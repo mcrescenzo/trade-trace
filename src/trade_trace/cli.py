@@ -128,6 +128,15 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
             "IDs without writing anything; sets meta.dry_run=true (bead trade-trace-268)"
         ),
     )
+    parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help=(
+            "required by mutating admin tools (journal.restore, "
+            "journal.backup, journal.repair, journal.config_set) — without "
+            "it the tool returns meta.preview_only=true (bead trade-trace-2z7)"
+        ),
+    )
 
     args, positional = parser.parse_known_args(argv)
 
@@ -170,6 +179,9 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
         tool_args["_allow_no_idempotency"] = True
     if args.dry_run:
         tool_args["_dry_run"] = True
+    if args.confirm:
+        tool_args["confirm"] = True
+        tool_args["_confirm"] = True
 
     envelope = dispatch(
         tool_name,

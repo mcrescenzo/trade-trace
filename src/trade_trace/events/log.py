@@ -242,8 +242,15 @@ class EventWriter:
                 existing.idempotent_replay = True
                 return existing
 
-        # Fresh write.
-        ts = to_utc_iso8601((now or datetime.now(timezone.utc)).isoformat())
+        # Fresh write. Respect CLOCK_OVERRIDE so deterministic-replay
+        # scopes (fixture seed, replay tests) produce identical
+        # `created_at` values across runs.
+        if now is None:
+            from trade_trace.tools._helpers import CLOCK_OVERRIDE
+
+            override = CLOCK_OVERRIDE.get()
+            now = override if override is not None else datetime.now(timezone.utc)
+        ts = to_utc_iso8601(now.isoformat())
         # Canonicalize payload for storage so semantic comparison on replay
         # works byte-equal on structural fields. We store the canonical form;
         # the original free-text values are still in there.

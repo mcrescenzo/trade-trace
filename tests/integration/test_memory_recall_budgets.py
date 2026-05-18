@@ -138,3 +138,66 @@ def test_min_confidence_rejects_out_of_range(home):
     })
     assert env.ok is False
     assert env.error.code.value == "VALIDATION_ERROR"
+
+
+# -- node_types filter ----------------------------------------------
+
+
+def test_node_types_filter_narrows_to_subset(home):
+    """`node_types=['playbook_rule']` should restrict recall to nodes
+    of that type only — per memory-layer.md §7.4."""
+
+    obs = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": "observation about earnings",
+        "idempotency_key": "00000000-0000-4000-8000-nt-obs01",
+    }).data["id"]
+    rule = _mcp(home, "memory.retain", {
+        "node_type": "playbook_rule", "body": "rule about earnings",
+        "idempotency_key": "00000000-0000-4000-8000-nt-rul01",
+    }).data["id"]
+    env = _mcp(home, "memory.recall", {
+        "query": "earnings", "k": 10, "node_types": ["playbook_rule"],
+    })
+    assert env.ok
+    ids = [it["id"] for it in env.data["items"]]
+    assert rule in ids
+    assert obs not in ids
+
+
+def test_node_types_rejects_invalid_value(home):
+    env = _mcp(home, "memory.recall", {
+        "query": "x", "node_types": ["musing"],
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "node_types"
+
+
+# -- mode='per_strategy' return shape ------------------------------
+
+
+def test_mode_per_strategy_returns_per_strategy_lists(home):
+    """`mode='per_strategy'` adds a `per_strategy` dict with one list
+    per active retrieval strategy, capped at `k`."""
+
+    _seed_n_nodes(home, 3, body_prefix="mode-test-body")
+    env = _mcp(home, "memory.recall", {
+        "query": "mode-test", "k": 5, "mode": "per_strategy",
+    })
+    assert env.ok
+    assert env.data["mode"] == "per_strategy"
+    assert "per_strategy" in env.data
+    # Every requested strategy is keyed; values are lists of node ids.
+    for strategy, ranked in env.data["per_strategy"].items():
+        assert strategy in ("bm25", "temporal", "graph")
+        assert isinstance(ranked, list)
+        assert all(isinstance(nid, str) for nid in ranked)
+        assert len(ranked) <= 5
+
+
+def test_mode_fused_default_omits_per_strategy_block(home):
+    _seed_n_nodes(home, 2, body_prefix="mode-default")
+    env = _mcp(home, "memory.recall", {"query": "mode-default", "k": 3})
+    assert env.ok
+    assert env.data["mode"] == "fused"
+    assert "per_strategy" not in env.data

@@ -158,15 +158,27 @@ def report_coach(
             "scored forecasts) — review the calibration on this pattern."
         )
 
-    # Placeholder fields the M3 implementations will populate.
+    # Placeholder field the M3 drift detector will populate.
     calibration_drift = {
         "status": "not_yet_detected",
         "note": "calibration drift signal landing with the M3 drift detector",
     }
-    override_outcomes = {
-        "status": "not_yet_tracked",
-        "note": "override-outcome aggregates land with the M3 playbook layer",
-    }
+
+    # Override-outcome panel (M4, bead fbq + Test QC 722). When a
+    # decision had a playbook rule marked `overridden`, downstream
+    # outcomes on that decision's instrument are interesting: were the
+    # overrides justified (outcome went the agent's way) or punished
+    # (outcome was adverse)? The coach surfaces raw counts with
+    # sample_ids so the agent can drill in; the panel is descriptive,
+    # not prescriptive — phrasing is chosen to stay clear of forbidden
+    # trade-advice phrases.
+    override_outcomes = _override_outcomes_panel(conn)
+    if override_outcomes["overridden_count"] > 0:
+        callouts.append(
+            f"playbook override audit: {override_outcomes['overridden_count']} "
+            f"decision(s) marked overridden; review sample_ids before next "
+            "similar setup."
+        )
 
     # Source-quality provenance panel (bead trade-trace-l9q). Surfaces the
     # five attachment-hygiene diagnostics; each diagnostic with count>0
@@ -219,6 +231,53 @@ def report_coach(
     }
     _assert_no_trade_advice(packet)
     return packet
+
+
+def _override_outcomes_panel(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Aggregate `decision_playbook_rules` rows with `status='overridden'`
+    plus any outcomes recorded on the same instrument afterwards.
+
+    Output shape:
+        {
+          "overridden_count": int,
+          "with_subsequent_outcome": int,
+          "without_subsequent_outcome": int,
+          "sample_decision_ids": [<= 10 ids],
+        }
+
+    The panel is descriptive — no judgment about whether the override
+    was 'right' or 'wrong' (outcomes are themselves probabilistic).
+    The agent reads the sample IDs and forms their own view.
+    """
+
+    rows = conn.execute(
+        """
+        SELECT dpr.id, dpr.decision_id, d.instrument_id, d.created_at
+        FROM decision_playbook_rules dpr
+        JOIN decisions d ON d.id = dpr.decision_id
+        WHERE dpr.status = 'overridden'
+        ORDER BY d.created_at, dpr.id
+        """
+    ).fetchall()
+    overridden_count = len(rows)
+    decision_ids: list[str] = []
+    with_outcome = 0
+    for _adh_id, dec_id, instr_id, dec_at in rows:
+        if dec_id not in decision_ids:
+            decision_ids.append(dec_id)
+        has_outcome = conn.execute(
+            "SELECT 1 FROM outcomes WHERE instrument_id = ? "
+            "AND resolved_at > ? LIMIT 1",
+            (instr_id, dec_at),
+        ).fetchone()
+        if has_outcome is not None:
+            with_outcome += 1
+    return {
+        "overridden_count": overridden_count,
+        "with_subsequent_outcome": with_outcome,
+        "without_subsequent_outcome": overridden_count - with_outcome,
+        "sample_decision_ids": decision_ids[:10],
+    }
 
 
 def _assert_no_trade_advice(packet: dict[str, Any]) -> None:

@@ -2,6 +2,12 @@
 
 Status: clean planning draft. Date: 2026-05-18.
 
+**Implementation status (M0-M4 MVP):** every contract in this doc
+ships in MVP — envelope shape, meta surface, error-code enum,
+deterministic-replay meta fields, CLI/MCP parity tests. The only
+known additive extension is `meta.preview_only` (bead trade-trace-2z7)
+and `meta.dry_run` (bead 268), both backward-compatible.
+
 Companion docs: [PRD.md](../../PRD.md), [VISION.md](../../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [memory-layer.md](memory-layer.md).

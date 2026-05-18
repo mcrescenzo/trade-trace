@@ -24,10 +24,19 @@ For the full vision, see [`VISION.md`](./VISION.md). For the working PRD, see [`
 
 ## Status
 
-**M0 + M1 shipped** (package skeleton, storage, full manual write surface,
-event log + outbox + idempotency, source/edge contract). M2 (scoring
-reports), M3 (memory layer), and M4 (playbook loop) are the remaining
-milestones.
+**M0 / M1 / M2 / M3 / M4 shipped.** All four milestones cleared their
+implementation, test-QC, docs-QC, and gate beads. Package skeleton +
+storage + full manual write surface, event log + outbox + idempotency,
+deterministic reports + integrity / source-quality diagnostics +
+sample-size warnings, memory graph (retain/reflect/link/recall) with
+bi-temporal validity + RRF over BM25 + temporal + graph, first-class
+strategies, playbook versioning + normalized adherence + override-outcome
+tracking, deterministic reflection-prompt packet, secret-pattern write
+guard + file-permission + no-telemetry audit, journal backup/restore
+with SHA-256 manifest, deterministic-replay clock injection + fixture
+seed. The P1+ work that remains (embeddings opt-in, review.bundle / import
+implementations, web/sync features) is explicitly scoped out of MVP and
+tracked under beads `trade-trace-a4p` and the P1 design docs.
 
 What works today:
 
@@ -173,15 +182,37 @@ tt resolve pending                   # NDJSON stream of forecasts awaiting resol
 tt resolve record ...                # alias for `tt outcome add`
 ```
 
-Planned (M2–M4 / P1):
+Shipped (M2–M4):
 
 ```bash
-tt report calibration                # M2: Brier/log/ECE/sharpness panel
-tt memory recall --query "..."       # M3: BM25+temporal recall; semantic opt-in
-tt memory reflect ...                # M3: agent-written reflections with provenance
-tt report coach --horizon-days 30    # M4: coach signals over recent activity
-tt review bundle ...                 # P1 (contract is M1-locked)
-tt import validate / import commit   # P1 (contract is M1-locked)
+tt report calibration                # M2: Brier/log/ECE/sharpness panel + integrity diagnostics
+tt report calibration_integrity      # M2: 6 anti-goodhart hygiene diagnostics
+tt report source_quality             # M2: 5 provenance hygiene diagnostics
+tt report mistakes / strengths       # M2: tag-aggregated patterns
+tt report pnl / watchlist            # M2: position roll-up + stale-watch list
+tt report unscored_forecasts         # M2: time-passed unscored detection
+tt report decision_velocity          # M2: daily/weekly decision bucketing
+tt report playbook_adherence         # M4: per-version followed/overridden counts
+tt report coach                      # M2-M4: synthesized signal packet (no LLM)
+tt memory retain / reflect / link    # M3: typed memory graph with bi-temporal validity
+tt memory recall --query "..."       # M3: BM25+temporal+graph recall (RRF combined)
+tt strategy create / list / show / update  # M3: first-class strategies
+tt playbook create / propose_version / adherence  # M4: versioned playbooks
+tt decision record_adherence         # M4: normalized adherence rows
+tt reflection prompt_for_outcome     # M3: deterministic prompt packet
+tt journal backup / restore          # MVP-hardening: SHA-256-verified roundtrip
+tt journal config_set                # MVP-hardening: persisted config keys
+tt journal fixture_seed --target=mvp-eval  # Deterministic eval-harness dataset
+```
+
+Still planned (P1+):
+
+```bash
+tt review bundle ...                 # P1 (contract is M1-locked; impl in P1)
+tt import validate / import commit   # P1 (contract is M1-locked; impl in P1)
+tt config set embeddings.provider local  # P1: sqlite-vec + bge-small (bead trade-trace-a4p)
+tt model import / model warm         # P1: air-gap embedding model staging (bead a4p)
+tt memory reindex --confirm          # P1: re-embed on provider change (bead a4p)
 ```
 
 ## License

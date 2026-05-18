@@ -2,6 +2,11 @@
 
 Status: clean planning draft. Date: 2026-05-18.
 
+**Implementation status (M0-M4 MVP):** every contract here ships — events
+table + outbox + closed event-type enum (per bead trade-trace-0r1),
+idempotency-key replay, JSONL atomic write, append-only triggers across
+M1+M3+M4 tables, projection rebuild (positions + memory_node_stats).
+
 Companion docs: [PRD.md](../../PRD.md), [VISION.md](../../VISION.md),
 [memory-layer.md](memory-layer.md), [scoring.md](scoring.md),
 [contracts.md](contracts.md).

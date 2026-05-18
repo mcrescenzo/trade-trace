@@ -47,6 +47,12 @@ class Meta(BaseModel):
     cli_human_hint: str | None = None
     mcp_transport_hints: dict[str, Any] | None = None
     dry_run: bool | None = None
+    preview_only: bool | None = None
+    generated_at: str | None = None
+    schema_version: int | None = None
+    package_version: str | None = None
+    normalized_filter: dict[str, Any] | None = None
+    retrieval_strategy_metadata: dict[str, Any] | None = None
 
 
 class SuccessEnvelope(BaseModel):

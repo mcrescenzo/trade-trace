@@ -28,6 +28,10 @@ from trade_trace.reports.integrity import (
     MAX_SAMPLE_IDS,
     report_calibration_integrity,
 )
+from trade_trace.reports.playbook_adherence import (
+    DEFAULT_ADHERENCE_MIN_SAMPLE,
+    report_playbook_adherence,
+)
 from trade_trace.reports.pnl import report_pnl
 from trade_trace.reports.source_quality import (
     STALE_SOURCE_THRESHOLD_DAYS,
@@ -39,6 +43,7 @@ from trade_trace.reports.watchlist import report_watchlist
 
 __all__ = [
     "CONFIDENCE_LABELS",
+    "DEFAULT_ADHERENCE_MIN_SAMPLE",
     "DEFAULT_BIN_POLICY",
     "DEFAULT_MIN_SAMPLE",
     "FORBIDDEN_PHRASES",
@@ -59,6 +64,7 @@ __all__ = [
     "report_decision_velocity",
     "report_mistakes",
     "report_pnl",
+    "report_playbook_adherence",
     "report_source_quality",
     "report_strengths",
     "report_unscored_forecasts",

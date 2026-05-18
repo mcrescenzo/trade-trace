@@ -2,6 +2,15 @@
 
 Status: clean planning draft. Date: 2026-05-18.
 
+**Implementation status (M0-M4 MVP):** shipped: UTC ISO 8601
+normalization, append-only migration runner, JSONL export +
+secret-pattern warning, WAL + single-writer lock, journal.backup /
+journal.restore / journal.repair / journal.config_set (bead 2z7),
+recovery playbook §5.4. Deferred (P1+): structured logging shipped
+without metric scrape (operability §6 is the contract; the JSON-logs
+shape is contract-locked but Prometheus / OpenTelemetry exporters are
+P1).
+
 Companion docs: [PRD.md](../../PRD.md), [VISION.md](../../VISION.md),
 [memory-layer.md](memory-layer.md), [persistence.md](persistence.md),
 [scoring.md](scoring.md), [contracts.md](contracts.md),
@@ -267,6 +276,19 @@ Restore is `tt restore --from <path>`. The command:
 2. Atomically replaces the main DB file. The WAL is reset.
 3. Re-runs `tt journal status` to verify the restored DB is reachable
    and consistent.
+
+### 5.4 Recovery playbook (bead trade-trace-bwv)
+
+The shipped admin surface for the recovery scenarios — verified by
+`tests/integration/test_operability_drill.py`:
+
+| Scenario | Procedure | Verification test |
+|---|---|---|
+| Forward migration on populated DB | `apply_pending_migrations(conn)` (idempotent; re-applying is a no-op when no migrations are pending). | `test_forward_migration_preserves_counts_and_integrity` — row counts in every append-only table stay identical and `PRAGMA integrity_check` returns 'ok'. |
+| Failed migration | Migration runner wraps each script in `BEGIN ... ROLLBACK on raise`; the DB stays at the prior `schema_version` byte-equivalent. | `test_broken_migration_atomic_rollback` — a simulated raise inside a `BEGIN` envelope leaves no row trace. |
+| Backup → restore | `tt journal backup --dest <dir> --confirm` writes a SHA-256 manifest; `tt journal restore --src <dir> --confirm` verifies every file's hash before copying. SHA-256 mismatch aborts with `INVARIANT_VIOLATION`; preview mode (`--confirm` omitted) returns `meta.preview_only=true` without writing. | `test_backup_restore_round_trip_byte_identical` (manifest hash → restored hash equality) + `test_journal_restore_detects_corrupted_backup` (corruption guard). |
+| Projection rebuild | `tt journal rebuild_projections --projection positions|memory_node_stats|all`; rebuild is idempotent. | `test_projection_rebuild_positions_idempotent` + `test_projection_rebuild_memory_node_stats_idempotent`. |
+| Integrity audit | `tt journal repair` runs `PRAGMA integrity_check` + `PRAGMA foreign_key_check`; MVP repair is read-only. The findings report distinguishes preview (no `--confirm`) from the read-only apply path. | `tests/integration/test_admin_tools.py::test_journal_repair_preview_returns_findings` + `test_journal_repair_with_confirm_returns_findings`. |
 
 ## 6. Logging
 

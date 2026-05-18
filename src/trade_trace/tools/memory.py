@@ -263,7 +263,9 @@ def _memory_reflect(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     db = open_db_for_args(args)
     try:
         with UnitOfWork(db.connection) as uow:
-            edge_id = new_id("edg")
+            # Allow the caller to pin the edge id (used by the fixture
+            # seed for byte-identical replay); otherwise generate one.
+            edge_id = args.get("edge_id") or new_id("edg")
             created_at = now_iso()
             uow.execute(
                 "INSERT INTO edges(id, source_kind, source_id, target_kind, "
@@ -454,6 +456,34 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "min_confidence must be a float in [0.0, 1.0]",
             details={"field": "min_confidence", "value": min_confidence},
         )
+    # `node_types` filter and `mode` per memory-layer.md §7.4 + bead 7v6
+    # docs alignment. `mode='per_strategy'` returns per-strategy ranked
+    # lists side-by-side so the agent can triangulate without seeing only
+    # the fused ranking.
+    node_types = args.get("node_types")
+    if node_types is not None:
+        if not isinstance(node_types, list) or not node_types:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "node_types must be a non-empty list when set",
+                details={"field": "node_types", "value": node_types},
+            )
+        invalid_types = [t for t in node_types if t not in NODE_TYPES]
+        if invalid_types:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"node_types must be drawn from {NODE_TYPES}",
+                details={"field": "node_types", "invalid": invalid_types,
+                         "allowed": list(NODE_TYPES)},
+            )
+    mode = args.get("mode", "fused")
+    if mode not in ("fused", "per_strategy"):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "mode must be 'fused' or 'per_strategy'",
+            details={"field": "mode", "value": mode,
+                     "allowed": ["fused", "per_strategy"]},
+        )
     as_of = normalize_timestamp(args, "as_of")
     requested_strategies = args.get("strategies") or ["bm25", "temporal", "graph"]
     if not isinstance(requested_strategies, list) or not requested_strategies:
@@ -478,6 +508,13 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     db = open_db_for_args(args)
     try:
         in_scope_rows = _load_in_scope_nodes(db.connection, as_of=as_of)
+        # Apply node_types filter BEFORE ranking so each strategy only
+        # sees the eligible candidate set.
+        if node_types is not None:
+            in_scope_rows = {
+                nid: row for nid, row in in_scope_rows.items()
+                if row["node_type"] in node_types
+            }
         rankings: dict[str, list[str]] = {}
         if "bm25" in requested_strategies:
             rankings["bm25"] = _bm25_rank(db.connection, query, in_scope_rows)
@@ -576,15 +613,39 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     finally:
         db.close()
 
-    return {
+    response: dict[str, Any] = {
         "recall_id": recall_id,
         "query": query,
         "strategies_used": sorted(rankings.keys()),
         "k": limit_k,
         "as_of": as_of,
+        "mode": mode,
         "items": items,
         "total_in_scope": len(in_scope_rows),
     }
+    if mode == "per_strategy":
+        # Surface the per-strategy ranked lists side-by-side per
+        # memory-layer.md §7.4. Each strategy's ranking is capped at k
+        # so the response stays bounded.
+        response["per_strategy"] = {
+            strategy: ranked[:limit_k]
+            for strategy, ranked in rankings.items()
+        }
+
+    # Reproducibility surface per bead trade-trace-64q.
+    from trade_trace.version import __version__
+
+    ctx.meta_hints["generated_at"] = created_at
+    ctx.meta_hints["package_version"] = __version__
+    ctx.meta_hints["retrieval_strategy_metadata"] = {
+        "strategies_used": sorted(rankings.keys()),
+        "k": limit_k,
+        "max_chars": max_chars,
+        "k_rrf": K_RRF,
+        "importance_boost_slope": IMPORTANCE_BOOST_SLOPE,
+        "supersession_discount": SUPERSESSION_DISCOUNT,
+    }
+    return response
 
 
 # -- ranking helpers -----------------------------------------------

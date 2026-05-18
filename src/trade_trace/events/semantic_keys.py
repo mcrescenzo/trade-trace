@@ -181,6 +181,10 @@ SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
     "forecast.superseded": SemanticKeySpec(
         structural_fields=frozenset({"prior_forecast_id", "new_forecast_id"}),
     ),
+    "playbook.created": SemanticKeySpec(
+        structural_fields=frozenset({"name", "status"}),
+        free_text_fields=frozenset({"description", "metadata_json"}),
+    ),
     "playbook.proposed_version": SemanticKeySpec(
         structural_fields=frozenset(
             {

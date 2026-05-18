@@ -2,6 +2,16 @@
 
 Status: clean planning draft. Date: 2026-05-18.
 
+**Implementation status (M0-M4 MVP):** shipped: report.calibration,
+report.calibration_integrity, report.source_quality, report.mistakes,
+report.strengths, report.pnl, report.watchlist,
+report.unscored_forecasts, report.decision_velocity,
+report.playbook_adherence, report.coach, report.filter_schema.
+Deferred (P1): report.compare, report.strategy_performance,
+report.risk, report.opportunity. review.bundle ships as a
+contract-only stub (UNSUPPORTED_CAPABILITY); the §5 spec is the
+binding contract for the P1 implementation.
+
 Companion docs: [PRD.md](../../PRD.md), [VISION.md](../../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md), [memory-layer.md](memory-layer.md).

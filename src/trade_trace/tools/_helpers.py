@@ -18,14 +18,50 @@ from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
 from trade_trace.tools.errors import ToolError
 
 
+_DETERMINISTIC_ID_COUNTER: dict[str, int] = {}
+
+
+def reset_deterministic_id_counter() -> None:
+    """Reset the deterministic id counter. Called at the start of the
+    fixture seed so re-running on a fresh home yields the same id
+    sequence."""
+
+    _DETERMINISTIC_ID_COUNTER.clear()
+
+
 def new_id(prefix: str) -> str:
     """Generate a short, URL-safe ID with a recognizable prefix
-    (`i_xxx` for instrument, `t_xxx` for thesis, etc.)."""
+    (`i_xxx` for instrument, `t_xxx` for thesis, etc.).
 
+    When the CLOCK_OVERRIDE context var is set (i.e. we're running
+    inside a deterministic-replay scope like the fixture seeder or a
+    determinism test), the id is derived from a per-prefix counter so
+    repeated runs produce the same sequence of ids. Otherwise the id
+    comes from `secrets.token_urlsafe(12)` for production-grade
+    unpredictability."""
+
+    if CLOCK_OVERRIDE.get() is not None:
+        next_idx = _DETERMINISTIC_ID_COUNTER.get(prefix, 0) + 1
+        _DETERMINISTIC_ID_COUNTER[prefix] = next_idx
+        return f"{prefix}_det{next_idx:08d}"
     return f"{prefix}_{secrets.token_urlsafe(12)}"
 
 
+from contextvars import ContextVar
+
+CLOCK_OVERRIDE: ContextVar[datetime | None] = ContextVar(
+    "trade_trace.clock_override", default=None,
+)
+"""Request-scoped clock override per bead trade-trace-64q. When set,
+`now_iso()` returns the injected timestamp's ISO8601 form instead of
+`datetime.now(tz=utc)`. Used by deterministic-replay tests + the
+fixture seed tool; CLI/MCP transport entry points never set it."""
+
+
 def now_iso() -> str:
+    override = CLOCK_OVERRIDE.get()
+    if override is not None:
+        return to_utc_iso8601(override.isoformat())
     return to_utc_iso8601(datetime.now(timezone.utc).isoformat())
 
 

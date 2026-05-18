@@ -27,9 +27,12 @@ from trade_trace.events.log import IdempotencyConflictError
 from trade_trace.events.unit_of_work import DRY_RUN_FLAG
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.imports import register_import_stubs
+from trade_trace.tools.admin import register_admin_tools
+from trade_trace.tools.fixture import register_fixture_tools
 from trade_trace.tools.journal import register_journal_tools
 from trade_trace.tools.ledger import register_ledger_tools
 from trade_trace.tools.memory import register_memory_tools
+from trade_trace.tools.playbook import register_playbook_tools
 from trade_trace.tools.reflection import register_reflection_tools
 from trade_trace.tools.strategy import register_strategy_tools
 from trade_trace.tools.reports import register_report_tools
@@ -46,9 +49,12 @@ def build_registry() -> ToolRegistry:
     a CLI-name collision; the test suite re-runs the same code path."""
 
     registry = ToolRegistry()
+    register_admin_tools(registry)
+    register_fixture_tools(registry)
     register_journal_tools(registry)
     register_ledger_tools(registry)
     register_memory_tools(registry)
+    register_playbook_tools(registry)
     register_reflection_tools(registry)
     register_strategy_tools(registry)
     register_review_bundle(registry)
@@ -68,7 +74,25 @@ def default_registry() -> ToolRegistry:
     return _DEFAULT_REGISTRY
 
 
+_REQUEST_ID_COUNTER: list[int] = [0]
+
+
+def _reset_deterministic_request_id_counter() -> None:
+    _REQUEST_ID_COUNTER[0] = 0
+
+
 def new_request_id() -> str:
+    """Generate a request id. When CLOCK_OVERRIDE is set (deterministic
+    replay scope), the request id is derived from a process-local
+    counter so re-running the same fixture produces matching events
+    table rows. Otherwise uses `uuid4().hex` for production-grade
+    unpredictability."""
+
+    from trade_trace.tools._helpers import CLOCK_OVERRIDE
+
+    if CLOCK_OVERRIDE.get() is not None:
+        _REQUEST_ID_COUNTER[0] += 1
+        return f"det-req-{_REQUEST_ID_COUNTER[0]:08d}".ljust(32, "0")[:32]
     return uuid.uuid4().hex
 
 

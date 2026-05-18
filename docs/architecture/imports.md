@@ -2,6 +2,14 @@
 
 Status: clean planning draft. Date: 2026-05-18.
 
+**Implementation status (M0-M4 MVP):** contract-only. import.validate
+and import.commit are registered tool stubs returning
+UNSUPPORTED_CAPABILITY; the schemas (`import_ready_writers` list +
+JSONL line shape per §2.1) are introspectable. The shipped JSONL
+*export* path (outbox drain) is the replay-input format, so an
+external runner can already re-dispatch a backed-up journal through
+the existing write tools. P1 ships the actual import command path.
+
 Companion docs: [PRD.md](../../PRD.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md), [operability.md](operability.md).
 

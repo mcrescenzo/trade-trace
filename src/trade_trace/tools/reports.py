@@ -28,6 +28,7 @@ from trade_trace.reports import (
     report_coach,
     report_decision_velocity,
     report_mistakes,
+    report_playbook_adherence,
     report_pnl,
     report_source_quality,
     report_strengths,
@@ -48,6 +49,9 @@ def _propagate_report_meta(ctx: ToolContext, data: dict[str, Any]) -> None:
       groups.
     - `sample_warning`: the *summary*-level warning string (per-group
       warnings live in `data.groups[].sample_warning`).
+    - Reproducibility (bead trade-trace-64q): `generated_at`,
+      `schema_version`, `package_version`, `normalized_filter` populate
+      so the agent can branch on stable run metadata.
     """
 
     summary = data.get("summary") or {}
@@ -62,6 +66,17 @@ def _propagate_report_meta(ctx: ToolContext, data: dict[str, Any]) -> None:
     next_cursor = data.get("next_cursor")
     if next_cursor is not None:
         ctx.meta_hints["next_cursor"] = next_cursor
+    # Reproducibility surface — populated for every report.* call.
+    from trade_trace.tools._helpers import now_iso
+    from trade_trace.version import __version__
+
+    ctx.meta_hints["generated_at"] = now_iso()
+    ctx.meta_hints["package_version"] = __version__
+    # Normalized filter: the report functions echo it under
+    # `summary.filter`; surface it on meta too so callers can read it
+    # without parsing summary.
+    if isinstance(summary.get("filter"), dict):
+        ctx.meta_hints["normalized_filter"] = summary["filter"]
 
 
 def _report_calibration(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -94,6 +109,36 @@ def _report_calibration(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         # Embed integrity diagnostics in the panel so the panel can never
         # be read without the denominator/hygiene context.
         data["integrity_diagnostics"] = report_calibration_integrity(db.connection)
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_playbook_adherence(
+    args: dict[str, Any], ctx: ToolContext,
+) -> dict[str, Any]:
+    """`report.playbook_adherence` — adherence aggregate from
+    `decision_playbook_rules` (bead fbq). Optional top-level scoping
+    knobs `playbook_id` and `strategy_id`; standard ReportFilter is
+    accepted on the `filter` arg."""
+
+    raw_filter = args.get("filter")
+    playbook_id = args.get("playbook_id")
+    strategy_id = args.get("strategy_id")
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_playbook_adherence(
+                db.connection, raw_filter=raw_filter,
+                playbook_id=playbook_id, strategy_id=strategy_id,
+            )
+        except ValidationError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"ReportFilter validation failed: {exc.errors()}",
+                details={"field": "filter", "validation_errors": exc.errors()},
+            ) from exc
     finally:
         db.close()
     _propagate_report_meta(ctx, data)
@@ -349,6 +394,17 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "sample_warning when N < min_sample (default 20). Embeds the "
             "six anti-goodhart hygiene diagnostics from "
             "report.calibration_integrity under data.integrity_diagnostics."
+        ),
+    )
+    registry.register(
+        "report.playbook_adherence",
+        _report_playbook_adherence,
+        description=(
+            "Playbook adherence aggregate from decision_playbook_rules "
+            "(no JSON parsing). Per-group metrics: counts of considered / "
+            "followed / overridden / not_applicable. Optional scoping: "
+            "playbook_id (single playbook), strategy_id (single strategy "
+            "across decisions). Per bead fbq."
         ),
     )
     registry.register(

@@ -1285,7 +1285,7 @@ def _make_source_attacher(target_kind: str):
                             "target_kind": target_kind, "target_id": target_id,
                             "edge_type": edge_type, "created_at": row[0]}
 
-                edge_id = new_id("edg")
+                edge_id = args.get("id") or new_id("edg")
                 created_at = now_iso()
                 uow.execute(
                     "INSERT INTO edges(id, source_kind, source_id, target_kind, target_id, "

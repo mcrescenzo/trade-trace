@@ -2,6 +2,14 @@
 
 Status: clean planning draft. Date: 2026-05-18.
 
+**Implementation status (M0-M4 MVP):** binary Brier + log-score + ECE
+(equal-width 0.1 bins) + sharpness + baseline (prevalence /
+Brier-baseline / log-score-baseline / skill) + reliability bins ship.
+Categorical/scalar scoring is deferred to P1 (journal.rescan_scoring
+returns UNSUPPORTED_CAPABILITY today). Anti-goodhart integrity
+diagnostics (bead trade-trace-jzn) are embedded under
+`report.calibration.data.integrity_diagnostics`.
+
 Companion docs: [PRD.md](../../PRD.md), [VISION.md](../../VISION.md),
 [memory-layer.md](memory-layer.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md).
