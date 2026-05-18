@@ -2,22 +2,22 @@
 
 **A local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents.**
 
-Trade Trace records every trading decision an LLM agent makes — across prediction markets, equities, options, crypto, and event markets — and helps the agent identify and refine its own process over time through a closed self-improvement loop. It runs locally, exposes both an MCP server and a CLI with a JSON-only output contract, and never executes trades or handles credentials.
+Trade Trace records trading decisions an LLM agent makes and helps the agent improve through a closed learning loop: journal a decision, resolve the outcome, score calibration, review deterministic reports, write reflections, update a versioned playbook, and recall that learning next time. It runs locally, exposes both an MCP server and a CLI with JSON-first contracts, and never executes trades.
 
 ## What this is
 
-- A **decision journal** with forecasts, theses, evidence, and process tags.
-- A **memory layer** modeled on Hindsight's Retain / Recall / Reflect surface but trading-specific (outcome-linked, calibration-aware, position-provenanced).
-- A **calibration grader** that auto-scores forecasts when outcomes resolve and surfaces drift.
-- A **playbook engine** that versions trading rules, tracks adherence and override outcomes, and evolves with reflection-derived provenance.
-- An **MCP server** and an **equivalent CLI** with identical JSON contracts.
+- A **decision journal** with instruments, snapshots, theses, forecasts, outcomes, and process tags.
+- A **trading-native memory layer** modeled on Retain / Recall / Reflect, with outcome-linked and calibration-aware recall.
+- A **binary MVP calibration grader** that scores supported binary forecasts with Brier score when outcomes resolve.
+- A **playbook loop** that versions rules, records manual/advisory overrides, and keeps provenance from reflections.
+- An **MCP server** and **CLI** whose schemas and semantics are equivalent after transport normalization.
 
 ## What this is not
 
-- Not a trade executor. No order signing, no wallet handling, no credentials.
-- Not a human dashboard. There is no web UI. Outputs are JSON-only.
+- Not a trade executor. No order signing, wallet handling, broker credentials, seed phrases, or trade routing.
+- Not a human dashboard. There is no product web UI; P2 may add optional static/read-only inspection exports.
 - Not a generic agent memory framework. The schema is trading-shaped.
-- Not a backtesting engine, tax accountant, or social platform.
+- Not a backtesting engine, tax accountant, social platform, or source of financial advice.
 
 For the full vision, see [`VISION.md`](./VISION.md). For the working PRD, see [`PRD.md`](./PRD.md).
 
@@ -26,107 +26,80 @@ For the full vision, see [`VISION.md`](./VISION.md). For the working PRD, see [`
 Pre-implementation. The current artifacts are design docs:
 
 - [`VISION.md`](./VISION.md) — north star
-- [`PRD.md`](./PRD.md) — working PRD
+- [`PRD.md`](./PRD.md) — working PRD and MVP scope
 - [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md) — memory layer spec
-- [`docs/architecture/connector-interface.md`](./docs/architecture/connector-interface.md) — connector plugin spec
-
-Implementation begins after these are reviewed and an implementation plan is written.
+- [`docs/architecture/scoring.md`](./docs/architecture/scoring.md) — forecast scoring (Brier formula, resolution status, lifecycle)
+- [`docs/architecture/persistence.md`](./docs/architecture/persistence.md) — events, outbox, idempotency
+- [`docs/architecture/contracts.md`](./docs/architecture/contracts.md) — CLI/MCP envelope and error codes
 
 ## Install (planned)
 
 ```bash
-pip install trade-trace                                    # core
-pip install "trade-trace[polymarket,manifold,yfinance]"    # with marquee venue connectors
+pip install trade-trace
 ```
 
-Requirements (planned): Python 3.11+, SQLite with the `sqlite-vec` extension (auto-installed), ~150MB for the default local embedding model (`BAAI/bge-small-en-v1.5`).
+Planned requirements: Python 3.11+, SQLite with FTS5. `sqlite-vec` and a local embedding model can be enabled when available; MVP recall can run with FTS5 + graph + temporal retrieval. The default local embedding model is downloaded and cache-managed when enabled, not bundled into the wheel.
 
-## Quickstart for an agent (MCP)
+Trade Trace makes no outbound network calls and has no external data connectors. The agent calling it supplies all market data through the structured ingestion APIs.
 
-Add to your MCP host config (e.g., Claude Code's `mcp.json`):
+## MVP vertical slice
 
-```json
-{
-  "mcpServers": {
-    "trade-trace": {
-      "command": "trade-trace",
-      "args": ["mcp"]
-    }
-  }
-}
-```
+The MVP proves a complete learning-loop slice with narrow breadth:
 
-Then from the agent:
+1. `journal.init`
+2. manual `instrument.add` / `snapshot.add` / `thesis.add` / binary `forecast.add` / `decision.add`
+3. `outcome.add`
+4. binary Brier scoring
+5. deterministic reports and `report.coach`
+6. agent-written `memory.reflect`
+7. `playbook.propose_version` with advisory/manual override tracking
+8. `memory.recall` during the next thesis
+
+Deferred or optional after the manual loop: CSV import, sqlite-vec embeddings, multi-class/scalar scoring, trading-native edge/market reports (forecast-vs-market, calibration-by-liquidity-bucket), exact ForecastBench compatibility, sync, HTTP/SSE, websockets, and a web viewer.
+
+## Quickstart for an agent (MCP, planned)
 
 ```jsonc
-// 1. Initialize the local journal
 {"tool": "journal.init"}
 
-// 2. Add an instrument
 {"tool": "instrument.add", "args": {
-  "venue": "polymarket",
+  "venue": "manual",
   "asset_class": "prediction_market",
   "title": "Will X happen by 2026-06-30?",
-  "currency_or_collateral": "USDC"
+  "currency_or_collateral": "USDC",
+  "actor_id": "agent:default"
 }}
 
-// 3. Record a snapshot + thesis + forecast + decision
-{"tool": "snapshot.add", "args": {"instrument_id": "...", "price": 0.37, "bid": 0.36, "ask": 0.39}}
-{"tool": "thesis.add", "args": {"instrument_id": "...", "side": "yes", "body": "...", "falsification_criteria": "..."}}
-{"tool": "forecast.add", "args": {"thesis_id": "...", "kind": "binary", "outcomes": [{"label": "YES", "probability": 0.48}, {"label": "NO", "probability": 0.52}]}}
-{"tool": "decision.add", "args": {"instrument_id": "...", "thesis_id": "...", "type": "skip", "reason": "Estimated edge < spread + resolution risk", "tags": ["liquidity-ignored", "good-skip"]}}
+{"tool": "snapshot.add", "args": {"instrument_id": "...", "price": 0.37, "bid": 0.36, "ask": 0.39, "actor_id": "agent:default"}}
+{"tool": "thesis.add", "args": {"instrument_id": "...", "side": "yes", "body": "...", "falsification_criteria": "...", "actor_id": "agent:default"}}
+{"tool": "forecast.add", "args": {"thesis_id": "...", "kind": "binary", "outcomes": [{"label": "YES", "probability": 0.48}, {"label": "NO", "probability": 0.52}], "actor_id": "agent:default"}}
+{"tool": "decision.add", "args": {"instrument_id": "...", "thesis_id": "...", "type": "skip", "reason": "Estimated edge < spread + resolution risk", "tags": ["liquidity-ignored", "good-skip"], "actor_id": "agent:default"}}
 
-// 4. When the market resolves, record the outcome and the system auto-scores
-{"tool": "outcome.add", "args": {"instrument_id": "...", "outcome_label": "NO", "outcome_value": 0.0, "resolved_at": "2026-06-30T00:00:00Z"}}
+{"tool": "outcome.add", "args": {"instrument_id": "...", "outcome_label": "NO", "outcome_value": 0.0, "resolved_at": "2026-06-30T00:00:00Z", "actor_id": "agent:default"}}
 
-// 5. Run the self-improvement loop
 {"tool": "report.coach", "args": {"horizon_days": 30}}
-// → structured JSON with calibration drift, top mistake tags, overdue reviews, ...
 
 {"tool": "memory.reflect", "args": {
   "target": {"kind": "decision", "id": "..."},
-  "insight": "Skip was correct here; spread compression never materialized. Pattern: thin-liquidity resolution-week markets.",
-  "strength_tags": ["good-skip", "good-liquidity-discipline"]
+  "insight": "Skip was correct here; spread compression never materialized.",
+  "strength_tags": ["good-skip", "good-liquidity-discipline"],
+  "actor_id": "agent:default"
 }}
 
-// 6. Recall relevant past memory when forming a new thesis on a similar market
-{"tool": "memory.recall", "args": {
-  "context": {"kind": "instrument", "id": "..."},
-  "node_types": ["observation", "reflection", "playbook_rule"],
-  "k": 10
-}}
+{"tool": "memory.recall", "args": {"context": {"kind": "instrument", "id": "..."}, "node_types": ["observation", "reflection", "playbook_rule"], "k": 10}}
 ```
 
-## Quickstart for a human dogfooder (CLI)
+## CLI dogfood surface (planned)
 
-The CLI is a 1:1 mirror of the MCP tools, with a `--human` flag that adds prose to stderr for readability.
+The CLI mirrors the MCP tool catalog. Stdout is JSON only by default; `--human` may add prose to stderr without changing stdout semantics.
 
 ```bash
-# Initialize
 trade-trace journal init --human
-
-# Add an instrument, snapshot, thesis, decision
-trade-trace instrument add --venue polymarket --asset-class prediction_market --title "Will X happen by 2026-06-30?" --currency USDC --human
-
-# Run a report
+trade-trace instrument add --venue manual --asset-class prediction_market --title "Will X happen by 2026-06-30?" --currency USDC --actor-id agent:default --human
 trade-trace report coach --horizon-days 30 --human
-
-# See the full tool schema for any command
 trade-trace journal schema --tool decision.add
 ```
 
-All commands also accept the equivalent flags without `--human`; output is then JSON-only to stdout.
-
 ## License
 
-MIT. See `LICENSE` (added at implementation start).
-
-## Contributing
-
-The project is pre-implementation. The most useful contributions right now are review of the design docs:
-
-- Does the data model serve a real LLM trading workflow you've built or tried to build?
-- Are the four layers of the self-improvement loop the right primitives?
-- Are there venues / connectors that should be marquee priority that aren't listed?
-
-Open an issue with feedback; implementation work will track a milestone-by-milestone plan once design is settled.
+MIT. See `LICENSE` once implementation begins.

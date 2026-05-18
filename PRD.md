@@ -1,757 +1,376 @@
 # Trade Trace — Product Requirements Document
 
 **Date:** 2026-05-18
-**Status:** Refined draft
-**Companion docs:** [`VISION.md`](./VISION.md), [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md), [`docs/architecture/connector-interface.md`](./docs/architecture/connector-interface.md)
+**Status:** Clean planning draft
+**Companion docs:** [`VISION.md`](./VISION.md), [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md), [`docs/architecture/scoring.md`](./docs/architecture/scoring.md), [`docs/architecture/persistence.md`](./docs/architecture/persistence.md), [`docs/architecture/contracts.md`](./docs/architecture/contracts.md)
 
-This document is the working PRD that drives implementation. It captures the locked decisions from the 2026-05-18 refinement session, sketches data models and APIs, enumerates milestones, and tracks remaining open questions.
+Trade Trace is a local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents. It records decisions, resolves outcomes, scores supported forecasts, stores reflections, evolves playbooks, and recalls prior learning. It never executes trades, never queries external venues for market data, never handles execution credentials, and is not a human dashboard.
 
-## 1. Executive summary
+## 1. MVP scope
 
-Trade Trace is a local, open-source, AI-only journal/memory/calibration substrate for LLM trading agents, distributed as a Python package exposing both an MCP server and a CLI with a JSON-only output contract. It records every decision the agent makes across markets, grades forecasts when outcomes resolve, stores agent reflections as a typed knowledge graph, and runs a four-layer self-improvement loop (primitive reports → coach synthesis → reflection → playbook evolution). It does not execute trades. It does not handle credentials. It is not a human dashboard.
+The MVP proves the full four-layer learning loop with narrow breadth: a complete learning-loop slice, not the entire broad product. Breadth is deferred.
 
-The product is **market-agnostic at the core** (prediction markets, equities, options, futures, crypto, event markets share a generic decision/position/outcome spine), with **plugin connectors** for first-party venues (Polymarket, Manifold, yfinance in MVP). The full product is planned from day one; there is no MVP shortcut.
+MVP vertical slice:
 
-## 2. Decisions log
+1. `journal.init`
+2. Structured manual ingestion of instruments, snapshots, theses, binary forecasts, and decisions
+3. Structured manual outcome entry with a typed resolution status
+4. Binary Brier scoring (see [`scoring.md`](./docs/architecture/scoring.md))
+5. Deterministic reports and `report.coach`
+6. Agent-written reflection
+7. Playbook version update with normalized adherence tracking (considered, followed, overridden, not_applicable)
+8. Token-budgeted recall of prior observations, reflections, and playbook rules in the next decision
+9. Source/evidence capture attached to theses, decisions, and forecasts
 
-The following decisions were locked in the 2026-05-18 refinement session and are non-negotiable assumptions for the rest of this document.
+Deferred or optional after the manual loop: `sqlite-vec` embeddings, CSV import, multi-class/scalar scoring, trading-native edge/market reports (forecast-vs-market, calibration-by-liquidity-bucket, skipped-positive-edge review), exact ForecastBench submission compatibility, web viewer, sync, HTTP/SSE transport, and websockets.
 
-### 2.1 Memory layer — custom, trading-native
+There are no external data connectors. The agent supplies all market data through the structured ingestion APIs.
 
-The memory layer is built in-house, modeled on Hindsight's **Retain / Recall / Reflect** API surface (so other tooling can swap in or out) but backed by a trading-specific schema: every memory node can link to ledger rows (decisions, positions, outcomes), carries calibration-aware confidence and decay, and supports typed edges to other memory nodes. No external memory framework as a runtime dependency.
+## 2. Locked product decisions
 
-**Rationale:** The trading semantics (outcome-linked recall, position provenance, calibration-decayed confidence) do not fit a generic memory store without significant retrofitting. Owning the schema is cheaper than wrapping Hindsight and fighting its assumptions.
+### 2.1 Memory layer
 
-### 2.2 Data model — hybrid ledger + memory graph
+The memory layer is built in-house, modeled on Retain / Recall / Reflect but trading-specific. Memory nodes link to ledger rows, carry confidence/decay metadata, and can participate in typed graph recall. No external memory framework is a runtime dependency. See [`memory-layer.md`](./docs/architecture/memory-layer.md).
 
-The trade ledger (decision, position, position_event, snapshot, outcome, forecast, thesis, source, instrument, venue, playbook, playbook_version) lives in strictly-typed SQL tables with foreign-key relationships, append-only semantics, and an event log. The memory layer (observation, reflection, semantic_claim, playbook_rule, coach_signal) lives in a unified `memory_nodes` table with a node-type discriminator and embedding columns. A single `edges` table connects any node to any other node *or* to any ledger row, with typed edges (supports, contradicts, supersedes, links, derived_from, about, violates, follows).
+### 2.2 State model
 
-**Rationale:** P&L roll-ups, position math, and calibration scoring need clean SQL; agent recall needs flexible graph traversal. Both worlds cross-link cleanly via the edges table.
+The SQLite database is the source of truth. It separates immutable event/source tables from mutable or rebuildable projections. See [`persistence.md`](./docs/architecture/persistence.md) for the full event/outbox/idempotency contract.
 
-### 2.3 Self-improvement loop — full four-layer loop in MVP
+- `position_events` are source of truth; `positions` is a projection derived from them.
+- `memory_nodes` are immutable; recall telemetry belongs in `memory_node_stats` or recall events/projections, not on the node row.
+- Corrections create new rows/events, not silent mutation.
+- JSONL export/audit is derived from committed DB events via the outbox table. It is not a second source of truth and must not require fragile dual writes.
 
-All four layers ship in MVP: (1) primitive reports, (2) `coach` synthesis, (3) agent-written reflections, (4) versioned playbook rules with provenance and override tracking. This is the product wedge; anything less makes Trade Trace a generic journal.
+### 2.3 CLI and MCP parity
 
-**Rationale:** Without playbook evolution, the journal is just a logger. Without reflection, the agent has no synthesis loop. Without `coach`, the agent burns tokens computing primitives. Without primitive reports, `coach` has nothing to synthesize.
+One internal core API backs both MCP and CLI. Tool schemas, validation semantics, result meaning, and error codes must be equivalent after transport normalization. JSON byte identity is not required because MCP framing, streaming, and transport metadata differ from CLI stdout/NDJSON. See [`contracts.md`](./docs/architecture/contracts.md) for the envelope and error code list.
 
-### 2.4 Surface — CLI + MCP, MCP-primary, JSON-only
+### 2.4 No data fetching
 
-One Python package, single internal `trade_trace.core` API, two thin parallel front-ends: an MCP server (primary) and a CLI (equivalent). All output is JSON to stdout. No human prose is emitted unless `--human` is explicitly passed, in which case prose goes to stderr only. Errors are structured JSON with stable `code` fields. Streams are NDJSON (one JSON object per line, newline-delimited).
+Trade Trace never queries external venues, broker APIs, or market data providers. The agent calling Trade Trace already has the data — it is the one currently analyzing the market — and supplies it through structured ingestion APIs. This boundary keeps the product small, market-agnostic, secure by construction, and free of third-party rate limits, version drift, and trust assumptions.
 
-**Rationale:** Schema introspection and host integration (Claude Code, Cursor) demand MCP; token-efficient batch writes and scriptability demand CLI; identical contracts let agents treat them interchangeably.
+The `snapshots.source` and `outcomes.source` columns are free-form strings. MVP only writes `'manual'`. The columns exist so future imports (CSV, JSONL, dogfooded research scripts) have a place to land without migration; no connector type taxonomy is implied or reserved.
 
-### 2.5 Connectors — plugin architecture + first-party for marquee venues
+### 2.5 Forecast model
 
-The core package defines a `Connector` ABC with three required methods (`snapshot`, `resolve`, `search`) and a small capability-flag interface. First-party connectors for Polymarket (Gamma read-only), Manifold, and yfinance ship in MVP. Third-party connectors are separate pip packages registered via the `trade_trace.connectors` entry point group. Manual snapshot and outcome entry is always supported; no connector is ever required to use the journal.
+MVP scoring is binary only. See [`scoring.md`](./docs/architecture/scoring.md) for invariants, the exact Brier formula (single-probability form), the resolution status enum, and the lifecycle of a forecast row.
 
-**Rationale:** Out-of-box experience for marquee venues without committing to maintain the universe of connectors. Plugin model encourages community contribution without growing core.
+- Binary prediction markets: score directly against resolved YES/NO outcome.
+- Equity/crypto directional forecasts: may be expressed as binary derived events, e.g. `AAPL closes above 200 at horizon` or `BTC return > 0 by horizon`.
+- Scalar, options, futures, numeric, and multi-outcome forecasts may be stored as record-only data with `scoring_support = 'unsupported'` until P1.
+- P1 may add `forecasts.distribution_json` and multi-class/scalar scoring; it is not an MVP schema field.
 
-### 2.6 Forecast model — multi-outcome from day one, calibration first-class
+The `forecasts` table splits status into two columns: `scoring_support` (capability) and `scoring_state` (lifecycle). Auto-scoring only fires when the linked `outcomes` row has `status = 'resolved_final'`.
 
-Forecasts are modeled to support binary, multi-outcome categorical, and scalar/continuous distributions from the data layer onward. **Long form**: one row per outcome in `forecast_outcomes` with `probability` and `lower_bound` / `upper_bound` columns where applicable, linked to a `forecasts` parent. MVP ships binary Brier scoring; multi-class Brier and ranked probability score land in P1. **Calibration is a first-class feature, not a report** — every decision with a forecast is auto-scored the moment an outcome resolves, calibration drift is a top-level metric in `coach` output, and exports are ForecastBench-compatible.
+### 2.6 Playbooks
 
-**Rationale:** Manifold has MULTIPLE_CHOICE / NUMERIC / PSEUDO_NUMERIC natively. A binary-only data model would force a repaint within months. Auto-scoring at resolution time means the agent never has a stale picture of its own performance.
+MVP playbook rules are advisory. The agent records which rules it considered, followed, overrode, or judged not_applicable in a normalized `decision_playbook_rules` table (§3.1), not in a JSON blob. Automatic violation detection is only implemented for future rules whose predicates are explicitly machine-checkable. MVP must not promise a general automatic rule engine.
 
-### 2.7 Storage — SQLite + sqlite-vec + FTS5 + JSONL log
+### 2.7 Coach signals
 
-Single SQLite file as the source of truth. The `sqlite-vec` extension provides vector similarity for memory recall. SQLite FTS5 provides BM25 keyword recall. Both back the multi-strategy retrieval (semantic + keyword + temporal + graph). A JSONL append-only event log is written alongside SQLite for audit, portability, and recovery. Pydantic v2 schemas are the single source of truth, generating MCP tool definitions, CLI argument validators, and DB serializers.
+No background scheduler or daemon exists in MVP. Write-triggered signals may be persisted during ordinary writes. Time-passing signals, such as stale watches and unscored forecasts, are generated lazily by `report.coach`, `watch.stale`, `report.unscored_forecasts`, or an explicit maintenance scan. External scheduling is out of scope.
 
-**Rationale:** One file, no extra services, queryable, durable, supports all retrieval strategies natively. JSONL log gives a portable durable record independent of SQLite if the schema ever needs aggressive migration.
+### 2.8 Credentials and security
 
-### 2.8 Embeddings — configurable, default local
+The core never accepts, stores, logs, or prompts for credentials. Wallet, broker, order-signing, and seed credentials are never supported, never read from any source, and never appear in any API surface. Because there is no external data fetching (§2.4), there is no execution path, network surface, or third-party trust model in MVP.
 
-Bundle `BAAI/bge-small-en-v1.5` (133MB, top-tier small open model in 2026) as the default embedding model via `sentence-transformers`. Override via config to use Claude, OpenAI, or Voyage embedding APIs for higher-quality recall. Local default preserves the local-first promise; API override gives a quality lever.
+### 2.9 Tags
 
-**Rationale:** Local-first is a stated principle. Embedding API calls would route every memory write/recall through a network. Small local models are good enough for in-domain similarity; the API path exists for users who want it.
+Tags are stored relationally, e.g. `decision_tags(decision_id, tag)` and `review_tags(review_id, tag, tag_kind)`, because SQLite has no native array column type. APIs may expose arrays for convenience.
 
-### 2.9 Open questions resolved during PRD authoring
+### 2.10 Edges
 
-The following were marked open in the refinement plan and are resolved here:
+Generic edges require endpoint validation against allowed endpoint kinds and existing IDs. Edge endpoint kinds include memory nodes and ledger rows including instruments and venues. Do not use `contradicts` for administrative edge deletion. Edge removal/admin history is either deferred or represented with retract/tombstone edge events.
 
-| # | Question | Decision |
-|---|----------|----------|
-| 1 | Command/tool naming | CLI: `trade-trace`. Python module: `trade_trace`. PyPI package: `trade-trace`. |
-| 2 | License | **MIT** (most permissive open-source license; matches ecosystem norms for AI/finance tooling) |
-| 3 | Python floor | **3.11** (Pydantic v2, fastmcp, sqlite-vec all support; broad compatibility) |
-| 4 | Embedding default | `BAAI/bge-small-en-v1.5` |
-| 5 | MCP framework | `fastmcp` (decorator-based, ergonomic, widely adopted) |
-| 6 | Multi-outcome forecast shape | Long form: rows in `forecast_outcomes` linked to a `forecasts` parent |
-| 7 | Memory decay model | Both: per-node `decay_rate_per_day` (default by node type) + edge-density modulation at recall time |
-| 8 | Playbook rule format | Both: structured `rule_meta` for override detection + free-text `rule_body` for agent reasoning |
-| 9 | Coach trigger | On-demand primary (`report.coach`). System auto-emits `coach_signal` memory nodes on notable events (calibration drift, large outcome surprise, stale watch). External scheduling is deferred. |
-| 10 | Repository layout | **Monorepo, single package with optional extras**. `pip install trade-trace` for core; `pip install trade-trace[polymarket,manifold,yfinance]` for connectors. First-party connectors live under `trade_trace/connectors/`. Third-party connectors are separate packages. |
+Period- or tag-scoped reflections are valid, but periods and tags are not MVP edge endpoints. Their scope is stored in reflection `meta_json` unless later versions add first-class period/tag entities.
 
-## 3. Architecture overview
+### 2.11 External claims
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                       LLM Trading Agent                         │
-│                  (Claude / GPT / local / etc.)                  │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-              ┌────────────────┴────────────────┐
-              │                                 │
-              ▼                                 ▼
-   ┌─────────────────────┐         ┌─────────────────────┐
-   │   MCP server        │         │       CLI           │
-   │   (fastmcp,         │         │  (typer, JSON-only) │
-   │   primary surface)  │         │                     │
-   └──────────┬──────────┘         └──────────┬──────────┘
-              │                                │
-              └────────────────┬───────────────┘
-                               │
-                               ▼
-                  ┌──────────────────────────┐
-                  │   trade_trace.core       │
-                  │  (single internal API,   │
-                  │   pydantic schemas)      │
-                  └────────────┬─────────────┘
-                               │
-        ┌──────────────────────┼──────────────────────┐
-        │                      │                      │
-        ▼                      ▼                      ▼
-┌───────────────┐      ┌───────────────┐      ┌───────────────┐
-│  Ledger       │      │  Memory       │      │  Connectors   │
-│  (strict SQL) │      │  (graph)      │      │  (plugins)    │
-│  ─────────    │      │  ─────────    │      │  ─────────    │
-│ decisions     │      │ memory_nodes  │      │ Polymarket    │
-│ positions     │──┬──▶│ edges         │      │ Manifold      │
-│ snapshots     │  │   │ (sqlite-vec,  │      │ yfinance      │
-│ forecasts     │  │   │  FTS5)        │      │ (third-party  │
-│ outcomes      │  │   └───────────────┘      │  via entry    │
-│ instruments   │  │           ▲              │  points)      │
-│ ...           │  │           │              └───────┬───────┘
-└───────────────┘  │           │                      │
-                   └───────────┴──────────────────────┘
-                          edges link ledger ↔ memory
-                          and connector data → snapshots/outcomes
-                               │
-                               ▼
-                  ┌──────────────────────────┐
-                  │  trade-trace.sqlite      │
-                  │  + events.jsonl (audit)  │
-                  └──────────────────────────┘
-```
+- yfinance, Polymarket Gamma, and similar external APIs are explicitly out of scope; see §2.4.
+- `sqlite-vec` is optional/verified at init; MVP recall can use FTS5 + graph + temporal retrieval.
+- Local embedding models are downloaded/cache-managed when enabled.
+- ForecastBench export is ForecastBench-inspired/TBD until the current external schema is verified.
+- No claim is made that LLMs have reached forecasting parity with human superforecasters.
 
-Pydantic schemas in `trade_trace.schemas` define every entity. The MCP server uses fastmcp to generate JSON schemas from pydantic models automatically. The CLI uses typer with the same schemas. The core API exposes a single set of methods, both front-ends call into it.
+## 3. Data model
 
-## 4. Data model
+All write APIs include common metadata from MVP:
 
-### 4.1 Ledger tables
+- `id`
+- `created_at`
+- `actor_id` or `actor` (`agent:default`, `cli:user`, `import:<name>`, etc.)
+- `idempotency_key` where retries are expected (uniqueness scope and conflict behavior in [`persistence.md`](./docs/architecture/persistence.md))
+- `metadata_json` where venue/tool-specific extension is needed
 
-All ledger tables are append-only or versioned. Corrections create new rows; nothing is silently overwritten.
+### 3.1 Core ledger/source tables
 
 #### `venues`
-- `id` (text, primary key, e.g., `polymarket`, `manifold`, `yfinance`, `manual`)
-- `name`, `kind` (prediction_market, equity, options, futures, crypto, event_market, other)
-- `connector_name` (nullable; references an installed connector)
-- `metadata_json`
-- `created_at`
+- `id`, `name`, `kind`, `metadata_json`, `created_at`, `actor_id`
 
 #### `instruments`
-- `id` (uuid)
-- `venue_id` (FK)
-- `external_id` (venue-specific ID), `symbol`, `title`
-- `asset_class` (text)
-- `currency_or_collateral`
-- `multi_outcome` (bool)
-- `expiration_or_resolution_at` (nullable)
-- `resolution_criteria_text` (nullable)
-- `contract_multiplier` (nullable, for options/futures)
-- `metadata_json`
-- `created_at`
+- `id`, `venue_id`, `external_id`, `symbol`, `title`, `asset_class`, `currency_or_collateral`
+- `expiration_or_resolution_at`, `resolution_criteria_text`, `contract_multiplier`, `metadata_json`, `created_at`, `actor_id`
 
 #### `snapshots`
-- `id` (uuid)
-- `instrument_id` (FK)
-- `captured_at` (timestamp)
-- `source` (text: `connector:polymarket`, `manual`, `import:csv`, …)
-- `source_url` (nullable)
-- `price`, `bid`, `ask`, `mid`, `spread`
-- `volume`, `open_interest`, `liquidity_depth_json`
-- `implied_probability` (nullable, for prediction markets)
-- `metadata_json`
-- Immutable; corrections create new rows.
+- `id`, `instrument_id`, `captured_at`, `source`, `source_url`
+- `price`, `bid`, `ask`, `mid`, `spread`, `volume`, `open_interest`, `implied_probability`, `liquidity_depth_json`
+- `metadata_json`, `created_at`, `actor_id`
+- Immutable; corrections create new snapshots.
+- `source` is a free-form string; MVP only writes `'manual'`.
 
 #### `theses`
-- `id` (uuid)
-- `instrument_id` (FK)
-- `version` (int, starts at 1)
-- `parent_thesis_id` (FK, nullable — points to previous version)
-- `side` (text: yes/no/long/short/call/put/multi/…)
-- `time_horizon_at` (timestamp, nullable)
-- `confidence_label` (text: low/medium/high/extreme — agent-defined; the *forecast* row carries the numeric probability)
-- `body` (text)
-- `falsification_criteria` (text)
-- `exit_triggers` (text)
-- `risk_notes` (text)
-- `created_at`
-- Versioned: thesis updates create new rows linked via `parent_thesis_id`.
+- `id`, `instrument_id`, `version`, `parent_thesis_id`, `side`, `time_horizon_at`, `confidence_label`
+- `body`, `falsification_criteria`, `exit_triggers`, `risk_notes`, `created_at`, `actor_id`
+- Versioned; updates create new rows.
 
 #### `forecasts`
-- `id` (uuid)
-- `thesis_id` (FK)
-- `kind` (text: binary, categorical, scalar)
-- `resolution_at` (timestamp, nullable)
-- `created_at`
+- `id`, `thesis_id`, `kind` (`binary`, `categorical`, `scalar`), `resolution_at`, `yes_label`
+- `scoring_support` (`supported`, `unsupported`) — capability: can this `kind` be scored by the installed scorer?
+- `scoring_state` (`pending`, `scored`, `failed`, `superseded`) — lifecycle: what has happened to this forecast?
+- `created_at`, `actor_id`
+- MVP supports binary scoring only; non-binary rows are recorded with `scoring_support = 'unsupported'` and remain `pending` forever unless a future scorer ships. See [`scoring.md`](./docs/architecture/scoring.md).
 
 #### `forecast_outcomes`
-- `id` (uuid)
-- `forecast_id` (FK)
-- `outcome_label` (text, e.g., "YES", "NO", "AAPL>200@2026-06-30")
-- `probability` (float, 0-1)
-- `lower_bound`, `upper_bound` (float, nullable — for scalar/continuous)
-- One row per outcome; for binary forecasts there are typically two rows.
+- `id`, `forecast_id`, `outcome_label`, `probability`, `lower_bound`, `upper_bound`
+- One row per forecast outcome. Binary forecasts have exactly two rows whose `probability` values sum to 1.0 within `1e-6` tolerance.
+
+#### `forecast_scores`
+- `id`, `forecast_id`, `outcome_id`, `metric` (`brier_binary` in MVP), `score`, `scored_at`, `actor_id`, `metadata_json`
+- Immutable score event table. `score = NULL` with `metadata_json.failure_reason` on `scoring_state = 'failed'`.
 
 #### `decisions`
-- `id` (uuid)
-- `instrument_id` (FK)
-- `thesis_id` (FK, nullable)
-- `forecast_id` (FK, nullable)
-- `snapshot_id` (FK, nullable — what was the market state at decision time)
-- `type` (text: watch, skip, paper_enter, paper_exit, actual_enter, actual_exit, add, reduce, hold, invalidate_thesis, update_thesis, resolved, review)
-- `side`, `quantity`, `price`, `fees`, `slippage` (nullable — only relevant for enter/exit/add/reduce)
-- `reason` (text)
-- `playbook_version_id` (FK, nullable — which playbook was in force)
-- `playbook_overrides_json` (list of rule IDs the agent intentionally overrode)
-- `review_by` (timestamp, nullable — used for watch entries)
-- `tags` (text[])
-- `created_at`
-- Append-only.
+- `id`, `instrument_id`, `thesis_id`, `forecast_id`, `snapshot_id`
+- `type` (`watch`, `skip`, `paper_enter`, `paper_exit`, `actual_enter`, `actual_exit`, `add`, `reduce`, `hold`, `invalidate_thesis`, `update_thesis`, `resolved`, `review`)
+- `side`, `quantity`, `price`, `fees`, `slippage`, `reason`
+- `playbook_version_id`, `review_by`, `created_at`, `actor_id`
+- Tags live in `decision_tags`; playbook rule adherence lives in `decision_playbook_rules`.
+- The `actual_enter`, `actual_exit`, `add`, and `reduce` decision types are **journal records only**. They record trades the agent placed elsewhere; they never trigger orders, writes to external systems, or any execution path inside Trade Trace.
 
-#### `positions`
-- `id` (uuid)
-- `instrument_id` (FK)
-- `kind` (paper, actual)
-- `side`
-- `status` (open, closed, resolved)
-- `opened_at`, `closed_at`, `resolved_at`
-- `realized_pnl`, `unrealized_pnl`, `avg_entry_price`
-- Derived from `position_events`.
+#### `decision_tags`
+- `decision_id`, `tag`
+
+#### `decision_playbook_rules`
+- `id`, `decision_id`, `playbook_version_id`, `rule_node_id`
+- `status` (`considered`, `followed`, `overridden`, `not_applicable`)
+- `reason`, `created_at`, `actor_id`
+- Normalized adherence tracking. One row per (decision, rule) pair the agent evaluated. Supports `report.playbook_adherence` directly without JSON parsing.
 
 #### `position_events`
-- `id` (uuid)
-- `position_id` (FK)
-- `decision_id` (FK)
-- `event_type` (open, add, reduce, close, partial_close, resolve, mark)
-- `quantity_delta`, `price`, `fees`, `slippage`
-- `created_at`
+- `id`, `position_id`, `instrument_id`, `decision_id`, `event_type`, `quantity_delta`, `price`, `fees`, `slippage`, `created_at`, `actor_id`
+- Source of truth for position history.
+
+#### `positions`
+- `id`, `instrument_id`, `kind`, `side`, `status`, `opened_at`, `closed_at`, `resolved_at`, `realized_pnl`, `unrealized_pnl`, `avg_entry_price`, `updated_at`
+- Rebuildable projection from `position_events` and marks.
 
 #### `outcomes`
-- `id` (uuid)
-- `instrument_id` (FK)
-- `resolved_at`
-- `outcome_label` (text — matches one or more `forecast_outcomes.outcome_label` if a forecast exists)
-- `outcome_value` (float — final settle value, e.g., 1.0 for YES at $1, or the actual return)
-- `source` (text)
-- `confidence` (float — 1.0 for unambiguous resolutions; <1 for disputed/delayed prediction markets)
-- `metadata_json`
+- `id`, `instrument_id`, `resolved_at`, `outcome_label`, `outcome_value`
+- `status` (`resolved_final`, `resolved_provisional`, `ambiguous`, `disputed`, `void`, `cancelled`) — see [`scoring.md`](./docs/architecture/scoring.md) §5.
+- `source`, `confidence`, `metadata_json`, `created_at`, `actor_id`
+- Append-only. Corrections produce new rows; older rows stay readable. Auto-scoring fires only when `status = 'resolved_final'`.
 
 #### `sources`
-- `id` (uuid)
-- `kind` (text: url, file, ref, note)
-- `ref` (text — URL, path, or identifier)
-- `title`, `note`
-- `stance` (text: supporting, opposing, neutral, background)
-- `captured_at`
-- Attached to theses, decisions, reviews, or memory nodes via the `edges` table.
+- `id`, `kind`, `ref`, `title`, `note`, `stance` (`supports`, `contradicts`, `neutral`), `freshness_at`, `content_hash`, `captured_at`, `created_at`, `actor_id`
+- Attached to theses, decisions, forecasts, and memory nodes through edges.
 
 #### `reviews`
-- `id` (uuid)
-- `target_kind` (text: decision, position, instrument, period, playbook)
-- `target_id` (uuid)
-- `classification` (text: good_process_good_outcome, good_process_bad_outcome, bad_process_good_outcome, bad_process_bad_outcome, unreviewable_missing_data)
-- `mistake_tags`, `strength_tags` (text[])
-- `body` (text)
-- `next_rule_suggestion` (text — optional; may spawn a playbook_rule node)
-- `created_at`
-- Reviews are reusable but each review row is immutable.
+- `id`, `target_kind`, `target_id`, `classification`, `body`, `next_rule_suggestion`, `created_at`, `actor_id`
+- Tags live in `review_tags`.
 
-#### `playbooks`
-- `id` (uuid)
-- `name` (text, unique)
-- `description` (text)
-- `created_at`
+#### `review_tags`
+- `review_id`, `tag`, `tag_kind` (`mistake`, `strength`, `neutral`)
 
-#### `playbook_versions`
-- `id` (uuid)
-- `playbook_id` (FK)
-- `version` (int, starts at 1)
-- `parent_version_id` (FK, nullable)
-- `created_at`
-- `provenance_reflection_node_id` (uuid, nullable — points to the memory node that motivated this version)
-- Each `playbook_rule` memory node belongs to a `playbook_version`; new versions are created when rules change.
+#### `playbooks` / `playbook_versions`
+- `playbooks`: `id`, `name`, `description`, `created_at`, `actor_id`
+- `playbook_versions`: `id`, `playbook_id`, `version`, `parent_version_id`, `created_at`, `actor_id`, `provenance_reflection_node_id`
 
-### 4.2 Memory graph
+#### `events`
+- `id`, `event_type`, `subject_kind`, `subject_id`, `payload_json`, `actor_id`, `idempotency_key`, `request_id`, `created_at`
+- Append-only event log. One row per committed write. Unique on `(event_type, actor_id, idempotency_key)` when the key is present. Full schema and idempotency semantics in [`persistence.md`](./docs/architecture/persistence.md).
+
+#### `outbox`
+- `id`, `event_id`, `export_kind`, `state` (`pending`, `exported`, `failed`), `exported_at`, `error_text`, `attempt_count`
+- Drives optional JSONL export from the event log without dual writes.
+
+### 3.2 Memory graph
 
 #### `memory_nodes`
-- `id` (uuid)
-- `node_type` (text: observation, reflection, semantic_claim, playbook_rule, coach_signal)
-- `version` (int, defaults 1; bumps for typed nodes that version like `playbook_rule`)
-- `parent_node_id` (uuid, nullable)
-- `title` (text, short)
-- `body` (text, the actual content)
-- `meta_json` (typed metadata per node_type)
-- `confidence_base` (float 0-1)
-- `decay_rate_per_day` (float; default by node type; see [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md))
-- `embedding` (blob — sqlite-vec column; computed at write time)
-- `embedding_text_fts` (text — FTS5 virtual column)
-- `created_at`, `last_recalled_at`, `recall_count`
-- Append-only. Updates create new nodes with `parent_node_id` set.
+- `id`, `node_type` (`observation`, `reflection`, `semantic_claim`, `playbook_rule`, `coach_signal`)
+- `version`, `parent_node_id`, `title`, `body`, `meta_json`, `confidence_base`, `decay_rate_per_day`, `embedding_ref`, `created_at`, `actor_id`
+- Immutable. Updates create new nodes.
 
-**Per-`node_type` `meta_json` fields:**
-
-- **observation**: `{ instrument_id?, venue_id?, asset_class?, pattern_kind? }`
-- **reflection**: `{ target_kind, target_id, mistake_tags?, strength_tags? }`
-- **semantic_claim**: `{ scope: "market_type" | "venue" | "asset_class" | "general", scope_value? }`
-- **playbook_rule**: `{ playbook_version_id, rule_meta: { trigger_kind, applicable_decision_types, applicable_asset_classes? } }`
-- **coach_signal**: `{ signal_kind, severity, related_ledger_refs[] }`
+#### `memory_node_stats`
+- `memory_node_id`, `recall_count`, `last_recalled_at`, `updated_at`
+- Rebuildable/projection-style recall telemetry.
 
 #### `edges`
-- `id` (uuid)
-- `source_kind` (text: memory_node, decision, thesis, position, forecast, outcome, snapshot, review, playbook_version, source)
-- `source_id` (uuid)
-- `target_kind` (same enum)
-- `target_id` (uuid)
-- `edge_type` (text: supports, contradicts, supersedes, links, derived_from, about, violates, follows)
-- `weight` (float, optional)
-- `created_at`
-- Append-only. To "remove" an edge, add a superseding `contradicts` edge — never delete.
+- `id`, `source_kind`, `source_id`, `target_kind`, `target_id`, `edge_type`, `weight`, `created_at`, `actor_id`
+- Allowed endpoint kinds: `memory_node`, `decision`, `thesis`, `position`, `forecast`, `outcome`, `snapshot`, `review`, `playbook_version`, `source`, `instrument`, `venue`.
+- Edge types: `supports`, `contradicts`, `supersedes`, `links`, `derived_from`, `about`, `violates`, `follows`, `retracts`, `tombstones`.
+- Endpoint IDs are validated before insertion.
 
-Edges let any memory node link to any ledger row, and vice versa. A reflection "about" a decision is an edge with `(memory_node, reflection_id) -[about]-> (decision, decision_id)`. A playbook rule "violates" tag on a decision is an edge `(decision, decision_id) -[violates]-> (memory_node, rule_id)`.
+## 4. APIs and tools
 
-## 5. Memory layer API
+### 4.1 Memory
 
-All three operations live in `trade_trace.core.memory`. MCP tools and CLI commands are thin wrappers.
+- `memory.retain` writes observation, semantic claim, reflection, playbook rule, or coach signal nodes.
+- `memory.recall` retrieves by FTS5, graph, temporal, and optionally vector similarity when `sqlite-vec` and embeddings are configured. Accepts `max_chars`, `compact`, `include_body`, and `include_provenance` parameters to fit results within the caller's context budget. Full contract in [`memory-layer.md`](./docs/architecture/memory-layer.md) §4.
+- `memory.reflect` is sugar over `retain(node_type=reflection)` and creates `about`/provenance edges.
 
-### 5.1 `retain(node)`
+### 4.2 Reports and coach
 
-Write an episodic observation, semantic claim, reflection, playbook rule, or coach signal.
+Deterministic reports:
 
-```python
-def retain(
-    node_type: NodeType,
-    title: str,
-    body: str,
-    *,
-    meta: dict | None = None,
-    links: list[EdgeSpec] | None = None,
-    confidence_base: float = 1.0,
-    decay_rate_per_day: float | None = None,  # default by node type
-) -> MemoryNode
-```
+- `report.calibration` — MVP binary Brier and reliability buckets for scored binary forecasts
+- `report.mistakes` / `report.strengths` — tag counts and co-occurrence
+- `report.pnl` — basic paper/actual projections where enough data exists
+- `report.watchlist` and `watch.stale` — lazy stale-watch detection
+- `report.unscored_forecasts` — lazy time-passed unscored detection
+- `report.playbook_adherence` — driven by `decision_playbook_rules`; surfaces considered/followed/overridden/not_applicable counts and override outcomes
+- `report.decision_velocity`
 
-`links` accepts `EdgeSpec(target_kind, target_id, edge_type, weight?)`. Embeddings are computed automatically at write time using the configured provider.
+`report.coach` aggregates objective signals into a structured packet. It does not call an LLM and does not provide trading advice.
 
-### 5.2 `recall(...)`
+Trading-native reports (forecast-vs-market edge, calibration-by-liquidity-bucket, skipped-positive-edge review) are deferred to P1. The data is already captured in `snapshots`; the reports are additive.
 
-Multi-strategy retrieval — semantic similarity, BM25, temporal proximity, graph traversal.
+### 4.3 Playbooks
 
-```python
-def recall(
-    *,
-    query: str | None = None,                     # natural-language query
-    context: ContextRef | None = None,            # ledger row to retrieve memories about
-    node_types: list[NodeType] | None = None,
-    strategies: list[Strategy] = [SEMANTIC, BM25, TEMPORAL, GRAPH],
-    k: int = 10,
-    min_confidence: float = 0.0,
-    as_of: datetime | None = None,
-) -> list[ScoredMemoryNode]
-```
-
-Each returned node carries its current effective confidence (base × decay × edge-density boost), match score per strategy, and the reasoning trail (which edges or embeddings surfaced it).
-
-### 5.3 `reflect(target, insight, ...)`
-
-Sugar over `retain(node_type=reflection, ...)` with structured target binding and automatic edge creation.
-
-```python
-def reflect(
-    target: TargetRef,       # decision_id, position_id, period, tag, playbook_version_id
-    insight: str,
-    *,
-    mistake_tags: list[str] | None = None,
-    strength_tags: list[str] | None = None,
-    supersedes: list[uuid] | None = None,    # reflection IDs this one supersedes
-    derived_from: list[NodeRef] | None = None,  # observations / claims this reflection synthesizes
-) -> MemoryNode
-```
-
-Reflect always creates `about` edges to the target and optionally `supersedes` / `derived_from` edges.
-
-## 6. Self-improvement loop spec
-
-### 6.1 Layer 1 — Primitive reports (deterministic)
-
-All exposed as MCP tools and CLI commands under `report.*`:
-
-- `report.calibration` — calibration curve by bucket, optionally filtered by venue / asset_class / tag / playbook_version / time_window. Outputs reliability table + Brier / ECE / log loss.
-- `report.mistakes` — frequency and co-occurrence matrix of mistake tags (e.g., the top-20 pairs and how often they appear together).
-- `report.strengths` — same but for strength tags.
-- `report.pnl` — paper vs actual, optionally grouped by venue / asset_class / tag / playbook_version.
-- `report.watchlist` — open watches with stale flag (review_by passed without action).
-- `report.unscored_forecasts` — forecasts with passed resolution_at and no linked outcome row.
-- `report.playbook_adherence` — for a given playbook_version, decisions in scope, overrides used, override outcomes (good/bad), rule-by-rule grade.
-- `report.decision_velocity` — decisions per week broken down by type.
-
-These never call the LLM. Pure SQL aggregation, NDJSON-streamable.
-
-### 6.2 Layer 2 — `report.coach` (synthesis)
-
-A synthesizing primitive that aggregates the above into a structured "things to think about" packet:
-
-```json
-{
-  "as_of": "2026-05-18T12:00:00Z",
-  "horizon_days": 30,
-  "calibration_drift": [
-    {
-      "bucket": "high",
-      "expected_resolution_rate": 0.85,
-      "realized_resolution_rate": 0.62,
-      "n": 14,
-      "drift_zscore": -2.1
-    }
-  ],
-  "top_mistake_tags": [
-    {"tag": "liquidity-ignored", "count": 8, "trend": "up", "co_occurs_with": ["spread-too-wide"]}
-  ],
-  "playbook_warnings": [
-    {"rule_id": "uuid", "rule_name": "no-trade-in-thin-markets", "overridden_count": 3, "override_pnl": -120.0}
-  ],
-  "overdue_reviews": [...],
-  "stale_watches": [...],
-  "unscored_forecasts": [...],
-  "recent_coach_signals": [
-    {"id": "uuid", "kind": "calibration_drift_high_bucket", "severity": "warn", "created_at": "...", "related": [...]}
-  ]
-}
-```
-
-`coach` has no opinions — it surfaces objective signals. The agent decides what to reflect on.
-
-### 6.3 Layer 3 — Reflections (agent-driven)
-
-Agents call `memory.reflect(target, insight, ...)` after running `coach`, reviewing a position, or reading a resolved outcome. Reflections are typed memory nodes, linked to ledger rows and other memory nodes via the edges table. They never disappear; they decay in confidence and can be superseded by newer reflections via a `supersedes` edge.
-
-Recommended reflection cadence (a soft guideline, not enforced):
-- After every paper / actual exit
-- After every prediction-market resolution where a forecast existed
-- After every `coach` invocation that surfaces a non-empty signal set
-- Weekly summary reflection on a recent period
-
-### 6.4 Layer 4 — Playbook evolution
-
-Playbooks are versioned. Each playbook_version contains a set of playbook_rule memory nodes (with structured `rule_meta` for machine-checking and free-text `rule_body` for agent reasoning).
-
-When an agent proposes a rule change:
-1. The agent calls `playbook.propose_version(playbook_id, new_rules, provenance_reflection_id)`.
-2. A new `playbook_versions` row is created.
-3. New `playbook_rule` memory nodes are created with `parent_node_id` pointing to the prior version's rules where applicable.
-4. An edge `(playbook_versions, new) -[derived_from]-> (memory_nodes, reflection)` captures provenance.
-
-When a decision is recorded:
-1. The current playbook_version_id is captured.
-2. For each rule whose `trigger_kind` applies, the system checks whether the decision violates it.
-3. Violations are recorded in `decisions.playbook_overrides_json` and an edge `(decision) -[violates]-> (rule)` is created.
-4. When the outcome lands, override outcomes are aggregated in `report.playbook_adherence`.
-
-This closes the loop: rule outcomes inform the next reflection, which informs the next rule version.
-
-### 6.5 Coach signal events
-
-The system auto-emits `coach_signal` memory nodes on notable events to surface them without requiring the agent to run `coach`:
-
-- Outcome resolution where realized probability diverges from forecast by > 30%
-- Calibration drift z-score < -2 in any bucket
-- Playbook rule overridden 3+ times in 14 days
-- Watchlist item passes `review_by` without action
-- Forecast resolution_at passes without linked outcome (after a grace period)
-
-These signals appear in the `recent_coach_signals` field of `report.coach`. They are real memory nodes with edges to the originating ledger rows, so they can be reflected upon directly.
-
-## 7. Forecast & calibration spec
-
-### 7.1 Forecast shape
-
-A `forecasts` row anchors a forecast to a thesis. `forecast_outcomes` rows enumerate outcomes:
-
-- **Binary**: 2 rows (e.g., YES p=0.62, NO p=0.38).
-- **Categorical**: N rows, probabilities sum to 1.0 within tolerance.
-- **Scalar / continuous**: one or more rows with `lower_bound`, `upper_bound`, and `probability` (interval probabilities), or a parametric distribution stored in `forecasts.distribution_json` (P1).
-
-### 7.2 Auto-scoring on resolution
-
-When an `outcomes` row is written with a `outcome_label` matching a forecast's outcome rows, the system:
-
-1. Computes binary Brier in MVP for binary forecasts: `(forecast_probability_of_realized_outcome - 1.0)²`.
-2. Writes a `forecast_score` event (an internal ledger event, not a node) with metric values.
-3. Emits a `coach_signal` memory node if the score is a strong surprise (large Brier).
-
-Multi-class Brier and ranked probability score land in P1.
-
-### 7.3 Drift detection
-
-Calibration drift is computed by:
-
-1. Bucketing forecasts by `confidence_label` (low / medium / high) or numeric probability bucket (0.0-0.1, 0.1-0.2, …).
-2. Computing realized resolution rate within each bucket over a rolling window.
-3. Comparing to the bucket's expected rate (either the midpoint or the average forecast probability).
-4. Flagging buckets where the z-score of the deviation exceeds threshold (configurable, default 2.0).
-
-### 7.4 ForecastBench export
-
-`journal.export --format forecastbench` emits forecasts + outcomes in ForecastBench-compatible JSON for benchmark submission or external scoring tools. Sensitive trade details (P&L, actual position sizes) are stripped.
-
-## 8. Connector interface spec
-
-See [`docs/architecture/connector-interface.md`](./docs/architecture/connector-interface.md) for the full spec. Summary:
-
-```python
-class Connector(Protocol):
-    name: str
-    venue_kind: str
-    capabilities: ConnectorCapabilities
-
-    def snapshot(self, instrument_ref: InstrumentRef) -> Snapshot: ...
-    def resolve(self, instrument_ref: InstrumentRef) -> Outcome | None: ...
-    def search(self, query: str, *, limit: int = 20) -> list[InstrumentRef]: ...
-```
-
-`ConnectorCapabilities` flags: `supports_resolution`, `supports_multi_outcome`, `supports_websocket`, `requires_api_key`, `read_only` (always true for MVP — no connector may execute trades).
-
-Connectors are registered via the `trade_trace.connectors` entry point group in `pyproject.toml`. The core resolves connectors at startup by name; the venue table's `connector_name` column joins to the registry.
-
-Manual snapshot / outcome entry via `snapshot.add` / `outcome.add` is always available and bypasses connectors entirely.
-
-## 9. MCP tool catalog
-
-Tools are grouped by namespace. All emit JSON, accept `--dry-run` (validation without write), and use `--idempotency-key` where writes may be retried.
-
-### `journal.*`
-- `journal.init` — initialize storage in the current directory or a configured path
-- `journal.status` — schema version, storage location, counts of major entities
-- `journal.schema` — return the JSON schema for a specified entity or tool
-- `journal.export` — export as `jsonl`, `markdown`, or `forecastbench`
-- `journal.import` — import CSV trades (P1)
-
-### `venue.*`, `instrument.*`, `snapshot.*`, `source.*`
-Standard CRUD-ish operations: `add`, `list`, `show`, with filtering by tag / venue / asset_class / date_range.
-
-### `thesis.*`, `forecast.*`, `decision.*`
-- `thesis.add`, `thesis.update` (creates new version)
-- `forecast.add` (linked to a thesis)
-- `decision.add`, `decision.list`, `decision.show`
-
-### `position.*`
-- `position.list`, `position.show`, `position.close` (records a final mark-and-close decision)
-
-### `watch.*`
-- `watch.list`, `watch.stale`, `watch.archive`, `watch.convert` (to skip / paper_enter / actual_enter)
-
-### `review.*`
-- `review.add`, `review.due`, `review.list`, `review.show`
-
-### `memory.*`
-- `memory.retain`, `memory.recall`, `memory.reflect`
-- `memory.list_edges`, `memory.add_edge` (manual edge creation)
-
-### `playbook.*`
 - `playbook.create`, `playbook.list`, `playbook.show`
 - `playbook.propose_version`, `playbook.list_versions`
-- `playbook.adherence` (sugar over `report.playbook_adherence`)
+- `playbook.adherence` — convenience wrapper around `report.playbook_adherence` scoped to a single playbook
 
-### `report.*`
-- `report.calibration`, `report.mistakes`, `report.strengths`
-- `report.pnl`, `report.watchlist`, `report.decision_velocity`
-- `report.unscored_forecasts`, `report.playbook_adherence`
-- `report.coach` — synthesis primitive
-- `report.weekly` — convenience preset that calls coach + a fixed set of reports
+MVP captures the active playbook version and normalized adherence records on every decision. Machine-checkable predicates may be added for specific rule types later.
 
-### `connector.*`
-- `connector.list` — installed connectors and their capabilities
-- `connector.snapshot` — pull a snapshot for a given instrument
-- `connector.resolve` — pull outcome data
-- `connector.search` — search a venue for instruments matching a query
+### 4.4 Resolution
 
-Every MCP tool has a corresponding CLI command at `trade-trace <namespace> <verb>`. See `journal.schema` for the full machine-readable tool registry at runtime.
+- `resolve.pending` — returns forecasts past their `resolution_at` without an `outcomes` row, or with an outcome row whose `status != 'resolved_final'`. Idempotent read; supports filters by instrument/venue/asset_class/time-window.
+- `resolve.record` — writes an `outcomes` row with the required `status`, optionally attaches evidence via `source.attach_to_*`, and triggers auto-scoring when `status = 'resolved_final'` and the forecast is scoring-supported.
 
-## 10. CLI surface
+These tools exist because outcomes lag decisions: the agent session that resolves a forecast is usually not the same session that made the decision.
 
-The CLI is a 1:1 mirror of the MCP tool catalog. Conventions:
+### 4.5 Sources
 
-```bash
-trade-trace <namespace> <verb> [--positional <id>] [--flag value ...]
-```
+- `source.add` — creates a `sources` row.
+- `source.attach_to_thesis`, `source.attach_to_decision`, `source.attach_to_forecast`, `source.attach_to_memory_node` — create `about`/`supports`/`contradicts` edges from a source to the target, depending on the source's `stance`.
 
-Common flags:
-- `--json` — (default, kept for explicitness; identical to no flag)
-- `--human` — emit human-readable prose to stderr; stdout remains JSON
-- `--idempotency-key <key>` — natural-key dedup for write retries
-- `--dry-run` — validate without writing
-- `--note-file <path>` — supply long notes from a file
-- `--tags <a,b,c>` — comma-separated tags
-- `--metadata-json <json>` — structured metadata for venue-specific fields
-- `--fields <a,b,c>` — limit returned JSON to specified fields (context-budget aware)
-- `--page-all` — NDJSON stream of all results, one per line
+Evidence capture is first-class in MVP because reflection quality depends on it: "did I overweight a weak source", "did I miss the resolution criteria", "did I rely on stale news" are answerable only if sources were captured at decision time.
 
-Output contract:
-- **stdout**: JSON only. Pretty-printed with `--human`, compact otherwise. Streams are NDJSON.
-- **stderr**: empty by default. Used for `--human` prose and structured error logs.
-- **exit codes**: 0 success, 1 generic error, 2 validation error, 3 not-found, 4 idempotency conflict, 5 connector error, 6 storage error.
+## 5. Storage
 
-Errors are always structured JSON to stdout (even in CLI), e.g.:
+- Primary store: SQLite at `$TRADE_TRACE_HOME/trade-trace.sqlite`, WAL mode, single-writer assumption for MVP.
+- Required recall: SQLite FTS5 + graph + temporal queries.
+- Optional vector recall: `sqlite-vec` if installed and verified at `journal.init`/`journal.status`.
+- Event/outbox tables record committed writes for audit/export. JSONL export is generated from the outbox; see [`persistence.md`](./docs/architecture/persistence.md).
+- Migrations are versioned and preserve data.
+- File permissions default to user-only where supported.
 
-```json
-{"error": {"code": "VALIDATION_ERROR", "message": "...", "field": "side", "expected": ["yes","no","long","short"]}}
-```
+## 6. Output contract
 
-## 11. Storage spec
+- CLI stdout is JSON only by default; list streams use NDJSON.
+- `--human` may add prose to stderr only.
+- MCP uses normal MCP framing and may stream according to transport capabilities.
+- CLI and MCP must be schema/semantic equivalents after transport normalization, not byte-level twins.
+- Success and error envelopes have the shapes defined in [`contracts.md`](./docs/architecture/contracts.md). Stable error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `IDEMPOTENCY_CONFLICT`, `UNSUPPORTED_CAPABILITY`, `STORAGE_ERROR`, `SCORING_UNSUPPORTED`, `SCORING_NOT_READY`, `INVARIANT_VIOLATION`, `MARKET_NOT_RESOLVED`, `MARKET_AMBIGUOUS`, `RATE_LIMITED`.
 
-- **Primary store**: SQLite database at `$TRADE_TRACE_HOME/trade-trace.sqlite` (default `~/.trade-trace/`).
-- **Vector index**: `sqlite-vec` extension loaded at connection time; `embedding` columns on `memory_nodes`.
-- **Full-text index**: SQLite FTS5 virtual table over `memory_nodes.title`, `memory_nodes.body`, and selected ledger text fields.
-- **Audit log**: `$TRADE_TRACE_HOME/events.jsonl` — append-only, one JSON record per write. Format: `{"ts": "...", "op": "decision.add", "actor": "agent" | "cli" | "import", "payload": {...}}`.
-- **Schema migrations**: versioned migration scripts under `trade_trace/migrations/`. `journal.status` reports schema version. Migrations preserve all data.
-- **File permissions**: created with mode `0600` where the platform allows.
-- **Configuration**: `$TRADE_TRACE_HOME/config.toml` controls embedding provider, default decay rates, drift z-score thresholds, log verbosity.
+## 7. Safety and privacy
 
-## 12. Output contract
+- No execution path places, signs, cancels, or routes trades.
+- No external data fetching (§2.4): no network surface, no third-party API surface, no rate limits to negotiate.
+- Core never accepts or persists credentials of any kind.
+- Wallet/broker/order-signing credentials are never supported.
+- Analytics are retrospective decision support, not recommendations or financial advice.
 
-Reiterating the principle: **JSON-only by default.** Every command, success or error, success or empty, returns valid JSON to stdout. No human prose is mixed in. The `--human` flag adds prose to stderr only, never to stdout.
-
-Streams (`--page-all`, list operations on large result sets) use NDJSON — one JSON object per line, terminated by `\n`. Agents can stream-parse with `for line in stdout: obj = json.loads(line)`.
-
-Schema introspection: `journal.schema` returns the full JSON schema of any entity, command argument set, or tool definition. The MCP server also exposes this through the standard MCP `tools/list` and `tools/get` calls; agents using MCP do not need to call `journal.schema` separately.
-
-## 13. Safety, privacy, compliance
-
-- **No execution.** No code path in MVP produces an order or signs anything. Connector code is firewalled from any execution capability at the protocol level.
-- **No credentials.** Connectors that need API keys read them only from environment variables. Keys are never written to disk, never logged, never echoed.
-- **Local-first.** No remote sync in MVP. Optional sync is a P2 feature gated behind explicit consent.
-- **Export warnings.** Exports that include actual trade details emit a stderr warning and require `--confirm-actual-trades` to proceed.
-- **Framing.** All analytics output is labeled as retrospective decision support, not as recommendation. Documentation never claims edge, profitability, or financial advice.
-- **License**: MIT. Project ships with `NOTICE` listing third-party dependencies and their licenses.
-
-## 14. Milestones
+## 8. Milestones
 
 ### M0 — Repo and package foundation
-- `pyproject.toml`, MIT license, Python 3.11+
-- Package skeleton: `trade_trace/{core,schemas,storage,connectors,cli,mcp,migrations}/`
-- Pydantic v2 schemas for all ledger entities and memory nodes
-- SQLite + sqlite-vec + FTS5 wired; migration framework
-- README, VISION, PRD published
+- Python 3.11+, MIT license, package skeleton
+- Pydantic schemas and migration framework
+- SQLite + FTS5 baseline; optional `sqlite-vec` detection
+- Initial docs
 
-### M1 — Ledger core + CLI/MCP frames
-- All ledger tables created via migration v1
-- Core API methods: instrument, snapshot, thesis, decision, position, outcome, source, review
-- CLI + MCP front-ends wired (fastmcp + typer), JSON-only output
-- `journal.init`, `journal.status`, `journal.schema`, `journal.export jsonl`
-- Manual workflow end-to-end: add instrument → add snapshot → add thesis → add forecast → add decision → add outcome → run a basic report
+### M1 — Manual ledger core + CLI/MCP frames
+- Tables for venues, instruments, snapshots, theses, forecasts, decisions, outcomes, sources, tags, events, outbox, and write metadata
+- `journal.init`, `journal.status`, `journal.schema`, JSONL export drain
+- Manual end-to-end write path: instrument → snapshot → thesis → binary forecast → decision → outcome
+- Idempotency contract and result/error envelope per [`contracts.md`](./docs/architecture/contracts.md) and [`persistence.md`](./docs/architecture/persistence.md)
+- `source.add`, `source.attach_to_*`
+- `resolve.pending`, `resolve.record`
 
-### M2 — Memory layer
-- `memory_nodes` and `edges` tables
-- Embedding provider abstraction; bundled bge-small default
-- `memory.retain / recall / reflect` API and tool/command pairs
-- Multi-strategy retrieval (semantic + BM25 + temporal + graph)
-- Confidence/decay computation at recall time
-- `memory.list_edges`, `memory.add_edge`
+### M2 — Binary scoring and deterministic reports
+- `forecast_scores` binary Brier on supported outcome writes (single-probability form per [`scoring.md`](./docs/architecture/scoring.md))
+- Calibration, watchlist, unscored forecast, tag, decision velocity, and basic P&L reports
+- Lazy coach-signal generation in reports/explicit scans
 
-### M3 — Self-improvement loop
-- Layer 1: primitive reports (`report.calibration`, `report.mistakes`, `report.strengths`, `report.pnl`, `report.watchlist`, `report.decision_velocity`, `report.playbook_adherence`, `report.unscored_forecasts`)
-- Layer 2: `report.coach` synthesis
-- Layer 3: reflection ergonomics + linked-memory traversal
-- Layer 4: playbook + playbook_version + playbook_rule machinery; override detection; provenance
+### M3 — Memory layer and recall
+- `memory_nodes`, `memory_node_stats`, `edges`
+- `memory.retain`, `memory.reflect`, `memory.recall` with budget params (`max_chars`, `compact`, `include_body`, `include_provenance`)
+- FTS5 + graph + temporal recall; optional vector recall if configured
 
-### M4 — Connectors
-- Connector ABC + entry-point registry
-- First-party: Polymarket (Gamma read-only), Manifold, yfinance
-- `connector.snapshot / resolve / search` tools
-- Manual fallback always available
+### M4 — Playbook loop
+- Playbooks, versions, playbook rule nodes
+- Normalized `decision_playbook_rules` adherence tracking
+- `report.coach` and `report.playbook_adherence`
+- Playbook version update with reflection provenance
 
-### M5 — Calibration and reports polish
-- Binary Brier scoring with `forecast_score` events
-- Calibration drift detection + `coach_signal` emission
-- ForecastBench-compatible export
-- Tag taxonomy seed (~30 mistake tags, ~10 strength tags from VISION.md §16)
+### P1
+- CSV import
+- Multi-class/categorical scoring and ranked probability score
+- Scalar/distribution schema including `distribution_json`
+- Trading-native reports: forecast-vs-market edge, calibration-by-liquidity-bucket, skipped-positive-edge review
+- ForecastBench schema verification and compatible export if feasible
+- HTTP/SSE transport, re-embedding tools
+- Subscribe API on the event log
 
-### P1 (post-MVP)
-- CSV import (`journal.import csv`)
-- Multi-class and ranked probability scoring
-- Strategy/playbook reports that grade rules by outcome
-- Performance metrics: win rate, expectancy, R-multiple, max favorable/adverse excursion, profit factor
-- Read-only Polymarket WebSocket connector
-- Additional connectors via plugins (Kalshi, Polygon, IBKR)
+### P2
+- Optional sync/backup
+- Optional static/read-only inspection export/viewer, not a product dashboard
+- Historical/replay hooks
+- Multi-agent concurrency improvements
 
-### P2 (later)
-- Optional sync / backup
-- Local web read-only viewer (still JSON-source-of-truth, generated HTML view)
-- Replay / backtest hooks for connectors that support historical data
-- Multi-agent collaboration patterns (multiple agents writing to the same journal with attribution)
+## 9. Testing and verification
 
-## 15. Testing & verification
+- `journal.init` is idempotent.
+- Every tool has a JSON schema.
+- Every write carries `actor_id`/actor metadata; retryable writes accept `idempotency_key` and replay-safely.
+- CLI and MCP outputs are semantically equivalent after transport normalization (verified by the golden-test suite in [`contracts.md`](./docs/architecture/contracts.md) §7).
+- Append-only invariants hold for source/event tables.
+- `positions` and `memory_node_stats` can be rebuilt from source data via `journal.rebuild_projections`.
+- Binary Brier scores match reference calculations using the single-probability form.
+- Binary forecast invariants hold: exactly two outcomes, probabilities in `[0,1]`, sum to `1.0` within `1e-6`, distinct labels.
+- Auto-scoring is blocked when the linked `outcomes.status != 'resolved_final'`.
+- An `IDEMPOTENCY_CONFLICT` is raised only on semantically incompatible payload reuse; pure replay succeeds and reports `meta.idempotent_replay: true`.
+- Time-passing signals are generated lazily by reports or explicit scan, not by a hidden daemon.
+- Security tests ensure credentials are not accepted through CLI/MCP args and are not logged.
 
-### CLI / MCP front-end tests
-- `journal.init` is idempotent
-- Every tool has a JSON schema retrievable via `journal.schema`
-- Every write tool supports `--dry-run` and `--idempotency-key`
-- Error responses use stable codes from the documented enum
-- CLI and MCP emit byte-identical JSON for equivalent inputs
+## 10. Definition of done — MVP
 
-### Storage tests
-- Schema migrations preserve all data on upgrade and downgrade where reversible
-- Append-only invariants hold for snapshots, theses, decisions, position_events, outcomes, reviews, memory_nodes, edges
-- sqlite-vec and FTS5 are operational after fresh init
+The MVP is done when **both** the plumbing criteria and the loop-useful criteria below are met.
 
-### Memory layer tests
-- Embeddings are computed and stored for every memory_node write
-- Recall returns nodes ordered by combined score across enabled strategies
-- Confidence decay matches the documented formula for synthetic age inputs
-- Edge traversal honors depth limits and edge-type filters
+### 10.1 Plumbing criteria (the loop runs)
 
-### Self-improvement loop tests
-- Auto-scoring fires on outcome resolution and produces correct Brier values for binary forecasts
-- Calibration drift z-scores match a reference numpy implementation
-- Playbook override detection correctly flags decisions that violate active rules
-- `report.coach` synthesizes from a fixture without calling any LLM
+1. Initialize a journal.
+2. Record at least 30 decisions, including binary forecasts.
+3. Resolve at least 5 supported binary forecasts with `outcomes.status = 'resolved_final'` and score them with binary Brier.
+4. Run deterministic reports and `report.coach`.
+5. Write at least 10 reflections linked to ledger rows.
+6. Propose at least one playbook version update with provenance from a reflection.
+7. Record `decision_playbook_rules` adherence entries on later decisions and surface them in `report.playbook_adherence`.
+8. Recall relevant prior memories/playbook rules during a later thesis.
+9. Execute zero trades and handle zero execution credentials.
 
-### Connector tests
-- Polymarket Gamma read-only snapshot for a known market
-- Manifold public snapshot for a known market
-- yfinance snapshot for a known equity
-- Manual entry path produces identical ledger state to connector-provided entry
+### 10.2 Loop-useful criteria (the loop helps)
 
-### End-to-end dogfood test
-- LLM agent (Claude/GPT) is given MCP access to the journal
-- It records 20 decisions across at least two asset classes
-- It runs `report.coach`, writes reflections, proposes a playbook rule update
-- The next session of decisions shows the updated playbook is in force and overrides are tracked
+10. At least one report identifies a recurring error or strength pattern that the agent did not call out in advance.
+11. At least one `memory.recall` result is explicitly cited in a later thesis, traceable via a `derived_from` or `supports` edge.
+12. At least one playbook rule changes a later decision: either followed (`decision_playbook_rules.status = 'followed'`) or overridden (`status = 'overridden'`) with the outcome captured.
+13. At least one ambiguous-resolution case is handled correctly: the outcome row carries `status ∈ ('ambiguous', 'disputed', 'resolved_provisional')` and the forecast remains in `scoring_state = 'pending'` until a `resolved_final` outcome supersedes it.
+14. The calibration report explicitly states sample size; 5 resolved forecasts is enough for plumbing but not enough for serious calibration, and reports must say so when the sample is small.
 
-## 16. Definition of done (MVP, learning-gated)
+Validation question: does Trade Trace make the LLM trader auditable, calibratable, and improvable over time?
 
-The MVP is done when, after 30 days of continuous dogfooding by an LLM agent:
+## 11. Remaining open questions
 
-1. The agent has recorded **at least 30 decisions** across **at least two asset classes** (one of which is binary prediction markets, for calibration testing).
-2. At least **5 forecasts have resolved** and been auto-scored with binary Brier; calibration buckets have non-trivial sample size.
-3. `report.coach` surfaces **at least one miscalibrated bucket** the agent did not already know about (verified by asking the agent before and after).
-4. The agent has written **at least 10 reflections** linked to ledger rows and other memory nodes; `memory.recall` reliably surfaces relevant past reflections when forming a new thesis.
-5. **At least one playbook rule has been updated** via `playbook.propose_version`, with provenance traceable to a stored reflection; override tracking is active and reports show at least one rule whose override outcomes are negative.
-6. The system has executed **zero trades**.
-7. Exports (`journal.export jsonl` and `journal.export forecastbench`) produce valid output that round-trips through import (where supported) without data loss.
-
-The validation question, restated:
-
-> Does Trade Trace make the LLM trader auditable, calibratable, and improvable over time?
-
-## 17. Remaining open questions
-
-These are deferred to implementation planning or future iterations:
-
-1. **MCP server transport**: stdio (default for local Claude Code / Cursor integration) only, or also HTTP/SSE for remote hosts? Stdio in MVP; HTTP in P1.
-2. **Embedding migration**: if the user changes the embedding model in config, do we re-embed all existing memory nodes lazily, eagerly, or never? Probably lazily with a `memory.reembed` command in P1.
-3. **Tag governance**: tags are free-form for now but a system playbook of "canonical mistake tags" is shipped. Should we lint or normalize agent-provided tags? Probably not — let usage data inform later.
-4. **Reflection LLM model**: agents bring their own LLM; the system never calls an LLM directly. But should `report.coach` optionally call an LLM to summarize the structured packet in prose? Probably no — the prose belongs to the agent, not the system.
-5. **Multi-agent attribution**: when multiple agents write to the same journal, do we track `actor_id` on every row? Probably yes, even in MVP — a simple `actor` column on writes is cheap insurance.
-6. **Connector authentication boundary**: how do we prevent a third-party connector from doing unintended things? Sandboxing is hard in Python. Best we can do for MVP: connector capability flags + connectors live in known plugin packages + we document the security model and refuse to load unknown connectors without explicit config opt-in.
-7. **Concurrency**: SQLite WAL mode + a single writer assumption is fine for MVP. Multi-process concurrency from multiple agents on the same machine is a P1 concern.
+1. Re-embedding policy when an embedding model changes: likely P1 lazy re-embed, see [`memory-layer.md`](./docs/architecture/memory-layer.md) §8.
+2. Concurrency: SQLite WAL with single-writer assumption for MVP; stronger multi-agent concurrency later. See [`persistence.md`](./docs/architecture/persistence.md) §9.
+3. Exact ForecastBench export shape: verify against the current schema before promising compatibility.
+4. Surfacing "the agent did not already know this" for the §10.2 usefulness criterion: requires the agent to explicitly flag pre-existing knowledge on thesis write, or the report to compare against the agent's prior memory recall results. Likely a small extension to `report.coach` in P1.
