@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-18
 **Status:** Clean planning draft
-**Companion docs:** [`VISION.md`](./VISION.md), [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md), [`docs/architecture/scoring.md`](./docs/architecture/scoring.md), [`docs/architecture/persistence.md`](./docs/architecture/persistence.md), [`docs/architecture/contracts.md`](./docs/architecture/contracts.md), [`docs/architecture/operability.md`](./docs/architecture/operability.md), [`docs/architecture/reports.md`](./docs/architecture/reports.md), [`docs/architecture/imports.md`](./docs/architecture/imports.md), [`docs/architecture/risk-units.md`](./docs/architecture/risk-units.md), [`docs/architecture/opportunity-analysis.md`](./docs/architecture/opportunity-analysis.md)
+**Companion docs:** [`VISION.md`](./VISION.md), [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md), [`docs/architecture/scoring.md`](./docs/architecture/scoring.md), [`docs/architecture/persistence.md`](./docs/architecture/persistence.md), [`docs/architecture/contracts.md`](./docs/architecture/contracts.md), [`docs/architecture/operability.md`](./docs/architecture/operability.md), [`docs/architecture/reports.md`](./docs/architecture/reports.md), [`docs/architecture/imports.md`](./docs/architecture/imports.md), [`docs/architecture/risk-units.md`](./docs/architecture/risk-units.md), [`docs/architecture/opportunity-analysis.md`](./docs/architecture/opportunity-analysis.md), [`docs/architecture/dogfood-protocol.md`](./docs/architecture/dogfood-protocol.md)
 
 Trade Trace is a local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents. It records decisions, resolves outcomes, scores supported forecasts, stores reflections, evolves playbooks, and recalls prior learning. It never executes trades, never queries external venues for market data, never handles execution credentials, and is not a human dashboard.
 
@@ -278,7 +278,7 @@ Forbidden-but-supplied fields raise `VALIDATION_ERROR` with `details.field` set.
 - `status` (`active`, `archived`), `created_at`, `updated_at`, `actor_id`
 - Mutable rows on `description`, `hypothesis`, and `status`. Every change writes a `strategy.updated` event in the `events` log so historical state is recoverable without a separate version table.
 - Soft-archive only; rows are never deleted. Archived strategies remain valid FK targets for historical decisions, theses, and reviews.
-- Slug uniqueness is enforced at the storage layer; duplicate slugs on `strategy.create` surface as `VALIDATION_ERROR` (§6).
+- Slug uniqueness is enforced at the storage layer per Trade Trace database instance (one `$TRADE_TRACE_HOME/trade-trace.sqlite` = one slug namespace; cross-database slug collisions are not detected or relevant). Duplicate slugs on `strategy.create` surface as `VALIDATION_ERROR` (§6).
 - Ships in M3 alongside the memory layer (§8); the nullable `strategy_id` FK columns on `decisions`, `theses`, and `reviews` are reserved in M1.
 
 #### `playbooks` / `playbook_versions`
@@ -332,7 +332,7 @@ Forbidden-but-supplied fields raise `VALIDATION_ERROR` with `details.field` set.
 - Allowed endpoint kinds: `memory_node`, `decision`, `thesis`, `position`, `forecast`, `outcome`, `snapshot`, `review`, `playbook_version`, `source`, `instrument`, `venue`, `signal`, `strategy`.
 - Edge types (7, matching [`memory-layer.md`](./docs/architecture/memory-layer.md) §5): `about`, `derived_from`, `supports`, `contradicts`, `supersedes`, `violates`, `follows`.
 - Deferred edge types until a concrete need arises: `links`, `retracts`, `tombstones`. Append-only; correction is via `supersedes`. `contradicts` is semantic evidence and is never used for administrative deletion.
-- Endpoint IDs are validated before insertion. The `signal` and `strategy` endpoint kinds are added with the memory layer and strategies in M3; pre-M3 writes that pass these kinds are rejected with `VALIDATION_ERROR`.
+- Endpoint IDs are validated before insertion. **M1 endpoint enum** (minimum sufficient for source attachments and outcome corrections): `decision`, `thesis`, `forecast`, `outcome`, `snapshot`, `instrument`, `venue`, `source`, `review`, `playbook_version`. **M1 edge type enum**: `about`, `supports`, `contradicts`, `supersedes`. The `memory_node`, `signal`, and `strategy` endpoint kinds and the `derived_from`, `violates`, `follows` edge types are added with the memory layer and strategies in M3; pre-M3 writes that pass these kinds or types are rejected with `VALIDATION_ERROR`.
 
 ## 4. APIs and tools
 
@@ -370,8 +370,13 @@ Deterministic reports:
 - `report.playbook_adherence` — driven by `decision_playbook_rules`; surfaces considered/followed/overridden/not_applicable counts and override outcomes.
 - `report.decision_velocity`.
 - `report.filter_schema` — returns the canonical `ReportFilter` Pydantic schema as JSON, so an agent can introspect valid fields without hitting the docs.
+- `report.calibration_integrity` — six anti-goodhart hygiene diagnostics (forecast_coverage, unsupported_rate, ambiguous_rate, disputed_rate, void_cancelled_rate, suspicious_late_rate). Embedded in `report.calibration.data.integrity_diagnostics` and surfaced as a standalone tool. See [`reports.md`](./docs/architecture/reports.md) §4.8. (Bead trade-trace-jzn.)
+- `report.source_quality` — five provenance hygiene diagnostics (missing_sources_on_actual_enter, stale_sources, contradictory_sources, duplicated_sources, sensitive_sources) over the source-attachment graph. See [`reports.md`](./docs/architecture/reports.md) §4.9. (Bead trade-trace-l9q.)
+- `tool.schema` — per-tool introspection: returns description, CLI invocation, example_minimal/example_rich payloads (for write tools), and required_metadata notes (actor_id pattern, idempotency_key pattern, dry-run support flags). Omit `tool` to enumerate the full tool catalog. (Bead trade-trace-268.)
 
-`report.coach` aggregates objective signals into a structured packet. It does not call an LLM and does not provide trading advice. Allowed outputs: surfacing recurring tags, calibration drift buckets, override outcomes, stale watches, sample-size warnings. Forbidden outputs: trade recommendations, profitability claims, directional advice.
+Every write tool accepts `--dry-run` (CLI) / `_dry_run: true` (MCP): the dispatcher rolls back the wrapping transaction so the call returns the would-be IDs and payload without persisting any rows. `meta.dry_run=true` echoes back on the envelope (success or error). (Bead trade-trace-268.)
+
+`report.coach` aggregates objective signals into a structured packet. It does not call an LLM and does not provide trading advice. Allowed outputs: surfacing recurring tags, calibration drift buckets, override outcomes, stale watches, sample-size warnings, integrity / source-quality diagnostics. Forbidden outputs: trade recommendations, profitability claims, directional advice.
 
 Trading-native reports (forecast-vs-market edge, calibration-by-liquidity-bucket, skipped-positive-edge review) are deferred to P1. The data is already captured in `snapshots`; the reports are additive.
 
@@ -466,12 +471,14 @@ The MVP commitment is the **import-ready write schema**: every core write tool i
 
 ### M1 — Manual ledger core + CLI/MCP frames
 - Tables for venues, instruments, snapshots, theses, forecasts, decisions, outcomes, sources, tags, events, outbox, and write metadata (with segmentation fields `agent_id`/`model_id`/`environment`/`run_id` and bi-temporal fields `valid_from`/`valid_to`/`invalidated_at`/`invalidated_by` on belief-shaped tables)
+- `edges` table ships in M1 with a **minimal endpoint enum** sufficient for source attachments and outcome corrections: `decision`, `thesis`, `forecast`, `outcome`, `snapshot`, `instrument`, `venue`, `source`, `review`, `playbook_version`. Edge types in M1: `about`, `supports`, `contradicts`, `supersedes`. The `memory_node`, `signal`, and `strategy` endpoint kinds and the `derived_from`/`violates`/`follows` edge types are deferred to M3 alongside the memory layer and strategies (§3.2); pre-M3 writes that pass deferred kinds or types are rejected with `VALIDATION_ERROR`. `signals` table is M3 (no system-emitted signals before reports exist).
 - Reserve nullable `strategy_id` columns on `decisions`, `theses`, and `reviews` for forward compatibility; the `strategies` table itself, the `strategy.*` tools, and the `strategy` edge endpoint kind ship in M3
 - Core write tools per §4.0: `venue.add`, `instrument.add`, `snapshot.add`, `thesis.add`, `forecast.add`, `forecast.supersede`, `decision.add`, `outcome.add` / `resolve.record`
 - `journal.init`, `journal.status`, `journal.schema`, JSONL export drain
 - Manual end-to-end write path: instrument → snapshot → thesis → binary forecast → decision → outcome
 - Idempotency contract and result/error envelope per [`contracts.md`](./docs/architecture/contracts.md) and [`persistence.md`](./docs/architecture/persistence.md)
-- `source.add`, `source.attach_to_*` with provenance fields per §3.1 sources
+- `source.add`, `source.attach_to_*` with provenance fields per §3.1 sources (writes `about`/`supports`/`contradicts` rows into the M1 `edges` table)
+- Outcome correction path per §3.1 outcomes (new `outcomes` row + `supersedes` edge in the M1 `edges` table)
 - `resolve.pending`, `resolve.record`
 
 ### M2 — Binary scoring and deterministic reports
@@ -556,20 +563,22 @@ The MVP is done when **both** the plumbing criteria and the loop-useful criteria
 
 ### 10.2 Loop-useful criteria (the loop helps)
 
-10. At least one report identifies a recurring error or strength pattern that the agent did not call out in advance.
-11. At least one `memory.recall` result is explicitly cited in a later thesis, traceable via a `derived_from` or `supports` edge.
-12. At least one playbook rule changes a later decision: either followed (`decision_playbook_rules.status = 'followed'`) or overridden (`status = 'overridden'`) with the outcome captured.
-13. At least one ambiguous-resolution case is handled correctly: the outcome row carries `status ∈ ('ambiguous', 'disputed', 'resolved_provisional')` and the forecast remains in `scoring_state = 'pending'` until a `resolved_final` outcome supersedes it.
-14. The calibration report explicitly states sample size and emits a `sample_warning` when the filtered set is below the configurable minimum (default 20 scored forecasts); 5 resolved forecasts is enough for plumbing but not enough for serious calibration, and reports must say so.
-15. At least one strategy-scoped recall (`memory.recall(context: {kind: 'strategy', id})`) surfaces a memory the agent did not cite in the originating thesis, traceable via a `derived_from` or `supports` edge — demonstrating that strategies actually narrow recall to a useful subset rather than acting as decorative metadata.
-16. The calibration report surfaces a sharpness signal that distinguishes "always 50%" from a confident-and-calibrated forecaster (the former has near-zero sharpness; the latter has non-trivial sharpness with low ECE).
+Each criterion has a deterministic protocol and measurable assertion in [`dogfood-protocol.md`](./docs/architecture/dogfood-protocol.md) §5; `c1r` (Final Verification) runs the protocol against the trade-trace-8dv fixture.
+
+10. At least one report identifies a recurring error or strength pattern that the agent did not call out in advance. (Protocol: §5.1.)
+11. At least one `memory.recall` result is explicitly cited in a later thesis, traceable via a `derived_from` or `supports` edge. (Protocol: §5.2; "agent did not already know this" construction in §6.)
+12. At least one playbook rule changes a later decision: either followed (`decision_playbook_rules.status = 'followed'`) or overridden (`status = 'overridden'`) with the outcome captured. (Protocol: §5.3.)
+13. At least one ambiguous-resolution case is handled correctly: the outcome row carries `status ∈ ('ambiguous', 'disputed', 'resolved_provisional')` and the forecast remains in `scoring_state = 'pending'` until a `resolved_final` outcome supersedes it. (Protocol: §3 / §5.4 covers `void`, `disputed`, and `resolved_provisional` scenarios.)
+14. The calibration report explicitly states sample size and emits a `sample_warning` when the filtered set is below the configurable minimum (default 20 scored forecasts); 5 resolved forecasts is enough for plumbing but not enough for serious calibration, and reports must say so. (Protocol: §5.5.)
+15. At least one strategy-scoped recall (`memory.recall(context: {kind: 'strategy', id})`) surfaces a memory the agent did not cite in the originating thesis, traceable via a `derived_from` or `supports` edge — demonstrating that strategies actually narrow recall to a useful subset rather than acting as decorative metadata. (Protocol: §5.6.)
+16. The calibration report surfaces a sharpness signal that distinguishes "always 50%" from a confident-and-calibrated forecaster (the former has near-zero sharpness; the latter has non-trivial sharpness with low ECE). (Protocol: §5.7.)
 
 The validation question for the MVP is whether the loop **made the LLM trader auditable, calibratable, and improvable over time**: every decision traces to a thesis with bi-temporal validity, every supported forecast has a calibration score with a documented baseline, and every reflection traces to the ledger rows that motivated it.
 
 ## 11. Remaining open questions
 
 1. Exact ForecastBench export shape: verify against the current schema before promising compatibility.
-2. Surfacing "the agent did not already know this" for the §10.2 usefulness criterion: requires the agent to explicitly flag pre-existing knowledge on thesis write, or the report to compare against the agent's prior memory recall results. Likely a small extension to `report.coach` in P1.
+2. ~~Surfacing "the agent did not already know this" for the §10.2 usefulness criterion~~ Resolved by [`dogfood-protocol.md`](./docs/architecture/dogfood-protocol.md) §6: the construction relies on the union of `derived_from`/`supports`/`about` edges from the new thesis (and its same-transaction decision/forecast rows) plus the immediately-preceding `memory_recall_events` row's `node_ids_returned`. No `prior_knowledge` boolean column is needed; the property is computable from existing data and surfaces in `report.coach`.
 3. **Strategy ↔ playbook coupling.** A future `playbook_strategy_link(playbook_version_id, strategy_id, role)` join table is considered and explicitly deferred. Orthogonality (§2.6, §2.12) is the MVP stance. Promote when dogfood shows that playbooks consistently follow strategy boundaries (e.g., one strategy "owns" a rule set used nowhere else) and `(strategy × playbook)` filtering on `report.playbook_adherence` becomes insufficient.
 4. **Strategy versioning.** Hypotheses evolve. MVP captures evolution as `strategy.updated` events in the `events` log (per §3.1 and [`persistence.md`](./docs/architecture/persistence.md)). Promote to a `strategy_versions` table when point-in-time queries like "what was this strategy's hypothesis on the date I made decision X" become load-bearing for reflection or reporting.
 5. **Many-to-many decision↔strategy.** Pairs trades and basket strategies arguably belong to multiple strategies at once. MVP uses a single nullable `strategy_id` FK; the workaround is a composite strategy row (e.g., `pairs-trade-AAPL-MSFT`). Promote to a `decision_strategies` join table when dogfood produces concrete cases where the composite-row workaround loses information that reports actually consume.

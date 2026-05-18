@@ -172,7 +172,9 @@ So the agent can triangulate (e.g., "BM25 surfaced this node, semantic didn't �
 
 ### 7.2 Opt-in strategy: SEMANTIC
 
-- **`SEMANTIC`** — vector similarity via `sqlite-vec`. **Off by default in MVP** (per PRD §2.4.1). The package ships with `sqlite-vec` and `sentence-transformers` as runtime dependencies, but no model weights are downloaded on `journal.init`. To enable:
+**Implementation status (M3, bead trade-trace-ubp split):** the SEMANTIC strategy and its enabling config surfaces (`tt config set embeddings.provider local|openai|none`, `tt model import <path>`, `tt memory reindex --confirm`) are **deferred to bead trade-trace-a4p** (deferred until 2026-06-15). MVP ships BM25 + TEMPORAL + GRAPH only; `memory.recall` runs entirely on local SQLite (FTS5 BM25, in-memory recency, edges-table traversal) with zero network. `journal.status` reports `embeddings_provider = "none"` on every fresh init. The off-by-default contract is verified end-to-end in `tests/security/test_embeddings_off_by_default.py`.
+
+- **`SEMANTIC`** — vector similarity via `sqlite-vec`. **Off by default in MVP** (per PRD §2.4.1). The package ships with `sqlite-vec` and `sentence-transformers` as runtime dependencies, but no model weights are downloaded on `journal.init`. To enable (in a future build that lands bead a4p):
   - `tt config set embeddings.provider local` — authorizes one-time download of `BAAI/bge-small-en-v1.5` (~130MB) into `$TRADE_TRACE_HOME/models/`. Subsequent recall calls use it transparently.
   - `tt model import <path>` — air-gapped install path that uses a pre-staged model without any network call.
   - `tt config set embeddings.provider openai` (or other API provider) — opt-in remote embedding; see §8.3.
@@ -226,9 +228,11 @@ Strategy context composes with `query` (full-text terms still apply within the s
 
 ## 8. Embeddings
 
+**Implementation status (M3):** §8.1 ships in MVP; §§8.2-8.5 (provider config tool, lazy download, API providers, reindex, disable) are **deferred to bead trade-trace-a4p** (deferred until 2026-06-15, split from bead ubp). MVP wheels do NOT yet bundle `sqlite-vec` / `sentence-transformers` — those install-time dependencies land with a4p. The off-by-default behavior described in §8.1 is the binding contract today: a fresh `journal.init` makes zero outbound network calls and the recall path returns valid results without vectors.
+
 ### 8.1 MVP default: vectors off, deps bundled
 
-The base wheel includes `sqlite-vec` and `sentence-transformers` as runtime dependencies — they ship with the install. **No model weights are downloaded on `journal.init`.** A fresh install runs fully offline; recall uses BM25 + temporal (+ graph if requested).
+The base wheel includes `sqlite-vec` and `sentence-transformers` as runtime dependencies — they ship with the install (planned with bead a4p; M3 wheels are vector-dep-free pending that bead). **No model weights are downloaded on `journal.init`.** A fresh install runs fully offline; recall uses BM25 + temporal (+ graph if requested).
 
 This is the load-bearing change from earlier drafts: VISION §safety promises "MVP makes no outbound network calls" and is air-gappable on first run, which a default-on lazy download breaks. Defaulting vectors off keeps that promise; opting in is one config line.
 
@@ -290,6 +294,43 @@ The `target` of a reflection can be:
 
 - A specific decision (`decision_id`), position (`position_id`), instrument (`instrument_id`), playbook version (`playbook_version_id`), signal (`signal_id`), outcome (`outcome_id`), forecast (`forecast_id`), or strategy (`strategy_id`) — creates an `about` edge to the target endpoint.
 - A time period (`period: {start, end}`) or tag (`tag: "liquidity-ignored"`) — stored in reflection `meta_json` until/unless period/tag entities become first-class endpoints. Strategies, by contrast, *are* first-class (PRD §2.12) and target a strategy directly rather than via `meta_json`.
+
+### 9.1 Period- and tag-scoped reflection lookup
+
+Since period and tag are not first-class edge endpoints in MVP, the
+lookup pattern goes through `meta_json` directly. The canonical
+representation in `meta_json` is locked so callers and reports agree on
+what to query:
+
+| Scope | `meta_json` shape (written by `memory.reflect`) |
+|---|---|
+| Period | `meta_json.scope_kind = "period"`, `meta_json.scope_period = {"start": "<ISO 8601 UTC>", "end": "<ISO 8601 UTC>"}`. `start` is inclusive, `end` is exclusive. |
+| Tag | `meta_json.scope_kind = "tag"`, `meta_json.scope_tag = "<lower-cased tag>"`. Tag normalization mirrors `decision_tags` (lowercase, leading/trailing whitespace stripped). |
+
+`memory.recall` accepts these scopes via the `context` parameter:
+
+- `context: {kind: "period", id: {"start": "...", "end": "..."}}` —
+  restricts the candidate set to reflection nodes where
+  `meta_json.scope_kind = "period"` AND the stored period interval
+  intersects the supplied interval (`stored.start < query.end AND
+  stored.end > query.start`).
+- `context: {kind: "tag", id: "liquidity-ignored"}` — restricts the
+  candidate set to reflection nodes where `meta_json.scope_kind = "tag"`
+  AND `meta_json.scope_tag` equals the lower-cased query tag.
+
+Both lookups compose with `query` (FTS5 over body/title), `as_of`
+(bi-temporal validity per §3), `node_types` (which must include
+`reflection` for either lookup to return anything), and the other
+budget params (`k`, `max_chars`, `compact`). An empty candidate set
+returns an empty result with `meta.budget_applied = false`, not an
+error.
+
+This pattern reserves first-class period/tag entity promotion for a
+later release without changing the recall API: a future
+`period`/`tag` endpoint kind on the edges table can be wired up
+transparently, with `memory.reflect` writing both the new edge and the
+legacy `meta_json` keys for one schema version (the
+[`operability.md`](operability.md) §4.4 add-new + dual-write pattern).
 
 ## 10. Reflection ergonomics
 

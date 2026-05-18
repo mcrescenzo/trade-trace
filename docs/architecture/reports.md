@@ -74,7 +74,8 @@ filter on this field"; `null` means "unset."
     "resolution_status": [],        // any of outcomes.status values
     "scoring_state": [],            // any of forecasts.scoring_state values
     "score_gte": null,              // brier_binary lower bound
-    "score_lt": null
+    "score_lt": null,
+    "include_late_recorded": false  // see dogfood-protocol.md §2.2: false (default) excludes late-recorded forecasts from calibration aggregates; true includes them with caveat
   },
   "source": {
     "source_kind": [],
@@ -226,6 +227,21 @@ skill), reliability bins.
 Groups: by default, one group; group-by is via `report.compare` (§4.7).
 The single-group case still emits `groups[]` for shape uniformity.
 
+**Late-recorded filter (default exclusion).** Per
+[`dogfood-protocol.md`](dogfood-protocol.md) §2.2, every score row
+whose forecast does not satisfy the "pre-outcome" condition is stamped
+with `forecast_scores.metadata_json.late_recorded = true`.
+`report.calibration` excludes those rows from every aggregate metric
+unless the filter's `outcome.include_late_recorded` is `true`. The
+summary always reports `data.summary.late_recorded_excluded` (integer
+count) and adds a caveat to `data.caveats[]` when any were excluded.
+
+**Embedded integrity panel (MVP hardening, bead trade-trace-jzn).** Every
+`report.calibration` envelope also carries `data.integrity_diagnostics`
+— the same shape that `report.calibration_integrity` (§4.8) emits as a
+standalone surface. The embed exists so an agent reading the calibration
+panel cannot ignore the denominator/hygiene context. See §4.8.
+
 ### 4.2 `report.mistakes` and `report.strengths`
 
 Group by tag. Per-group metrics: tag count, distinct decisions,
@@ -272,6 +288,56 @@ Output: a `ReportResult` whose `groups[]` is one entry per distinct
 value of `group_by`, each with the `base_report`'s metric set. Each
 group carries its own sub-filter for drill-down. Sample warnings are
 per group; the summary aggregates over all groups.
+
+### 4.8 `report.calibration_integrity` (MVP hardening)
+
+Six anti-goodhart hygiene diagnostics over the journal. The same shape
+is embedded inside `report.calibration.data.integrity_diagnostics`; the
+standalone tool exists for agents that want the panel without recomputing
+calibration metrics. Diagnostics:
+
+1. `forecast_coverage` — `{total_decisions, total_forecasts,
+   scored_forecasts, denominator_coverage_pct}`. The denominator-truth
+   block: no other metric is interpretable without it.
+2. `unsupported_rate` — forecasts with `scoring_support='unsupported'`
+   (categorical/scalar in MVP, awaiting the P1 scorer).
+3. `ambiguous_rate` — outcomes with `status='ambiguous'`.
+4. `disputed_rate` — outcomes with `status='disputed'`.
+5. `void_cancelled_rate` — combined for `status in (void, cancelled)`.
+6. `suspicious_late_rate` — forecasts whose `created_at` is after a
+   matching outcome's `resolved_at` (post-hoc bias signal).
+
+Each diagnostic returns `{count, total, rate_pct, sample_ids,
+truncated}`. The framing is hygiene-not-fraud per scoring.md §9: the
+goal is to make the panel honest about its denominator, not to second-
+guess intent. Empty journal returns `summary.sample_warning="no_data"`.
+
+Source: bead trade-trace-jzn.
+
+### 4.9 `report.source_quality` (MVP hardening)
+
+Five provenance hygiene diagnostics over the source-attachment graph:
+
+1. `missing_sources_on_actual_enter` — decisions with
+   `type='actual_enter'` whose linked thesis has zero attached sources.
+2. `stale_sources` — sources whose `freshness_at` predates the linked
+   decision's `created_at` by more than `stale_threshold_days` (default
+   7).
+3. `contradictory_sources` — theses with both `supports` and
+   `contradicts` edges from sources of the same `kind`.
+4. `duplicated_sources` — source rows with the same `content_hash`
+   attached to the same target more than once.
+5. `sensitive_sources` — sources with `redaction_status='sensitive'`
+   that show up in the attachment graph (the `review.bundle` path
+   strips these per §5.3; the diagnostic surfaces them so agents know
+   which edges operate against a blank-out).
+
+Each diagnostic returns `{count, sample_ids, samples, truncated}`. The
+report is intentionally global (no `ReportFilter` input): provenance
+hygiene is a journal-level signal, not a per-strategy slice. No external
+fetching, no credibility scoring.
+
+Source: bead trade-trace-l9q.
 
 ## 5. `review.bundle`
 

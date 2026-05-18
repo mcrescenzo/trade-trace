@@ -1,0 +1,393 @@
+"""Provenance / source-quality hygiene per bead trade-trace-l9q.
+
+Covers ≥6 named tests:
+
+- stance-to-edge-type mapping per stance (`supports`, `contradicts`,
+  `neutral`).
+- Unknown stance / source kind rejected with VALIDATION_ERROR.
+- Unknown endpoint target rejected with NOT_FOUND.
+- report.source_quality + report.coach surface each of the five
+  diagnostics: missing on actual_enter, stale, contradictory,
+  duplicated, sensitive.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from trade_trace.mcp_server import mcp_call
+
+
+@pytest.fixture
+def home(tmp_path):
+    h = tmp_path / "home"
+    assert mcp_call("journal.init", {"home": str(h)}).ok
+    return h
+
+
+def _mcp(home: Path, tool: str, args: dict | None = None):
+    payload = {"home": str(home), **(args or {})}
+    return mcp_call(tool, payload, actor_id="agent:default")
+
+
+def _seed_thesis_and_decision(
+    home: Path, *, decision_type: str = "actual_enter",
+) -> dict:
+    """Walk venue → instrument → thesis → forecast → decision and return
+    every id so individual tests can attach sources or assert hygiene."""
+
+    venue = _mcp(home, "venue.add",
+                 {"name": "PM", "kind": "prediction_market"}).data["id"]
+    inst = _mcp(home, "instrument.add", {
+        "venue_id": venue,
+        "asset_class": "prediction_market", "title": "X",
+    }).data["id"]
+    thesis = _mcp(home, "thesis.add", {
+        "instrument_id": inst, "side": "yes", "body": "t",
+    }).data["id"]
+    fcst = _mcp(home, "forecast.add", {
+        "thesis_id": thesis, "kind": "binary", "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.6},
+            {"outcome_label": "no", "probability": 0.4},
+        ],
+    }).data["id"]
+    dec = _mcp(home, "decision.add", {
+        "type": decision_type, "instrument_id": inst,
+        "thesis_id": thesis, "forecast_id": fcst,
+        "side": "yes", "quantity": 1, "price": 0.6,
+        "idempotency_key": "00000000-0000-4000-8000-000000000000",
+    }).data["id"]
+    return {"venue": venue, "instrument": inst, "thesis": thesis,
+            "forecast": fcst, "decision": dec}
+
+
+# -- 1. stance → edge_type mapping per stance value ------------------
+
+
+@pytest.mark.parametrize(
+    "stance,expected_edge_type",
+    [
+        ("supports", "supports"),
+        ("contradicts", "contradicts"),
+        ("neutral", "about"),  # decided: neutral → about (positional)
+    ],
+)
+def test_stance_to_edge_type_mapping(home, stance, expected_edge_type):
+    seeds = _seed_thesis_and_decision(home)
+    src = _mcp(home, "source.add", {
+        "kind": "url", "stance": stance, "uri": f"https://example.com/{stance}",
+        "idempotency_key": f"00000000-0000-4000-8000-{stance:>012}"[:36],
+    }).data["id"]
+    env = _mcp(home, "source.attach_to_thesis", {
+        "source_id": src, "target_id": seeds["thesis"],
+        "idempotency_key": f"00000000-0000-4000-8000-attach-{stance:>4}"[:36],
+    })
+    assert env.ok, env
+    assert env.data["edge_type"] == expected_edge_type
+
+
+# -- 2. unknown stance / kind rejected ----------------------------
+
+
+def test_unknown_stance_rejected(home):
+    """SQLite CHECK constraint on sources.stance surfaces as
+    VALIDATION_ERROR via the dispatcher's IntegrityError handler."""
+
+    env = _mcp(home, "source.add", {
+        "kind": "url", "stance": "bullish",  # not in enum
+        "uri": "https://example.com/x",
+        "idempotency_key": "00000000-0000-4000-8000-100000000001",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+
+
+def test_unknown_source_kind_rejected(home):
+    env = _mcp(home, "source.add", {
+        "kind": "smoke_signals",  # not in enum
+        "stance": "supports",
+        "uri": "https://example.com/x",
+        "idempotency_key": "00000000-0000-4000-8000-100000000002",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+
+
+# -- 3. unknown endpoint target rejected (NOT_FOUND) -------------
+
+
+def test_attach_to_missing_thesis_returns_not_found(home):
+    src = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports", "uri": "https://e.x/y",
+        "idempotency_key": "00000000-0000-4000-8000-100000000003",
+    }).data["id"]
+    env = _mcp(home, "source.attach_to_thesis", {
+        "source_id": src, "target_id": "thes_does_not_exist",
+        "idempotency_key": "00000000-0000-4000-8000-100000000004",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "NOT_FOUND"
+    assert env.error.details["entity_kind"] == "thesis"
+
+
+def test_attach_to_missing_decision_returns_not_found(home):
+    src = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports", "uri": "https://e.x/y",
+        "idempotency_key": "00000000-0000-4000-8000-100000000005",
+    }).data["id"]
+    env = _mcp(home, "source.attach_to_decision", {
+        "source_id": src, "target_id": "dec_does_not_exist",
+        "idempotency_key": "00000000-0000-4000-8000-100000000006",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "NOT_FOUND"
+    assert env.error.details["entity_kind"] == "decision"
+
+
+# -- 4. (a) missing_sources_on_actual_enter -----------------------
+
+
+def test_missing_sources_on_actual_enter_fires(home):
+    """positive: an actual_enter decision whose thesis has zero source
+    attachments surfaces in the diagnostic."""
+
+    seeds = _seed_thesis_and_decision(home, decision_type="actual_enter")
+    env = _mcp(home, "report.source_quality", {})
+    assert env.ok, env
+    diag = env.data["diagnostics"]["missing_sources_on_actual_enter"]
+    assert diag["count"] == 1
+    assert seeds["decision"] in diag["sample_ids"]["decisions"]
+
+
+def test_missing_sources_silent_when_source_attached(home):
+    """negative: attach one source → diagnostic is silent."""
+
+    seeds = _seed_thesis_and_decision(home, decision_type="actual_enter")
+    src = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports", "uri": "https://e.x/y",
+        "idempotency_key": "00000000-0000-4000-8000-200000000001",
+    }).data["id"]
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": src, "target_id": seeds["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-200000000002",
+    })
+    env = _mcp(home, "report.source_quality", {})
+    diag = env.data["diagnostics"]["missing_sources_on_actual_enter"]
+    assert diag["count"] == 0
+
+
+# -- 5. (b) stale_sources -----------------------------------------
+
+
+def test_stale_sources_fires_when_freshness_predates_decision(home):
+    """positive: a source whose freshness_at is 100 days before the
+    decision.created_at surfaces with staleness_days well above the
+    7-day threshold."""
+
+    seeds = _seed_thesis_and_decision(home)
+    src = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports", "uri": "https://e.x/y",
+        "freshness_at": "2020-01-01T00:00:00Z",  # ancient
+        "idempotency_key": "00000000-0000-4000-8000-300000000001",
+    }).data["id"]
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": src, "target_id": seeds["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-300000000002",
+    })
+    env = _mcp(home, "report.source_quality", {})
+    diag = env.data["diagnostics"]["stale_sources"]
+    assert diag["count"] >= 1
+    sample = next(s for s in diag["samples"] if s["id"] == src)
+    assert sample["staleness_days"] > 7
+
+
+def test_stale_sources_silent_when_freshness_recent(home):
+    """negative: a source freshness_at = now (within 7 days of decision)
+    does not fire."""
+
+    from trade_trace.timestamps import to_utc_iso8601
+    from datetime import datetime, timezone, timedelta
+
+    seeds = _seed_thesis_and_decision(home)
+    recent = to_utc_iso8601(
+        (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    )
+    src = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports", "uri": "https://e.x/recent",
+        "freshness_at": recent,
+        "idempotency_key": "00000000-0000-4000-8000-300000000003",
+    }).data["id"]
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": src, "target_id": seeds["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-300000000004",
+    })
+    env = _mcp(home, "report.source_quality", {})
+    diag = env.data["diagnostics"]["stale_sources"]
+    assert diag["count"] == 0
+
+
+# -- 6. (c) contradictory_sources --------------------------------
+
+
+def test_contradictory_sources_fires_when_same_kind_disagrees(home):
+    """positive: two news-kind sources attach to the same thesis, one
+    supports and one contradicts → diagnostic catches it."""
+
+    seeds = _seed_thesis_and_decision(home)
+    sup = _mcp(home, "source.add", {
+        "kind": "news_article", "stance": "supports",
+        "uri": "https://e.x/sup",
+        "idempotency_key": "00000000-0000-4000-8000-400000000001",
+    }).data["id"]
+    con = _mcp(home, "source.add", {
+        "kind": "news_article", "stance": "contradicts",
+        "uri": "https://e.x/con",
+        "idempotency_key": "00000000-0000-4000-8000-400000000002",
+    }).data["id"]
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": sup, "target_id": seeds["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-400000000003",
+    })
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": con, "target_id": seeds["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-400000000004",
+    })
+    env = _mcp(home, "report.source_quality", {})
+    diag = env.data["diagnostics"]["contradictory_sources"]
+    assert diag["count"] == 1
+    sample = diag["samples"][0]
+    assert sample["thesis_id"] == seeds["thesis"]
+    assert sample["kind"] == "news_article"
+    assert sup in sample["supports"]
+    assert con in sample["contradicts"]
+
+
+def test_contradictory_sources_silent_with_only_supports(home):
+    seeds = _seed_thesis_and_decision(home)
+    src = _mcp(home, "source.add", {
+        "kind": "news_article", "stance": "supports",
+        "uri": "https://e.x/s",
+        "idempotency_key": "00000000-0000-4000-8000-400000000010",
+    }).data["id"]
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": src, "target_id": seeds["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-400000000011",
+    })
+    env = _mcp(home, "report.source_quality", {})
+    assert env.data["diagnostics"]["contradictory_sources"]["count"] == 0
+
+
+# -- 7. (d) duplicated_sources -----------------------------------
+
+
+def test_duplicated_sources_fires_on_repeated_content_hash(home):
+    """positive: two source rows with the same content_hash attached to
+    the same target surface in the duplicated diagnostic."""
+
+    seeds = _seed_thesis_and_decision(home)
+    src1 = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports",
+        "uri": "https://e.x/a", "content_hash": "deadbeef",
+        "idempotency_key": "00000000-0000-4000-8000-500000000001",
+    }).data["id"]
+    src2 = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports",
+        "uri": "https://e.x/b", "content_hash": "deadbeef",
+        "idempotency_key": "00000000-0000-4000-8000-500000000002",
+    }).data["id"]
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": src1, "target_id": seeds["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-500000000003",
+    })
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": src2, "target_id": seeds["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-500000000004",
+    })
+    env = _mcp(home, "report.source_quality", {})
+    diag = env.data["diagnostics"]["duplicated_sources"]
+    assert diag["count"] == 1
+    sample = diag["samples"][0]
+    assert sample["content_hash"] == "deadbeef"
+    assert sample["count"] == 2
+    assert set(sample["source_ids"]) == {src1, src2}
+
+
+def test_duplicated_sources_silent_when_hashes_differ(home):
+    seeds = _seed_thesis_and_decision(home)
+    for i, h_ in enumerate(["aaa", "bbb"]):
+        src = _mcp(home, "source.add", {
+            "kind": "url", "stance": "supports",
+            "uri": f"https://e.x/{i}", "content_hash": h_,
+            "idempotency_key": f"00000000-0000-4000-8000-50000000001{i}",
+        }).data["id"]
+        _mcp(home, "source.attach_to_thesis", {
+            "source_id": src, "target_id": seeds["thesis"],
+            "idempotency_key": f"00000000-0000-4000-8000-50000000002{i}",
+        })
+    env = _mcp(home, "report.source_quality", {})
+    assert env.data["diagnostics"]["duplicated_sources"]["count"] == 0
+
+
+# -- 8. (e) sensitive_sources -----------------------------------
+
+
+def test_sensitive_sources_fires_for_redacted_attachment(home):
+    seeds = _seed_thesis_and_decision(home)
+    src = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports",
+        "uri": "https://e.x/private", "redaction_status": "sensitive",
+        "idempotency_key": "00000000-0000-4000-8000-600000000001",
+    }).data["id"]
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": src, "target_id": seeds["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-600000000002",
+    })
+    env = _mcp(home, "report.source_quality", {})
+    diag = env.data["diagnostics"]["sensitive_sources"]
+    assert diag["count"] == 1
+    assert src in diag["sample_ids"]["sources"]
+
+
+def test_sensitive_sources_silent_for_default_redaction(home):
+    seeds = _seed_thesis_and_decision(home)
+    src = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports",
+        "uri": "https://e.x/public",
+        "idempotency_key": "00000000-0000-4000-8000-600000000003",
+    }).data["id"]
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": src, "target_id": seeds["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-600000000004",
+    })
+    env = _mcp(home, "report.source_quality", {})
+    assert env.data["diagnostics"]["sensitive_sources"]["count"] == 0
+
+
+# -- 9. coach embeds source-quality panel and surfaces callouts -----
+
+
+def test_report_coach_surfaces_source_quality_callouts(home):
+    """coach embeds the source-quality panel and emits a callout per
+    diagnostic with count>0."""
+
+    seeds = _seed_thesis_and_decision(home, decision_type="actual_enter")
+    env = _mcp(home, "report.coach", {})
+    assert env.ok, env
+    coach = env.data
+    assert "source_quality" in coach
+    callouts = " ".join(coach["callouts"])
+    # The seeded actual_enter decision has no attached source, so the
+    # missing_sources diagnostic fires and the callout is present.
+    assert "missing_sources_on_actual_enter" in callouts
+
+
+# -- 10. empty journal returns no_data ------------------------------
+
+
+def test_empty_db_returns_no_data_warning(home):
+    env = _mcp(home, "report.source_quality", {})
+    assert env.ok
+    assert env.data["summary"]["sample_warning"] == "no_data"

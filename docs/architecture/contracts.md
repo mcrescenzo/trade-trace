@@ -60,9 +60,36 @@ Examples:
 | `journal.rebuild_projections` | `trade-trace journal rebuild_projections --projection positions` |
 
 The mapping is mechanical and irreversible-with-collisions: two MCP
-tool names cannot map to the same CLI invocation. The implementation
-verifies this at startup; collisions are a build failure, not a runtime
-surprise.
+tool names cannot map to the same CLI invocation.
+
+**Collision detection (locked decision): enforced at registration time,
+which runs both in test/CI and at every server/CLI process start.**
+The tool registry (`src/trade_trace/contracts/tool_registry.py`,
+`ToolRegistry.register` and `ToolRegistry.validate`) computes the CLI
+invocation for every registered MCP name on construction and refuses to
+load when two names map to the same invocation. The failure manifests as:
+
+- **In CI / `pytest`**: a unit test (`tests/contracts/test_cli_name_uniqueness.py`)
+  fails with an explicit "CLI invocation collision" assertion listing
+  the conflicting tool names. The test gates CI; merging is blocked
+  until resolved. Test cases cover: clean registry, injected duplicate
+  invocation at register time, double registration, and full-CLI
+  `STORAGE_ERROR` envelope emission.
+- **At runtime startup**: `journal.init`, `journal.status`, and the MCP
+  server entrypoint each call the same registry construction. A
+  collision raises `trade_trace.contracts.tool_registry.CLINameCollisionError`
+  which the CLI (`src/trade_trace/cli.py`) catches and translates to a
+  fatal startup error (non-zero exit; `STORAGE_ERROR` envelope on stdout
+  with `details.reason = "cli_name_collision"`, `details.conflict_kind`
+  ∈ {`"duplicate_invocation"`, `"duplicate_name"`}, and
+  `details.colliding[*]` carrying `{tool_a, tool_b, conflict_kind,
+  suggested_rename}` per pair) before any tool call is accepted. This is
+  defense in depth — the test gate is the primary line; the startup
+  check exists so a forked/patched build with new tools cannot silently
+  produce ambiguous CLI invocations.
+
+Collisions cannot reach a released build that passed CI, and cannot
+become a mid-call surprise at runtime.
 
 ## 3. Success Envelope
 
@@ -110,9 +137,17 @@ Sometimes-present fields:
   result set was truncated. See [reports.md](reports.md) §3.
 - `cli_human_hint`: a short human-readable description of what happened,
   rendered to stderr by the CLI when `--human` is passed. Never affects
-  semantic content.
+  semantic content. The CLI also surfaces this field on `meta` so agents
+  inspecting the envelope see the same string the human reader saw on
+  stderr.
 - `mcp_transport_hints`: MCP-specific framing or streaming hints. Opaque
-  to the CLI.
+  to the CLI; populated as a (possibly empty) dict on the MCP path so
+  the structure is consistent across transports.
+- `dry_run: true`: set by the dispatcher when a write tool was invoked
+  with `--dry-run` (CLI) or `_dry_run: true` (MCP). The handler runs
+  normally and returns the would-be IDs / payload, but the wrapping
+  transaction rolls back; no events are appended and no projections are
+  updated. Per bead trade-trace-268.
 
 ## 4. Error Envelope
 
@@ -133,6 +168,14 @@ Sometimes-present fields:
   use in tests but not a contract surface — callers should branch on
   `code`, not on `message`.
 - `error.details` is a tool-specific object; documented per error code.
+  Conventions (per bead trade-trace-268):
+  - `VALIDATION_ERROR` on a timestamp field carries
+    `details.field` + `details.expected_format` (e.g. `"UTC ISO 8601 with
+    millisecond precision; operability.md §2.1"`).
+  - `NOT_FOUND` carries `details.entity_kind` identifying the missing
+    entity class (e.g. `"forecast"`, `"source"`, `"thesis"`, `"tool"`).
+  - `IDEMPOTENCY_CONFLICT` carries `details.original_event_id` and
+    `details.diff_summary` per persistence.md §5.2.
 - `meta` has the same shape as the success envelope's `meta`. Even on
   error, `tool`, `actor_id`, and `request_id` are always set.
 

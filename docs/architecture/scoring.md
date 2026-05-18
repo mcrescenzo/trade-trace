@@ -148,6 +148,40 @@ Values:
 - `scoring_state = 'failed'` requires a `forecast_scores` row with
   `score IS NULL` and a non-empty `metadata_json.failure_reason`.
 
+### 4.4 `scoring_state` transitions and `failure_reason` enum
+
+The full set of allowed `scoring_state` transitions (other transitions
+are invariant violations):
+
+| From | To | Trigger |
+|---|---|---|
+| (none) | `pending` | `forecast.created` event |
+| `pending` | `scored` | scorer wrote a `forecast_scores` row with `score IS NOT NULL` |
+| `pending` | `failed` | scorer wrote a `forecast_scores` row with `score IS NULL` and a `metadata_json.failure_reason` |
+| `pending` | `superseded` | `forecast.supersede` wrote a new forecast row and emitted a `supersedes` edge new → this row |
+| `scored` | `superseded` | same trigger as `pending → superseded` |
+| `failed` | `superseded` | same trigger (recovery path when `failure_reason = "yes_label_ambiguous"`) |
+
+No transition exits `scored`, `superseded`, or `failed` to any earlier
+state. `scored → failed` does not exist — once a `forecast_scores` row
+with a non-NULL score is committed, the score stands. Outcome
+supersession appends a new score row (§5.1) rather than mutating prior
+state.
+
+The `metadata_json.failure_reason` field on `forecast_scores` rows
+backing a `failed` state is a **closed enum** (per
+[`operability.md`](operability.md) §4.3, closed-enum additions require a
+contract version bump):
+
+| Value | When |
+|---|---|
+| `yes_label_ambiguous` | YES label could not be inferred at scoring time (§3.2 heuristic exhausted). Recovery: `forecast.supersede` with explicit `yes_label`. |
+| `label_mismatch` | Neither outcome label matched the resolved `outcomes.outcome_label` after case-insensitive whitespace-stripped comparison (§2). Recovery: agent reviews; if the outcome row is wrong, write a corrected outcome via supersedes; if the forecast labels are wrong, `forecast.supersede` with corrected labels. |
+| `outcome_superseded_mid_score` | The targeted `outcomes` row was superseded after the scoring transaction began but before it committed. Recovery: scoring re-fires on the new `resolved_final` outcome (§5.1). |
+
+Additional values may be added in P1 when categorical/scalar scorers
+ship; each requires a contract version bump per `operability.md` §4.3.
+
 ## 5. Resolution Status
 
 The `outcomes` table records what the market did. Outcomes are append-only;
@@ -169,15 +203,56 @@ an explicit `status`:
 | `cancelled` | Market was cancelled before resolution. | No |
 
 **Hard invariant:** the scorer auto-scores a forecast only when the
-associated outcome row has `status = 'resolved_final'`. Any other status
-leaves the forecast in `scoring_state = 'pending'` until either (a) a new
-`outcomes` row with `status = 'resolved_final'` supersedes the earlier one,
-or (b) the agent explicitly calls `forecast.score` with a manual override
-(which records `metadata_json.manual_override_reason` on the score row).
+associated outcome row has `status = 'resolved_final'` AND that row is
+not itself superseded by a newer outcome row via a `supersedes` edge
+([PRD](../../PRD.md) §3.1 outcomes). Any other status — or a superseded
+`resolved_final` row — leaves the forecast in `scoring_state = 'pending'`
+until a new `outcomes` row with `status = 'resolved_final'` becomes the
+non-superseded head.
 
 This invariant exists because bad resolution handling poisons calibration.
 A 60% forecast that's auto-scored against a `disputed` outcome that later
 flips creates noise that doesn't represent the agent's actual calibration.
+
+**MVP does not ship `forecast.score`.** Manual override of auto-scoring
+is deferred — the MVP scorer fires exclusively on auto-trigger (§6) and
+the recovery path for a bad `failed` row is `forecast.supersede` to a
+new forecast row with corrected `yes_label` or outcome labels, not a
+manual score write. A future `forecast.score` admin tool with
+`metadata_json.manual_override_reason` is a P1+ candidate; it remains
+out of MVP to keep the append-only invariant on `forecasts` /
+`forecast_scores` strict and the scoring logic single-pathed.
+
+### 5.1 Score behavior when a `resolved_final` outcome is later superseded
+
+Locked decision: scores are **append-only across outcome supersession**.
+
+- The prior `forecast_scores` row stays in place (append-only invariant
+  on `forecast_scores` is strict; see
+  [`persistence.md`](persistence.md) §8).
+- The supersession trigger fires the scorer against the new
+  `resolved_final` outcome. A new `forecast_scores` row is appended with
+  `metadata_json.outcome_id` pointing to the new outcome and
+  `metadata_json.supersedes_score_id` pointing to the prior score row.
+  The forecast's `scoring_state` is recomputed from the new score
+  (`scored` or `failed`); a transition through `superseded` is NOT
+  emitted, because the **forecast** is not superseded — only the outcome
+  is.
+- "Current score" is derivable: it is the latest `forecast_scores` row
+  for this forecast whose `metadata_json.outcome_id` resolves to an
+  `outcomes` row that is itself not superseded. Reports use this
+  definition; the column `scoring_state` reflects the same head.
+- If the scorer fails on the new outcome (label mismatch, etc.), a new
+  row is appended with `score = NULL` and
+  `metadata_json.failure_reason = "label_mismatch"` (or applicable
+  enum value per §4.4), and `scoring_state = 'failed'`. Prior scored
+  rows still exist for audit.
+- A `score_status` column on `forecast_scores` is rejected; introducing
+  mutable state on a score row would break the append-only invariant.
+
+This pattern (latest row whose pointer resolves to a non-superseded
+target) is the same pattern used elsewhere in the system for current
+state derivation from append-only history.
 
 ## 6. Scoring Lifecycle
 
@@ -203,7 +278,14 @@ The scoring trigger fires on two events:
    resolution time, and scores any whose `scoring_support = 'supported'`.
 2. `forecast.created` event when an outcome row already exists with
    `status = 'resolved_final'` and the forecast's resolution time is past.
-   (Late-recorded forecasts get scored immediately.)
+   Late-recorded forecasts get scored immediately AND are flagged with
+   `forecast_scores.metadata_json.late_recorded = true` plus
+   `metadata_json.late_recorded_by_seconds` (locked per
+   [`dogfood-protocol.md`](dogfood-protocol.md) §2.3). The forecast row
+   itself also carries `forecasts.metadata_json.late_recorded = true`
+   when created against an existing `resolved_final` outcome or after
+   `resolution_at`. `report.calibration` excludes late-recorded rows by
+   default; see [`reports.md`](reports.md) §4.1.
 
 Both triggers run inside the same transaction as the originating event, so
 `forecast_scores` writes and `scoring_state` transitions are atomic with the
@@ -383,16 +465,11 @@ The schema deliberately reserves room for future scorers without migration:
    forecasts, do we eagerly rescan all `pending unsupported` forecasts, or
    lazily upgrade them on next read? Likely eager via
    `journal.rescan_scoring`, but cost-bounded.
-2. **Score correction on outcome supersession.** When a `resolved_final`
-   outcome is later superseded (e.g. user discovers it was wrong), the
-   prior `forecast_scores` row is logically stale. MVP behavior: leave
-   the prior score row in place (append-only invariant on
-   `forecast_scores`), append a new score row triggered by the
-   superseding outcome, and rely on the `outcomes`-side supersedes edge
-   to make "current score" derivable (latest score whose
-   `metadata_json.outcome_id` resolves to a non-superseded outcome). A
-   `score_status` column is rejected to avoid mutable state on
-   `forecast_scores`.
+2. ~~**Score correction on outcome supersession.**~~ Resolved in §5.1
+   above: scores are append-only across outcome supersession; new score
+   rows are appended with `metadata_json.outcome_id` and
+   `metadata_json.supersedes_score_id`; "current score" is the latest
+   row whose `outcome_id` resolves to a non-superseded outcome.
 3. **Multi-step decision scoring.** Some agents make a series of decisions
    on the same forecast (entry, add, hold, exit). Should each get an
    independent calibration score, or only the entry forecast? MVP scores

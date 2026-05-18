@@ -165,8 +165,47 @@ defined per `event_type`. The MVP comparison policy is:
 | Class | Comparison |
 |---|---|
 | Structured writes with no free text (e.g. `decision.created`, `forecast.created`, `forecast_outcome.created`, `outcome.recorded`, `position_event.appended`, `playbook_rule.followed/overridden`, `edge.created`, `source.attached`) | Byte-equal JSON after canonical key ordering and after stripping the `actor_id`, `created_at`, `request_id` fields (which the server fills). |
-| Free-text writes (`memory_node.retained`, `memory_node.invalidated`, `thesis.created`, `signal.emitted`, `source.added` for free-text sources) | Compare a fixed structural-field set per event type, ignoring `body`, `title`, `note`, `excerpt`, `extracted_text`, `summary`, `reason`. Minor whitespace and LLM rephrasing on the free-text fields are tolerated. The per-event-type structural-field set is enumerated in the `events_semantic_keys.py` registry in code. Adding to the list is a non-breaking change; removing or changing a key requires a contract version bump. |
+| Free-text writes (`memory_node.retained`, `memory_node.invalidated`, `thesis.created`, `signal.emitted`, `source.added` for free-text sources, `strategy.created`, `strategy.updated`) | Compare a fixed structural-field set per event type, ignoring free-text fields (see §5.2.1). Minor whitespace and LLM rephrasing on the free-text fields are tolerated. The per-event-type structural-field set is enumerated in the `events_semantic_keys.py` registry in code (trade-trace-kvn). Adding to the list is a non-breaking change; removing or changing a key requires a contract version bump. |
 | Importer writes (`import.row_committed`) | Compare on `(import_run_id, source_row_number)` only; the row payload is treated as the entire row identity. |
+
+### 5.2.1 Per-event-type structural-field minimum set
+
+The registry implementation (trade-trace-kvn) MUST encode at least the
+fields below per event type. Free-text fields are explicitly excluded
+from comparison (LLM-rephrasing tolerance). This list is the MVP
+contract; additions are non-breaking.
+
+| `event_type` | Structural fields (compared) | Free-text fields (ignored) |
+|---|---|---|
+| `decision.created` | `instrument_id`, `type`, `thesis_id`, `forecast_id`, `snapshot_id`, `side`, `quantity`, `price`, `fees`, `slippage`, `playbook_version_id`, `review_by`, `strategy_id`, sorted `tags[]` | `reason` |
+| `outcome.recorded` | `instrument_id`, `resolved_at`, `outcome_label` (lower-cased), `outcome_value`, `status`, `source`, `confidence` | `metadata_json.note` if present |
+| `forecast.created` | `thesis_id`, `kind`, `resolution_at`, `yes_label`, sorted `outcomes[*].outcome_label` (lower-cased), `outcomes[*].probability`, `outcomes[*].lower_bound`, `outcomes[*].upper_bound` | `resolution_rule_text` |
+| `forecast.scored` | `forecast_id`, `outcome_id`, `metric`, `score`, `scored_at`, `metadata_json.failure_reason` | (none — no free text) |
+| `forecast.superseded` | `prior_forecast_id`, `new_forecast_id` | (none) |
+| `playbook.proposed_version` | `playbook_id`, `version`, `parent_version_id`, `provenance_reflection_node_id` | (none) |
+| `playbook_rule.followed` | `decision_id`, `playbook_version_id`, `rule_node_id`, `status="followed"` | `reason` |
+| `playbook_rule.overridden` | `decision_id`, `playbook_version_id`, `rule_node_id`, `status="overridden"` | `reason` |
+| `memory_node.retained` | `node_type`, `parent_node_id`, `version`, `confidence_base`, `decay_rate_per_day`, `importance`, `valid_from`, `valid_to`, sorted `tags[]`, structural `meta_json` keys (scoping fields like `instrument_id`/`venue_id`/`asset_class`/`pattern_kind`/`playbook_version_id`/`rule_meta`; free-text `meta_json` values excluded) | `title`, `body`, `meta_json.note` |
+| `memory_node.invalidated` | `memory_node_id`, `invalidated_by`, `invalidated_at` (truncated to millisecond) | (none) |
+| `edge.created` | `source_kind`, `source_id`, `target_kind`, `target_id`, `edge_type`, `weight` | (none) |
+| `source.attached` | `source_id`, `target_kind`, `target_id`, `edge_type` (derived from `sources.stance`) | (none) |
+| `strategy.created` | `slug` (lower-cased), `name`, `status="active"` (server-set) | `description`, `hypothesis` |
+| `strategy.updated` | `strategy_id`, `status` (when changed) | `description`, `hypothesis` |
+| `signal.emitted` | `kind`, `severity`, `actor_id`, sorted `related_refs_json[]` (deterministic-ordered by `{kind, id}`), `expires_at` | `body`, `meta_json.note` |
+| `import.row_committed` | `import_run_id`, `source_row_number` (entire payload identity per §5.2 row 3) | the whole row payload (treated as identity by the import_run_id pair) |
+
+Comparison rules common to every event type:
+- Server-filled fields (`actor_id`, `created_at`, `request_id`,
+  `event_id`) are excluded from comparison.
+- Timestamp fields included in the structural set are compared after
+  truncation to millisecond precision per
+  [`operability.md`](operability.md) §2.1.
+- Array fields are compared after deterministic sorting on the
+  documented key(s); the registry encodes the sort key.
+- Optional fields that are absent vs. set to `null` compare equal.
+- An unregistered `event_type` is a startup error (default-deny): a
+  writer cannot land a new event class without an explicit registry
+  entry. This guards against silent contract drift.
 
 When payloads are incompatible, the server returns `IDEMPOTENCY_CONFLICT`
 (see [contracts.md](contracts.md)) with `details.original_event_id`,

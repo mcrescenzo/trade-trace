@@ -1,5 +1,17 @@
 # Memory Layer Implementation Plan
 
+> ⚠️ **STALE — DO NOT EXECUTE AS-IS (2026-05-18).** This plan was written against `memory-layer.md` v2 and reflects pre-v3 defaults that no longer hold. Executors must treat the canonical docs as authoritative and use this file only for high-level phasing references. Specifically, the following sections of this plan **conflict with current docs** and must NOT be implemented:
+>
+> - **Node naming.** This plan uses `rule`; the canonical taxonomy is `observation` / `reflection` / `playbook_rule` (PRD §3.2, `memory-layer.md` §3, §App v3).
+> - **Embedding default.** This plan says local embeddings are **lazy-downloaded on init**; the canonical default per PRD §2.4.1 and `memory-layer.md` §8.1 is **vectors OFF by default in MVP** with zero outbound calls on `journal.init`. Local download is opt-in via explicit `tt config set embeddings.provider local` or air-gapped `tt model import`.
+> - **API embedding provider.** This plan defaults the OpenAI provider as a primary opt-in path; canonical posture (`memory-layer.md` §8.3) is opt-in with an explicit configure-time warning describing what data leaves the machine, and never default in any MVP path.
+> - **Edges/signals/strategy timing.** This plan does not cover the M1 minimal-edge endpoint enum (PRD §3.2, §8 M1) nor the M3 endpoint kinds (`memory_node`, `signal`, `strategy`). Executors must follow the M1/M3 split in PRD §8 rather than this plan's `Phase 1/2` lumping.
+> - **Bi-temporal + importance fields.** This plan predates `valid_from`/`valid_to`/`invalidated_at`/`invalidated_by`/`importance` columns on `memory_nodes`. The schema task must include them (`memory-layer.md` §3, §App v3).
+> - **`mode` and `as_of` on `memory.recall`.** Plan API surface omits both; canonical surface is `memory.recall(query?, context?, strategies?, k?, max_chars?, compact?, include_body?, include_provenance?, min_confidence?, node_types?, mode?, as_of?)` (`memory-layer.md` §7, §9).
+> - **`reflection.prompt_for_outcome`.** Not in this plan; required by PRD §4.1.
+>
+> **Canonical sources of truth** (read before implementing M3): [PRD.md](../../../PRD.md) §3.2, §4.1, §8 M3; [memory-layer.md](../../architecture/memory-layer.md) v3 (this file's appendix lists v2→v3 deltas); [persistence.md](../../architecture/persistence.md); [operability.md](../../architecture/operability.md). The implementation bead trade-trace-aa2 carries the reconciliation; the next-edit pass on this plan file is captured in that bead.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. During execution, create a `bd` issue per task before writing code (per project CLAUDE.md), claim it on start, close it on commit.
 
 **Goal:** Implement the trade-trace memory layer end-to-end per `docs/architecture/memory-layer.md` v2 — schema, write/read paths, embeddings, signals, CLI, MCP — on a greenfield Python package, with TDD.

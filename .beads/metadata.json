@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "trade_trace",
+  "project_id": "76f1fe3f-b662-4bf1-b394-91920d0555bc"
+}

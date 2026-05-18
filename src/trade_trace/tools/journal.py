@@ -1,0 +1,386 @@
+"""Journal admin tools per PRD §4 / docs/architecture/operability.md.
+
+M0 ships:
+
+- `journal.init` — idempotent SQLite bootstrap. Creates `$TRADE_TRACE_HOME`
+  if missing, opens (or creates) `trade-trace.sqlite` with WAL, busy_timeout,
+  and 0600 permissions where supported, then runs forward-only migrations.
+  Makes zero outbound calls.
+- `journal.status` — reports package/contract/schema versions, embeddings
+  provider, and the outbound-network-active boolean. Reads from `meta`
+  when a DB exists; falls back to defaults when called before init.
+- `journal.schema` — emits per-tool JSON schemas via Pydantic
+  `model_json_schema()`. Lets agents introspect the public surface without
+  reading docs.
+
+Tools accept an optional `home` arg pointing to a different `$TRADE_TRACE_HOME`
+than the env-resolved default; this is the load-bearing knob for the tests
+that exercise isolated DBs.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from trade_trace.contracts.errors import ErrorCode
+from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
+from trade_trace.storage import (
+    apply_pending_migrations,
+    current_version,
+    open_database,
+    resolve_home,
+)
+from trade_trace.storage.database import has_fts5, has_sqlite_vec
+from trade_trace.storage.paths import db_path
+from trade_trace.tools.errors import ToolError
+from trade_trace.version import CONTRACT_VERSION, __version__
+
+
+def _journal_init(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`journal.init` — idempotent. Returns the new or existing schema_version,
+    plus capability flags. Zero outbound calls."""
+
+    home = resolve_home(args.get("home"))
+    home.mkdir(parents=True, exist_ok=True)
+    path = db_path(home)
+    db = open_database(path)
+    try:
+        before = current_version(db.connection)
+        from_v, to_v = apply_pending_migrations(db.connection)
+        # Record bootstrap metadata; idempotent (replace on conflict).
+        db.connection.execute(
+            "INSERT INTO meta(key, value) VALUES ('package_version', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (__version__,),
+        )
+        db.connection.execute(
+            "INSERT INTO meta(key, value) VALUES ('contract_version', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (CONTRACT_VERSION,),
+        )
+        fts5 = has_fts5(db.connection)
+        vec = has_sqlite_vec(db.connection)
+    finally:
+        db.close()
+
+    return {
+        "home": str(home),
+        "db_path": str(path),
+        "schema_version_before": before,
+        "schema_version": to_v,
+        "applied_migrations": list(range(from_v + 1, to_v + 1)),
+        "fts5_available": fts5,
+        "sqlite_vec_available": vec,
+        "embeddings_provider": "none",
+        "outbound_network_active": False,
+    }
+
+
+def _journal_status(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`journal.status` — read package/contract/schema metadata. Works against
+    an initialized DB; gracefully reports defaults for an uninitialized home."""
+
+    home = resolve_home(args.get("home"))
+    path = db_path(home)
+    schema_version = 0
+    if path.exists():
+        db = open_database(path, create_parent=False)
+        try:
+            schema_version = current_version(db.connection)
+        finally:
+            db.close()
+
+    return {
+        "home": str(home),
+        "db_path": str(path),
+        "db_exists": path.exists(),
+        "package_version": __version__,
+        "contract_version": CONTRACT_VERSION,
+        "schema_version": schema_version,
+        "embeddings_provider": "none",
+        "outbound_network_active": False,
+    }
+
+
+def _journal_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`journal.schema` — emit per-model JSON schemas.
+
+    Optional `tool` arg filters to a specific tool/model. Without it, the
+    response is a dict of `{model_name: json_schema}` over the M0 model
+    surface. Future write tools register their own schemas; this is the
+    bootstrap version.
+    """
+
+    from trade_trace import models
+
+    targets = {
+        "Decision": models.Decision,
+        "Forecast": models.Forecast,
+        "ForecastOutcome": models.ForecastOutcome,
+        "MemoryNode": models.MemoryNode,
+        "Outcome": models.Outcome,
+        "Snapshot": models.Snapshot,
+        "Source": models.Source,
+        "Strategy": models.Strategy,
+        "Thesis": models.Thesis,
+    }
+    wanted = args.get("tool")
+    if wanted:
+        if wanted not in targets:
+            return {
+                "schemas": {},
+                "unknown_tool": wanted,
+                "known_tools": sorted(targets),
+            }
+        targets = {wanted: targets[wanted]}
+
+    return {
+        "schemas": {name: cls.model_json_schema() for name, cls in targets.items()},
+        "known_tools": sorted(targets),
+    }
+
+
+_VALID_PROJECTIONS = ("positions", "memory_node_stats", "all")
+
+
+def _journal_rebuild_projections(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`journal.rebuild_projections` — drop and rebuild projection tables.
+
+    Per persistence.md §7, the admin tool drops the chosen projection and
+    rebuilds it from its append-only source tables, all inside one
+    transaction. Used after a corruption-recovery restore, a schema
+    upgrade, or a projection-logic bug.
+
+    `projection` is required (default would be ambiguous). Accepted
+    values: `positions`, `memory_node_stats`, `all`.
+    """
+
+    import time
+
+    from trade_trace.projections import (
+        rebuild_memory_node_stats,
+        rebuild_positions,
+    )
+
+    projection = args.get("projection")
+    if projection not in _VALID_PROJECTIONS:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"projection must be one of {_VALID_PROJECTIONS!r}",
+            details={"field": "projection", "value": projection,
+                     "allowed": list(_VALID_PROJECTIONS)},
+        )
+
+    home = resolve_home(args.get("home"))
+    path = db_path(home)
+    if not path.exists():
+        raise ToolError(
+            ErrorCode.STORAGE_ERROR,
+            "journal not initialized; run `tt journal init` first",
+            details={"home": str(home), "db_path": str(path)},
+        )
+
+    db = open_database(path, create_parent=False)
+    results: list[dict[str, Any]] = []
+    start = time.monotonic()
+    try:
+        with db.transaction():
+            if projection in ("positions", "all"):
+                res = rebuild_positions(db.connection)
+                results.append({
+                    "projection": res.projection,
+                    "dropped_rows": res.dropped_rows,
+                    "rebuilt_rows": res.rebuilt_rows,
+                })
+            if projection in ("memory_node_stats", "all"):
+                res = rebuild_memory_node_stats(db.connection)
+                results.append({
+                    "projection": res.projection,
+                    "dropped_rows": res.dropped_rows,
+                    "rebuilt_rows": res.rebuilt_rows,
+                })
+    finally:
+        db.close()
+    duration_ms = int((time.monotonic() - start) * 1000)
+
+    return {
+        "projection": projection,
+        "results": results,
+        "duration_ms": duration_ms,
+    }
+
+
+def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`tool.schema` — per-tool example payloads + actor/idempotency notes.
+
+    Lets an autonomous agent discover the call surface for any registered
+    MVP tool without re-reading contracts.md. The response shape is:
+
+        {
+          "tool": "thesis.add",
+          "cli_invocation": "tt thesis add",
+          "description": "...",
+          "is_write": true,
+          "example_minimal": { ... },
+          "example_rich": { ... },
+          "required_metadata": {
+             "actor_id_pattern": "...",
+             "idempotency_key_pattern": "...",
+             "supports_dry_run": true,
+          },
+        }
+
+    Pass `tool` to introspect one; omit it to enumerate every registered
+    tool name (so the agent can build a catalog before drilling in).
+    Per bead trade-trace-268.
+    """
+
+    from trade_trace.contracts.grammar import ACTOR_ID_PATTERN, IDEMPOTENCY_KEY_PATTERN
+    from trade_trace.core import default_registry
+
+    registry = default_registry()
+    wanted = args.get("tool")
+    if wanted is None:
+        return {
+            "tools": [
+                {
+                    "name": reg.name,
+                    "cli_invocation": "tt " + " ".join(reg.cli_invocation),
+                    "is_write": reg.is_write,
+                    "has_example": reg.example_minimal is not None,
+                }
+                for reg in sorted(registry.by_name.values(), key=lambda r: r.name)
+            ],
+        }
+
+    if wanted not in registry.by_name:
+        raise ToolError(
+            ErrorCode.NOT_FOUND,
+            f"unknown tool {wanted!r}",
+            details={
+                "entity_kind": "tool",
+                "tool": wanted,
+                "known_tools": registry.names(),
+            },
+        )
+    reg = registry.by_name[wanted]
+    return {
+        "tool": reg.name,
+        "cli_invocation": "tt " + " ".join(reg.cli_invocation),
+        "description": reg.description,
+        "is_write": reg.is_write,
+        "example_minimal": reg.example_minimal,
+        "example_rich": reg.example_rich,
+        "required_metadata": {
+            "actor_id_pattern": ACTOR_ID_PATTERN,
+            "idempotency_key_pattern": IDEMPOTENCY_KEY_PATTERN,
+            "supports_dry_run": reg.is_write,
+            "dry_run_flag_cli": "--dry-run",
+            "dry_run_flag_mcp": "_dry_run",
+            "allow_no_idempotency_cli": "--allow-no-idempotency",
+            "allow_no_idempotency_mcp": "_allow_no_idempotency",
+        },
+        "json_schema": reg.json_schema,
+    }
+
+
+def _journal_rescan_scoring(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`journal.rescan_scoring` — P1 placeholder per scoring.md §4.3 / §7.
+
+    Surfaces the future upgrade path (re-scoring previously-unsupported
+    forecasts once a categorical/scalar scorer is registered) without
+    implementing the rescan itself. The error envelope carries an
+    accurate `affected_rows` so the agent can size the future migration
+    before P1 ships."""
+
+    home = resolve_home(args.get("home"))
+    path = db_path(home)
+    affected_rows = 0
+    if path.exists():
+        db = open_database(path, create_parent=False)
+        try:
+            row = db.connection.execute(
+                "SELECT COUNT(*) FROM forecasts "
+                "WHERE scoring_support = 'unsupported' "
+                "AND scoring_state = 'pending'"
+            ).fetchone()
+            affected_rows = int(row[0]) if row else 0
+        finally:
+            db.close()
+
+    raise ToolError(
+        ErrorCode.UNSUPPORTED_CAPABILITY,
+        "journal.rescan_scoring is deferred to P1 (categorical/scalar "
+        "scorers not in MVP)",
+        details={
+            "reason": "implementation_deferred_p1",
+            "affected_rows": affected_rows,
+            "schema_doc": "docs/architecture/scoring.md#4-status-fields",
+        },
+    )
+
+
+def register_journal_tools(registry: ToolRegistry) -> None:
+    """Register `journal.*` tools on the supplied registry."""
+
+    registry.register(
+        "journal.init",
+        _journal_init,
+        description=(
+            "Initialize $TRADE_TRACE_HOME with a fresh SQLite DB. Idempotent: "
+            "re-running on an existing journal succeeds and reports the current "
+            "schema_version. Makes zero outbound network calls (PRD §2.4.1)."
+        ),
+    )
+    registry.register(
+        "journal.status",
+        _journal_status,
+        description=(
+            "Return current package, contract, and schema version plus the "
+            "active embeddings provider and the boolean state of any outbound "
+            "network path. MVP default reports outbound_network_active=False "
+            "because the only opt-in outbound path (PRD §2.4.1) is off by default."
+        ),
+    )
+    registry.register(
+        "journal.schema",
+        _journal_schema,
+        description=(
+            "Emit Pydantic JSON schemas for ledger/memory models. Optional "
+            "`tool` arg restricts output to one model name."
+        ),
+    )
+    registry.register(
+        "journal.rescan_scoring",
+        _journal_rescan_scoring,
+        description=(
+            "[P1 contract; M1 stub] Re-score forecasts whose `scoring_support` "
+            "was upgraded by a new scorer installation. Returns "
+            "UNSUPPORTED_CAPABILITY in MVP with `affected_rows` set to the "
+            "count of pending unsupported forecasts so the agent can size the "
+            "future migration. See scoring.md §4.3 / §7."
+        ),
+    )
+    registry.register(
+        "tool.schema",
+        _tool_schema,
+        description=(
+            "Introspect a registered MVP tool: returns description, "
+            "cli_invocation, example_minimal/example_rich payloads (for write "
+            "tools), and required_metadata notes (actor_id pattern, "
+            "idempotency_key pattern, dry-run support). Omit `tool` to "
+            "enumerate the full tool catalog. Per bead trade-trace-268."
+        ),
+    )
+    registry.register(
+        "journal.rebuild_projections",
+        _journal_rebuild_projections,
+        description=(
+            "Admin tool: drop and rebuild projection tables from their source "
+            "append-only tables inside one atomic transaction. "
+            "`projection` is required (one of `positions`, `memory_node_stats`, "
+            "`all`). Used after corruption-restore or projection bug per "
+            "persistence.md §7. memory_node_stats rebuild is a no-op until "
+            "the M3 memory layer lands."
+        ),
+    )

@@ -8,6 +8,15 @@
 __pycache__/
 *.egg-info/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 dist/
 build/
 venv/
+.venv/
+
+# Trade Trace runtime
+trade-trace.sqlite
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

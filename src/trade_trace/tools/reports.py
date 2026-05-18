@@ -1,0 +1,445 @@
+"""`report.*` tool surface per docs/architecture/reports.md.
+
+This module ships the contract-grade pieces an agent needs to introspect
+the report system before the full 7-report implementation lands:
+
+- `report.filter_schema` (trade-trace-fo7): canonical JSON Schema for the
+  ReportFilter shape. Agents call this to discover valid fields and enum
+  values without reading the docs.
+
+The 7 deterministic reports (calibration, mistakes, strengths, pnl,
+watchlist, unscored_forecasts, decision_velocity) land in
+trade-trace-77z; the coach lands in trade-trace-2g2.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import ValidationError
+
+from trade_trace.contracts.errors import ErrorCode
+from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
+from trade_trace.reports import (
+    TradingAdvicePhraseError,
+    report_calibration,
+    report_calibration_integrity,
+    report_coach,
+    report_decision_velocity,
+    report_mistakes,
+    report_pnl,
+    report_source_quality,
+    report_strengths,
+    report_unscored_forecasts,
+    report_watchlist,
+)
+from trade_trace.tools._helpers import open_db_for_args
+from trade_trace.tools.errors import ToolError
+
+
+def _propagate_report_meta(ctx: ToolContext, data: dict[str, Any]) -> None:
+    """Promote standard report-meta fields off the data envelope onto
+    `ctx.meta_hints` per contracts.md §3.2 / bead trade-trace-u5s.
+
+    - `bin_policy`: emitted by `report.calibration`; null for every other
+      report.
+    - `truncated` / `next_cursor`: surfaced from any report that paginates
+      groups.
+    - `sample_warning`: the *summary*-level warning string (per-group
+      warnings live in `data.groups[].sample_warning`).
+    """
+
+    summary = data.get("summary") or {}
+    sample_warning = summary.get("sample_warning")
+    if sample_warning is not None:
+        ctx.meta_hints["sample_warning"] = sample_warning
+    bin_policy = data.get("bin_policy")
+    if bin_policy is not None:
+        ctx.meta_hints["bin_policy"] = bin_policy
+    if data.get("truncated"):
+        ctx.meta_hints["truncated"] = True
+    next_cursor = data.get("next_cursor")
+    if next_cursor is not None:
+        ctx.meta_hints["next_cursor"] = next_cursor
+
+
+def _report_calibration(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.calibration` — Brier, log score, ECE, sharpness, baseline +
+    skill, reliability bins over scored binary forecasts in the filtered
+    set. Per scoring.md §7 / reports.md §4.1.
+
+    Also embeds the anti-goodhart integrity diagnostics (bead trade-trace-jzn)
+    under `data.integrity_diagnostics` so an agent reading the calibration
+    panel sees the denominator coverage and hygiene signals (ambiguous /
+    disputed / unsupported / suspicious_late) in the same envelope.
+    """
+
+    raw_filter = args.get("filter")
+    min_sample = args.get("min_sample")
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_calibration(
+                db.connection,
+                raw_filter=raw_filter,
+                min_sample=min_sample if min_sample is not None else 20,
+            )
+        except ValidationError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"ReportFilter validation failed: {exc.errors()}",
+                details={"field": "filter", "validation_errors": exc.errors()},
+            ) from exc
+        # Embed integrity diagnostics in the panel so the panel can never
+        # be read without the denominator/hygiene context.
+        data["integrity_diagnostics"] = report_calibration_integrity(db.connection)
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_source_quality(
+    args: dict[str, Any], ctx: ToolContext,
+) -> dict[str, Any]:
+    """`report.source_quality` — provenance hygiene panel (bead trade-trace-l9q).
+
+    Five diagnostics over the source attachment graph: missing sources
+    on actual_enter decisions, stale sources, contradictory same-kind
+    sources, duplicated content_hashes, and sensitive-redaction-status
+    sources. Optional `stale_threshold_days` overrides the default 7.
+    """
+
+    stale_threshold_days = args.get("stale_threshold_days", 7)
+    if not isinstance(stale_threshold_days, int) or stale_threshold_days < 0:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "stale_threshold_days must be a non-negative integer",
+            details={"field": "stale_threshold_days",
+                     "value": stale_threshold_days},
+        )
+    db = open_db_for_args(args)
+    try:
+        data = report_source_quality(
+            db.connection, stale_threshold_days=stale_threshold_days,
+        )
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_calibration_integrity(
+    args: dict[str, Any], ctx: ToolContext,
+) -> dict[str, Any]:
+    """`report.calibration_integrity` — standalone surface for the six
+    anti-goodhart diagnostics (bead trade-trace-jzn). Useful when an agent
+    wants the hygiene panel without computing the calibration metrics
+    (cheaper, and explicitly framed as "is the data clean enough to
+    trust the calibration numbers?")."""
+
+    db = open_db_for_args(args)
+    try:
+        data = report_calibration_integrity(db.connection)
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_unscored_forecasts(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.unscored_forecasts` — list pending binary forecasts past
+    `resolution_at` with no resolved_final outcome on their instrument."""
+
+    raw_filter = args.get("filter")
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_unscored_forecasts(db.connection, raw_filter=raw_filter)
+        except ValidationError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"ReportFilter validation failed: {exc.errors()}",
+                details={"field": "filter", "validation_errors": exc.errors()},
+            ) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_decision_velocity(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.decision_velocity` — bucketed decision counts (day or week)."""
+
+    raw_filter = args.get("filter")
+    bucket = args.get("bucket", "day")
+    if bucket not in ("day", "week"):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"bucket must be 'day' or 'week'; got {bucket!r}",
+            details={"field": "bucket", "value": bucket,
+                     "allowed": ["day", "week"]},
+        )
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_decision_velocity(
+                db.connection, raw_filter=raw_filter, bucket=bucket,
+            )
+        except ValidationError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"ReportFilter validation failed: {exc.errors()}",
+                details={"field": "filter", "validation_errors": exc.errors()},
+            ) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _make_filter_only_report(fn):
+    """Wrap a report function whose only optional arg is `filter` into a tool
+    handler that validates and dispatches it."""
+
+    def _handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        db = open_db_for_args(args)
+        try:
+            try:
+                data = fn(db.connection, raw_filter=args.get("filter"))
+            except ValidationError as exc:
+                raise ToolError(
+                    ErrorCode.VALIDATION_ERROR,
+                    f"ReportFilter validation failed: {exc.errors()}",
+                    details={"field": "filter", "validation_errors": exc.errors()},
+                ) from exc
+        finally:
+            db.close()
+        _propagate_report_meta(ctx, data)
+        return data
+
+    return _handler
+
+
+def _report_watchlist(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.watchlist` — list open watch decisions. `mode='stale'` opts in
+    to the stale subset; `stale_threshold_days` overrides the default 14."""
+
+    raw_filter = args.get("filter")
+    mode = args.get("mode", "all")
+    if mode not in ("all", "stale"):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"mode must be 'all' or 'stale'; got {mode!r}",
+            details={"field": "mode", "value": mode, "allowed": ["all", "stale"]},
+        )
+    stale_threshold_days = args.get("stale_threshold_days", 14)
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_watchlist(
+                db.connection, raw_filter=raw_filter,
+                stale=(mode == "stale"),
+                stale_threshold_days=stale_threshold_days,
+            )
+        except ValidationError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"ReportFilter validation failed: {exc.errors()}",
+                details={"field": "filter", "validation_errors": exc.errors()},
+            ) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_coach(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.coach` — synthesized decision-support packet. No LLM, no
+    network, no trade advice."""
+
+    raw_filter = args.get("filter")
+    stale_threshold_days = args.get("stale_threshold_days", 14)
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_coach(
+                db.connection, raw_filter=raw_filter,
+                stale_threshold_days=stale_threshold_days,
+            )
+        except ValidationError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"ReportFilter validation failed: {exc.errors()}",
+                details={"field": "filter", "validation_errors": exc.errors()},
+            ) from exc
+        except TradingAdvicePhraseError as exc:
+            raise ToolError(
+                ErrorCode.INVARIANT_VIOLATION,
+                str(exc),
+                details={"forbidden_matches": exc.matches},
+            ) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_filter_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """Return the canonical Pydantic-generated JSON Schema for ReportFilter.
+
+    Optional `mode` arg: `"validation"` (default) or `"serialization"`.
+    Validation mode reflects what the server accepts on a tool call;
+    serialization mode reflects what the server emits on echo (e.g. in
+    a `ReportResult.summary.filter` field). For ReportFilter the two
+    differ only in `Optional` handling — both shapes are useful for
+    agents building UIs over the surface.
+    """
+
+    mode = args.get("mode", "validation")
+    if mode not in ("validation", "serialization"):
+        from trade_trace.contracts.errors import ErrorCode
+        from trade_trace.tools.errors import ToolError
+
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"mode must be 'validation' or 'serialization'; got {mode!r}",
+            details={"field": "mode", "value": mode,
+                     "allowed": ["validation", "serialization"]},
+        )
+
+    schema = ReportFilter.model_json_schema(mode=mode)
+    return {
+        "schema": schema,
+        "mode": mode,
+        "strategy_id_sentinel": {
+            "value": "__none__",
+            "meaning": "Select rows where strategy_id IS NULL.",
+        },
+    }
+
+
+def register_report_tools(registry: ToolRegistry) -> None:
+    """Register `report.*` tools on the supplied registry.
+
+    Currently registers only `report.filter_schema`; the 7 deterministic
+    reports + the coach are wired in their dedicated beads."""
+
+    registry.register(
+        "report.filter_schema",
+        _report_filter_schema,
+        description=(
+            "Return the canonical JSON Schema for ReportFilter (the shared "
+            "input shape for every report.* tool). Optional `mode` arg "
+            "(`validation` default or `serialization`). Surfaces the "
+            "`__none__` sentinel meaning for `strategy.strategy_id` so "
+            "agents can build filter UIs without reading the docs."
+        ),
+    )
+    registry.register(
+        "report.calibration",
+        _report_calibration,
+        description=(
+            "Calibration metric panel over scored binary forecasts: Brier, "
+            "log score, ECE (equal-width 0.1 bins), sharpness, baseline + "
+            "skill, plus reliability bins (scoring.md §7). Excludes "
+            "late-recorded forecasts by default per dogfood-protocol §2.2 "
+            "(opt in via filter.outcome.include_late_recorded). Emits a "
+            "sample_warning when N < min_sample (default 20). Embeds the "
+            "six anti-goodhart hygiene diagnostics from "
+            "report.calibration_integrity under data.integrity_diagnostics."
+        ),
+    )
+    registry.register(
+        "report.source_quality",
+        _report_source_quality,
+        description=(
+            "Provenance hygiene diagnostics over attached sources "
+            "(bead trade-trace-l9q): missing_sources_on_actual_enter, "
+            "stale_sources, contradictory_sources, duplicated_sources, "
+            "sensitive_sources. Each emits {count,sample_ids,samples,"
+            "truncated}. stale_threshold_days defaults to 7. No external "
+            "fetching, no credibility scoring."
+        ),
+    )
+    registry.register(
+        "report.calibration_integrity",
+        _report_calibration_integrity,
+        description=(
+            "Anti-goodhart hygiene diagnostics for the calibration panel "
+            "(bead trade-trace-jzn): forecast_coverage, unsupported_rate, "
+            "ambiguous_rate, disputed_rate, void_cancelled_rate, "
+            "suspicious_late_rate. Each diagnostic returns "
+            "{count,total,rate_pct,sample_ids,truncated}; the summary "
+            "carries denominator context (total_decisions, total_forecasts, "
+            "scored_forecasts, denominator_coverage_pct). Empty DBs surface "
+            "sample_warning='no_data'."
+        ),
+    )
+    registry.register(
+        "report.unscored_forecasts",
+        _report_unscored_forecasts,
+        description=(
+            "List pending binary forecasts past resolution_at whose "
+            "instrument has no resolved_final (non-superseded) outcome. "
+            "Mirrors signal.scan kind=unscored_forecast (trade-trace-2ry) "
+            "but returns the rows for direct action."
+        ),
+    )
+    registry.register(
+        "report.decision_velocity",
+        _report_decision_velocity,
+        description=(
+            "Decision counts bucketed by day or week over the filter's "
+            "decision_at_* window. Bucket boundaries are UTC-aligned; "
+            "groups[] are ordered by bucket key ascending."
+        ),
+    )
+    registry.register(
+        "report.mistakes",
+        _make_filter_only_report(report_mistakes),
+        description=(
+            "Tag-aggregated recurring patterns ranked by mean Brier of "
+            "associated scored forecasts (worst first). Per-group metrics: "
+            "decision_count, scored_forecast_count, mean_brier."
+        ),
+    )
+    registry.register(
+        "report.strengths",
+        _make_filter_only_report(report_strengths),
+        description=(
+            "Tag-aggregated patterns ranked by mean Brier (best first). "
+            "Mirror of report.mistakes."
+        ),
+    )
+    registry.register(
+        "report.pnl",
+        _make_filter_only_report(report_pnl),
+        description=(
+            "Realized + unrealized + mark-to-market P&L over the positions "
+            "projection. Per-instrument groups; summary carries data_coverage "
+            "(positions_with_marks / total). Reads the rebuildable positions "
+            "projection (trade-trace-5zg)."
+        ),
+    )
+    registry.register(
+        "report.watchlist",
+        _report_watchlist,
+        description=(
+            "List `watch`-type decisions. mode='all' (default) returns every "
+            "watch; mode='stale' returns watches older than "
+            "stale_threshold_days (default 14)."
+        ),
+    )
+    registry.register(
+        "report.coach",
+        _report_coach,
+        description=(
+            "Synthesized decision-support packet aggregating recurring "
+            "mistake/strength tags, unscored forecasts, stale watches, and "
+            "sample-size warnings. Deterministic; no LLM, no network, no "
+            "trading recommendations. Output is enforced free of the "
+            "forbidden trade-advice phrases (positive grep gate)."
+        ),
+    )

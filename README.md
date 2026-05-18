@@ -24,27 +24,62 @@ For the full vision, see [`VISION.md`](./VISION.md). For the working PRD, see [`
 
 ## Status
 
-Pre-implementation. The current artifacts are design docs:
+**M0 + M1 shipped** (package skeleton, storage, full manual write surface,
+event log + outbox + idempotency, source/edge contract). M2 (scoring
+reports), M3 (memory layer), and M4 (playbook loop) are the remaining
+milestones.
+
+What works today:
+
+- `pip install -e .` then `tt journal init` creates `$TRADE_TRACE_HOME/trade-trace.sqlite` with WAL, 5s busy_timeout, 0600 permissions, and the current schema head.
+- The full manual ledger write surface: `venue.add`, `instrument.add`, `snapshot.add`, `thesis.add`, `forecast.add` (binary invariants enforced as `INVARIANT_VIOLATION`), `forecast.supersede`, `decision.add` (13-type required-field matrix enforced), `outcome.add` / `resolve.record` alias, `resolve.pending`, `source.add`, `source.attach_to_{thesis,decision,forecast}`. `source.attach_to_memory_node` returns `UNSUPPORTED_CAPABILITY` until M3.
+- Decision → outcome → auto-scoring loop: an `outcome.add` with `status="resolved_final"` automatically scores every pending binary forecast against the resolved label using the single-probability Brier form per [`docs/architecture/scoring.md`](./docs/architecture/scoring.md) §3.
+- Idempotent retries: every retryable write requires `idempotency_key` (per PRD §2); pure replays return the original event row with `meta.idempotent_replay=true`; semantically-different payloads return `IDEMPOTENCY_CONFLICT` with a structural diff (no raw bodies leaked).
+- Append-only invariants enforced at the SQLite layer via BEFORE UPDATE/DELETE triggers on every M1 source/event table; the projection (`positions`) and the outbox state column are the only exceptions.
+- `import.validate` and `import.commit` registered as contract stubs (P1 implementation pending); their schemas + the `import_ready_writers` list are introspectable today.
+- `review.bundle` registered as a contract stub (P1 implementation pending); the input/output Pydantic schemas including `bundle_hash` are introspectable today.
+- CLI emits NDJSON for list tools (`tt resolve pending`) with one envelope per record plus a summary line per [`docs/architecture/contracts.md`](./docs/architecture/contracts.md) §1.2; exit code mapping: `VALIDATION_ERROR`→2, `INVARIANT_VIOLATION`→3, other errors→1.
+- A registration-time + startup CLI-name-collision check ensures two MCP tool names can never map to the same `tt` invocation; the runtime check emits a `STORAGE_ERROR` envelope rather than a Python traceback.
+- UTC timestamps validated at the boundary: naive timestamps rejected, non-UTC offsets converted, sub-millisecond digits truncated.
+- Outbound network is unconditionally off by default: `tests/security/test_no_network_default.py` monkeypatches `socket.connect`/`getaddrinfo` to refuse any outbound attempt and exercises the full ledger flow without a single call escaping.
+- Credential-shaped args (api_key, wallet_seed, private_key, mnemonic, broker_token, etc.) are silently ignored by every write tool and never persist in any column or `metadata_json` blob; verified by `tests/security/test_no_credentials.py`.
+
+Design artifacts:
 
 - [`VISION.md`](./VISION.md) — north star
 - [`PRD.md`](./PRD.md) — working PRD and MVP scope
 - [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md) — memory layer spec (node taxonomy, retrieval, bi-temporal validity, embeddings posture)
-- [`docs/architecture/scoring.md`](./docs/architecture/scoring.md) — forecast scoring (Brier, log score, ECE, sharpness, reliability bins, lifecycle)
-- [`docs/architecture/persistence.md`](./docs/architecture/persistence.md) — events, outbox, idempotency
+- [`docs/architecture/scoring.md`](./docs/architecture/scoring.md) — forecast scoring (Brier, log score, ECE, sharpness, reliability bins, lifecycle, `failure_reason` enum)
+- [`docs/architecture/persistence.md`](./docs/architecture/persistence.md) — events, outbox, idempotency (incl. §5.2.1 per-event-type structural-field registry)
 - [`docs/architecture/contracts.md`](./docs/architecture/contracts.md) — CLI/MCP envelope and error codes
 - [`docs/architecture/operability.md`](./docs/architecture/operability.md) — timezone, multi-process, migrations, logging, blob caps, JSONL on-disk format
 - [`docs/architecture/reports.md`](./docs/architecture/reports.md) — `ReportFilter` / `ReportResult` / drill-down / `review.bundle`
 - [`docs/architecture/imports.md`](./docs/architecture/imports.md) — JSONL/CSV local-import contract
 - [`docs/architecture/risk-units.md`](./docs/architecture/risk-units.md) — P1 risk-unit / R-multiple analytics design
 - [`docs/architecture/opportunity-analysis.md`](./docs/architecture/opportunity-analysis.md) — P1 path-dependent process diagnostics
+- [`docs/architecture/dogfood-protocol.md`](./docs/architecture/dogfood-protocol.md) — MVP loop-usefulness protocol and provenance policies
 
-## Install (planned)
+## Install
+
+Today (development):
 
 ```bash
-pip install trade-trace
+pip install -e .
+tt journal init
 ```
 
-Planned requirements: Python 3.11+, SQLite with FTS5. The base wheel ships `sqlite-vec` and `sentence-transformers` as runtime dependencies. **Vectors are off by default in MVP**: a fresh `journal.init` makes zero outbound network calls. MVP recall runs with FTS5 + graph + temporal retrieval. Opt in to semantic recall via `tt config set embeddings.provider local` (one-time model-weight download, ~130 MB) or `tt model import <path>` for air-gapped installs. See [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md) §8.
+The published package (`pip install trade-trace`) ships once the MVP M1–M4
+write surface lands. Requirements today: Python 3.11+, SQLite with FTS5.
+The base wheel will ship `sqlite-vec` and `sentence-transformers` as runtime
+dependencies once M3 lands.
+
+**Vectors are off by default in MVP**: a fresh `journal.init` makes zero
+outbound network calls (verified by `tests/security/test_no_network_default.py`).
+MVP recall runs with FTS5 + graph + temporal retrieval. Opt in to semantic
+recall via `tt config set embeddings.provider local` (one-time model-weight
+download, ~130 MB; lands in M3) or `tt model import <path>` for air-gapped
+installs. See [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md)
+§8.
 
 Trade Trace never fetches trading data, broker data, market prices, order books, or outcomes. The agent calling it supplies all market data through the structured ingestion APIs. The single opt-in outbound path (embedding model download) carries no trading data; the optional API-embeddings path is separately opt-in and warned about at configure time. See [`PRD.md`](./PRD.md) §2.4.1.
 
@@ -98,17 +133,57 @@ Deferred or optional after the manual loop: JSONL/CSV import implementations (th
 {"tool": "memory.recall", "args": {"context": {"kind": "strategy", "id": "..."}, "node_types": ["observation", "reflection", "playbook_rule"], "k": 10}}
 ```
 
-## CLI dogfood surface (planned)
+## CLI dogfood surface
 
-The CLI mirrors the MCP tool catalog. Stdout is JSON only by default; `--human` may add prose to stderr without changing stdout semantics.
+The CLI mirrors the MCP tool catalog. Stdout is JSON only by default;
+`--human` may add prose to stderr without changing stdout semantics.
+
+Working today (M0 + M1):
 
 ```bash
-trade-trace journal init --human
-trade-trace instrument add --venue manual --asset-class prediction_market --title "Will X happen by 2026-06-30?" --currency USDC --actor-id agent:default --human
-trade-trace report coach --horizon-days 30 --human
-trade-trace journal schema --tool decision.add
+# Foundation
+tt journal init                      # idempotent SQLite bootstrap
+tt journal status                    # version + capability report
+tt journal schema --tool Decision    # Pydantic JSON schema for a model
+
+# Manual ledger write path (M1)
+tt venue add --name "Polymarket" --kind prediction_market --actor-id agent:default
+tt instrument add --venue-id ven_... --asset-class prediction_market \
+    --title "Will X happen by 2026-06-30?" --currency-or-collateral USDC \
+    --actor-id agent:default
+tt snapshot add --instrument-id ins_... --captured-at 2026-05-18T14:00:00Z \
+    --price 0.37 --bid 0.36 --ask 0.39 --actor-id agent:default
+tt thesis add --instrument-id ins_... --side yes --body "..." --actor-id agent:default
+tt forecast add --thesis-id th_... --kind binary \
+    --outcomes-json '[{"outcome_label":"YES","probability":0.48},{"outcome_label":"NO","probability":0.52}]' \
+    --resolution-at 2026-06-30T00:00:00Z --actor-id agent:default
+tt decision add --instrument-id ins_... --type skip \
+    --reason "Estimated edge < spread + resolution risk" --actor-id agent:default
+tt outcome add --instrument-id ins_... --resolved-at 2026-06-30T00:00:00Z \
+    --outcome-label NO --status resolved_final --actor-id agent:default
+# (auto-scoring fires; forecast_scores row appears)
+
+# Source / evidence (M1)
+tt source add --kind research_doc --title "Liquidity profile" --stance supports \
+    --actor-id agent:default
+tt source attach_to_thesis --source-id src_... --target-id th_... --actor-id agent:default
+
+# Resolution helpers (M1)
+tt resolve pending                   # NDJSON stream of forecasts awaiting resolution
+tt resolve record ...                # alias for `tt outcome add`
+```
+
+Planned (M2–M4 / P1):
+
+```bash
+tt report calibration                # M2: Brier/log/ECE/sharpness panel
+tt memory recall --query "..."       # M3: BM25+temporal recall; semantic opt-in
+tt memory reflect ...                # M3: agent-written reflections with provenance
+tt report coach --horizon-days 30    # M4: coach signals over recent activity
+tt review bundle ...                 # P1 (contract is M1-locked)
+tt import validate / import commit   # P1 (contract is M1-locked)
 ```
 
 ## License
 
-MIT. See `LICENSE` once implementation begins.
+MIT. See [`LICENSE`](./LICENSE).

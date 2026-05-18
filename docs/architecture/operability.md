@@ -31,8 +31,15 @@ enforced at the schema/Pydantic-validator layer:
   offset is dropped; if the caller wanted to preserve "agent's local
   time" it should record it in `metadata_json`.
 - Sub-second precision is preserved up to milliseconds; sub-millisecond
-  digits are truncated. SQLite text-comparison ordering is stable on the
-  canonical form.
+  digits are **truncated, not rejected** (locked decision): the validator
+  silently floors to millisecond precision at write time so callers with
+  nanosecond-precision clocks land cleanly. SQLite text-comparison
+  ordering is stable on the canonical form. The truncation policy
+  applies uniformly to every `*_at` column on every table and to every
+  timestamp field embedded in `*_json` payloads. Idempotency comparison
+  (per [`persistence.md`](persistence.md) §5.2) runs on the truncated
+  form, so a re-send that differs only in sub-millisecond digits replays
+  cleanly.
 
 ### 2.2 "Now" resolution
 
@@ -175,6 +182,55 @@ the error code list, `node_type`, the 7 edge types, `decisions.type`,
 - **Renaming a column**: breaking. Implemented as add-new + dual-write +
   remove-old over two schema versions.
 
+### 4.5 Policy enforcement and migration template
+
+Policy mechanics live in `src/trade_trace/storage/policy.py`:
+
+- `check_no_reverse_migration(current_version, target_version)` — raises
+  `MigrationPolicyError` when a target steps `schema_version` backward.
+  Wired into `apply_pending_migrations`.
+- `check_enum_extension(enum_key, new_values)` — closed enums (defined in
+  `CLOSED_ENUMS`) raise on any add/remove; open enums (`OPEN_ENUMS`)
+  permit additive extensions and reject removals. Unknown enums raise
+  because registration is the deliberate gate for adding new enums.
+- `check_column_change(table, before, after, *, major_version_bump=False)`
+  — raises when columns are removed without an explicit
+  `major_version_bump=True` acknowledgment.
+
+Migration script template (place under
+`src/trade_trace/storage/migrations.py`):
+
+```python
+def _migration_NNN_<short-description>(conn: sqlite3.Connection) -> None:
+    """One-line description of what this migration does and why.
+
+    Citing the architecture doc / PR that motivated it makes future
+    archeology cheap: e.g. "Promotes account_label from metadata_json to a
+    first-class column per PRD §11 OQ#7."
+    """
+
+    # 1. SQL changes go here. Use IF NOT EXISTS where harmless so a
+    #    partial-apply on a half-broken DB can resume.
+    conn.execute("CREATE TABLE IF NOT EXISTS ...")
+
+    # 2. Backfill any non-NULL columns introduced as nullable in this step
+    #    (see §4.4 two-step pattern).
+
+    # 3. If this migration touches a closed enum or removes a column, also
+    #    bump the matching CLOSED_ENUMS / column lists in
+    #    src/trade_trace/storage/policy.py in the same patch.
+
+
+# Append the migration to MIGRATIONS at the end of the file:
+MIGRATIONS.append(_migration_NNN_<short-description>)
+```
+
+The policy module's constants and the migration MUST land in the same
+patch — a migration that adds a closed-enum value without the policy
+update fails the `check_enum_extension` test in
+`tests/integration/test_migration_policy.py`. This keeps the policy
+audit honest at code-review time.
+
 ## 5. Backup and Restore
 
 ### 5.1 The `cp` story
@@ -310,20 +366,34 @@ non-breaking change.
 
 ### 9.2 Line format
 
-Each line is a single JSON object identical to the corresponding
-`events` row's `payload_json` field, with these additional keys:
+Each line is a single JSON object carrying the [imports.md](imports.md)
+§2.1 `{tool, args}` envelope plus transport metadata, so the exporter's
+output is the importer's input without preprocessing:
 
+- `tool` (string) — the canonical MCP tool name the importer would
+  dispatch. Resolved from `event_type` via
+  `trade_trace.exporter.resolve_tool_for_event`. System-emitted events
+  (e.g. `forecast.scored`, `signal.emitted`) fall back to the
+  `event_type` string so the line stays self-describing.
+- `args` (object) — the corresponding `events.payload_json` with
+  underscore-prefixed keys stripped. Re-dispatchable through the public
+  `dispatch(tool, args)` surface.
 - `_event_id` (integer) — the source `events.id`.
 - `_event_type` (string) — copy of the row's `event_type` for
-  self-description.
+  self-description (also load-bearing when `tool` is unmapped).
 - `_actor_id` (string).
 - `_created_at` (UTC ISO 8601).
 - `_contract_version` (string, e.g. `"1.0"`).
 
 Underscore-prefixed keys are reserved for transport metadata; domain
-fields never start with underscore. This makes JSONL files
-self-describing and replayable through `import.commit` without external
-schema. See [imports.md](imports.md) §2.
+fields never start with underscore. The importer ignores transport keys
+on read, so re-import of an exported file produces the same write set as
+the original sequence. See [imports.md](imports.md) §2.
+
+JSON inside the line is canonicalized with `sort_keys=True` (top-level
+and inside `args`) so a re-drain of an unchanged event row produces a
+byte-identical file (SHA-256 stable). This is the property
+`trade_trace.exporter.drain_outbox`'s idempotency guarantee relies on.
 
 ### 9.3 Encoding
 
