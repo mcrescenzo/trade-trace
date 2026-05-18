@@ -32,7 +32,7 @@ Trade Trace lives at that intersection. It is a *grader* and a *memory*, not a *
 Three shifts make 2026 the right moment:
 
 - **LLMs are becoming useful forecasting actors, but calibration remains fragile.** Recent forecasting work shows rapid improvement, while still leaving a gap to strong human forecasting and large variance across tasks. Trade Trace exists because agents need auditable calibration feedback, not because parity is guaranteed.
-- **Agent memory is now a real engineering discipline.** Mem0, Hindsight, Letta, Zep, SYNAPSE, and others have converged on a recognizable shape: episodic + semantic + reflective memory with multi-strategy retrieval. The patterns are stable enough to specialize.
+- **Agent memory is now a real engineering discipline.** Mem0, Hindsight, Letta, Zep, SYNAPSE, and others have converged on a recognizable shape: episodic + semantic + reflective memory with multi-strategy retrieval (BM25 + temporal + vector + graph, distinct from trading strategies). The patterns are stable enough to specialize.
 - **MCP has won as the agent-tool interface.** A journal exposed as an MCP server plugs into Claude Code, Cursor, and every other MCP-aware host without integration work. Combined with a token-efficient CLI for tight write loops, the surface is solved.
 
 ## Product principles
@@ -104,6 +104,8 @@ Trade Trace's central feature is a closed loop that turns trading experience int
 
 Layers 1 and 2 are deterministic and live in the system. Layers 3 and 4 are agent-driven and stored as graph memory. The loop closes because every new decision records the current playbook version, advisory/manual overrides are tracked, and override outcomes feed the next cycle's reports. Future machine-checkable rules may add automatic violation detection for explicitly modeled predicates.
 
+Reflections, reports, and recall can be scoped by **strategy** — a named edge thesis (e.g., `earnings-momentum`, `pairs-trade-XYZ`) that groups decisions, theses, and reviews into one logical grain. The loop then runs not just per-decision but per-strategy: the agent can ask "how is this strategy performing, what mistakes recur in it, what rule changes does it suggest?" without smearing those signals across unrelated trades. Strategies are orthogonal to playbooks (rules) and tags (free-form sub-classifiers); see PRD §2.12.
+
 This loop is the product. The MVP proves the complete loop with narrow breadth: structured manual ingestion, binary scoring, deterministic reports, reflection, playbook versioning, and recall. Broad asset coverage, richer scoring, sync, and viewers can follow only after that slice works.
 
 ## Differentiation
@@ -116,6 +118,33 @@ This loop is the product. The MVP proves the complete loop with narrow breadth: 
 | **Mem0 / Letta / Zep** | General agent memory frameworks | Multi-strategy retrieval | Domain-specific; would not be a good fit if generalized |
 | **ForecastBench** | Forecasting benchmark | Calibration scoring | Tooling, not benchmark — export shape remains TBD until schema verification |
 | **TradeNote / Deltalytix** | Open-source self-hosted journals | Local-first, open-source | Agent-native; no web UI; memory + reflection loop |
+
+## Borrowed patterns (and what they translate to)
+
+Trade Trace borrows analytical and architectural patterns from existing systems without copying their product surface. The rule is: borrow what helps an AI agent reason, reject what only serves a human UI.
+
+From **Tradervue / Edgewonk** (human trading journals):
+
+- **Report drill-down** — aggregates carry the filter spec and contributing record IDs so an agent can pull the exact underlying decisions. Translated as the `ReportFilter` / `ReportResult` / `ReportGroup` contracts in `reports.md`, not as clickable charts.
+- **Tags + tag-combination reports** — free-form sub-classifiers with a tag-co-occurrence query model. Already in MVP (`decision_tags`, `report.mistakes`, `report.strengths`).
+- **R-multiple / risk-normalized analytics** — every trade carries declared risk so P&L can be unit-normalized. P1 per `risk-units.md`.
+- **MFE/MAE / exit efficiency** — path-dependent process diagnostics over snapshot series the agent supplied. P1 per `opportunity-analysis.md`. Never fetches market data.
+- **Mentor read-only + private comments** — adapted as `review.bundle`: a deterministic packet a separate reviewer (LLM or human) consumes. No SaaS sharing.
+- **Account tags as a tag, not a separate entity** — account/portfolio bucket is a `metadata_json` key, not a first-class field. Avoids broker-account semantics.
+- **Generic CSV import schema (execution-level fills)** — captured as the import-ready write schema in MVP; JSONL/CSV importers ship as P1 implementations.
+
+From **Hindsight / Mem0 / Letta / Zep** (AI memory systems):
+
+- **Retain / Recall / Reflect surface naming** — agent-developer familiarity.
+- **Multi-strategy retrieval (BM25 + vector + temporal + graph) with RRF fusion** — standard, adopted directly.
+- **Bi-temporal records (Zep / Graphiti)** — every belief-shaped row records both transaction time (`created_at`, `invalidated_at`) and world time (`valid_from`, `valid_to`) so "what did the agent believe on day X" is a primitive query. Load-bearing for honest calibration replay.
+- **Importance scoring at write time (Generative Agents)** — every memory node carries `importance ∈ [1, 10]`, fed into recall ranking. Lets writer-set salience drive surfacing rather than letting "loudest" win.
+- **Episodic / semantic / procedural memory types (Mem0)** — Trade Trace's three node types (`observation`, `reflection`, `playbook_rule`) map onto this distinction.
+
+From **ForecastBench / Manifold / Brier.fyi** (LLM forecasting):
+
+- **Full calibration panel** — not just Brier. The MVP `report.calibration` emits Brier + log score + reliability bins + ECE + sharpness + sample-prevalence baseline so "agent improved" and "agent got more confident" are distinguishable signals.
+- **Resolution rule recorded at prediction time** — `forecasts.resolution_rule_text` is captured at create time, not derived later, to keep resolution decisions auditable.
 
 ## Non-goals
 
@@ -134,9 +163,10 @@ This loop is the product. The MVP proves the complete loop with narrow breadth: 
 ## Safety posture
 
 - The MVP cannot execute trades. There is no surface that signs, routes, or transmits an order.
-- The MVP makes no outbound network calls. There are no external data connectors, no third-party API clients, no webhooks, and no telemetry. The product is air-gappable.
-- The core never reads, stores, logs, or asks for private keys, seed phrases, broker credentials, wallet signatures, or API keys. The credential ban is unconditional.
-- Local journal data contains sensitive trading information. Default file permissions are user-only (`0600`) where the platform supports it. Exports that include actual trade details emit a stderr warning.
+- **Forbidden network surface:** Trade Trace never fetches trading data, broker data, market prices, order books, or outcomes. There are no broker integrations, no market-data clients, no webhooks, no telemetry, and no auto-update. The product is air-gappable on first run.
+- **One opt-in outbound path:** the optional local embedding model download for the SEMANTIC recall strategy (see PRD §2.4.1). Off by default in MVP; opt-in via explicit config; carries only model weights, never trading data. API embedding providers (memory-layer.md §8.3) are a separate also-opt-in path that DOES send memory text outward and carries an explicit configure-time warning. Neither path activates by default.
+- The core never reads, stores, logs, or asks for private keys, seed phrases, broker credentials, wallet signatures, or trading-API keys. The credential ban is unconditional. Embedding-provider API keys (when an API provider is opt-in) are stored in the OS keyring, never in the database or plaintext config, never logged.
+- Local journal data contains sensitive trading information. Default file permissions are user-only (`0600`) where the platform supports it. Exports that include actual trade details emit a stderr warning. Sources flagged `redaction_status = sensitive` are never included in review bundles.
 - All analytics are framed as retrospective decision support, not as recommendations. The system does not generate trade ideas or signals.
 
 ## Definition of done — vision level

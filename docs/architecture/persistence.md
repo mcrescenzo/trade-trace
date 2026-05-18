@@ -28,17 +28,33 @@ writes under crash.
 
 SQLite at `$TRADE_TRACE_HOME/trade-trace.sqlite` is the single source of
 truth. The database runs in WAL mode with a single-writer assumption for
-MVP. Multi-writer concurrency is a P1+ concern (see open questions).
+MVP; multi-writer behavior is specified in [`operability.md`](operability.md)
+§3.
 
-Two classes of table:
+Three classes of table:
 
 - **Source/event tables** (`events`, `outcomes`, `snapshots`, `theses`,
-  `decisions`, `position_events`, `forecast_scores`, `memory_nodes`,
-  `edges`, `outbox`) are append-only. Corrections create new rows; older
-  rows stay readable for audit.
+  `forecasts`, `forecast_outcomes`, `decisions`, `decision_tags`,
+  `decision_playbook_rules`, `position_events`, `forecast_scores`,
+  `memory_nodes`, `memory_recall_events`, `signals`, `edges`, `outbox`)
+  are append-only. Corrections create new rows; older rows stay
+  readable for audit. The append-only invariant is tested per §8.
+- **Mutable metadata tables** (`venues`, `instruments`, `playbooks`,
+  `strategies`) hold low-volume reference data whose `description`,
+  `hypothesis`, or `status` fields may change over the life of the row.
+  Every change writes a corresponding `<subject>.updated` event in the
+  `events` log, so the audit trail is preserved even though the row
+  itself is mutated in place. There is no separate version table for
+  these entities at MVP (see PRD §11 for the deferred decisions).
 - **Projection tables** (`positions`, `memory_node_stats`) are rebuildable
   from source data via `journal.rebuild_projections`. They exist for query
   performance, not authority.
+
+`memory_node_embeddings` is a special case: it is logically append-only but
+the embedding `BLOB` for a given `(memory_node_id, provider)` may be
+replaced via DELETE+INSERT inside one transaction during a re-embed pass
+(see [`memory-layer.md`](memory-layer.md) §8.4). This is the only DELETE
+permitted on a memory-side table and is gated behind explicit user action.
 
 ## 3. The `events` Table
 
@@ -52,10 +68,14 @@ transaction as the write itself.
 | `subject_kind` | `TEXT NOT NULL` | Kind of the primary subject (`decision`, `outcome`, `memory_node`, ...). |
 | `subject_id` | `TEXT NOT NULL` | ID of the primary subject. |
 | `payload_json` | `TEXT NOT NULL` | The full input payload as accepted by the tool, after validation. |
-| `actor_id` | `TEXT NOT NULL` | `agent:default`, `cli:user`, `import:<name>`, etc. |
-| `idempotency_key` | `TEXT NULL` | Caller-supplied retry key (see §5). |
-| `created_at` | `TEXT NOT NULL` | UTC ISO 8601 timestamp. |
+| `actor_id` | `TEXT NOT NULL` | `agent:default`, `cli:user`, `import:<name>`, etc. Per PRD §2 grammar. |
+| `idempotency_key` | `TEXT NULL` | Caller-supplied retry key (see §5). Required by default for retryable writes per PRD §2. |
+| `created_at` | `TEXT NOT NULL` | UTC ISO 8601 timestamp. Mandatory UTC per [`operability.md`](operability.md) §2.1. |
 | `request_id` | `TEXT NULL` | Per-call request ID echoed in the response envelope. |
+| `agent_id` | `TEXT NULL` | Optional segmentation; logical trading-agent identifier. PRD §2. |
+| `model_id` | `TEXT NULL` | Optional segmentation; model/family identifier. PRD §2. |
+| `environment` | `TEXT NULL` | Optional segmentation; `paper`/`actual_recorded`/`simulation`/`backtest_import`/`manual_review`. PRD §2. |
+| `run_id` | `TEXT NULL` | Optional segmentation; agent run/session identifier. PRD §2. |
 
 Indexes:
 
@@ -67,14 +87,20 @@ Indexes:
 
 ### 3.1 `event_type` taxonomy
 
-The full taxonomy is owned by the implementation, not this doc. Conventions:
+Conventions:
 
 - `<subject>.<verb_past_tense>`: `decision.created`, `outcome.recorded`,
-  `forecast.scored`, `playbook.proposed_version`, `memory_node.retained`,
-  `edge.created`, `source.attached`, `playbook_rule.followed`,
-  `playbook_rule.overridden`.
+  `forecast.scored`, `forecast.superseded`, `playbook.proposed_version`,
+  `memory_node.retained`, `memory_node.invalidated`, `edge.created`,
+  `source.attached`, `playbook_rule.followed`, `playbook_rule.overridden`,
+  `strategy.created`, `strategy.updated`, `signal.emitted`,
+  `import.row_committed`.
 - One event per logical write. A `decision.created` event may cascade to a
   `position_event.appended` in the same transaction, producing two events.
+- Adding a new `event_type` is a non-breaking schema extension. Removing or
+  renaming one is a breaking change requiring a contract version bump. Per
+  [`operability.md`](operability.md) §4 (migration policy), the migration
+  framework treats `event_type` as an open enum.
 
 ## 4. The `outbox` Table
 
@@ -134,29 +160,50 @@ exists in `events`:
 The only case that produces an error is when an existing
 `(event_type, actor_id, idempotency_key)` row's `payload_json` is
 semantically incompatible with the new payload. "Semantic equivalence" is
-defined per `event_type`:
+defined per `event_type`. The MVP comparison policy is:
 
-- For most types, byte-equal JSON after canonical key ordering is
-  sufficient.
-- For event types where the payload contains agent-generated free text
-  (e.g. `memory_node.retained` with a `body` field), only structurally
-  significant fields are compared; minor whitespace or LLM-generated
-  rephrasing should not produce a conflict. The list of compared fields
-  per event type is owned by the implementation.
+| Class | Comparison |
+|---|---|
+| Structured writes with no free text (e.g. `decision.created`, `forecast.created`, `forecast_outcome.created`, `outcome.recorded`, `position_event.appended`, `playbook_rule.followed/overridden`, `edge.created`, `source.attached`) | Byte-equal JSON after canonical key ordering and after stripping the `actor_id`, `created_at`, `request_id` fields (which the server fills). |
+| Free-text writes (`memory_node.retained`, `memory_node.invalidated`, `thesis.created`, `signal.emitted`, `source.added` for free-text sources) | Compare a fixed structural-field set per event type, ignoring `body`, `title`, `note`, `excerpt`, `extracted_text`, `summary`, `reason`. Minor whitespace and LLM rephrasing on the free-text fields are tolerated. The per-event-type structural-field set is enumerated in the `events_semantic_keys.py` registry in code. Adding to the list is a non-breaking change; removing or changing a key requires a contract version bump. |
+| Importer writes (`import.row_committed`) | Compare on `(import_run_id, source_row_number)` only; the row payload is treated as the entire row identity. |
 
 When payloads are incompatible, the server returns `IDEMPOTENCY_CONFLICT`
-(see [contracts.md](contracts.md)) with `details.original_event_id` and
-`details.diff_summary`.
+(see [contracts.md](contracts.md)) with `details.original_event_id`,
+`details.diff_summary` (a structural diff, never raw payload bodies, to
+avoid leaking sensitive content), and `details.compared_keys` (the
+structural-key set used for the comparison, so the caller can audit which
+fields were considered).
 
 ### 5.3 Absent idempotency keys
 
 If a call omits `idempotency_key`, the server does not deduplicate. Each
 call produces a new event row. This is documented as at-least-once
 semantics for callers who explicitly want it (e.g. an importer that wants
-every CSV row to land even if duplicates exist).
+every row to land even if duplicates exist).
 
-The MCP and CLI surfaces both default to **requiring** `idempotency_key`
-for retryable writes; the absence path is opt-in via a documented flag.
+The MCP and CLI surfaces both **require `idempotency_key` for retryable
+writes by default.** The absence path is opt-in via an explicit flag:
+
+- CLI: `--allow-no-idempotency` (long-form only; no short form to discourage
+  accidental use).
+- MCP: `_allow_no_idempotency: true` in the tool's args object (underscore
+  prefix marks it as a transport-level argument, not a domain field).
+
+When the flag is absent and `idempotency_key` is omitted on a retryable
+write, the server returns `VALIDATION_ERROR` with
+`details.field = "idempotency_key"` and `details.hint = "missing required
+idempotency_key; pass --allow-no-idempotency to opt into at-least-once
+semantics"`. Read tools, list tools, and admin tools do not require a key
+and never raise this error.
+
+The full list of "retryable writes" is exactly the §4.0 core write tools
+(PRD): `venue.add`, `instrument.add`, `snapshot.add`, `thesis.add`,
+`forecast.add`, `forecast.supersede`, `decision.add`, `outcome.add` /
+`resolve.record`, plus `memory.retain`, `memory.reflect`, `memory.link`,
+`source.add`, `source.attach_to_*`, `playbook.create`,
+`playbook.propose_version`, `strategy.create`, `strategy.update`,
+`import.commit`.
 
 ## 6. Transaction Boundaries
 
@@ -183,29 +230,55 @@ seconds, minutes, or weeks after the decision itself.
 The two projection tables in MVP are:
 
 - `positions`: rebuildable from `position_events` and `snapshots`.
-- `memory_node_stats`: rebuildable from recall event history (whose own
-  event log table is `memory_recall_events`, defined alongside `events`
-  but with a narrower schema; out of scope for this doc).
+- `memory_node_stats`: rebuildable from `memory_recall_events`. The
+  `memory_recall_events` table is defined in PRD §3.2; it is append-only
+  and shares the persistence semantics of `events` (committed in the same
+  transaction as the recall response).
+
+A recall call (`memory.recall`) is a read tool from the agent's perspective
+but appends to `memory_recall_events` as a side effect to drive the
+projection. The recall transaction includes the read query and the
+`memory_recall_events` row. This makes recall a writer at the SQLite level
+and is the one case where a nominally-read tool participates in the
+single-writer assumption ([`operability.md`](operability.md) §3). The
+write is small (one row per recall call) and bounded.
 
 Admin command `journal.rebuild_projections`:
 
+- Accepts `projection: "positions" | "memory_node_stats" | "all"`
+  (required; default would be ambiguous).
 - Drops and rebuilds the chosen projection from its source tables.
 - Runs inside one transaction so the rebuild is atomic.
 - Reports `rebuilt_rows`, `dropped_rows`, and `duration_ms` in the success
   envelope.
 - Is intended for recovery after corruption, schema upgrade, or projection
-  bug; not part of normal operation.
+  bug; not part of normal operation. Concurrent writes during a rebuild
+  are serialized behind the single-writer transaction per
+  [`operability.md`](operability.md) §3.
 
 ## 8. Append-Only Invariants
 
 Tests enforce:
 
 - No `UPDATE` or `DELETE` statement runs against `events`, `outcomes`,
-  `snapshots`, `decisions`, `position_events`, `forecast_scores`,
-  `memory_nodes`, `edges`, or `outbox` (except `outbox.state` and
-  `outbox.exported_at` updates by the exporter).
-- Corrections to ledger rows create new rows with a `supersedes` edge or a
-  table-specific `parent_*_id` reference.
+  `snapshots`, `theses`, `forecasts`, `forecast_outcomes`, `decisions`,
+  `decision_tags`, `decision_playbook_rules`, `position_events`,
+  `forecast_scores`, `memory_nodes`, `memory_recall_events`, `signals`,
+  `edges`, or `outbox`. Specific exemptions:
+  - `outbox.state`, `outbox.exported_at`, `outbox.error_text`,
+    `outbox.attempt_count` updates by the exporter.
+  - `memory_node_stats` (a projection) is freely mutable; the projection
+    rebuild path drops and re-inserts the whole table.
+  - `memory_node_embeddings` allows DELETE+INSERT inside one re-embed
+    transaction per [`memory-layer.md`](memory-layer.md) §8.4 (the only
+    permitted memory-side DELETE).
+- Corrections to ledger rows create new rows with a `supersedes` edge.
+  This is the **single canonical correction mechanism** for all
+  append-only tables — there is no `parent_*_id` correction column on
+  ledger tables. (`theses.parent_thesis_id` is a *versioning* column that
+  threads thesis revisions; it is not a correction mechanism. Versioning
+  and correction are distinct: a new version may emit a `supersedes` edge
+  to the prior version; a correction MUST emit one.)
 - Replay of the event log against an empty database produces the same
   projection state as the original sequence.
 
@@ -218,10 +291,12 @@ Tests enforce:
 2. **Outbox compaction.** Once an event is exported, do we keep the
    outbox row forever or compact it? Keep forever for MVP (cheap; useful
    for audit). Revisit if disk pressure shows up in dogfooding.
-3. **Multi-writer concurrency.** SQLite WAL handles concurrent readers
-   fine, but multi-writer is serialized. If multiple agents start writing
-   to the same journal, do we want a connection-pool with retry/backoff,
-   or do we move to a different engine? Out of scope for MVP.
-4. **Cross-process event-stream subscribe.** An obvious P1 feature is a
+3. **Cross-process event-stream subscribe.** An obvious P1 feature is a
    subscribe API (`events.subscribe`) that streams new events as they
    commit. Out of MVP.
+
+Closed in this pass (no longer open): multi-writer behavior is specified
+in [`operability.md`](operability.md) §3 (second writer receives
+`STORAGE_ERROR` with `details.reason = "single_writer_lock"` and an
+exponential backoff hint); the implementation-owned semantic-equivalence
+list for `IDEMPOTENCY_CONFLICT` is enumerated in §5.2 above.

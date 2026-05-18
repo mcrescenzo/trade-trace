@@ -34,6 +34,36 @@ predictable shapes for retries, parsing, and error recovery.
   metadata, and CLI prose-on-stderr behavior all differ. Byte identity
   is explicitly out of scope.
 
+### 2.1 Name mapping
+
+MCP tool names use `subject.verb` dot notation (`decision.add`,
+`memory.recall`, `report.calibration`). The CLI maps these mechanically:
+
+- Replace each `.` with a single space.
+- All other tokens are preserved.
+- `args` keys become long-flag form `--key`; nested `args.foo.bar` becomes
+  `--foo-bar` (kebab-cased). Arrays use repeated flags or a comma-separated
+  list; objects use `--<key>-json '<json>'`.
+
+Examples:
+
+| MCP tool | CLI invocation |
+|---|---|
+| `decision.add` | `trade-trace decision add` |
+| `memory.recall` | `trade-trace memory recall` |
+| `report.calibration` | `trade-trace report calibration` |
+| `report.filter_schema` | `trade-trace report filter_schema` |
+| `resolve.record` / `outcome.add` | `trade-trace resolve record` / `trade-trace outcome add` |
+| `import.commit` | `trade-trace import commit` |
+| `strategy.create` | `trade-trace strategy create` |
+| `journal.init` | `trade-trace journal init` |
+| `journal.rebuild_projections` | `trade-trace journal rebuild_projections --projection positions` |
+
+The mapping is mechanical and irreversible-with-collisions: two MCP
+tool names cannot map to the same CLI invocation. The implementation
+verifies this at startup; collisions are a build failure, not a runtime
+surprise.
+
 ## 3. Success Envelope
 
 ```json
@@ -66,6 +96,18 @@ Sometimes-present fields:
 - `idempotent_replay: true`: when the call was a successful replay of a
   prior write with the same `idempotency_key` (see
   [persistence.md](persistence.md) §5).
+- `contract_version`: the contract version string (`"1.0"` for MVP).
+  Always set on success and error envelopes regardless of `--human`.
+- `bin_policy`: set by `report.calibration` to identify the
+  reliability-bin policy used (`"equal_width_0.1"` in MVP); see
+  [scoring.md](scoring.md) §7.2.
+- `budget_applied: true`: set by `memory.recall` when context-budget
+  shaping (reducing `k`, switching to `compact`, dropping low-scoring
+  rows) was applied.
+- `sample_warning`: set by any report when the filtered sample size is
+  below the configured minimum.
+- `truncated: true` plus `next_cursor`: set by list/report tools when the
+  result set was truncated. See [reports.md](reports.md) §3.
 - `cli_human_hint`: a short human-readable description of what happened,
   rendered to stderr by the CLI when `--human` is passed. Never affects
   semantic content.
@@ -106,17 +148,18 @@ contract change requiring a version bump.
 
 | Code | When |
 |---|---|
-| `VALIDATION_ERROR` | Input failed schema validation (wrong type, missing required field, value out of range). |
+| `VALIDATION_ERROR` | Input failed schema validation (wrong type, missing required field, value out of range, forbidden field set per the decision required-field matrix in [PRD](../../PRD.md) §3.1). |
 | `NOT_FOUND` | The referenced entity doesn't exist. |
-| `IDEMPOTENCY_CONFLICT` | A retry with the same `idempotency_key` carried a semantically different payload than the original write. |
-| `UNSUPPORTED_CAPABILITY` | The call targets a capability the server doesn't support in this configuration (e.g. vector recall when `sqlite-vec` is disabled). |
-| `STORAGE_ERROR` | A storage layer (SQLite) error escaped the transaction. |
+| `IDEMPOTENCY_CONFLICT` | A retry with the same `idempotency_key` carried a semantically different payload than the original write. See [persistence.md](persistence.md) §5.2 for the per-event-type comparison policy. |
+| `UNSUPPORTED_CAPABILITY` | The call targets a capability the server doesn't support in this configuration (e.g. vector recall when `embeddings.provider = none`). |
+| `STORAGE_ERROR` | A storage layer (SQLite) error escaped the transaction. `details.reason` is set when known: `single_writer_lock` for the multi-writer case ([operability.md](operability.md) §3), `wal_corruption` for WAL faults, etc. |
 | `SCORING_UNSUPPORTED` | A forecast of this `kind` has `scoring_support = 'unsupported'`; scoring cannot be attempted. |
 | `SCORING_NOT_READY` | Scoring was triggered but the prerequisites aren't met (no `resolved_final` outcome, ambiguous YES label, label mismatch). |
 | `INVARIANT_VIOLATION` | A schema-level invariant was violated post-validation (e.g. binary forecast probabilities don't sum to 1, two outcomes have the same label). |
 | `MARKET_NOT_RESOLVED` | Scoring or resolution was attempted on a forecast whose `resolution_at` hasn't passed and no outcome row exists. |
 | `MARKET_AMBIGUOUS` | The most recent outcome row has `status ∈ ('ambiguous', 'disputed')`. |
-| `RATE_LIMITED` | Reserved. Unused in MVP (no external API surface). Will be re-used if a future ingestion path needs it. |
+
+There is no `RATE_LIMITED` code. The earlier draft reserved it; that was inconsistent with a closed enum. If a future ingestion path needs rate-limit semantics, the code is added via a minor contract version bump per §8 (additive enum extension).
 
 ### 5.1 Code selection guidance
 
@@ -174,6 +217,25 @@ For each tool:
 - One `IDEMPOTENCY_CONFLICT` case (single test exercising the
   idempotency contract across both transports).
 - One `NOT_FOUND` case (single test).
+
+#### Strategy-specific coverage (lands with M3)
+
+- One success case each for `strategy.create`, `strategy.list`,
+  `strategy.show`, and `strategy.update`.
+- One `VALIDATION_ERROR` case for `strategy.create` covering duplicate
+  slug rejection (single-field uniqueness — see §5.1; `VALIDATION_ERROR`
+  is the correct selection over `INVARIANT_VIOLATION`).
+- One `VALIDATION_ERROR` case for `memory.link` / `memory.reflect`
+  whose payload supplies an invalid edge endpoint kind. The test
+  fixture's expected enum MUST list `strategy` (and `signal`) as valid
+  kinds; the failing payload uses an unrecognized kind like
+  `not_a_real_kind`. This pins the §3.2 endpoint enum to the contract.
+- One success case for `decision.add` with `strategy_id` set and one
+  with `strategy_slug` set (alias resolution); both envelopes must echo
+  `strategy_id` in `data`.
+- One success case for `memory.recall` with
+  `context: {kind: "strategy", id: ...}` returning at least one row
+  whose `meta.provenance` references the supplied strategy.
 
 PRD §9 lists this as a verification requirement.
 
