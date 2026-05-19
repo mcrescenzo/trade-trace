@@ -57,7 +57,7 @@ The `snapshots.source` and `outcomes.source` columns are free-form strings. MVP 
 One — and only one — path in Trade Trace makes outbound network calls: the optional local embedding model download for the `SEMANTIC` recall strategy. It is:
 
 - **Off by default in MVP.** A fresh `journal.init` does not download anything. `memory.recall` runs with BM25 + temporal (+ graph if requested) and returns valid results without vectors. The "air-gappable on first run" promise (VISION §safety) holds out of the box.
-- **Opt-in via explicit config.** The agent or operator runs `tt journal config_set embeddings.provider local` (or `journal.init --enable-embeddings`) to authorize the one-time model download. The download targets only the local model's host (no telemetry, no metrics, no API key submission).
+- **Opt-in via explicit config.** The agent or operator runs `tt journal config_set embeddings.provider local` to authorize the one-time model download. The download targets only the local model's host (no telemetry, no metrics, no API key submission). (An earlier proposal documented `journal.init --enable-embeddings` as a one-shot alternative; the live registry does not expose that flag — `config_set` is the canonical surface, per trade-trace-mehh.)
 - **Disjoint from trading data.** The download fetches model weights; it never transmits trading records, snapshots, theses, or any journal data outward.
 - **Disableable.** `tt journal config_set embeddings.provider none` removes the SEMANTIC strategy entirely. Air-gapped installs may pre-stage the model with `tt model import <path>` instead.
 
@@ -110,7 +110,7 @@ Period- or tag-scoped reflections remain valid, but periods and tags are not MVP
 
 - yfinance, Polymarket Gamma, and similar external APIs are explicitly out of scope; see §2.4.
 - `sqlite-vec` is optional/verified at init; MVP recall runs with FTS5 + graph + temporal retrieval. Vector recall is off by default and opt-in (§2.4.1).
-- Local embedding models are downloaded/cache-managed only when explicitly enabled (§2.4.1, [`memory-layer.md`](./architecture/memory-layer.md) §8). The MVP base wheel ships **only** `pydantic` as a runtime dependency (see `pyproject.toml`); `sqlite-vec` and `sentence-transformers` are deferred to a `[embeddings]` install extra per bead trade-trace-a4p. Earlier text claiming the base wheel ships these is obsolete — see bead trade-trace-tka for the reconciliation.
+- Local embedding models are downloaded/cache-managed only when explicitly enabled (§2.4.1, [`memory-layer.md`](./architecture/memory-layer.md) §8). The MVP base wheel ships `pydantic` + `mcp` (the latter became a base dep per trade-trace-o8j5) as runtime dependencies; `sqlite-vec` and `keyring` are deferred to the `[embeddings]` install extra (see `pyproject.toml`). Local-model packaging (e.g. `sentence-transformers`) is opt-in via `tt model import` against a pre-downloaded model directory — the package itself does not pull a large ML dependency into the wheel.
 - ForecastBench export is ForecastBench-inspired/TBD until the current external schema is verified; see [`forecastbench-compatibility.md`](./architecture/forecastbench-compatibility.md).
 - No claim is made that LLMs have reached forecasting parity with human superforecasters.
 

@@ -61,7 +61,15 @@ def _journal_init(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             (CONTRACT_VERSION,),
         )
         fts5 = has_fts5(db.connection)
-        vec = False
+        # Per trade-trace-mehh: report the real sqlite-vec capability
+        # instead of hard-coding False. `has_sqlite_vec` runs a
+        # best-effort load + smoke-test of the vec0 virtual table; it
+        # returns False on any failure. Vectors stay off-by-default
+        # regardless of capability (the operator opts in via
+        # `journal.config_set embeddings.provider …`).
+        from trade_trace.storage.database import has_sqlite_vec
+
+        vec = has_sqlite_vec(db.connection)
     finally:
         db.close()
 
