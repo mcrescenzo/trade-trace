@@ -239,13 +239,166 @@ def _retain_result(node_id, node_type, body, importance, confidence_base,
 
 # -- memory.reflect ------------------------------------------------
 
+# Per bead trade-trace-m0h: docs/memory-layer.md §10 enumerates these
+# edge-sugar params on memory.reflect, but they are deferred to P1+.
+# Reject them up front with a typed error so docs-following agents
+# don't get a confusing schema reject from Pydantic land.
+_DEFERRED_REFLECT_EDGE_FIELDS = (
+    "derived_from", "supports", "contradicts", "supersedes",
+)
+
+
+def _normalize_reflect_input(args: dict[str, Any]) -> dict[str, Any]:
+    """Accept the README quickstart shape (`target={kind, id}`,
+    `insight`, `strength_tags`, `weakness_tags`) alongside the
+    canonical flat shape, and translate to the canonical form before
+    `_memory_reflect` validates it.
+
+    The canonical fields after normalization are: `target_kind`,
+    `target_id`, `body`. `strength_tags`/`weakness_tags` are folded
+    into `metadata_json.tags` so the structured-tag recall path can
+    find them later.
+    """
+
+    normalized = dict(args)
+
+    target_obj = normalized.pop("target", None)
+    if target_obj is not None:
+        if not isinstance(target_obj, dict):
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "memory.reflect `target` must be an object with "
+                "`kind` and `id` (README §quickstart)",
+                details={"field": "target", "value": target_obj},
+            )
+        existing_kind = normalized.get("target_kind")
+        existing_id = normalized.get("target_id")
+        target_kind = target_obj.get("kind")
+        target_id = target_obj.get("id")
+        if target_kind is None or target_id is None:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "memory.reflect `target` must include `kind` and `id`",
+                details={"field": "target", "value": target_obj},
+            )
+        if existing_kind is not None and existing_kind != target_kind:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "memory.reflect `target.kind` conflicts with `target_kind`",
+                details={
+                    "field": "target",
+                    "target_kind": existing_kind,
+                    "target_object_kind": target_kind,
+                },
+            )
+        if existing_id is not None and existing_id != target_id:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "memory.reflect `target.id` conflicts with `target_id`",
+                details={
+                    "field": "target",
+                    "target_id": existing_id,
+                    "target_object_id": target_id,
+                },
+            )
+        normalized["target_kind"] = target_kind
+        normalized["target_id"] = target_id
+
+    if "insight" in normalized:
+        insight_value = normalized.pop("insight")
+        if "body" in normalized and normalized["body"] != insight_value:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "memory.reflect `insight` conflicts with `body`",
+                details={
+                    "field": "insight",
+                    "body": normalized["body"],
+                    "insight": insight_value,
+                },
+            )
+        normalized["body"] = insight_value
+
+    strength_tags = normalized.pop("strength_tags", None)
+    weakness_tags = normalized.pop("weakness_tags", None)
+    if strength_tags is not None or weakness_tags is not None:
+        # memory.retain serializes the `meta_json` key (not
+        # metadata_json) for memory_nodes; per-bead memory-layer.md §10
+        # the strength/weakness tags are persisted there as
+        # meta_json.tags.
+        meta_obj = normalized.get("meta_json")
+        if isinstance(meta_obj, str):
+            try:
+                meta_obj = json.loads(meta_obj)
+            except json.JSONDecodeError as exc:
+                raise ToolError(
+                    ErrorCode.VALIDATION_ERROR,
+                    "meta_json must be valid JSON when supplied as a string",
+                    details={"field": "meta_json", "reason": "invalid_json"},
+                ) from exc
+        if meta_obj is None:
+            meta_obj = {}
+        if not isinstance(meta_obj, dict):
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "meta_json must decode to an object",
+                details={"field": "meta_json"},
+            )
+        tags = list(meta_obj.get("tags") or [])
+        for value, kind in (
+            (strength_tags, "strength_tags"),
+            (weakness_tags, "weakness_tags"),
+        ):
+            if value is None:
+                continue
+            if not isinstance(value, list) or not all(
+                isinstance(t, str) for t in value
+            ):
+                raise ToolError(
+                    ErrorCode.VALIDATION_ERROR,
+                    f"{kind} must be a list of strings",
+                    details={"field": kind, "value": value},
+                )
+            tags.extend(value)
+        if tags:
+            meta_obj["tags"] = tags
+        normalized["meta_json"] = meta_obj
+
+    for deferred in _DEFERRED_REFLECT_EDGE_FIELDS:
+        if deferred in normalized:
+            raise ToolError(
+                ErrorCode.UNSUPPORTED_CAPABILITY,
+                f"memory.reflect edge-sugar field {deferred!r} is "
+                "documented in memory-layer.md §10 but not implemented "
+                "in MVP; use memory.link to write the edge explicitly "
+                "until the sugar lands (deferred to P1+).",
+                details={"field": deferred,
+                         "deferred_to": "P1+ (memory-layer.md §10)"},
+            )
+
+    return normalized
+
 
 def _memory_reflect(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """Write a reflection node + `about` edge atomically. The pair is
     written in one transaction so the bead's orphan invariant holds:
     `SELECT count(*) FROM memory_nodes n WHERE n.node_type='reflection'
     AND NOT EXISTS (SELECT 1 FROM edges e WHERE e.source_kind='memory_node'
-    AND e.source_id=n.id AND e.edge_type='about')` always returns 0."""
+    AND e.source_id=n.id AND e.edge_type='about')` always returns 0.
+
+    Accepts two equivalent input shapes per bead trade-trace-m0h:
+    - Flat: `target_kind`, `target_id`, `body` (canonical).
+    - Sugar: `target={kind, id}`, `insight` (README §quickstart shape).
+
+    Plus the README's `strength_tags` and `weakness_tags` lists, which
+    are folded into the reflection's `metadata_json` as `tags` so the
+    structured tag-aware recall path can find them later. The
+    docs/memory-layer.md §10 edge-sugar fields (`derived_from`,
+    `supports`, `contradicts`, `supersedes`) are documented there as
+    P1+ deferred work; passing them today raises VALIDATION_ERROR
+    until that bead lands so the docs/impl drift cannot grow further.
+    """
+
+    args = _normalize_reflect_input(args)
 
     target_kind = require(args, "target_kind")
     target_id = require(args, "target_id")

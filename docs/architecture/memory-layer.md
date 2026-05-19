@@ -338,11 +338,30 @@ legacy `meta_json` keys for one schema version (the
 
 1. Creates the reflection node.
 2. Creates an `about` edge to the target (for row-backed targets).
+
+The following edge sugar is documented for the contract but **deferred
+to P1+** per bead trade-trace-m0h. Passing any of these fields today
+returns `UNSUPPORTED_CAPABILITY` so docs-following agents see a clear
+deferral message instead of a silent acceptance:
+
 3. Optionally creates `derived_from` edges to specified observations.
 4. Optionally creates `supersedes` edges to older reflection IDs.
 5. Optionally creates `supports` / `contradicts` edges to other memory nodes.
 
-This lets reflections accumulate naturally at every grain — per-trade, per-period, per-pattern — without the agent having to issue multiple write calls.
+Until that ships, callers write follow-up edges via `memory.link`,
+which is fully implemented. The reflection node + about edge are
+still atomic per bead trade-trace-1up.
+
+The MVP write surface accepts two equivalent shapes:
+
+- Flat (canonical): `memory.reflect(target_kind, target_id, body, …)`.
+- Sugar (README §quickstart): `memory.reflect(target={"kind", "id"},
+  insight, strength_tags?, weakness_tags?, …)`. `strength_tags` and
+  `weakness_tags` are folded into the reflection's
+  `metadata_json.tags` so structured-tag recall picks them up.
+
+Per bead trade-trace-m0h: the sugar shape and the deferred edge
+fields are pinned by tests replaying the README example.
 
 ## 11. Hindsight comparison
 

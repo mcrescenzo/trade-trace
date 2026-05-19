@@ -135,6 +135,119 @@ def test_memory_reflect_writes_reflection_with_about_edge(home):
     assert edge_row == ("about", "thesis", seeds["thesis"])
 
 
+# -- bead trade-trace-m0h: README §quickstart sugar shape ----------
+
+
+def _seed_decision(home):
+    """Mirror of _seed_thesis but bottoms out at a decision so the
+    README example's `target.kind = 'decision'` path is exercisable."""
+
+    venue = _mcp(home, "venue.add", {
+        "name": "PM", "kind": "prediction_market",
+    }).data["id"]
+    instrument = _mcp(home, "instrument.add", {
+        "venue_id": venue, "title": "X",
+        "asset_class": "prediction_market",
+    }).data["id"]
+    decision = _mcp(home, "decision.add", {
+        "instrument_id": instrument, "type": "skip",
+        "reason": "no edge today",
+    }).data["id"]
+    return {"venue": venue, "instrument": instrument, "decision": decision}
+
+
+def test_memory_reflect_accepts_readme_sugar_shape(home):
+    """The README quickstart shape — `target={kind,id}`, `insight`,
+    `strength_tags` — must work end-to-end through mcp_call (bead
+    trade-trace-m0h)."""
+
+    seeds = _seed_decision(home)
+    env = _mcp(home, "memory.reflect", {
+        "target": {"kind": "decision", "id": seeds["decision"]},
+        "insight": (
+            "Skip was correct here; spread compression never materialized."
+        ),
+        "strength_tags": ["good-skip", "good-liquidity-discipline"],
+    })
+    assert env.ok, env
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            "SELECT body, meta_json FROM memory_nodes WHERE id = ?",
+            (env.data["id"],),
+        ).fetchone()
+        edge = db.connection.execute(
+            "SELECT target_kind, target_id FROM edges "
+            "WHERE source_kind = 'memory_node' AND source_id = ?",
+            (env.data["id"],),
+        ).fetchone()
+    finally:
+        db.close()
+    assert row[0] == (
+        "Skip was correct here; spread compression never materialized."
+    )
+    import json
+    meta = json.loads(row[1])
+    assert set(meta.get("tags", [])) == {
+        "good-skip", "good-liquidity-discipline",
+    }
+    assert edge == ("decision", seeds["decision"])
+
+
+def test_memory_reflect_target_object_conflicts_with_target_kind(home):
+    seeds = _seed_decision(home)
+    env = _mcp(home, "memory.reflect", {
+        "target": {"kind": "decision", "id": seeds["decision"]},
+        "target_kind": "thesis",  # contradicts target.kind
+        "insight": "should fail",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "target"
+
+
+def test_memory_reflect_insight_and_body_conflict_rejected(home):
+    seeds = _seed_decision(home)
+    env = _mcp(home, "memory.reflect", {
+        "target": {"kind": "decision", "id": seeds["decision"]},
+        "insight": "one phrasing",
+        "body": "another phrasing",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "insight"
+
+
+def test_memory_reflect_strength_tags_must_be_list_of_strings(home):
+    seeds = _seed_decision(home)
+    env = _mcp(home, "memory.reflect", {
+        "target": {"kind": "decision", "id": seeds["decision"]},
+        "insight": "tags shape check",
+        "strength_tags": "not-a-list",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+
+
+def test_memory_reflect_deferred_edge_sugar_returns_unsupported(home):
+    """memory-layer.md §10 lists derived_from / supports / contradicts /
+    supersedes as deferred to P1+; passing any of them must surface as
+    UNSUPPORTED_CAPABILITY so the docs/impl gap is loud (bead m0h)."""
+
+    seeds = _seed_decision(home)
+    for field in ("derived_from", "supports", "contradicts", "supersedes"):
+        env = _mcp(home, "memory.reflect", {
+            "target": {"kind": "decision", "id": seeds["decision"]},
+            "insight": "reflection",
+            field: ["mem_abc"],
+        })
+        assert env.ok is False, f"{field} unexpectedly accepted"
+        assert env.error.code.value == "UNSUPPORTED_CAPABILITY"
+        assert env.error.details["field"] == field
+        assert "P1" in env.error.details["deferred_to"]
+
+
 def test_memory_reflect_rejects_missing_target(home):
     env = _mcp(home, "memory.reflect", {
         "target_kind": "thesis", "target_id": "thes_nope",
