@@ -15,10 +15,11 @@ from trade_trace.mcp_server import mcp_call
 
 
 @pytest.fixture
-def home(tmp_path):
-    h = tmp_path / "home"
-    assert mcp_call("journal.init", {"home": str(h)}).ok
-    return h
+def home(initialized_home):
+    """Alias to the shared `initialized_home` fixture in
+    `tests/conftest.py` (trade-trace-qs5v / SIMP-008)."""
+
+    return initialized_home
 
 
 def _mcp(home: Path, tool: str, args: dict | None = None):

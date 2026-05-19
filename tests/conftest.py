@@ -85,3 +85,20 @@ def _restore_strict_dispatch_for_marker(request):
             _mcp_server.dispatch = prior_mcp
     else:
         yield
+
+
+@pytest.fixture
+def initialized_home(tmp_path):
+    """Per-test isolated `$TRADE_TRACE_HOME` directory with the journal
+    schema already migrated (trade-trace-qs5v / SIMP-008). 30+ tests
+    previously redefined the same three-line `home` fixture; this is
+    the shared shape. Tests that need a customized init flow (e.g.,
+    `_journal_init` with extra args) keep their per-file fixture.
+    """
+
+    from trade_trace.mcp_server import mcp_call
+
+    h = tmp_path / "home"
+    init = mcp_call("journal.init", {"home": str(h)})
+    assert init.ok, init
+    return h
