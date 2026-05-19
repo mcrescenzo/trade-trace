@@ -30,6 +30,7 @@ REQUIRED_NAV_ROUTES = [
     "/strategies",
     "/playbooks",
     "/integrity",
+    "/logs",
     "/raw",
 ]
 
@@ -48,13 +49,14 @@ def test_base_template_lists_every_required_nav_route():
         assert f'href="{route}"' in html, f"nav missing route {route!r}"
 
 
-def test_base_template_does_not_include_logs_nav():
-    """The Logs page is deferred per console.md §12 / -jtec; the
-    shell must not render a 'Logs' nav entry."""
+def test_base_template_includes_logs_nav_after_jtec():
+    """trade-trace-jtec restored the Logs nav entry now that the
+    operational-logging contract (trade-trace-3zvl) is in place."""
 
-    html = _base_html().lower()
-    assert "logs</a>" not in html, "shell still includes a Logs nav entry"
-    assert "href=\"/logs\"" not in html
+    html = _base_html()
+    assert 'href="/logs"' in html
+    # The deferred-logs footer note from before jtec is gone.
+    assert "Logs page deferred" not in html
 
 
 @pytest.mark.parametrize("name", [

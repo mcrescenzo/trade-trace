@@ -68,7 +68,10 @@ def test_banner_includes_required_fields(tmp_path: Path):
     assert "DB path:" in banner
     assert "read-only" in banner
     assert "does not execute trades" in banner
-    assert "logs deferred" in banner.lower()
+    # After trade-trace-jtec the Logs page is shipped; the banner
+    # now points at the log file path instead of the deferral.
+    assert "logs" in banner.lower()
+    assert "trade-trace.log" in banner
 
 
 def test_missing_console_extra_returns_typed_error(tmp_path: Path, monkeypatch):

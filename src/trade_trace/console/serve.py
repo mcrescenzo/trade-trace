@@ -196,6 +196,17 @@ def _build_app(home_path: str) -> Any:
             db.close()
         return _render(request, "integrity.html", ctx)
 
+    @app.get("/logs", response_class=HTMLResponse)
+    def logs_html(request: Any, level: str | None = None, tail: int = 200) -> Any:
+        from trade_trace.console.logs import logs_context
+
+        ctx = logs_context(
+            home=resolve_home(home_path),
+            tail=max(10, min(int(tail), 2000)),
+            level_filter=level or None,
+        )
+        return _render(request, "logs.html", ctx)
+
     @app.get("/raw", response_class=HTMLResponse)
     def raw_html(request: Any, event_id: int | None = None) -> Any:
         _, db = _open()
@@ -263,7 +274,7 @@ def _format_banner(
     *,
     url: str,
     db_path: str,
-    log_status: str = "logs deferred — see trade-trace-jtec",
+    log_status: str = "logs at <home>/logs/trade-trace.log",
     read_only: bool = True,
 ) -> str:
     """Render the startup banner per console.md §10."""

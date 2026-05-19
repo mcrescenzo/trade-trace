@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Logs · Trade Trace Console{% endblock %}
+{% block content %}
+<section class="tt-logs">
+  <h1>Logs</h1>
+  <p class="tt-context">Log directory: <code>{{ log_dir }}</code></p>
+  <form data-filter-form>
+    <label>Level
+      <select name="level">
+        <option value="">All</option>
+        <option value="DEBUG">DEBUG</option>
+        <option value="INFO">INFO</option>
+        <option value="WARN">WARN</option>
+        <option value="WARNING">WARNING</option>
+        <option value="ERROR">ERROR</option>
+      </select>
+    </label>
+    <label>Tail <input type="number" name="tail" min="10" max="2000" value="{{ tail|default(200) }}"></label>
+    <button type="submit">Apply</button>
+  </form>
+  {% if empty_state %}
+    <article class="tt-empty-state" data-empty-state="logs">
+      <h2>{{ empty_state.title }}</h2>
+      <ol>
+        {% for label, cmd in empty_state.next_steps %}
+          <li>{{ label }}: <code>{{ cmd }}</code></li>
+        {% endfor %}
+      </ol>
+    </article>
+  {% else %}
+    <table class="tt-table tt-logs-table">
+      <thead>
+        <tr><th>ts</th><th>level</th><th>actor</th><th>verb</th><th>message</th></tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr data-record-id="{{ row.request_id or '' }}">
+            {% if row._unparsed %}
+              <td colspan="5"><code class="tt-warn">malformed: {{ row._unparsed }}</code></td>
+            {% else %}
+              <td><time data-ts="{{ row.ts }}">{{ row.ts }}</time></td>
+              <td><code>{{ row.level }}</code></td>
+              <td><code>{{ row.actor }}</code></td>
+              <td><code>{{ row.verb or '' }}</code></td>
+              <td>{{ row.message }}</td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</section>
+{% endblock %}

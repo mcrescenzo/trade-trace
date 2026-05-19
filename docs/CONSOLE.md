@@ -53,9 +53,8 @@ The default flags:
 | `--allow-non-loopback` | (off) | Explicit acknowledgement that `--host` exposes the dashboard beyond localhost. |
 
 The CLI prints a banner on startup naming the URL, the DB path,
-the read-only mode, the no-trade notice, and the Logs-deferred
-status. It then opens your default browser (unless
-`--no-browser`).
+the read-only mode, and the no-trade notice. It then opens your
+default browser (unless `--no-browser`).
 
 If the port is occupied, the CLI exits with code **73** and a
 helpful message naming the port and suggesting `--port=<n+1>`
@@ -83,12 +82,12 @@ client-side; the server always returns UTC ISO 8601.
 | Strategies (`/strategies`) | Paginated strategies table. |
 | Playbooks (`/playbooks`) | Paginated playbooks table. |
 | Evidence & Integrity (`/integrity`) | Source totals, decision-source attachment counts, event-log totals, outbox-pending count. |
+| Logs (`/logs`) | Last N lines of `<home>/logs/trade-trace.log` (configurable via `TRADE_TRACE_LOG_DIR`). Optional level filter, malformed-line tolerance, and the same secret redaction the logging module applies on write. |
 | Raw JSON (`/raw`) | Index of latest events plus per-event payload viewer (`/raw?event_id=<n>`). |
 
-The **Logs page is deferred** out of MVP. Operational logging
-contract: [`docs/architecture/logging.md`](./architecture/logging.md)
-(trade-trace-3zvl). Console Logs page follow-up:
-trade-trace-jtec.
+The operational logging contract lives in
+[`docs/architecture/logging.md`](./architecture/logging.md)
+(trade-trace-3zvl); the Logs page consumes those JSONL files.
 
 ## Troubleshooting
 

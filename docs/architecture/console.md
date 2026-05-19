@@ -284,14 +284,15 @@ Adding a smoke test for a new page:
    the `[console-test]` extra isn't installed, so it never
    breaks a default `pytest` run.
 
-### 12. Logs page — deferred out of MVP
+### 12. Logs page — shipped via trade-trace-jtec
 
-The Console **Logs page is explicitly out of MVP scope**. It is
-filed as the standalone follow-up bead trade-trace-jtec, which
-depends on trade-trace-3zvl (operational logging contract) — the
-contract that makes the Logs page possible at all. trade-trace-3zvl
-landed in this work session; trade-trace-jtec remains open and is
-**not** a 1kkv child.
+The Console Logs page (`/logs`) was added as a follow-up to the
+MVP via trade-trace-jtec, once the operational-logging contract
+(trade-trace-3zvl) was in place. The page reads JSONL log files
+under `<home>/logs/` (or `$TRADE_TRACE_LOG_DIR`), filters by
+level + tail-length, tolerates missing/corrupt files, and
+re-applies the secret redaction the logging module enforces on
+write.
 
 ### 13. Pagination contract — cursor-based
 
@@ -396,7 +397,7 @@ Threats deferred to later beads:
 
 - Implementing the FastAPI app, templates, or static assets.
 - Choosing color palette / visual polish.
-- Designing the Logs page (separately deferred per §12).
+- Designing additional Console pages beyond the MVP nav set. The Logs page shipped via §12 / trade-trace-jtec.
 - Defining the Console's pagination contract or perf baseline
   (deferred to trade-trace-1kkv.14).
 - Choosing CSP / network-isolation defaults (deferred to
