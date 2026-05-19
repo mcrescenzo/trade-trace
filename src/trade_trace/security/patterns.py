@@ -11,7 +11,7 @@ Built-in patterns:
 
 - ``api_key``           : ``(sk-|pk_)[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16}``
 - ``slack_token``       : ``xox[abprs]-[A-Za-z0-9-]+``
-- ``ethereum_address``  : ``0x[a-fA-F0-9]{40}``
+- ``ethereum_address``  : ``\b0x[a-fA-F0-9]{40}\b`` (word-bounded; longer hex blobs like Polymarket condition ids, 0x+64 hex, are not Ethereum addresses — see trade-trace-aqpf)
 - ``jwt``               : three base64url segments separated by ``.``
 
 The registry is a process-global module-level dict. Tests that mutate
@@ -51,7 +51,7 @@ class SecretPatternError(ValueError):
 BUILTIN_PATTERNS: Final[dict[str, str]] = {
     "api_key": r"(sk-|pk_)[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16}",
     "slack_token": r"xox[abprs]-[A-Za-z0-9-]+",
-    "ethereum_address": r"0x[a-fA-F0-9]{40}",
+    "ethereum_address": r"\b0x[a-fA-F0-9]{40}\b",
     "jwt": r"\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b",
 }
 """Built-in pattern source strings per operability.md §6.3. JWT regex

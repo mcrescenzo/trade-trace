@@ -485,3 +485,55 @@ def test_clean_decision_reason_writes_normally(home):
         "idempotency_key": "00000000-0000-4000-8000-clean-decis",
     })
     assert env.ok, env
+
+
+# -- Polymarket condition ID false positives (trade-trace-aqpf) ----------
+
+
+def test_polymarket_condition_id_is_not_flagged_as_ethereum_address(home: Path):
+    """Polymarket conditionId is `0x` + 64 hex (32 bytes), longer than an
+    Ethereum address (`0x` + 40 hex / 20 bytes). The ethereum_address
+    pattern must use a word boundary so it does not falsely match the
+    longer condition-id prefix (trade-trace-aqpf)."""
+
+    from trade_trace.security import scan_text
+
+    condition_id = "0x5caf6459052e0fcc736c368f97b5ea98e6bf264507f2e94ac8d69fcc441b1bae"
+    matches = scan_text(condition_id)
+    assert not any(m.pattern_kind == "ethereum_address" for m in matches), (
+        f"condition id falsely matched ethereum_address: {matches}"
+    )
+
+
+def test_real_ethereum_address_still_flagged():
+    """The fix must not weaken detection of a real 40-hex Ethereum address
+    embedded in free text."""
+
+    from trade_trace.security import scan_text
+
+    text = "send to 0x1234567890abcdef1234567890abcdef12345678 by EOD"
+    matches = scan_text(text)
+    assert any(m.pattern_kind == "ethereum_address" for m in matches)
+
+
+def test_instrument_metadata_with_polymarket_condition_id_succeeds(home: Path):
+    """instrument.add with Polymarket conditionId in metadata_json must
+    succeed; previously the ethereum_address false positive blocked it
+    (trade-trace-aqpf)."""
+
+    venue = _mcp(home, "venue.add", {
+        "name": "Polymarket", "kind": "prediction_market",
+        "idempotency_key": "aqpf-venue",
+    }).model_dump(mode="json", exclude_none=True)
+    env = _mcp(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market",
+        "title": "Ukraine NATO accession before 2027",
+        "external_id": "polymarket:ukraine-nato:2027",
+        "metadata_json": {
+            "polymarket_slug": "ukraine-agrees-not-to-join-nato-before-2027",
+            "condition_id": "0x5caf6459052e0fcc736c368f97b5ea98e6bf264507f2e94ac8d69fcc441b1bae",
+        },
+        "idempotency_key": "aqpf-inst",
+    }).model_dump(mode="json", exclude_none=True)
+    assert env["ok"] is True, env
