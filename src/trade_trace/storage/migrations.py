@@ -1133,9 +1133,11 @@ MIGRATIONS: list[Migration] = [
 # Tables each migration is the FIRST to create. Used by
 # `_assert_schema_matches_meta` (bead trade-trace-0ib) to detect a
 # stale/lost `meta.schema_version` against the actual on-disk schema.
-# Migrations that only add columns/triggers (004, 009, 010) appear
-# with an empty list; the check focuses on table-creation order
-# which is the canonical signal of how far migrations have run.
+# Migrations that only add columns/triggers (004, 010) appear with an
+# empty list; column drift is detected separately via
+# `_MIGRATION_COLUMNS_ADDED` (trade-trace-n1mm). Trigger drift is
+# explicitly out of scope per
+# `docs/architecture/schema-meta-diagnostics.md`.
 _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
     (1, ["meta"]),
     (2, ["events", "outbox", "config"]),
@@ -1156,28 +1158,87 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
 ]
 
 
+# Columns each column-only migration adds. Used by
+# `_assert_schema_matches_meta` (trade-trace-n1mm) to surface a typed
+# diagnostic when a stale `meta.schema_version` row hides the fact
+# that a column-only migration already ran. Trigger-only migrations
+# (010) appear as empty dicts; trigger drift is out of scope per
+# `docs/architecture/schema-meta-diagnostics.md`.
+_MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
+    (1, {}),
+    (2, {}),
+    (3, {}),
+    (4, {
+        "theses": [
+            "risk_unit_label", "max_loss_budget", "invalidation_condition",
+        ],
+        "decisions": [
+            "declared_risk_amount", "declared_risk_unit", "expected_edge",
+            "expected_edge_after_costs", "cost_basis_estimate",
+            "risk_reward_estimate",
+        ],
+        "position_events": [
+            "initial_risk_amount", "realized_r_multiple",
+            "unrealized_r_multiple",
+        ],
+        "positions": [
+            "initial_risk_amount", "realized_r_multiple",
+            "unrealized_r_multiple",
+        ],
+    }),
+    (5, {}),
+    (6, {}),
+    (7, {}),
+    (8, {}),
+    (9, {}),
+    (10, {}),
+]
+
+
 class SchemaMetaMismatchError(RuntimeError):
-    """The DB's `meta.schema_version` disagrees with the tables that
-    actually exist on disk (bead trade-trace-0ib / DEBT-015).
+    """The DB's `meta.schema_version` disagrees with the tables or
+    columns that actually exist on disk
+    (bead trade-trace-0ib / DEBT-015; column-drift coverage added in
+    trade-trace-n1mm).
 
     Raised before any migration runs so an opaque DDL failure ("table
-    X already exists") is replaced with an actionable diagnostic.
+    X already exists" / "duplicate column name") is replaced with an
+    actionable diagnostic.
     """
 
-    def __init__(self, current_version: int, unexpected_tables: list[str]) -> None:
+    def __init__(
+        self,
+        current_version: int,
+        unexpected_tables: list[str] | None = None,
+        unexpected_columns: dict[str, list[str]] | None = None,
+    ) -> None:
         self.current_version = current_version
-        self.unexpected_tables = sorted(unexpected_tables)
-        super().__init__(
-            f"schema/meta mismatch: meta.schema_version={current_version} "
-            f"but the following table(s) already exist on disk: "
-            f"{self.unexpected_tables!r}. This usually means a prior "
-            "migration committed without updating the meta row, or the "
-            "meta row was reset by an out-of-band recovery. Restore the "
-            "DB from a backup (tt journal restore --from <path>) or "
-            "remove the unexpected tables manually before re-running "
+        self.unexpected_tables = sorted(unexpected_tables or [])
+        self.unexpected_columns = {
+            table: sorted(cols)
+            for table, cols in sorted((unexpected_columns or {}).items())
+        }
+        parts = [f"schema/meta mismatch: meta.schema_version={current_version}"]
+        if self.unexpected_tables:
+            parts.append(
+                f"these table(s) already exist on disk: "
+                f"{self.unexpected_tables!r}"
+            )
+        if self.unexpected_columns:
+            parts.append(
+                f"these column(s) already exist on disk: "
+                f"{self.unexpected_columns!r}"
+            )
+        parts.append(
+            "This usually means a prior migration committed without "
+            "updating the meta row, or the meta row was reset by an "
+            "out-of-band recovery. Restore the DB from a backup "
+            "(tt journal restore --from <path>) or remove the "
+            "unexpected schema elements manually before re-running "
             "tt journal init. See operability.md §4 for the migration "
             "policy."
         )
+        super().__init__("; ".join(parts) + ".")
 
 
 def _assert_schema_matches_meta(
@@ -1185,32 +1246,55 @@ def _assert_schema_matches_meta(
 ) -> None:
     """Detect a schema/meta mismatch before the migration loop starts.
 
-    Walks `_MIGRATION_TABLES_CREATED` for migrations the meta row
-    claims have NOT yet run and asserts none of those tables already
-    exist in `sqlite_master`. If any do, raise
-    `SchemaMetaMismatchError` with the offending names so the
+    Walks `_MIGRATION_TABLES_CREATED` AND `_MIGRATION_COLUMNS_ADDED`
+    for migrations the meta row claims have NOT yet run and asserts
+    none of those tables or columns already exist on disk. If any do,
+    raise `SchemaMetaMismatchError` with the offending names so the
     operator can recover deliberately instead of debugging an
-    "table X already exists" error mid-loop.
+    "table X already exists" or "duplicate column name" error mid-loop.
+    Trigger drift is out of scope per
+    `docs/architecture/schema-meta-diagnostics.md`.
     """
 
-    # No tables exist at version 0 → migration 001 creates `meta`.
     # Use sqlite_master directly so the check works even when `meta`
     # is itself missing or stale.
     rows = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' "
         "AND name NOT LIKE 'sqlite_%'"
     ).fetchall()
-    existing = {r[0] for r in rows}
+    existing_tables = {r[0] for r in rows}
 
-    unexpected: list[str] = []
+    unexpected_tables: list[str] = []
     for version, tables in _MIGRATION_TABLES_CREATED:
         if version <= current_version:
             continue
         for table in tables:
-            if table in existing:
-                unexpected.append(table)
-    if unexpected:
-        raise SchemaMetaMismatchError(current_version, unexpected)
+            if table in existing_tables:
+                unexpected_tables.append(table)
+
+    unexpected_columns: dict[str, list[str]] = {}
+    for version, fingerprint in _MIGRATION_COLUMNS_ADDED:
+        if version <= current_version:
+            continue
+        for table, columns in fingerprint.items():
+            if table not in existing_tables:
+                continue
+            present = {
+                row[1]
+                for row in conn.execute(
+                    f"PRAGMA table_info({table})"
+                ).fetchall()
+            }
+            for column in columns:
+                if column in present:
+                    unexpected_columns.setdefault(table, []).append(column)
+
+    if unexpected_tables or unexpected_columns:
+        raise SchemaMetaMismatchError(
+            current_version,
+            unexpected_tables=unexpected_tables,
+            unexpected_columns=unexpected_columns,
+        )
 
 
 def current_version(conn: sqlite3.Connection) -> int:

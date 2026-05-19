@@ -280,3 +280,45 @@ def test_strategy_id_new_row_triggers_grandfather_preexisting_rows(tmp_path: Pat
         assert "decisions.strategy_id" in str(exc.value)
     finally:
         db.close()
+
+
+def test_schema_meta_mismatch_detects_column_drift_from_migration_004(tmp_path: Path):
+    """Per trade-trace-n1mm: when the DB has columns on disk that a
+    not-yet-run column-only migration would add (migration 004's
+    risk-units stub), the runner must surface SchemaMetaMismatchError
+    with the offending columns instead of letting SQLite raise
+    "duplicate column name". Migration 010 is trigger-only and is
+    explicitly out of scope per
+    docs/architecture/schema-meta-diagnostics.md."""
+
+    from trade_trace.storage.migrations import SchemaMetaMismatchError
+
+    db = _open(tmp_path)
+    try:
+        # Bring the DB up to migration 4 (which adds the columns), then
+        # rewind meta.schema_version to 3 so the runner thinks 004 is
+        # still pending. The columns are already on disk.
+        apply_pending_migrations(db.connection, target_version=4)
+        assert current_version(db.connection) == 4
+        db.connection.execute(
+            "UPDATE meta SET value = '3' WHERE key = 'schema_version'"
+        )
+        assert current_version(db.connection) == 3
+
+        with pytest.raises(SchemaMetaMismatchError) as exc:
+            apply_pending_migrations(db.connection)
+
+        err = exc.value
+        assert err.current_version == 3
+        # The diagnostic must enumerate the migration-004 columns the
+        # check found already present on disk.
+        assert "theses" in err.unexpected_columns
+        assert "risk_unit_label" in err.unexpected_columns["theses"]
+        assert "decisions" in err.unexpected_columns
+        assert "declared_risk_amount" in err.unexpected_columns["decisions"]
+        # And must NOT contain a raw SQLite "duplicate column" message.
+        msg = str(err)
+        assert "duplicate column name" not in msg.lower()
+        assert "schema/meta mismatch" in msg
+    finally:
+        db.close()
