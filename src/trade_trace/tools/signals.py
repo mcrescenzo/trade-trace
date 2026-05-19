@@ -145,14 +145,30 @@ def _already_signaled(
 ) -> bool:
     """Lookup whether a signal with `kind` already references `(ref_key, ref_id)`.
 
-    Used by the scan's idempotency guard so re-running `signal.scan` on
-    the same DB state does not append duplicate rows.
+    Used by the scan's idempotency guard so re-running `signal.scan`
+    on the same DB state does not append duplicate rows.
+
+    Per bead trade-trace-c2h / DEBT-020: the previous implementation
+    used a substring `LIKE '%"<key>":"<id>"%'` against the raw
+    `related_refs_json` blob. That matched only one specific JSON
+    formatting (compact, value-quoted, no extra whitespace) — a
+    future producer that wrote a re-ordered key set or any
+    whitespace would silently bypass the dedupe. The query now
+    uses SQLite's `json_extract` so the comparison is structural
+    against the JSON value regardless of formatting.
     """
 
+    # `related_refs_json` is a JSON array of single-key dicts like
+    # `[{"forecast_id": "fid_123"}, {"instrument_id": "..."}]`. The
+    # dedupe check asks "does any element have key=ref_key with
+    # value=ref_id?". We walk the array via `json_each` and pull
+    # `json_extract(value, $.<ref_key>)` per element so the match is
+    # structural regardless of JSON whitespace or sibling-key
+    # ordering.
     cur = conn.execute(
-        "SELECT id FROM signals WHERE kind = ? "
-        "AND related_refs_json LIKE ?",
-        (kind, f'%"{ref_key}":"{ref_id}"%'),
+        "SELECT s.id FROM signals s, json_each(s.related_refs_json) e "
+        "WHERE s.kind = ? AND json_extract(e.value, ?) = ? LIMIT 1",
+        (kind, f"$.{ref_key}", ref_id),
     )
     return cur.fetchone() is not None
 

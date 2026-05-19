@@ -107,6 +107,51 @@ def test_signal_scan_dedupe_default(home):
     assert _signal_count(home) == 1
 
 
+def test_signal_scan_dedupe_survives_alternate_json_formatting(home):
+    """Per bead trade-trace-c2h / DEBT-020: the dedupe guard must match
+    structurally, not as a LIKE substring of the JSON blob.
+    Previously a producer that wrote `related_refs_json` with extra
+    whitespace, reordered keys, or unicode-escaped values would
+    bypass the dedupe (the LIKE expected one specific compact
+    formatting). The json_extract walk is formatting-agnostic.
+    """
+
+    forecast_id = _seed_unscored_forecast(home)
+
+    # Pre-insert a signal row directly, formatted differently from
+    # what _emit_signal produces (spaces in the JSON, keys reordered),
+    # but with the same logical (forecast_id, instrument_id) refs.
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        db.connection.execute(
+            "INSERT INTO signals(id, kind, severity, body, related_refs_json, "
+            "meta_json, created_at, actor_id) VALUES "
+            "(?, 'unscored_forecast', 'warn', 'preseed body', ?, '{}', "
+            "?, 'system:report.signal_scan')",
+            (
+                "sig_preseed",
+                # Indented JSON with the same logical refs — historically
+                # bypassed the LIKE pattern but must now hit the dedupe.
+                '[ { "instrument_id": "preseed_i" }, '
+                f'{{ "forecast_id": "{forecast_id}" }} ]',
+                "2026-05-19T12:00:00Z",
+            ),
+        )
+        db.connection.commit()
+    finally:
+        db.close()
+
+    # First scan should now NOT emit (dedupe sees the preseed row).
+    env = _envelope(home, "signal.scan", {})
+    assert env["data"]["emitted_count"] == 0, (
+        "dedupe missed an alternate-formatting preseed row; the "
+        "LIKE pattern would have missed this, json_extract must not"
+    )
+
+
 def test_signal_scan_dedupe_off_forces_reemission(home):
     _seed_unscored_forecast(home)
     _envelope(home, "signal.scan", {})
