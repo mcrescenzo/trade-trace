@@ -62,15 +62,6 @@ def home(tmp_path: Path) -> Path:
     return h
 
 
-def _all_columns(home: Path, table: str) -> list[str]:
-    db = open_database(db_path(home), create_parent=False)
-    try:
-        cur = db.connection.execute(f"PRAGMA table_info({table})")
-        return [r[1] for r in cur.fetchall()]
-    finally:
-        db.close()
-
-
 def test_no_table_column_resembles_credential(home: Path):
     """No M1 table has a column whose name suggests credentials."""
 
