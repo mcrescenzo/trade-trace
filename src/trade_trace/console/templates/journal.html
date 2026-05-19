@@ -3,13 +3,49 @@
 {% block content %}
 <section class="tt-journal">
   <h1>Journal</h1>
-  <p class="tt-muted">Page content lands in a follow-up bead under the 1kkv epic.</p>
   <form data-filter-form>
-    <label>Search <input type="text" name="q"></label>
+    <label>Event type <input type="text" name="event_type" value="{{ filters.event_type|default('') }}"></label>
+    <label>Actor <input type="text" name="actor_id" value="{{ filters.actor_id|default('') }}"></label>
+    <label>Subject kind <input type="text" name="subject_kind" value="{{ filters.subject_kind|default('') }}"></label>
     <button type="submit">Apply</button>
   </form>
-  <div id="tt-journal-list" hx-trigger="tt:refresh from:body">
-    {% block list %}{% endblock %}
-  </div>
+  {% if empty_state %}
+    <article class="tt-empty-state" data-empty-state="journal">
+      <h2>{{ empty_state.title }}</h2>
+      <ol>
+        {% for label, cmd in empty_state.next_steps %}
+          <li>{{ label }}: <code>{{ cmd }}</code></li>
+        {% endfor %}
+      </ol>
+    </article>
+  {% else %}
+    <table class="tt-table">
+      <thead>
+        <tr>
+          <th>id</th>
+          <th>event_type</th>
+          <th>subject</th>
+          <th>actor</th>
+          <th>created_at</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr data-record-id="{{ row.id }}">
+            <td><a href="/raw?event_id={{ row.id }}"><code>{{ row.id }}</code></a></td>
+            <td><code>{{ row.event_type }}</code></td>
+            <td><code>{{ row.subject_kind }}:{{ row.subject_id }}</code></td>
+            <td><code>{{ row.actor_id }}</code></td>
+            <td><time data-ts="{{ row.created_at }}">{{ row.created_at }}</time></td>
+            <td><a href="/raw?event_id={{ row.id }}" class="tt-drilldown">Raw JSON</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if next_cursor %}
+      <p class="tt-pagination"><a href="?cursor={{ next_cursor }}&amp;limit={{ limit }}" rel="next">Next page →</a></p>
+    {% endif %}
+  {% endif %}
 </section>
 {% endblock %}

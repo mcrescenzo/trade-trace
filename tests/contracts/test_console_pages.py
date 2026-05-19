@@ -1,0 +1,182 @@
+"""Console page context handlers (trade-trace-1kkv.6/.7/.8/.9).
+
+The handlers in `trade_trace.console.pages` are pure functions
+over a read-only SQLite connection. These tests pin the context
+shape, empty-state CTA, and pagination conformance without
+needing the `[console]` extra installed.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from trade_trace.mcp_server import mcp_call
+from trade_trace.storage.paths import db_path
+
+
+@pytest.fixture
+def seeded_home(tmp_path: Path) -> Path:
+    home = tmp_path / "home"
+    init = mcp_call("journal.init", {"home": str(home)})
+    assert init.ok
+    seed = mcp_call(
+        "journal.fixture_seed", {"home": str(home), "target": "mvp-eval"},
+        actor_id="agent:test",
+    )
+    assert seed.ok
+    return home
+
+
+@pytest.fixture
+def empty_home(tmp_path: Path) -> Path:
+    home = tmp_path / "empty"
+    init = mcp_call("journal.init", {"home": str(home)})
+    assert init.ok
+    return home
+
+
+@pytest.fixture
+def conn(seeded_home: Path):
+    from trade_trace.storage.database import open_database_readonly
+
+    db = open_database_readonly(db_path(seeded_home))
+    try:
+        yield db.connection
+    finally:
+        db.close()
+
+
+@pytest.fixture
+def empty_conn(empty_home: Path):
+    from trade_trace.storage.database import open_database_readonly
+
+    db = open_database_readonly(db_path(empty_home))
+    try:
+        yield db.connection
+    finally:
+        db.close()
+
+
+def test_overview_context_includes_record_counts(conn, seeded_home: Path):
+    from trade_trace.console.pages import overview_context
+
+    ctx = overview_context(conn, db_path=db_path(seeded_home))
+    assert ctx["page_title"] == "Overview"
+    assert ctx["row_counts"]["events"] > 0
+    assert ctx["empty_state"] is None
+
+
+def test_overview_empty_state_offers_concrete_cli_hints(empty_conn, empty_home: Path):
+    from trade_trace.console.pages import overview_context
+
+    ctx = overview_context(empty_conn, db_path=db_path(empty_home))
+    assert ctx["empty_state"] is not None
+    cmds = [cmd for _, cmd in ctx["empty_state"]["next_steps"]]
+    assert any("fixture" in c for c in cmds), cmds
+
+
+def test_journal_context_paginates_with_next_cursor(conn):
+    from trade_trace.console.pages import journal_context
+
+    page1 = journal_context(conn, cursor=None, limit=5)
+    assert len(page1["rows"]) == 5
+    assert page1["next_cursor"] is not None
+    page2 = journal_context(conn, cursor=page1["next_cursor"], limit=5)
+    assert {r["id"] for r in page1["rows"]}.isdisjoint({r["id"] for r in page2["rows"]})
+
+
+def test_journal_empty_state_has_seed_hint(empty_conn):
+    from trade_trace.console.pages import journal_context
+
+    ctx = journal_context(empty_conn, cursor=None, limit=50)
+    assert ctx["empty_state"] is not None
+    assert any("fixture" in c for _, c in ctx["empty_state"]["next_steps"])
+
+
+def test_decisions_context_paginates(conn):
+    from trade_trace.console.pages import decisions_context
+
+    ctx = decisions_context(conn, cursor=None, limit=50)
+    assert ctx["page_title"] == "Decisions"
+
+
+def test_decision_detail_returns_none_for_missing_id(conn):
+    from trade_trace.console.pages import decision_detail_context
+
+    assert decision_detail_context(conn, decision_id="does-not-exist") is None
+
+
+def test_decision_detail_returns_row_for_existing_id(conn):
+    from trade_trace.console.pages import decision_detail_context
+
+    decision_id = conn.execute("SELECT id FROM decisions LIMIT 1").fetchone()[0]
+    ctx = decision_detail_context(conn, decision_id=decision_id)
+    assert ctx is not None
+    assert ctx["decision"]["id"] == decision_id
+    assert "related_events" in ctx
+
+
+def test_reports_context_omits_lazy_write_handlers(conn):
+    from trade_trace.console.pages import reports_context
+
+    ctx = reports_context(conn)
+    assert "report.coach" not in ctx["report_tools"]
+    assert "report.coach" in ctx["lazy_write_handlers_blocked"]
+    assert "signal.scan" in ctx["lazy_write_handlers_blocked"]
+
+
+def test_calibration_context_reports_counts(conn):
+    from trade_trace.console.pages import calibration_context
+
+    ctx = calibration_context(conn)
+    assert "forecasts_total" in ctx
+    assert "forecasts_scored" in ctx
+
+
+def test_calibration_empty_state(empty_conn):
+    from trade_trace.console.pages import calibration_context
+
+    ctx = calibration_context(empty_conn)
+    assert ctx["empty_state"] is not None
+
+
+def test_strategies_context_paginates(conn):
+    from trade_trace.console.pages import strategies_context
+
+    ctx = strategies_context(conn, cursor=None, limit=10)
+    assert ctx["page_title"] == "Strategies"
+
+
+def test_playbooks_context_paginates(conn):
+    from trade_trace.console.pages import playbooks_context
+
+    ctx = playbooks_context(conn, cursor=None, limit=10)
+    assert ctx["page_title"] == "Playbooks"
+
+
+def test_integrity_context_returns_audit_counts(conn):
+    from trade_trace.console.pages import integrity_context
+
+    ctx = integrity_context(conn)
+    for key in ("sources_total", "attached_decisions", "events_total", "outbox_pending"):
+        assert key in ctx, key
+
+
+def test_raw_index_returns_latest_events(conn):
+    from trade_trace.console.pages import raw_context
+
+    ctx = raw_context(conn)
+    assert ctx["page_title"] == "Raw JSON"
+    assert ctx["selected_event"] is None
+    assert len(ctx["rows"]) > 0
+
+
+def test_raw_event_detail_returns_payload(conn):
+    from trade_trace.console.pages import raw_context
+
+    event_id = conn.execute("SELECT id FROM events LIMIT 1").fetchone()[0]
+    ctx = raw_context(conn, event_id=event_id)
+    assert ctx["selected_event"] is not None
+    assert ctx["selected_event"]["id"] == event_id

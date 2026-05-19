@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Decision · Trade Trace Console{% endblock %}
+{% block content %}
+<section class="tt-decision-detail">
+  <h1>Decision <code>{{ decision.id }}</code></h1>
+  <dl class="tt-detail">
+    <dt>Type</dt><dd><code>{{ decision.type }}</code></dd>
+    <dt>Instrument</dt><dd><code>{{ decision.instrument_id }}</code></dd>
+    <dt>Thesis</dt><dd><code>{{ decision.thesis_id or '—' }}</code></dd>
+    <dt>Side</dt><dd>{{ decision.side or '—' }}</dd>
+    <dt>Quantity</dt><dd>{{ decision.quantity if decision.quantity is not none else '—' }}</dd>
+    <dt>Price</dt><dd>{{ decision.price if decision.price is not none else '—' }}</dd>
+    <dt>Reason</dt><dd>{{ decision.reason or '—' }}</dd>
+    <dt>Recorded at</dt><dd><time data-ts="{{ decision.created_at }}">{{ decision.created_at }}</time></dd>
+  </dl>
+  <h2>Related events</h2>
+  {% if related_events %}
+    <ol class="tt-related-events">
+      {% for event in related_events %}
+        <li>
+          <a href="/raw?event_id={{ event.id }}"><code>#{{ event.id }}</code></a>
+          <code>{{ event.event_type }}</code>
+          <time data-ts="{{ event.created_at }}">{{ event.created_at }}</time>
+        </li>
+      {% endfor %}
+    </ol>
+  {% else %}
+    <p class="tt-muted">No events linked to this decision yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

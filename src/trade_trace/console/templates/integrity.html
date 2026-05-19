@@ -1,15 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Integrity · Trade Trace Console{% endblock %}
+{% block title %}Evidence &amp; Integrity · Trade Trace Console{% endblock %}
 {% block content %}
 <section class="tt-integrity">
-  <h1>Integrity</h1>
-  <p class="tt-muted">Page content lands in a follow-up bead under the 1kkv epic.</p>
-  <form data-filter-form>
-    <label>Search <input type="text" name="q"></label>
-    <button type="submit">Apply</button>
-  </form>
-  <div id="tt-integrity-list" hx-trigger="tt:refresh from:body">
-    {% block list %}{% endblock %}
-  </div>
+  <h1>Evidence &amp; Integrity</h1>
+  <dl class="tt-stats">
+    <div><dt>Total sources</dt><dd>{{ sources_total }}</dd></div>
+    <div><dt>Decisions with attached sources</dt><dd>{{ attached_decisions }}</dd></div>
+    <div><dt>Total events</dt><dd>{{ events_total }}</dd></div>
+    <div><dt>Outbox pending</dt><dd>{{ outbox_pending }}</dd></div>
+  </dl>
+  <p class="tt-muted">
+    Run <code>tt report source_quality</code> or <code>tt report
+    integrity</code> for deeper detail; the Console renders the
+    headline counts for at-a-glance checks.
+  </p>
 </section>
 {% endblock %}

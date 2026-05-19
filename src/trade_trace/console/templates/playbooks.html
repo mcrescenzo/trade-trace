@@ -3,13 +3,32 @@
 {% block content %}
 <section class="tt-playbooks">
   <h1>Playbooks</h1>
-  <p class="tt-muted">Page content lands in a follow-up bead under the 1kkv epic.</p>
-  <form data-filter-form>
-    <label>Search <input type="text" name="q"></label>
-    <button type="submit">Apply</button>
-  </form>
-  <div id="tt-playbooks-list" hx-trigger="tt:refresh from:body">
-    {% block list %}{% endblock %}
-  </div>
+  {% if empty_state %}
+    <article class="tt-empty-state" data-empty-state="playbooks">
+      <h2>{{ empty_state.title }}</h2>
+      <ol>
+        {% for label, cmd in empty_state.next_steps %}
+          <li>{{ label }}: <code>{{ cmd }}</code></li>
+        {% endfor %}
+      </ol>
+    </article>
+  {% else %}
+    <table class="tt-table">
+      <thead><tr><th>name</th><th>status</th><th>description</th><th>created_at</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+          <tr data-record-id="{{ row.id }}">
+            <td>{{ row.name }}</td>
+            <td>{{ row.status or "—" }}</td>
+            <td>{{ row.description or "—" }}</td>
+            <td><time data-ts="{{ row.created_at }}">{{ row.created_at }}</time></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if next_cursor %}
+      <p class="tt-pagination"><a href="?cursor={{ next_cursor }}&amp;limit={{ limit }}" rel="next">Next page →</a></p>
+    {% endif %}
+  {% endif %}
 </section>
 {% endblock %}

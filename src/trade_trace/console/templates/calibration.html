@@ -3,13 +3,25 @@
 {% block content %}
 <section class="tt-calibration">
   <h1>Calibration</h1>
-  <p class="tt-muted">Page content lands in a follow-up bead under the 1kkv epic.</p>
-  <form data-filter-form>
-    <label>Search <input type="text" name="q"></label>
-    <button type="submit">Apply</button>
-  </form>
-  <div id="tt-calibration-list" hx-trigger="tt:refresh from:body">
-    {% block list %}{% endblock %}
-  </div>
+  {% if empty_state %}
+    <article class="tt-empty-state" data-empty-state="calibration">
+      <h2>{{ empty_state.title }}</h2>
+      <ol>
+        {% for label, cmd in empty_state.next_steps %}
+          <li>{{ label }}: <code>{{ cmd }}</code></li>
+        {% endfor %}
+      </ol>
+    </article>
+  {% else %}
+    <dl class="tt-stats">
+      <div><dt>Forecasts total</dt><dd>{{ forecasts_total }}</dd></div>
+      <div><dt>Forecasts scored</dt><dd>{{ forecasts_scored }}</dd></div>
+    </dl>
+    <p class="tt-muted">
+      Drill into <a href="/raw">Raw JSON</a> for per-event payload, or
+      <code>tt report calibration</code> for the full reliability
+      diagram.
+    </p>
+  {% endif %}
 </section>
 {% endblock %}

@@ -3,13 +3,18 @@
 {% block content %}
 <section class="tt-reports">
   <h1>Reports</h1>
-  <p class="tt-muted">Page content lands in a follow-up bead under the 1kkv epic.</p>
-  <form data-filter-form>
-    <label>Search <input type="text" name="q"></label>
-    <button type="submit">Apply</button>
-  </form>
-  <div id="tt-reports-list" hx-trigger="tt:refresh from:body">
-    {% block list %}{% endblock %}
-  </div>
+  <p class="tt-muted">
+    Read-only deterministic reports. The Console invokes each via its
+    MCP/CLI handler; output is not persisted.
+  </p>
+  <ul class="tt-report-list">
+    {% for tool in report_tools %}
+      <li><code>{{ tool }}</code></li>
+    {% endfor %}
+  </ul>
+  <p class="tt-warn" data-deny-set>
+    Side-effect-risky handlers blocked from the Console:
+    {% for name in lazy_write_handlers_blocked %}<code>{{ name }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+  </p>
 </section>
 {% endblock %}

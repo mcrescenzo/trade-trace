@@ -1,15 +1,30 @@
 {% extends "base.html" %}
-{% block title %}Raw · Trade Trace Console{% endblock %}
+{% block title %}Raw JSON · Trade Trace Console{% endblock %}
 {% block content %}
 <section class="tt-raw">
-  <h1>Raw</h1>
-  <p class="tt-muted">Page content lands in a follow-up bead under the 1kkv epic.</p>
-  <form data-filter-form>
-    <label>Search <input type="text" name="q"></label>
-    <button type="submit">Apply</button>
-  </form>
-  <div id="tt-raw-list" hx-trigger="tt:refresh from:body">
-    {% block list %}{% endblock %}
-  </div>
+  <h1>Raw JSON</h1>
+  {% if selected_event %}
+    <p class="tt-context">
+      Event <code>#{{ selected_event.id }}</code>
+      <code>{{ selected_event.event_type }}</code>
+      at <time data-ts="{{ selected_event.created_at }}">{{ selected_event.created_at }}</time>.
+      <a href="/raw">← Back to recent events</a>
+    </p>
+    <pre class="tt-json"><code>{{ selected_event.payload_json }}</code></pre>
+  {% else %}
+    <p class="tt-muted">Recent events. Click any row to view its raw payload.</p>
+    <table class="tt-table">
+      <thead><tr><th>id</th><th>event_type</th><th>created_at</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+          <tr data-record-id="{{ row.id }}">
+            <td><a href="/raw?event_id={{ row.id }}"><code>{{ row.id }}</code></a></td>
+            <td><code>{{ row.event_type }}</code></td>
+            <td><time data-ts="{{ row.created_at }}">{{ row.created_at }}</time></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
 </section>
 {% endblock %}

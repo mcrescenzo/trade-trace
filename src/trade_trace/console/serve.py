@@ -21,6 +21,7 @@ from __future__ import annotations
 import errno
 import socket
 import sys
+from pathlib import Path
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
@@ -56,19 +57,22 @@ def _import_server_deps() -> tuple[Any, Any] | None:
 
 
 def _build_app(home_path: str) -> Any:
-    """Construct the FastAPI app. Endpoint logic lives in
-    `trade_trace.console.endpoints` (pure functions over a
-    read-only SQLite connection); this function maps HTTP routes
-    to those functions and wraps each in the read-only handle
-    lifecycle. The Console MVP exposes the read endpoints listed
-    in the .4 bead acceptance; the lazy-write deny set from §7 is
-    enforced by the endpoints module never calling those handlers."""
+    """Construct the FastAPI app. Page handlers in
+    `trade_trace.console.pages` produce render contexts; this
+    function maps HTML routes to those handlers and JSON data
+    routes to `trade_trace.console.endpoints`. The lazy-write
+    deny set from console.md §7 is enforced by the pages /
+    endpoints modules never *calling* either handler."""
 
     deps = _import_server_deps()
     assert deps is not None, "_build_app must not be called without deps"
     fastapi, _ = deps
 
-    from trade_trace.console import endpoints
+    from fastapi.responses import HTMLResponse  # type: ignore[import-not-found]
+    from fastapi.staticfiles import StaticFiles  # type: ignore[import-not-found]
+    from fastapi.templating import Jinja2Templates  # type: ignore[import-not-found]
+
+    from trade_trace.console import endpoints, pages
     from trade_trace.console.security import apply_security_headers
     from trade_trace.storage.database import (
         ReadOnlyDatabaseError,
@@ -76,11 +80,19 @@ def _build_app(home_path: str) -> Any:
     )
     from trade_trace.storage.paths import db_path as _db_path
 
+    console_root = Path(__file__).resolve().parent
+    templates = Jinja2Templates(directory=str(console_root / "templates"))
+
     app = fastapi.FastAPI(
         title="Trade Trace Console",
         version="1",
         docs_url=None,
         redoc_url=None,
+    )
+    app.mount(
+        "/static",
+        StaticFiles(directory=str(console_root / "static")),
+        name="static",
     )
 
     @app.middleware("http")
@@ -89,16 +101,111 @@ def _build_app(home_path: str) -> Any:
         apply_security_headers(response.headers)
         return response
 
-    def _open() -> Any:
+    def _open():
         path = _db_path(resolve_home(home_path))
         return path, open_database_readonly(path)
 
     def _page_to_dict(page: Any) -> dict[str, Any]:
-        return {
-            "rows": page.rows,
-            "next_cursor": page.next_cursor,
-            "limit": page.limit,
-        }
+        return {"rows": page.rows, "next_cursor": page.next_cursor, "limit": page.limit}
+
+    def _render(request: Any, template_name: str, context: dict[str, Any]) -> Any:
+        return templates.TemplateResponse(request, template_name, context)
+
+    # -- HTML pages --------------------------------------------------------
+
+    @app.get("/", response_class=HTMLResponse)
+    def overview_html(request: Any) -> Any:
+        path, db = _open()
+        try:
+            ctx = pages.overview_context(db.connection, db_path=path)
+        finally:
+            db.close()
+        return _render(request, "overview.html", ctx)
+
+    @app.get("/journal", response_class=HTMLResponse)
+    def journal_html(request: Any, cursor: str | None = None, limit: int = 50) -> Any:
+        _, db = _open()
+        try:
+            ctx = pages.journal_context(db.connection, cursor=cursor, limit=limit)
+        finally:
+            db.close()
+        return _render(request, "journal.html", ctx)
+
+    @app.get("/decisions", response_class=HTMLResponse)
+    def decisions_html(request: Any, cursor: str | None = None, limit: int = 50) -> Any:
+        _, db = _open()
+        try:
+            ctx = pages.decisions_context(db.connection, cursor=cursor, limit=limit)
+        finally:
+            db.close()
+        return _render(request, "decisions.html", ctx)
+
+    @app.get("/decisions/{decision_id}", response_class=HTMLResponse)
+    def decision_detail_html(request: Any, decision_id: str) -> Any:
+        _, db = _open()
+        try:
+            ctx = pages.decision_detail_context(db.connection, decision_id=decision_id)
+        finally:
+            db.close()
+        if ctx is None:
+            raise fastapi.HTTPException(status_code=404, detail=f"decision {decision_id} not found")
+        return _render(request, "decision_detail.html", ctx)
+
+    @app.get("/reports", response_class=HTMLResponse)
+    def reports_html(request: Any) -> Any:
+        _, db = _open()
+        try:
+            ctx = pages.reports_context(db.connection)
+        finally:
+            db.close()
+        return _render(request, "reports.html", ctx)
+
+    @app.get("/calibration", response_class=HTMLResponse)
+    def calibration_html(request: Any) -> Any:
+        _, db = _open()
+        try:
+            ctx = pages.calibration_context(db.connection)
+        finally:
+            db.close()
+        return _render(request, "calibration.html", ctx)
+
+    @app.get("/strategies", response_class=HTMLResponse)
+    def strategies_html(request: Any, cursor: str | None = None, limit: int = 50) -> Any:
+        _, db = _open()
+        try:
+            ctx = pages.strategies_context(db.connection, cursor=cursor, limit=limit)
+        finally:
+            db.close()
+        return _render(request, "strategies.html", ctx)
+
+    @app.get("/playbooks", response_class=HTMLResponse)
+    def playbooks_html(request: Any, cursor: str | None = None, limit: int = 50) -> Any:
+        _, db = _open()
+        try:
+            ctx = pages.playbooks_context(db.connection, cursor=cursor, limit=limit)
+        finally:
+            db.close()
+        return _render(request, "playbooks.html", ctx)
+
+    @app.get("/integrity", response_class=HTMLResponse)
+    def integrity_html(request: Any) -> Any:
+        _, db = _open()
+        try:
+            ctx = pages.integrity_context(db.connection)
+        finally:
+            db.close()
+        return _render(request, "integrity.html", ctx)
+
+    @app.get("/raw", response_class=HTMLResponse)
+    def raw_html(request: Any, event_id: int | None = None) -> Any:
+        _, db = _open()
+        try:
+            ctx = pages.raw_context(db.connection, event_id=event_id)
+        finally:
+            db.close()
+        return _render(request, "raw.html", ctx)
+
+    # -- JSON data endpoints ----------------------------------------------
 
     @app.get("/status")
     def status() -> dict[str, Any]:
@@ -129,16 +236,16 @@ def _build_app(home_path: str) -> Any:
 
         _handler.__name__ = fn.__name__
 
-    _bind_list("/events", endpoints.journal_events)
-    _bind_list("/decisions", endpoints.decisions_list)
-    _bind_list("/memory_nodes", endpoints.memory_nodes_list)
-    _bind_list("/strategies", endpoints.strategies_list)
-    _bind_list("/playbooks", endpoints.playbooks_list)
-    _bind_list("/instruments", endpoints.instruments_list)
-    _bind_list("/forecasts", endpoints.forecasts_list)
-    _bind_list("/outcomes", endpoints.outcomes_list)
+    _bind_list("/api/events", endpoints.journal_events)
+    _bind_list("/api/decisions", endpoints.decisions_list)
+    _bind_list("/api/memory_nodes", endpoints.memory_nodes_list)
+    _bind_list("/api/strategies", endpoints.strategies_list)
+    _bind_list("/api/playbooks", endpoints.playbooks_list)
+    _bind_list("/api/instruments", endpoints.instruments_list)
+    _bind_list("/api/forecasts", endpoints.forecasts_list)
+    _bind_list("/api/outcomes", endpoints.outcomes_list)
 
-    @app.get("/events/{event_id}")
+    @app.get("/api/events/{event_id}")
     def event_detail(event_id: int) -> dict[str, Any]:
         _, db = _open()
         try:
