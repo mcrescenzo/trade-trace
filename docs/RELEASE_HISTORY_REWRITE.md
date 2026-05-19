@@ -19,7 +19,7 @@ PyPI-targeted repo, the old commits must be unreachable so:
 - Owner email and personal name strings disappear from the
   public history (currently 268+ matches across 276 files in
   pre-piav commits).
-- `/home/hermes/code/trade-trace` absolute paths in audit
+- `LOCAL_REPO_PATH` absolute paths in audit
   artifacts disappear.
 - The Beads metadata (`.beads/config.yaml`,
   `.beads/metadata.json`, etc.) is no longer carried in
@@ -60,7 +60,7 @@ for repos this size (~160 commits, ~5 MB of blobs).
 # refuses unless --force is passed, which we deliberately do
 # not pass.
 cd /tmp
-git clone --no-local --mirror /home/hermes/code/trade-trace trade-trace-rewrite.git
+git clone --no-local --mirror LOCAL_REPO_PATH trade-trace-rewrite.git
 cd trade-trace-rewrite.git
 
 # 1. Strip artifact trees from every commit.
@@ -74,10 +74,10 @@ git filter-repo \
 # 2. Replace personal email + name strings in every blob.
 #    The replace-message file maps "<old>==><new>" per line.
 cat > /tmp/replace-text.txt <<'EOF'
-michaelcrescenzo@gmail.com==>noreply@example.com
-Michael Crescenzo==>Trade Trace Maintainer
-/home/hermes/code/trade-trace==><repo-root>
-/home/hermes==><home>
+OWNER_EMAIL==>noreply@example.com
+OWNER_NAME==>Trade Trace Maintainer
+LOCAL_REPO_PATH==><repo-root>
+LOCAL_HOME==><home>
 EOF
 git filter-repo --replace-text /tmp/replace-text.txt --refs refs/heads/main
 
@@ -85,7 +85,7 @@ git filter-repo --replace-text /tmp/replace-text.txt --refs refs/heads/main
 #    metadata. `git filter-repo --mailmap` is the documented
 #    path:
 cat > /tmp/mailmap.txt <<'EOF'
-Trade Trace Maintainer <noreply@example.com> Michael Crescenzo <michaelcrescenzo@gmail.com>
+Trade Trace Maintainer <noreply@example.com> OWNER_NAME <OWNER_EMAIL>
 EOF
 git filter-repo --mailmap /tmp/mailmap.txt --refs refs/heads/main
 ```
@@ -106,17 +106,17 @@ git log --all --diff-filter=A --name-only \
 # Expect: empty output.
 
 # 2. No personal email in any blob, any commit.
-git grep -E "michaelcrescenzo@gmail\.com" $(git rev-list --all)
+git grep -E "OWNER_EMAIL" $(git rev-list --all)
 # Expect: empty output. Note this is O(blobs * commits) and
 # may take a minute on a 160-commit repo.
 
 # 3. No personal name string in any blob.
-git grep -nE "Michael Crescenzo" $(git rev-list --all) \
+git grep -nE "OWNER_NAME" $(git rev-list --all) \
   | head -5
 # Expect: empty output.
 
-# 4. No /home/hermes path in any blob.
-git grep -nE "/home/hermes" $(git rev-list --all) | head -5
+# 4. No LOCAL_HOME path in any blob.
+git grep -nE "LOCAL_HOME" $(git rev-list --all) | head -5
 # Expect: empty output.
 
 # 5. Author / committer hygiene.
@@ -170,7 +170,7 @@ git clone https://github.com/mcrescenzo/trade-trace.git trade-trace-postrewrite
 cd trade-trace-postrewrite
 git log --all --diff-filter=A --name-only \
   -- '.beads/' 'audits/' 'docs/audits/' | sort -u
-git grep -E "michaelcrescenzo@gmail\.com" $(git rev-list --all)
+git grep -E "OWNER_EMAIL" $(git rev-list --all)
 ```
 
 ## Decision points the owner must approve

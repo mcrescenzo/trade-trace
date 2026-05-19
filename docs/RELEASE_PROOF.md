@@ -1,0 +1,81 @@
+# Pre-Publish Release Proof
+
+> Status: **proof artifact** for trade-trace-a468. Recorded
+> 2026-05-19 against the post-piav commit. The actual PyPI
+> upload is gated on the operator running through
+> `docs/RELEASE_HISTORY_REWRITE.md` and approving the final
+> remote force-push.
+
+## Commands run and their outcomes
+
+| Gate | Command | Result |
+|------|---------|--------|
+| Lint | `ruff check src tests` | `All checks passed!` |
+| Types | `mypy src` | `Success: no issues found in 86 source files` |
+| Tests | `pytest -q` | `1200 passed, 5 skipped` (skips are the documented opt-ins: perf baselines, dogfood full-suite) |
+| Build | `python -m build` | `Successfully built trade_trace-0.0.1rc3.tar.gz and trade_trace-0.0.1rc3-py3-none-any.whl` |
+| Twine | `twine check --strict dist/*` | Both wheel and sdist `PASSED` |
+| CLI smoke | `tt --help` (fresh venv) | renders usage block |
+| MCP smoke | `trade-trace-mcp --help` (fresh venv) | exits 0 |
+| Pip check | `pip check` (fresh venv) | `No broken requirements found.` |
+| Journal init smoke | `tt journal init --home /tmp/tt-fresh-home` | ok=true, schema_version=10 |
+| Console help smoke | `tt console serve --help` (fresh venv) | renders flag block |
+
+## Wheel and sdist surface
+
+The wheel contains only the intended public files:
+
+- `trade_trace/` (Python source tree, including `console/`,
+  `contracts/`, `events/`, `models/`, `reports/`, `security/`,
+  `storage/`, `tools/`).
+- `trade_trace/console/templates/*.html`.
+- `trade_trace/console/static/css/*.css`,
+  `trade_trace/console/static/js/*.js`.
+- `LICENSE`, `METADATA`, `WHEEL`, `entry_points.txt`,
+  `top_level.txt`, `RECORD`.
+
+It does **not** contain:
+
+- `.beads/` (Beads metadata).
+- `audits/` or `docs/audits/` (audit run artifacts).
+- Any local `*.sqlite` or runtime data.
+
+Smoke scan (`zipfile -l dist/...whl | grep -iE 'beads|audits|hermes'`):
+only `trade_trace/storage/edge_audit.py` matches — that's the
+audit-policy source file, not the audit-export tree. Acceptable.
+
+## Public-artifact scan
+
+Run against tracked files at the intended release commit
+(post-piav, post-ox5c-plan):
+
+| Scan | Result |
+|------|--------|
+| `git ls-files \| grep -E '^\.beads/\|^audits/\|^docs/audits/'` | empty |
+| `git grep -l 'michaelcrescenzo@gmail.com'` | empty |
+| `git grep -l '/home/hermes'` | empty |
+
+The above proves the **HEAD-only** scrub is complete. Old
+commits still hold the blobs — clearing those is the
+`trade-trace-ox5c` history rewrite that `docs/RELEASE_HISTORY_REWRITE.md`
+documents but does not execute. The PyPI upload itself ships
+the wheel/sdist (which were never derived from the offending
+blobs); the rewrite affects only what someone sees if they
+`git clone` and `git log -p` through history.
+
+## Final operator approval
+
+The following destructive / shared-state actions remain
+operator-gated. The agent will not perform them without explicit
+approval:
+
+1. Execute the rewrite plan in
+   `docs/RELEASE_HISTORY_REWRITE.md`.
+2. Force-push the rewritten history to `origin/main`.
+3. Tag the release (`git tag v0.0.1rc3 && git push --tags`).
+4. Upload to PyPI (`twine upload dist/*` or the OIDC-gated GitHub
+   Actions release workflow that lives in
+   `.github/workflows/workflow.yml`).
+
+Each of these is reversible only with substantial effort; the
+operator-approval boundary is intentional.
