@@ -1,16 +1,30 @@
-"""Brier-binary scoring property tests per trade-trace-ucd.
+"""Brier-binary scoring REFERENCE-DISTRIBUTION tests per
+trade-trace-ucd, rescoped from "property tests" per bead
+trade-trace-dff / DEBT-033.
 
-These pin the scoring.md §3 single-probability form against three reference
-distributions enumerated in the ucd acceptance criteria:
+These are NOT property tests in the QuickCheck / Hypothesis sense.
+They exercise an inline reference implementation of the
+single-probability Brier form against three closed-form
+distributions whose expected scores are known analytically:
 
 - perfectly-calibrated synthetic → Brier = 0
 - always-50% on balanced data → Brier ≈ 0.25
 - random (p drawn uniformly) on y=1 → Brier ≈ 1/3
 
-Each scenario has ≥2 explicit tests so a future regression on the formula
-shape (e.g. accidentally switching to the two-outcome form) trips loudly.
-The aggregation logic mirrors what `report.calibration` will use; this is
-the substrate, not the report.
+The aggregation logic mirrors what `report.calibration` does and the
+single-vs-two-outcome relationship is pinned, so a formula-shape
+regression trips. But the file lives under `tests/property/` for
+historical reasons; that naming is the legacy of an earlier draft
+where Hypothesis was on the table. There is no `hypothesis`
+dependency in the project and these tests do not generate cases
+beyond the seeded reference distributions.
+
+Routing this through production scoring (the autoscorer or
+`report.calibration`) would require seeding a fixture DB; the
+inline reference exists so a formula change is caught directly,
+without circular check against production code that itself uses
+the same formula. See bead trade-trace-dff for the disposition
+discussion.
 """
 
 from __future__ import annotations
@@ -21,14 +35,19 @@ import random
 import pytest
 
 
-def brier_binary(p_yes: float, y: int) -> float:
-    """Reference implementation of scoring.md §3 single-probability form.
-
-    Kept inline (rather than importing the autoscorer's private function)
-    so this file is a contract-grade fixture: any drift between the
-    autoscorer and the formula is a real failure, not a circular check."""
+def brier_binary_reference(p_yes: float, y: int) -> float:
+    """Reference implementation of scoring.md §3 single-probability
+    form. Kept inline (rather than importing the autoscorer's
+    private function) so this file is a contract-grade fixture: a
+    drift between the autoscorer and the formula is a real failure,
+    not a circular check."""
 
     return (p_yes - y) ** 2
+
+
+# Back-compat alias: the original name kept until external readers
+# notice the rename. Removable in a future cleanup bead.
+brier_binary = brier_binary_reference
 
 
 def mean_brier(scores: list[float]) -> float:
