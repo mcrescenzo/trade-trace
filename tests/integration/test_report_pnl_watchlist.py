@@ -117,6 +117,39 @@ def test_watchlist_mode_validation(home):
     assert env["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_watchlist_uses_single_clock_instant_for_as_of_age_and_stale(home, monkeypatch):
+    """Per bead trade-trace-bew / DEBT-026: report.watchlist must
+    capture one clock instant at entry and reuse it for the stale
+    threshold, every row's age_days, and the response's `as_of`
+    field. Previously each computation read the wall clock
+    independently, so a microsecond-boundary read could flake the
+    exact-threshold tests.
+
+    Implementation note: the report calls `now_iso()` (which honors
+    the CLOCK_OVERRIDE deterministic-replay fixture) and converts
+    to a datetime once. The test patches `now_iso` to count calls.
+    """
+
+    import trade_trace.reports.watchlist as wl
+
+    call_count = [0]
+    real_now_iso = wl.now_iso
+
+    def _counting_now_iso() -> str:
+        call_count[0] += 1
+        return real_now_iso()
+
+    monkeypatch.setattr(wl, "now_iso", _counting_now_iso)
+
+    env = _envelope(home, "report.watchlist", {"mode": "stale"})
+    assert env["ok"], env
+
+    assert call_count[0] == 1, (
+        f"watchlist read the wall clock {call_count[0]} times; per "
+        "bead bew it must capture one instant at entry"
+    )
+
+
 def test_watchlist_stale_mode_filters_by_age(home):
     """A fresh watch (created just now) is NOT stale; the stale filter
     returns an empty list."""

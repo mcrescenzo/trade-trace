@@ -322,6 +322,43 @@ def test_drain_marks_row_failed_when_payload_json_is_not_an_object(tmp_path: Pat
         db.close()
 
 
+def test_jsonl_path_sanitizes_unsafe_event_type_characters(tmp_path: Path):
+    """Per bead trade-trace-qc7 / DEBT-028: `event_type` may grow new
+    values over time; any character outside the safe set must be
+    replaced with `_` so a hostile or namespaced type can't escape
+    the YYYY/MM/DD bucket directory."""
+
+    from trade_trace.exporter import _safe_event_type_for_filename, jsonl_path
+
+    # The safe path stays unchanged.
+    assert _safe_event_type_for_filename("decision.created") == "decision.created"
+    assert _safe_event_type_for_filename("memory_node.retained") == "memory_node.retained"
+    assert _safe_event_type_for_filename("forecast-scored") == "forecast-scored"
+
+    # Path separators get scrubbed; the leading "." is safe (it's
+    # the namespace separator in event_type, e.g. "decision.created"),
+    # but the slashes that would let the name escape the bucket
+    # become "_".
+    assert _safe_event_type_for_filename("../etc/passwd") == ".._etc_passwd"
+    assert _safe_event_type_for_filename("foo/bar") == "foo_bar"
+    assert _safe_event_type_for_filename("foo\\bar") == "foo_bar"
+    assert _safe_event_type_for_filename("foo\x00bar") == "foo_bar"
+    assert _safe_event_type_for_filename("") == "_"
+
+    # And the full jsonl_path stays inside the date bucket no matter
+    # what the event_type contains — slashes become underscores so
+    # the bucket dir can't be escaped via path-traversal segments.
+    home = tmp_path / "home"
+    p = jsonl_path(home, "../bad/type", 42, "2026-05-19T12:00:00Z")
+    assert p.is_relative_to(home / "export" / "jsonl" / "2026" / "05" / "19")
+    assert p.name == ".._bad_type-42.jsonl"
+    # The resolved absolute path stays under the date bucket too —
+    # no `..` resolution can climb out.
+    resolved = p.resolve()
+    bucket = (home / "export" / "jsonl" / "2026" / "05" / "19").resolve()
+    assert resolved.is_relative_to(bucket)
+
+
 def test_drain_cleans_orphan_tmp_files(tmp_path: Path):
     """The drain runs the orphan cleanup as a side effect (per operability.md
     §9.1 the cleanup runs on every drain invocation)."""

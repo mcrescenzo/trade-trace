@@ -33,17 +33,47 @@ TMP_SUFFIX = ".jsonl.tmp"
 FINAL_SUFFIX = ".jsonl"
 
 
+_EVENT_TYPE_SAFE_CHARS = set(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+)
+
+
+def _safe_event_type_for_filename(event_type: str) -> str:
+    """Sanitize `event_type` for use in a JSONL filename per bead
+    trade-trace-qc7 / DEBT-028.
+
+    Today's `event_type` enum is filename-safe by construction
+    (`decision.created`, `memory_node.retained`, etc. — only ASCII
+    alphanumerics, `.`, `_`, `-`). But the enum is open: a future
+    event type could legitimately contain a `/` (nested namespace),
+    backslash, NUL, or path-traversal segment, and a naive
+    f-string would let it escape the YYYY/MM/DD bucket directory
+    or land at an unintended path under the export root.
+
+    The sanitization is conservative: any character outside the
+    documented safe set is replaced with `_`. The resulting string
+    is collision-safe across realistic event-type drift because
+    the event id is also embedded in the filename and is unique.
+    """
+
+    return "".join(c if c in _EVENT_TYPE_SAFE_CHARS else "_"
+                   for c in event_type) or "_"
+
+
 def jsonl_path(home: Path, event_type: str, event_id: int, created_at: str) -> Path:
     """Compute the canonical JSONL output path for an event.
 
     `created_at` must be the canonical UTC ISO 8601 string the events table
-    uses; the year/month/day buckets are derived from it.
+    uses; the year/month/day buckets are derived from it. `event_type` is
+    passed through `_safe_event_type_for_filename` to keep a hostile or
+    misnamed event type from escaping the date-bucket directory.
     """
 
     ts = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
     base = home / "export" / "jsonl" / f"{ts.year:04d}" / f"{ts.month:02d}" / f"{ts.day:02d}"
     base.mkdir(parents=True, exist_ok=True)
-    return base / f"{event_type}-{event_id}{FINAL_SUFFIX}"
+    safe_event_type = _safe_event_type_for_filename(event_type)
+    return base / f"{safe_event_type}-{event_id}{FINAL_SUFFIX}"
 
 
 # -- event_type → tool resolution (imports.md §2.1 superset shape) ---------

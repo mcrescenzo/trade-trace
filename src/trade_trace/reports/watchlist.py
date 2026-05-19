@@ -35,6 +35,17 @@ def report_watchlist(
     rf = ReportFilter.model_validate(raw_filter or {})
     enforce_supported_filter(rf, report="report.watchlist")
     filter_view = applied_filter_view(rf, report="report.watchlist")
+    # Per bead trade-trace-bew: capture one clock instant at entry so
+    # the stale threshold, per-row age_days, and the response's
+    # `as_of` field all read from the same clock. Previously each
+    # computation read the wall clock independently and a
+    # microsecond-boundary cross between reads could flake the
+    # exact-threshold tests. `now_iso()` honors the CLOCK_OVERRIDE
+    # ContextVar used by the deterministic-replay fixture, so the
+    # report stays deterministic under fixture seeding.
+    as_of = now_iso()
+    as_of_dt = datetime.fromisoformat(as_of.replace("Z", "+00:00")).astimezone(UTC)
+
     cur = conn.execute(
         "SELECT id, instrument_id, created_at, reason, review_by "
         "FROM decisions WHERE type = 'watch' ORDER BY created_at DESC"
@@ -43,7 +54,7 @@ def report_watchlist(
 
     threshold_ts = None
     if stale:
-        threshold_ts = datetime.now(UTC) - timedelta(days=stale_threshold_days)
+        threshold_ts = as_of_dt - timedelta(days=stale_threshold_days)
         rows = [r for r in rows if _is_stale(r[2], threshold_ts)]
 
     groups = [
@@ -53,7 +64,7 @@ def report_watchlist(
             "metrics": {
                 "created_at": r[2],
                 "review_by": r[4],
-                "age_days": _age_days(r[2]),
+                "age_days": _age_days(r[2], now=as_of_dt),
             },
             "filter": filter_view,
             "record_ids": {"decisions": [r[0]], "instruments": [r[1]]},
@@ -80,15 +91,15 @@ def report_watchlist(
     return {
         "summary": summary,
         "groups": groups,
-        "as_of": now_iso(),
+        "as_of": as_of,
         "truncated": False,
         "next_cursor": None,
     }
 
 
-def _age_days(created_at: str) -> float:
+def _age_days(created_at: str, *, now: datetime) -> float:
     ts = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(UTC)
-    delta = datetime.now(UTC) - ts
+    delta = now - ts
     return round(delta.total_seconds() / 86400, 3)
 
 
