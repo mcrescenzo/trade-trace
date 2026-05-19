@@ -9,7 +9,7 @@ Trade Trace is a local journal, memory, and calibration substrate for trading ag
 From a checkout:
 
 ```bash
-python -m pip install -e .
+python3 -m pip install -e .
 export TRADE_TRACE_HOME="$HOME/.trade-trace"
 tt journal init
 ```
@@ -17,7 +17,7 @@ tt journal init
 From a package install after publication:
 
 ```bash
-python -m pip install trade-trace
+python3 -m pip install trade-trace
 export TRADE_TRACE_HOME="$HOME/.trade-trace"
 tt journal init
 ```
@@ -246,7 +246,7 @@ Trade Trace also does not fetch market data or resolve markets by itself. The ca
 
 - Run `command -v trade-trace-mcp` in the same environment the client uses.
 - Use the absolute path in the MCP config.
-- Confirm the package is installed (MCP is bundled by default): `python -m pip install -e .`.
+- Confirm the package is installed (MCP is bundled by default): `python3 -m pip install -e .`.
 
 Tool list works but calls fail with actor validation:
 
