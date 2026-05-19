@@ -146,8 +146,37 @@ def dispatch(
 
     # Detect the at-least-once opt-in and surface it on the response meta
     # per trade-trace-3mp.
-    if args.get("_allow_no_idempotency") is True:
+    allow_no_idempotency = args.get("_allow_no_idempotency") is True
+    if allow_no_idempotency:
         meta.idempotency_disabled = True
+
+    # Enforce the idempotency_key contract for retryable writes per
+    # persistence.md §5.3 + AI_AGENT_MCP_GETTING_STARTED.md §7 (bead
+    # trade-trace-cpz2). The opt-out (`--allow-no-idempotency` /
+    # `_allow_no_idempotency: true`) is the only legal absence path.
+    if (
+        registration.is_write
+        and not allow_no_idempotency
+        and not args.get("idempotency_key")
+    ):
+        return ErrorEnvelope(
+            error=ErrorBody(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=(
+                    f"{tool_name!r} is a retryable write and requires "
+                    "`idempotency_key`; pass `_allow_no_idempotency: true` "
+                    "(CLI: `--allow-no-idempotency`) to opt into at-least-once "
+                    "semantics for batch importers/admin paths."
+                ),
+                details={
+                    "field": "idempotency_key",
+                    "tool": tool_name,
+                    "opt_out_cli": "--allow-no-idempotency",
+                    "opt_out_mcp": "_allow_no_idempotency",
+                },
+            ),
+            meta=meta,
+        )
 
     # Dry-run plumbing per trade-trace-268. The flag is request-scoped so
     # concurrent dispatches do not contaminate each other; UnitOfWork picks

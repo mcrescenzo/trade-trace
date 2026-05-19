@@ -12,6 +12,7 @@ from trade_trace.contracts.grammar import (
     validate_idempotency_key,
 )
 from trade_trace.core import dispatch
+from trade_trace import core as _core_module
 from trade_trace.tools.errors import ToolError
 
 # -- actor_id positive cases ----------------------------------------------
@@ -235,3 +236,138 @@ def test_write_path_trims_whitespace_on_idempotency_key(tmp_path):
         assert second.idempotent_replay is True
     finally:
         db.close()
+
+
+
+# -- write-tool idempotency_key enforcement (trade-trace-cpz2) ------------
+
+
+@pytest.mark.strict_idempotency
+def test_dispatch_rejects_write_without_idempotency_key(tmp_path):
+    """A retryable write tool called without `idempotency_key` and without
+    the `_allow_no_idempotency` opt-in must fail at the dispatch boundary
+    with VALIDATION_ERROR and `details.field == "idempotency_key"`. Before
+    this enforcement, the M1 ledger tools tolerated missing keys despite
+    docs/schema advertising the opposite (trade-trace-cpz2)."""
+
+    home = tmp_path / "home"
+    init = _core_module.dispatch("journal.init", {"home": str(home)}, actor_id="agent:default")
+    assert init.ok is True
+
+    envelope = _core_module.dispatch(
+        "venue.add",
+        {"home": str(home), "name": "NoKey", "kind": "manual"},
+        actor_id="agent:default",
+    )
+    body = envelope.model_dump(mode="json", exclude_none=True)
+    assert body["ok"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert body["error"]["details"]["field"] == "idempotency_key"
+
+
+@pytest.mark.strict_idempotency
+def test_dispatch_accepts_write_with_explicit_opt_out(tmp_path):
+    """The `_allow_no_idempotency: true` escape hatch for batch importers and
+    admin tools accepts a missing key AND surfaces `meta.idempotency_disabled
+    = true` so agents can branch on at-least-once semantics."""
+
+    home = tmp_path / "home"
+    _core_module.dispatch("journal.init", {"home": str(home)}, actor_id="agent:default")
+
+    envelope = _core_module.dispatch(
+        "venue.add",
+        {
+            "home": str(home),
+            "name": "OptOut",
+            "kind": "manual",
+            "_allow_no_idempotency": True,
+        },
+        actor_id="agent:default",
+    )
+    body = envelope.model_dump(mode="json", exclude_none=True)
+    assert body["ok"] is True
+    assert body["meta"].get("idempotency_disabled") is True
+
+
+@pytest.mark.strict_idempotency
+def test_dispatch_accepts_write_with_idempotency_key(tmp_path):
+    """The strict default path: a supplied key succeeds and the response
+    envelope does NOT carry meta.idempotency_disabled."""
+
+    home = tmp_path / "home"
+    _core_module.dispatch("journal.init", {"home": str(home)}, actor_id="agent:default")
+
+    envelope = _core_module.dispatch(
+        "venue.add",
+        {
+            "home": str(home),
+            "name": "WithKey",
+            "kind": "manual",
+            "idempotency_key": "cpz2:venue:withkey:v1",
+        },
+        actor_id="agent:default",
+    )
+    body = envelope.model_dump(mode="json", exclude_none=True)
+    assert body["ok"] is True
+    assert "idempotency_disabled" not in body["meta"]
+
+
+@pytest.mark.strict_idempotency
+def test_cli_rejects_write_without_idempotency_key(tmp_path, capsys):
+    """CLI parity: `tt venue add` without `--idempotency-key` and without
+    `--allow-no-idempotency` rejects at dispatch with VALIDATION_ERROR."""
+
+    from trade_trace.cli import main as cli_main
+
+    home = tmp_path / "home"
+    rc_init = cli_main([
+        "--actor-id", "agent:default",
+        "journal", "init",
+        "--home", str(home),
+    ])
+    assert rc_init == 0
+    capsys.readouterr()
+
+    rc = cli_main([
+        "--actor-id", "agent:default",
+        "venue", "add",
+        "--home", str(home),
+        "--name", "NoKey",
+        "--kind", "manual",
+    ])
+    out = capsys.readouterr().out.strip().splitlines()[-1]
+    body = json.loads(out)
+    assert rc == 2  # VALIDATION_ERROR maps to exit 2
+    assert body["ok"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert body["error"]["details"]["field"] == "idempotency_key"
+
+
+@pytest.mark.strict_idempotency
+def test_cli_accepts_write_with_allow_no_idempotency(tmp_path, capsys):
+    """CLI parity: `tt --allow-no-idempotency venue add` succeeds with
+    `meta.idempotency_disabled=true`."""
+
+    from trade_trace.cli import main as cli_main
+
+    home = tmp_path / "home"
+    cli_main([
+        "--actor-id", "agent:default",
+        "journal", "init",
+        "--home", str(home),
+    ])
+    capsys.readouterr()
+
+    rc = cli_main([
+        "--actor-id", "agent:default",
+        "--allow-no-idempotency",
+        "venue", "add",
+        "--home", str(home),
+        "--name", "OptOut",
+        "--kind", "manual",
+    ])
+    out = capsys.readouterr().out.strip().splitlines()[-1]
+    body = json.loads(out)
+    assert rc == 0
+    assert body["ok"] is True
+    assert body["meta"]["idempotency_disabled"] is True
