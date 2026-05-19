@@ -157,9 +157,25 @@ def dispatch(
         ctx.meta_hints["dry_run"] = True
 
     def _apply_hints() -> None:
+        """Propagate ctx.meta_hints onto the envelope's Meta object.
+
+        Per bead trade-trace-30u / DEBT-008: Meta is declared with
+        `extra='allow'`, signalling that callers may surface custom
+        metadata the standard model doesn't know about. Known keys
+        land on typed fields via setattr; unknown keys land in
+        `Meta.__pydantic_extra__` so they serialize into the envelope's
+        `meta` dict instead of disappearing silently.
+        """
+
+        extras = meta.__pydantic_extra__
+        if extras is None:  # pragma: no cover - extra='allow' guarantees a dict
+            extras = {}
+            meta.__pydantic_extra__ = extras
         for key, value in ctx.meta_hints.items():
             if key in Meta.model_fields:
                 setattr(meta, key, value)
+            else:
+                extras[key] = value
 
     try:
         try:

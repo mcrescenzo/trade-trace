@@ -77,9 +77,16 @@ class ToolContext:
 
     `meta_hints` is a write-back surface for handlers that need to populate
     envelope `meta.*` fields (per contracts.md §3.2). The dispatcher merges
-    hints onto `Meta` after the handler returns. Standard hint keys:
-    `event_id`, `idempotent_replay`, `bin_policy`, `sample_warning`,
-    `truncated`, `next_cursor`, `cli_human_hint`, `mcp_transport_hints`.
+    hints onto `Meta` after the handler returns. Standard hint keys land on
+    typed fields: `event_id`, `idempotent_replay`, `bin_policy`,
+    `sample_warning`, `truncated`, `next_cursor`, `cli_human_hint`,
+    `mcp_transport_hints`.
+
+    Per bead trade-trace-30u: any non-standard hint key is also propagated
+    to the envelope's `meta` dict via Meta's `extra='allow'` config. This
+    gives future tools and providers an extensible metadata channel
+    without requiring a Meta schema change. The previous behavior of
+    silently dropping unknown keys is gone.
     """
 
     tool: str
