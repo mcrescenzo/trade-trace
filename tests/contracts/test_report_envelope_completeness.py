@@ -21,6 +21,7 @@ import math
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -83,7 +84,7 @@ def _seed_scored_forecasts(
 # -- 1. meta presence per report kind -----------------------------------
 
 
-REPORT_TOOLS_AND_ARGS = [
+REPORT_TOOLS_AND_ARGS: list[tuple[str, dict[str, Any]]] = [
     ("report.calibration", {}),
     ("report.mistakes", {}),
     ("report.strengths", {}),

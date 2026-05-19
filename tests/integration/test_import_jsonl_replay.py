@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from trade_trace.mcp_server import mcp_call
-from trade_trace.storage import apply_pending_migrations, open_database
+from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
 from trade_trace.tools import imports
 

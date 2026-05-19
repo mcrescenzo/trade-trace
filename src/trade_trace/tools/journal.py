@@ -294,13 +294,13 @@ def _journal_rescan_scoring(args: dict[str, Any], ctx: ToolContext) -> dict[str,
     outcomes, forecast_outcomes, forecasts, or forecast_scores rows.
     """
 
+    from trade_trace.events.unit_of_work import UnitOfWork
+    from trade_trace.tools._helpers import now_iso
     from trade_trace.tools.ledger import (
         _current_resolved_final_outcome,
         _emit_forecast_scored,
         _score_one_forecast,
     )
-    from trade_trace.events.unit_of_work import UnitOfWork
-    from trade_trace.tools._helpers import now_iso
 
     mode = args.get("mode") or ("confirm" if args.get("confirm") is True else "preview")
     if mode not in ("preview", "confirm"):
@@ -347,8 +347,10 @@ def _journal_rescan_scoring(args: dict[str, Any], ctx: ToolContext) -> dict[str,
             for r, c in zip(rows, candidates, strict=True):
                 if not c["will_score"]:
                     continue
-                head = (c["head_outcome_id"],)
-                outcome = uow.conn.execute("SELECT id, outcome_label FROM outcomes WHERE id = ?", head).fetchone()
+                outcome = uow.conn.execute(
+                    "SELECT id, outcome_label FROM outcomes WHERE id = ?",
+                    (c["head_outcome_id"],),
+                ).fetchone()
                 if outcome is None:
                     continue
                 scored_at = now_iso()

@@ -188,7 +188,7 @@ def _validate_mapping(mapping: dict[str, Any]) -> None:
 
 def _derive_idempotency_key(run_id: str, row_no: int) -> str:
     digest = hashlib.sha1(
-        f"{run_id}:{row_no}".encode("utf-8"),
+        f"{run_id}:{row_no}".encode(),
         usedforsecurity=False,
     ).hexdigest()
     return digest[:32]

@@ -31,6 +31,7 @@ import os
 import stat
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -189,7 +190,7 @@ def test_exporter_tmp_file_is_created_with_0600_from_the_start(
 
     import trade_trace.exporter as exporter_mod
 
-    captured: dict[str, Path] = {}
+    captured: dict[str, object] = {}
     original_replace = os.replace
 
     def _replace_capture(src, dst):
@@ -214,17 +215,17 @@ def test_exporter_tmp_file_is_created_with_0600_from_the_start(
         # Patch the symbol the exporter module sees (it imported os).
         monkey_setattr = exporter_mod.os
         original = monkey_setattr.replace
-        monkey_setattr.replace = _replace_capture
+        monkey_setattr.replace = _replace_capture  # type: ignore[assignment]
         try:
             drain_outbox(db.connection, home)
         finally:
-            monkey_setattr.replace = original
+            monkey_setattr.replace = original  # type: ignore[method-assign]
     finally:
         db.close()
 
     assert "tmp_mode" in captured, "tmp file was never observed"
     assert captured["tmp_mode"] == 0o600, (
-        f"tmp file mode {oct(captured['tmp_mode'])} would leak under "
+        f"tmp file mode {oct(cast('int', captured['tmp_mode']))} would leak under "
         "permissive umask"
     )
 

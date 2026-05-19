@@ -29,13 +29,13 @@ from trade_trace.reports.integrity import (
     MAX_SAMPLE_IDS,
     report_calibration_integrity,
 )
-from trade_trace.reports.playbook_adherence import (
-    DEFAULT_ADHERENCE_MIN_SAMPLE,
-    report_playbook_adherence,
-)
 from trade_trace.reports.opportunity import (
     DEFAULT_OPPORTUNITY_MIN_SAMPLE,
     report_opportunity,
+)
+from trade_trace.reports.playbook_adherence import (
+    DEFAULT_ADHERENCE_MIN_SAMPLE,
+    report_playbook_adherence,
 )
 from trade_trace.reports.pnl import report_pnl
 from trade_trace.reports.risk import DEFAULT_RISK_MIN_SAMPLE, report_risk

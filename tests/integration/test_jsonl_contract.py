@@ -107,8 +107,12 @@ def test_jsonl_envelope_replay_through_core(tmp_path: Path):
     }
     # Strip the underscore-prefixed transport metadata that the importer
     # would drop before calling dispatch.
-    domain_args = {k: v for k, v in line["args"].items() if not k.startswith("_")}
-    env = dispatch(line["tool"], domain_args, actor_id="import:fixture-2026").model_dump(
+    line_args = line["args"]
+    assert isinstance(line_args, dict)
+    line_tool = line["tool"]
+    assert isinstance(line_tool, str)
+    domain_args = {k: v for k, v in line_args.items() if not k.startswith("_")}
+    env = dispatch(line_tool, domain_args, actor_id="import:fixture-2026").model_dump(
         mode="json", exclude_none=True
     )
     assert env["ok"] is True

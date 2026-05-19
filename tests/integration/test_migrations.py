@@ -85,8 +85,9 @@ def test_memory_layer_migration_requires_fts5(tmp_path: Path, monkeypatch):
     through after some tables had been created, leaving callers with
     no remediation hint and a partially-migrated schema."""
 
-    from trade_trace.storage.migrations import FTS5UnavailableError
     import sqlite3
+
+    from trade_trace.storage.migrations import FTS5UnavailableError
 
     def _fts5_unavailable(conn: sqlite3.Connection) -> None:
         # Simulate the OperationalError SQLite raises when FTS5 is not

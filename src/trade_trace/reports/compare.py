@@ -12,17 +12,18 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections import defaultdict
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any, cast
 
 from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.reports._filter_support import applied_filter_view, enforce_supported_filter
 from trade_trace.reports.calibration import (
     DEFAULT_MIN_SAMPLE,
-    _ScoredRow,
     _build_examples,
     _compute_metrics,
     _empty_metrics,
     _resolve_p_yes_and_y,
+    _ScoredRow,
 )
 from trade_trace.reports.pnl import DEFAULT_PNL_MIN_SAMPLE, _pnl_metrics_for_rows
 
@@ -136,7 +137,7 @@ def _compare_calibration(conn: sqlite3.Connection, *, group_by: str, raw_filter:
             "sample_warning": warning,
             "truncated": False,
         })
-    total = sum(g["sample_size"] for g in groups)
+    total = sum(cast("int", g["sample_size"]) for g in groups)
     return {
         "summary": {
             "base_report": "calibration",

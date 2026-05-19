@@ -108,13 +108,13 @@ def _store_metadata_json(args: dict[str, Any], key: str = "metadata_json") -> st
         # decoded object too so nested credential keys cannot hide in raw JSON.
         try:
             decoded = json.loads(value)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as err:
             reject_if_contains_secrets(value, field=key)
             raise ToolError(
                 ErrorCode.VALIDATION_ERROR,
                 f"{key} must be valid JSON when supplied as a string",
                 details={"field": key, "reason": "invalid_json"},
-            )
+            ) from err
         else:
             _reject_credential_metadata(decoded, field=key)
         return value

@@ -42,7 +42,7 @@ def home(tmp_path: Path) -> Path:
     return h
 
 
-def _cli(home: Path, tokens: list[str]) -> dict:
+def _cli(home: Path, tokens: list[str]) -> tuple[int, dict]:
     buf = io.StringIO()
     args = [
         "--actor-id", "agent:default",

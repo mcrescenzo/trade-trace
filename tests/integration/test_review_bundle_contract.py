@@ -63,6 +63,7 @@ def _seed_decision(home: Path, *, actor_id: str = "agent:default") -> dict:
         "home": str(home), "instrument_id": instrument.data["id"],
         "type": "skip", "reason": "no edge today",
     }, actor_id=actor_id)
+    assert decision.ok
     return {
         "venue_id": venue.data["id"],
         "instrument_id": instrument.data["id"],

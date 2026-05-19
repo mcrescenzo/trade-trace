@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import json, subprocess, pathlib, shutil, sys
+
+import json
+import pathlib
+import shutil
+import subprocess
+import sys
+
 ROOT = pathlib.Path('/home/hermes/code/trade-trace')
 BASE = ROOT / 'docs/audits/bughunt-20260519T030623Z'
 EPIC = 'trade-trace-2d3'

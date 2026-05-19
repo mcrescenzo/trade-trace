@@ -9,9 +9,9 @@ inventing prices when snapshots are sparse or missing.
 
 from __future__ import annotations
 
-from collections import defaultdict
-from datetime import datetime, timezone
 import sqlite3
+from collections import defaultdict
+from datetime import UTC, datetime
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
@@ -32,7 +32,7 @@ def _parse_ts(value: str | None) -> datetime | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -62,14 +62,13 @@ def _coverage(decision_at: str, horizon_at: str | None, snapshots: list[sqlite3.
     if start is None or end is None or end <= start:
         return "partial"
     span = (end - start).total_seconds()
-    times = [_parse_ts(s["captured_at"]) for s in snapshots]
-    times = [t for t in times if t is not None]
+    times: list[datetime] = [t for s in snapshots if (t := _parse_ts(s["captured_at"])) is not None]
     if not times:
         return "missing"
     covered = max(0.0, (min(max(times), end) - start).total_seconds())
     ratio = covered / span if span > 0 else 1.0
     ordered = [start, *sorted(t for t in times if start < t <= end), end]
-    max_gap = max((b - a).total_seconds() for a, b in zip(ordered, ordered[1:])) if len(ordered) > 1 else span
+    max_gap = max((b - a).total_seconds() for a, b in zip(ordered, ordered[1:], strict=False)) if len(ordered) > 1 else span
     if ratio >= 0.75 and max_gap <= span * 0.25:
         return "complete"
     if ratio >= 0.50:
@@ -107,8 +106,7 @@ def _row_metrics(row: sqlite3.Row, snapshots: list[sqlite3.Row]) -> dict[str, An
             "exit_efficiency": None,
             "edge_peak": None,
         }
-    path_prices = [(s, _price(s)) for s in snapshots]
-    path_prices = [(s, p) for s, p in path_prices if p is not None]
+    path_prices: list[tuple[sqlite3.Row, float]] = [(s, p) for s in snapshots if (p := _price(s)) is not None]
     if not path_prices:
         return {
             "max_favorable_delta": None,

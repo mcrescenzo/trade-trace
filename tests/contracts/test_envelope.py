@@ -42,11 +42,9 @@ def test_meta_hints_propagate_known_and_unknown_keys(tmp_path):
     keys propagate through Meta's `extra='allow'` config so a future
     tool/provider can surface metadata without a schema change."""
 
-    from pathlib import Path
 
-    from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
+    from trade_trace.contracts.tool_registry import ToolContext
     from trade_trace.core import default_registry, dispatch
-    from trade_trace.mcp_server import mcp_call
 
     registry = default_registry()
 

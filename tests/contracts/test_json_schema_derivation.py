@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from jsonschema.validators import Draft202012Validator
+from jsonschema.validators import Draft202012Validator  # type: ignore[import-untyped]
 
 from trade_trace.contracts.json_schema_derive import derive_schema
 from trade_trace.contracts.report_filter import ReportFilter

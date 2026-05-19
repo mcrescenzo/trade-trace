@@ -15,7 +15,7 @@ _R_BINS = [float("-inf"), -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0, float("inf")]
 
 def _histogram(values: list[float]) -> list[dict[str, Any]]:
     buckets: list[dict[str, Any]] = []
-    for low, high in zip(_R_BINS, _R_BINS[1:]):
+    for low, high in zip(_R_BINS, _R_BINS[1:], strict=False):
         count = sum(1 for value in values if value >= low and value < high)
         buckets.append({
             "lower": None if low == float("-inf") else low,

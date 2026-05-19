@@ -16,8 +16,8 @@ from typing import Any
 
 import pytest
 
-from trade_trace.contracts.tool_registry import ToolRegistry
 import trade_trace.mcp_server as mcp_server
+from trade_trace.contracts.tool_registry import ToolRegistry
 from trade_trace.mcp_server import (
     SECRET_TRANSPORT_HINT_KEYS,
     mcp_call,
@@ -25,7 +25,6 @@ from trade_trace.mcp_server import (
     serve_stdio,
     stdio_actor_id,
 )
-
 
 PROJECT_CREDENTIAL_KEYS = {
     "api_key",

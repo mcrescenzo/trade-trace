@@ -14,7 +14,7 @@ import pytest
 HAS_MCP = importlib.util.find_spec("mcp") is not None
 pytestmark = pytest.mark.skipif(not HAS_MCP, reason="mcp SDK optional extra is not installed")
 
-from trade_trace.mcp_server import mcp_call, mcp_tool_specs
+from trade_trace.mcp_server import mcp_call, mcp_tool_specs  # noqa: E402
 
 
 def _encode(message: dict[str, Any]) -> bytes:

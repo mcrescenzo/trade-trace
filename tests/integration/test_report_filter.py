@@ -9,6 +9,7 @@ Covers ux0 chunk 1 acceptance:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -194,7 +195,7 @@ def _journal_home(tmp_path: Path) -> Path:
 # the report does NOT support). Reports with no SQL-applied filter leaves
 # get `decision.decision_type` as the canary; reports that do apply a
 # leaf get one chosen from outside their supported set.
-_UNSUPPORTED_LEAF_CASES = [
+_UNSUPPORTED_LEAF_CASES: list[tuple[str, dict[str, Any], dict[str, Any], str]] = [
     ("report.calibration", {}, {"decision": {"decision_type": ["actual_enter"]}},
      "decision.decision_type"),
     ("report.mistakes", {}, {"actors": {"actor_id": ["agent:foo"]}},

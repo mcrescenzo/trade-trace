@@ -30,7 +30,7 @@ def _seed_n_nodes(home: Path, n: int, *, body_prefix: str = "obs",
                   confidence: float | None = None) -> list[str]:
     ids: list[str] = []
     for i in range(n):
-        args = {
+        args: dict[str, object] = {
             "node_type": "observation",
             "body": f"{body_prefix} #{i} — earnings volatility pattern",
             "idempotency_key": f"00000000-0000-4000-8000-budget-{i:08d}",
