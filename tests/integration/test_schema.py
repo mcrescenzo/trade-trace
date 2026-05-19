@@ -10,6 +10,7 @@ import pytest
 
 from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
+from trade_trace.timestamps import TIMESTAMP_API_GOVERNED_COLUMNS
 
 
 def _db(tmp_path: Path):
@@ -353,6 +354,66 @@ def test_bitemporal_columns_present(tmp_path: Path):
             cols = {row[1] for row in cur.fetchall()}
             for col in ("valid_from", "valid_to", "invalidated_at", "invalidated_by"):
                 assert col in cols, f"{table} missing bi-temporal column {col!r}"
+    finally:
+        db.close()
+
+
+def test_timestamp_text_columns_are_explicitly_api_governed(tmp_path: Path):
+    """trade-trace-wmz bounded policy: timestamp columns remain TEXT without
+    broad storage CHECKs/triggers for compatibility with existing append-only
+    journals.  They must not be silently unconstrained: every timestamp-shaped
+    TEXT column in the migrated schema is listed in the API-governed policy set.
+    """
+
+    db = _db(tmp_path)
+    try:
+        table_rows = db.connection.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
+        discovered: set[tuple[str, str]] = set()
+        for (table,) in table_rows:
+            for row in db.connection.execute(f"PRAGMA table_info({table})").fetchall():
+                column = row[1]
+                col_type = (row[2] or "").upper()
+                if col_type == "TEXT" and (
+                    column.endswith("_at")
+                    or column in {"valid_from", "valid_to", "review_by", "as_of"}
+                ):
+                    discovered.add((table, column))
+
+        assert discovered == set(TIMESTAMP_API_GOVERNED_COLUMNS)
+    finally:
+        db.close()
+
+
+def test_critical_timestamp_columns_have_no_storage_level_checks(tmp_path: Path):
+    """Document the explicit delegation boundary: direct SQLite writes can still
+    persist malformed TEXT for governed timestamp columns; public APIs own
+    normalization via trade_trace.timestamps.
+    """
+
+    db = _db(tmp_path)
+    try:
+        schema_sql = "\n".join(
+            row[0] or ""
+            for row in db.connection.execute(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type IN ('table', 'trigger') AND sql IS NOT NULL"
+            ).fetchall()
+        )
+        for table, column in TIMESTAMP_API_GOVERNED_COLUMNS:
+            assert f"{table}.{column}" not in schema_sql
+
+        db.connection.execute(
+            "INSERT INTO venues(id, name, kind, created_at, actor_id) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("v_bad_ts", "manual", "manual", "not a timestamp", "agent:default"),
+        )
+        row = db.connection.execute(
+            "SELECT created_at FROM venues WHERE id = ?", ("v_bad_ts",)
+        ).fetchone()
+        assert row[0] == "not a timestamp"
     finally:
         db.close()
 

@@ -7,7 +7,11 @@ from datetime import UTC, datetime, timedelta, timezone
 import pytest
 
 from trade_trace.clock import FixedClock, SystemClock
-from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
+from trade_trace.timestamps import (
+    TimestampValidationError,
+    is_canonical_utc_iso8601,
+    to_utc_iso8601,
+)
 
 
 def test_normalize_utc_string_preserves_milliseconds():
@@ -39,6 +43,13 @@ def test_datetime_input_normalized():
 def test_invalid_string_raises():
     with pytest.raises(TimestampValidationError):
         to_utc_iso8601("not a timestamp")
+
+
+def test_canonical_storage_predicate_matches_helper_output():
+    assert is_canonical_utc_iso8601(to_utc_iso8601("2026-05-18T14:32:11.123999Z"))
+    assert not is_canonical_utc_iso8601("2026-05-18T14:32:11Z")
+    assert not is_canonical_utc_iso8601("2026-05-18T14:32:11.123+00:00")
+    assert not is_canonical_utc_iso8601("2026-05-18T14:32:11.123")
 
 
 def test_system_clock_returns_aware_datetime():

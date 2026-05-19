@@ -14,10 +14,84 @@ Rules (locked):
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import re
+
+
+_CANONICAL_UTC_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$"
+)
+
+# Storage policy for bead trade-trace-wmz:
+#
+# SQLite keeps timestamp columns as TEXT without broad CHECK/table rebuilds.
+# Existing append-only journals may already contain historical TEXT values, and
+# retrofitting CHECK constraints across those tables would require invasive
+# rebuild/copy migrations.  The bounded invariant is therefore API-only for the
+# columns listed below: public write paths must normalize through
+# `to_utc_iso8601`/`normalize_timestamp`/`now_iso` before INSERT, and schema
+# audit tests fail if a new timestamp-shaped TEXT column appears without being
+# explicitly added to this governed set.
+TIMESTAMP_API_GOVERNED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("config", "updated_at"),
+        ("decisions", "created_at"),
+        ("decisions", "review_by"),
+        ("decision_playbook_rules", "created_at"),
+        ("edges", "created_at"),
+        ("events", "created_at"),
+        ("forecast_scores", "scored_at"),
+        ("forecasts", "created_at"),
+        ("forecasts", "invalidated_at"),
+        ("forecasts", "resolution_at"),
+        ("forecasts", "valid_from"),
+        ("forecasts", "valid_to"),
+        ("instruments", "created_at"),
+        ("instruments", "expiration_or_resolution_at"),
+        ("memory_nodes", "created_at"),
+        ("memory_nodes", "invalidated_at"),
+        ("memory_nodes", "valid_from"),
+        ("memory_nodes", "valid_to"),
+        ("memory_node_stats", "last_recalled_at"),
+        ("memory_recall_events", "as_of"),
+        ("memory_recall_events", "created_at"),
+        ("outbox", "exported_at"),
+        ("outcomes", "created_at"),
+        ("outcomes", "resolved_at"),
+        ("playbooks", "created_at"),
+        ("playbook_versions", "created_at"),
+        ("position_events", "created_at"),
+        ("positions", "closed_at"),
+        ("positions", "opened_at"),
+        ("positions", "resolved_at"),
+        ("positions", "updated_at"),
+        ("signals", "created_at"),
+        ("signals", "expires_at"),
+        ("snapshots", "captured_at"),
+        ("snapshots", "created_at"),
+        ("sources", "captured_at"),
+        ("sources", "created_at"),
+        ("sources", "freshness_at"),
+        ("sources", "retrieved_at"),
+        ("strategies", "created_at"),
+        ("strategies", "updated_at"),
+        ("theses", "created_at"),
+        ("theses", "invalidated_at"),
+        ("theses", "time_horizon_at"),
+        ("theses", "valid_from"),
+        ("theses", "valid_to"),
+        ("venues", "created_at"),
+    }
+)
 
 
 class TimestampValidationError(ValueError):
     """Raised when a timestamp input cannot be normalized to UTC ISO 8601."""
+
+
+def is_canonical_utc_iso8601(value: str) -> bool:
+    """Return True for the canonical storage form emitted by to_utc_iso8601."""
+
+    return bool(_CANONICAL_UTC_RE.fullmatch(value))
 
 
 def to_utc_iso8601(value: str | datetime, *, field: str = "<value>") -> str:
