@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 from trade_trace.mcp_server import mcp_call
@@ -182,3 +183,8 @@ def test_semantic_strategy_appears_in_memory_recall_when_enabled(monkeypatch, tm
     assert recall.ok, recall
     assert "semantic" in recall.data["strategies_used"]
     assert recall.data["items"][0]["id"] == retain.data["id"]
+    item = recall.data["items"][0]
+    assert "semantic" in item["strategy_provenance"]
+    serialized_item = json.dumps(item, sort_keys=True)
+    assert "api_key" not in serialized_item
+    assert str(home) not in serialized_item

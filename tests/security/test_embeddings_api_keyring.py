@@ -10,7 +10,6 @@ from trade_trace.mcp_server import mcp_call
 from trade_trace.security import keyring as tt_keyring
 from trade_trace.tools.memory import _float32_blob
 
-
 SERVICE = "trade-trace:embeddings:openai"
 KNOWN_SECRET = "sk-tradetracez6sKnownSecret000001"
 
@@ -168,8 +167,16 @@ def test_embeddings_api_provider_switch_grep_audit_finds_zero_plaintext_secret(m
 
     with sqlite3.connect(home / "trade-trace.sqlite") as conn:
         config_rows = conn.execute("SELECT key, value FROM config").fetchall()
+        event_rows = conn.execute("SELECT * FROM events").fetchall()
+        outbox_rows = conn.execute("SELECT * FROM outbox").fetchall()
     assert ("embeddings.provider", "api:openai") in config_rows
-    assert all(KNOWN_SECRET not in json.dumps(row) for row in config_rows)
+    persisted_audit = json.dumps(
+        {"config": config_rows, "events": event_rows, "outbox": outbox_rows},
+        default=str,
+        sort_keys=True,
+    )
+    assert KNOWN_SECRET not in persisted_audit
+    assert "api_key" not in persisted_audit
 
 
 def test_memory_recall_api_key_resolved_at_call_time_and_not_returned(monkeypatch, tmp_path):
@@ -220,6 +227,9 @@ def test_memory_recall_api_key_resolved_at_call_time_and_not_returned(monkeypatc
         {"home": str(home), "query": "illiquid close", "strategies": ["semantic"], "k": 1},
     )
     assert recall.ok, recall
+    assert "semantic" in recall.data["strategies_used"]
+    assert recall.data["items"][0]["id"] == "mem-api-key-test"
+    assert "semantic" in recall.data["items"][0]["strategy_provenance"]
     serialized = json.dumps(recall.model_dump(mode="json", exclude_none=True), sort_keys=True)
     assert KNOWN_SECRET not in serialized
     assert "api_key" not in serialized
