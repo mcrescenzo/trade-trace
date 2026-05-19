@@ -83,7 +83,10 @@ def test_journal_status_parity(tmp_path):
 
 
 def test_cli_error_envelope_for_unknown_tool():
-    """An unknown tool returns a NOT_FOUND error envelope and exit code 1."""
+    """An unknown tool returns a NOT_FOUND error envelope and exit code 1
+    per trade-trace-kynj. Before that fix the CLI raised a raw
+    `SystemExit` with stderr text — agent callers could not parse the
+    failure the same way they parse a typed VALIDATION_ERROR."""
 
     buf = io.StringIO()
     with redirect_stdout(buf):
@@ -94,8 +97,12 @@ def test_cli_error_envelope_for_unknown_tool():
 
     buf2 = io.StringIO()
     with redirect_stdout(buf2):
-        try:
-            rc2 = cli_main(["nonexistent", "tool"])
-        except SystemExit as exc:
-            rc2 = exc.code or 2
-    assert rc2 != 0
+        rc2 = cli_main(["nonexistent", "tool"])
+    body = json.loads(buf2.getvalue().strip().splitlines()[-1])
+    assert rc2 == 1
+    assert body["ok"] is False
+    assert body["error"]["code"] == "NOT_FOUND"
+    assert body["error"]["details"]["entity_kind"] == "tool"
+    assert body["error"]["details"]["tokens"] == ["nonexistent", "tool"]
+    # And a known invocation is listed so the agent can correct the typo.
+    assert "journal status" in body["error"]["details"]["known_invocations"]

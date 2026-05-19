@@ -131,6 +131,21 @@ def _parse_kv_args(unknown: list[str]) -> dict[str, Any]:
     return out
 
 
+class UnknownCommandError(Exception):
+    """Raised by `_invocation_from_args` when positional tokens do not
+    extend any registered CLI invocation. Per trade-trace-kynj the
+    dispatcher converts this to a typed `NOT_FOUND` envelope rather
+    than a raw `SystemExit` with stderr text — agent callers can then
+    parse failures the same way for any tool surface."""
+
+    def __init__(self, tokens: list[str], known: list[tuple[str, ...]]) -> None:
+        self.tokens = list(tokens)
+        self.known = sorted(" ".join(c) for c in known)
+        super().__init__(
+            f"unknown command: {' '.join(tokens) or '<no command>'}"
+        )
+
+
 def _invocation_from_args(
     tokens: list[str], registry: ToolRegistry
 ) -> tuple[str, list[str]]:
@@ -142,10 +157,7 @@ def _invocation_from_args(
         if tuple(tokens[: len(candidate)]) == candidate and len(candidate) > len(longest):
             longest = candidate
     if not longest:
-        raise SystemExit(
-            f"unknown command: {' '.join(tokens) or '<no command>'}\n"
-            f"available commands: {', '.join(' '.join(c) for c in registry.cli_invocations())}"
-        )
+        raise UnknownCommandError(tokens, registry.cli_invocations())
     return ".".join(longest), tokens[len(longest):]
 
 
@@ -252,7 +264,23 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
         parser.print_help(sys.stderr)
         return 2
 
-    tool_name, remaining = _invocation_from_args(positional, registry)
+    try:
+        tool_name, remaining = _invocation_from_args(positional, registry)
+    except UnknownCommandError as exc:
+        # Emit a typed NOT_FOUND envelope per trade-trace-kynj instead
+        # of the legacy SystemExit-with-stderr. CLI/MCP parity contract.
+        return _emit_cli_error(
+            tool="<unknown>",
+            actor_id=args.actor_id,
+            request_id=args.request_id,
+            code=ErrorCode.NOT_FOUND,
+            message=str(exc),
+            details={
+                "entity_kind": "tool",
+                "tokens": exc.tokens,
+                "known_invocations": exc.known,
+            },
+        )
     try:
         tool_args = _parse_kv_args(remaining)
     except MalformedJsonArgError as exc:
