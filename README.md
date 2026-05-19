@@ -4,6 +4,8 @@ Install the optional MCP extra to run the stdio server:
 
 ```bash
 pip install -e '.[mcp]'
+export TRADE_TRACE_HOME="$HOME/.trade-trace"
+tt journal init
 trade-trace-mcp
 ```
 
@@ -11,6 +13,12 @@ The server communicates on stdin/stdout only. Tool calls use `MCP_ACTOR_ID` as
 the actor id when set; otherwise they default to `mcp:default`. Do not write
 logs to stdout while the server is running because stdout is reserved for the
 MCP JSON-RPC protocol.
+
+Client setup walkthroughs:
+
+- [Claude Code](./docs/CLAUDE_CODE.md) — `claude mcp add trade-trace -- trade-trace-mcp`, with per-project vs user scope notes.
+- [Claude Desktop](./docs/CLAUDE_DESKTOP.md) — `claude_desktop_config.json` stdio config.
+- [Cursor / Windsurf / Cline](./docs/IDE_MCP_SETUP.md) — generic IDE stdio MCP config.
 
 **A local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents.**
 
