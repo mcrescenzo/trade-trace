@@ -1733,6 +1733,50 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
 
 # -- registration ------------------------------------------------------------
 
+
+# Hand-crafted JSON schema for decision.add per bead trade-trace-hsnz.
+# Auto-derivation from example_minimal=actual_enter forced `quantity`/`price`
+# as required, but the decision matrix marks them X (forbidden) for `watch`
+# and `skip`. Required set here is the intersection across all matrix rows:
+# every row has `instrument_id` R, and `type` discriminates the row, so
+# `type`, `instrument_id`, and `idempotency_key` are the only schema-level
+# required fields. The runtime decision matrix in `decision_matrix.py`
+# enforces per-type R/X constraints uniformly and returns a typed
+# VALIDATION_ERROR envelope on violation.
+_DECISION_ADD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "type": {"type": "string"},
+        "instrument_id": {"type": "string"},
+        "thesis_id": {"type": "string"},
+        "forecast_id": {"type": "string"},
+        "side": {"type": "string"},
+        "quantity": {"type": "number"},
+        "price": {"type": "number"},
+        "fees": {"type": "number"},
+        "slippage": {"type": "number"},
+        "reason": {"type": "string"},
+        "review_by": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "metadata_json": {"type": "object"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "run_id": {"type": "string"},
+        "strategy_id": {"type": "string"},
+        "position_id": {"type": "string"},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["type", "instrument_id", "idempotency_key"],
+    "description": (
+        "decision.add — runtime decision matrix in decision_matrix.py "
+        "enforces per-`type` required/forbidden fields and returns a "
+        "VALIDATION_ERROR envelope on violation (bead trade-trace-hsnz)."
+    ),
+}
+
+
 def register_ledger_tools(registry: ToolRegistry) -> None:
     """Register all M1 manual ledger / source / resolution write tools."""
 
@@ -1750,7 +1794,7 @@ def register_ledger_tools(registry: ToolRegistry) -> None:
     registry.register("thesis.add", _thesis_add, is_write=True, **_examples_for("thesis.add"))
     registry.register("forecast.add", _forecast_add, is_write=True, **_examples_for("forecast.add"))
     registry.register("forecast.supersede", _forecast_supersede, is_write=True)
-    registry.register("decision.add", _decision_add, is_write=True, **_examples_for("decision.add"))
+    registry.register("decision.add", _decision_add, is_write=True, json_schema=_DECISION_ADD_SCHEMA, **_examples_for("decision.add"))
     registry.register("outcome.add", _outcome_add, is_write=True, **_examples_for("outcome.add"))
     # resolve.record is an alias for outcome.add (PRD §4.4).
     registry.register("resolve.record", _outcome_add, is_write=True, **_examples_for("outcome.add"))

@@ -167,3 +167,109 @@ def test_stdio_tools_call_venue_add_dry_run_returns_success_without_persisting(t
     with sqlite3.connect(db_path) as conn:
         row = conn.execute("SELECT id FROM venues WHERE id = ?", (venue_id,)).fetchone()
     assert row is None
+
+
+# -- decision.add schema parity per trade-trace-hsnz ---------------------
+
+
+def test_stdio_decision_add_watch_succeeds_without_quantity(tmp_path: Path):
+    """Per trade-trace-hsnz: the decision.add MCP schema must not reject
+    watch decisions for missing quantity/price. The runtime decision matrix
+    forbids quantity for watch — the schema must not require it either."""
+
+    home = tmp_path / "home"
+    init = mcp_call("journal.init", {"home": str(home)}, actor_id="agent:stdio-test")
+    assert init.ok
+
+    venue = mcp_call("venue.add", {
+        "home": str(home),
+        "name": "PM",
+        "kind": "prediction_market",
+        "idempotency_key": "hsnz-venue",
+    }, actor_id="agent:stdio-test")
+    assert venue.ok
+    inst = mcp_call("instrument.add", {
+        "home": str(home),
+        "venue_id": venue.data["id"],
+        "asset_class": "prediction_market",
+        "title": "Watchlist Candidate",
+        "idempotency_key": "hsnz-inst",
+    }, actor_id="agent:stdio-test")
+    assert inst.ok
+
+    server = _initialized_server(tmp_path, actor_id="agent:stdio-test")
+    try:
+        result = server.request(
+            "tools/call",
+            {
+                "name": "decision.add",
+                "arguments": {
+                    "home": str(home),
+                    "type": "watch",
+                    "instrument_id": inst.data["id"],
+                    "reason": "wait for liquidity",
+                    "idempotency_key": "hsnz-watch-decision",
+                },
+            },
+        )
+        structured = result["structuredContent"]
+        assert structured["ok"] is True, structured
+        assert structured["data"]["type"] == "watch"
+    finally:
+        server.close()
+
+
+def test_stdio_decision_add_skip_succeeds_without_quantity(tmp_path: Path):
+    """A skip decision must succeed via stdio with just `type`, `instrument_id`,
+    `reason`, and `idempotency_key` — no quantity/price."""
+
+    home = tmp_path / "home"
+    mcp_call("journal.init", {"home": str(home)}, actor_id="agent:stdio-test")
+    venue = mcp_call("venue.add", {
+        "home": str(home), "name": "PM", "kind": "prediction_market",
+        "idempotency_key": "hsnz2-venue",
+    }, actor_id="agent:stdio-test")
+    inst = mcp_call("instrument.add", {
+        "home": str(home), "venue_id": venue.data["id"],
+        "asset_class": "prediction_market", "title": "Skip Target",
+        "idempotency_key": "hsnz2-inst",
+    }, actor_id="agent:stdio-test")
+
+    server = _initialized_server(tmp_path, actor_id="agent:stdio-test")
+    try:
+        result = server.request(
+            "tools/call",
+            {
+                "name": "decision.add",
+                "arguments": {
+                    "home": str(home),
+                    "type": "skip",
+                    "instrument_id": inst.data["id"],
+                    "reason": "spread too wide",
+                    "idempotency_key": "hsnz2-skip-decision",
+                },
+            },
+        )
+        structured = result["structuredContent"]
+        assert structured["ok"] is True, structured
+        assert structured["data"]["type"] == "skip"
+    finally:
+        server.close()
+
+
+def test_decision_add_json_schema_does_not_require_quantity_or_price():
+    """The published JSON schema for decision.add must not force quantity/price
+    as required (those are matrix-X for watch/skip). Required set must be the
+    subset that the runtime decision matrix marks R for every decision type."""
+
+    from trade_trace.core import default_registry
+
+    reg = default_registry().get("decision.add")
+    schema = reg.json_schema or {}
+    required = set(schema.get("required", []))
+    assert "quantity" not in required
+    assert "price" not in required
+    # At minimum, type and instrument_id must be required (every matrix row
+    # marks instrument_id R; type discriminates the matrix row).
+    assert "type" in required
+    assert "instrument_id" in required
