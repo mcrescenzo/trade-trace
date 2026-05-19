@@ -231,6 +231,97 @@ def test_drain_writes_imports_md_superset_shape(tmp_path: Path):
     assert line["_contract_version"] == "1.0"
 
 
+def _insert_raw_event_with_outbox(
+    conn, *, event_type: str, payload_json: str, idempotency_key: str,
+) -> int:
+    """Insert an event row directly so the test can seed a corrupt
+    payload_json the EventWriter would never produce. Returns the
+    event_id. Required because the events table is append-only after
+    migration 009; the corrupt row is a one-shot insert, not an
+    update."""
+
+    conn.execute(
+        "INSERT INTO events(event_type, subject_kind, subject_id, "
+        "payload_json, actor_id, idempotency_key, created_at) "
+        "VALUES (?, 'decision', 'd_corrupt', ?, 'agent:default', ?, ?)",
+        (event_type, payload_json, idempotency_key,
+         "2026-05-19T12:00:00Z"),
+    )
+    event_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute(
+        "INSERT INTO outbox(event_id, export_kind, state) "
+        "VALUES (?, 'jsonl', 'pending')",
+        (event_id,),
+    )
+    return event_id
+
+
+def test_drain_marks_row_failed_when_payload_json_is_corrupt(tmp_path: Path):
+    """Per bead trade-trace-eo4: a row whose payload_json is not valid
+    JSON must be marked failed with a descriptive error_text and an
+    incremented attempt_count, and the drain must continue processing
+    subsequent rows rather than aborting."""
+
+    home, db, writer = _journal(tmp_path)
+    try:
+        corrupt_event_id = _insert_raw_event_with_outbox(
+            db.connection,
+            event_type="decision.created",
+            payload_json="this is not valid json",
+            idempotency_key="bad-json",
+        )
+        # A valid row queued after the corrupt one must still drain.
+        writer.write(
+            event_type="decision.created",
+            subject_kind="decision",
+            subject_id="d_ok",
+            payload=_decision_payload(),
+            actor_id="agent:default",
+            idempotency_key="ok",
+        )
+
+        result = drain_outbox(db.connection, home)
+
+        # The valid row exported, the corrupt row did not.
+        assert len(result.exported_files) == 1
+        assert corrupt_event_id not in result.exported_event_ids
+
+        corrupt_state = db.connection.execute(
+            "SELECT state, error_text, attempt_count FROM outbox "
+            "WHERE event_id = ?",
+            (corrupt_event_id,),
+        ).fetchone()
+        assert corrupt_state[0] == "failed"
+        assert "payload_json_decode_error" in corrupt_state[1]
+        assert corrupt_state[2] >= 1
+    finally:
+        db.close()
+
+
+def test_drain_marks_row_failed_when_payload_json_is_not_an_object(tmp_path: Path):
+    """JSON that decodes to a non-dict (list, string, number) is also
+    treated as malformed — the JSONL exporter shape requires an object."""
+
+    home, db, _writer = _journal(tmp_path)
+    try:
+        bad_event_id = _insert_raw_event_with_outbox(
+            db.connection,
+            event_type="decision.created",
+            payload_json="[1, 2, 3]",  # valid JSON, wrong shape
+            idempotency_key="bad-shape",
+        )
+        result = drain_outbox(db.connection, home)
+        assert bad_event_id not in result.exported_event_ids
+        row = db.connection.execute(
+            "SELECT state, error_text FROM outbox WHERE event_id = ?",
+            (bad_event_id,),
+        ).fetchone()
+        assert row[0] == "failed"
+        assert "payload_json_not_object" in row[1]
+    finally:
+        db.close()
+
+
 def test_drain_cleans_orphan_tmp_files(tmp_path: Path):
     """The drain runs the orphan cleanup as a side effect (per operability.md
     §9.1 the cleanup runs on every drain invocation)."""

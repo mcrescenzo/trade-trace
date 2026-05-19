@@ -298,7 +298,28 @@ def drain_outbox(
             continue
 
         event_type, actor_id, created_at, payload_json = event
-        payload = json.loads(payload_json)
+        try:
+            payload = json.loads(payload_json)
+        except (json.JSONDecodeError, TypeError) as exc:
+            # Corrupt payload would abort the whole drain otherwise; per
+            # bead trade-trace-eo4 the row is marked failed and the loop
+            # continues so a single bad event can't wedge the exporter.
+            conn.execute(
+                "UPDATE outbox SET state = 'failed', error_text = ?, "
+                "attempt_count = attempt_count + 1 WHERE id = ?",
+                (f"payload_json_decode_error: {exc}", outbox_id),
+            )
+            continue
+        if not isinstance(payload, dict):
+            conn.execute(
+                "UPDATE outbox SET state = 'failed', error_text = ?, "
+                "attempt_count = attempt_count + 1 WHERE id = ?",
+                (
+                    f"payload_json_not_object: got {type(payload).__name__}",
+                    outbox_id,
+                ),
+            )
+            continue
         try:
             path = write_event_atomic(
                 home,
