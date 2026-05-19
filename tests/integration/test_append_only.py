@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from tests._direct_sql_builders import seed_full_append_only_graph
 from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
 
@@ -42,41 +43,10 @@ def _db(tmp_path: Path):
 
 
 def _seed_minimal(conn: sqlite3.Connection) -> None:
-    conn.executescript(
-        """
-        INSERT INTO venues(id, name, kind, created_at, actor_id)
-            VALUES ('v_1', 'manual', 'manual', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO instruments(id, venue_id, title, asset_class, created_at, actor_id)
-            VALUES ('i_1', 'v_1', 'Test', 'prediction_market', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO events(event_type, subject_kind, subject_id, payload_json, actor_id, created_at)
-            VALUES ('audit.seeded', 'instrument', 'i_1', '{}', 'agent:default', '2026-05-18T14:00:00Z');
-        INSERT INTO theses(id, instrument_id, side, body, created_at, actor_id)
-            VALUES ('t_1', 'i_1', 'yes', '...', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO forecasts(id, thesis_id, kind, created_at, actor_id)
-            VALUES ('f_1', 't_1', 'binary', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO forecast_outcomes(id, forecast_id, outcome_label, probability)
-            VALUES ('fo_1', 'f_1', 'YES', 0.6);
-        INSERT INTO snapshots(id, instrument_id, captured_at, created_at, actor_id)
-            VALUES ('snap_1', 'i_1', '2026-05-18T14:00:00Z', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO decisions(id, instrument_id, type, created_at, actor_id)
-            VALUES ('d_1', 'i_1', 'skip', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO decision_tags(decision_id, tag) VALUES ('d_1', 'liquidity-ignored');
-        INSERT INTO outcomes(id, instrument_id, resolved_at, outcome_label, status, created_at, actor_id)
-            VALUES ('o_1', 'i_1', '2026-05-18T14:00:00Z', 'YES', 'resolved_final',
-                    '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO sources(id, kind, created_at, actor_id)
-            VALUES ('s_1', 'note', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO edges(id, source_kind, source_id, target_kind, target_id, edge_type, created_at, actor_id)
-            VALUES ('e_1', 'source', 's_1', 'thesis', 't_1', 'about', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO position_events(id, position_id, instrument_id, event_type, created_at, actor_id)
-            VALUES ('pe_1', 'p_1', 'i_1', 'open', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO forecast_scores(id, forecast_id, outcome_id, metric, score, scored_at, actor_id)
-            VALUES ('fs_1', 'f_1', 'o_1', 'brier_binary', 0.16, '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO signals(id, kind, severity, created_at, actor_id)
-            VALUES ('sig_1', 'sample_size_warning', 'warn',
-                    '2026-05-18T14:00:00Z', 'system:report.coach');
-        """
-    )
+    """Seed one row in every append-only ledger table via the shared
+    direct-SQL builders (trade-trace-24ia / SIMP-009)."""
+
+    seed_full_append_only_graph(conn)
 
 
 @pytest.mark.parametrize("table", APPEND_ONLY_TABLES)

@@ -7,6 +7,15 @@ from pathlib import Path
 
 import pytest
 
+from tests._direct_sql_builders import (
+    insert_decision,
+    insert_forecast,
+    insert_instrument,
+    insert_outcome,
+    insert_source,
+    insert_thesis,
+    insert_venue,
+)
 from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
 
@@ -18,25 +27,17 @@ def _db(tmp_path: Path):
 
 
 def _seed_minimal(conn: sqlite3.Connection) -> None:
-    conn.executescript(
-        """
-        INSERT INTO venues(id, name, kind, created_at, actor_id)
-            VALUES ('v_1', 'manual', 'manual', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO instruments(id, venue_id, title, asset_class, created_at, actor_id)
-            VALUES ('i_1', 'v_1', 'Test', 'prediction_market', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO theses(id, instrument_id, side, body, created_at, actor_id)
-            VALUES ('t_1', 'i_1', 'yes', 'thesis body', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO forecasts(id, thesis_id, kind, created_at, actor_id)
-            VALUES ('f_1', 't_1', 'binary', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO decisions(id, instrument_id, type, created_at, actor_id)
-            VALUES ('d_1', 'i_1', 'skip', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO sources(id, kind, created_at, actor_id)
-            VALUES ('s_1', 'note', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO outcomes(id, instrument_id, resolved_at, outcome_label, status, created_at, actor_id)
-            VALUES ('o_1', 'i_1', '2026-05-18T14:00:00Z', 'YES', 'resolved_final',
-                    '2026-05-18T14:00:00Z', 'agent:default');
-        """
-    )
+    """Seed the venues/instruments/theses/forecasts/decisions/outcomes/
+    sources subgraph via the shared direct-SQL builders
+    (trade-trace-24ia / SIMP-009)."""
+
+    insert_venue(conn)
+    insert_instrument(conn)
+    insert_thesis(conn, body="thesis body")
+    insert_forecast(conn)
+    insert_source(conn)
+    insert_decision(conn)
+    insert_outcome(conn)
 
 
 M1_EDGE_TYPES = ("about", "supports", "contradicts", "supersedes")

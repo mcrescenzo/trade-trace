@@ -5,6 +5,12 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from tests._direct_sql_builders import (
+    insert_instrument,
+    insert_source,
+    insert_thesis,
+    insert_venue,
+)
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import apply_pending_migrations, find_orphan_edges, open_database
 from trade_trace.storage.paths import db_path
@@ -17,18 +23,14 @@ def _db(tmp_path: Path):
 
 
 def _seed_minimal(conn: sqlite3.Connection) -> None:
-    conn.executescript(
-        """
-        INSERT INTO venues(id, name, kind, created_at, actor_id)
-            VALUES ('v_1', 'manual', 'manual', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO instruments(id, venue_id, title, asset_class, created_at, actor_id)
-            VALUES ('i_1', 'v_1', 'Test', 'prediction_market', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO theses(id, instrument_id, side, body, created_at, actor_id)
-            VALUES ('t_1', 'i_1', 'yes', 'thesis body', '2026-05-18T14:00:00Z', 'agent:default');
-        INSERT INTO sources(id, kind, stance, created_at, actor_id)
-            VALUES ('s_1', 'note', 'supports', '2026-05-18T14:00:00Z', 'agent:default');
-        """
-    )
+    """Seed venues/instruments/theses/sources subgraph via the shared
+    direct-SQL builders (trade-trace-24ia / SIMP-009). `stance` is set
+    on sources because the orphan-edge audit reads that column."""
+
+    insert_venue(conn)
+    insert_instrument(conn)
+    insert_thesis(conn, body="thesis body")
+    insert_source(conn, stance="supports")
 
 
 def test_orphan_edge_audit_reports_direct_sql_missing_endpoint(tmp_path: Path):
