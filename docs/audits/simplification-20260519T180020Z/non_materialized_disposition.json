@@ -1,0 +1,34 @@
+[
+  {
+    "id": "SIMP-002",
+    "disposition": "defer",
+    "type": "investigation",
+    "title": "Evaluate declarative registration tables for simple tool families",
+    "source": "SIM-CLI-MCP-003",
+    "reason": "Too likely to become over-abstraction; keep as artifact-only lead."
+  },
+  {
+    "id": "SIMP-005",
+    "disposition": "defer",
+    "type": "investigation",
+    "title": "Decide whether public model stubs are stable DTOs, generated schemas, or deprecation candidates",
+    "source": "SIM-STORAGE-003",
+    "reason": "Needs product/API compatibility decision."
+  },
+  {
+    "id": "SIMP-010",
+    "disposition": "defer",
+    "type": "task",
+    "title": "Reduce dogfood/report test coupling without losing coverage",
+    "source": "TESTS-SIMPLIFY-004/005",
+    "reason": "Lower leverage until broader test-support work lands."
+  },
+  {
+    "id": "SIMP-017",
+    "disposition": "reject",
+    "type": "none",
+    "title": "Intentional complexity guardrails: keep public facades and avoid broad report hierarchy",
+    "source": "SIM-XCUT-001/002 + SIMPL-REPORTS-005",
+    "reason": "Intentional public facades/local report metrics; no work."
+  }
+]

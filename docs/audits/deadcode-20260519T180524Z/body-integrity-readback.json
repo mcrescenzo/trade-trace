@@ -1,0 +1,83 @@
+{
+  "note": "keyword guard only; raw readback and bead bodies are canonical",
+  "results": [
+    {
+      "id": "trade-trace-mehh",
+      "title": "Align optional embeddings docs and sqlite-vec capability reporting",
+      "status": "open",
+      "labels": [
+        "dead-code",
+        "deadcode-hunt",
+        "deadcode:refresh-20260519",
+        "domain:docs",
+        "domain:storage",
+        "needs-owner-confirmation",
+        "stale-contract"
+      ],
+      "missing_keyword_guards": []
+    },
+    {
+      "id": "trade-trace-8bdd",
+      "title": "Remove unused internal decision-matrix/test helpers",
+      "status": "open",
+      "labels": [
+        "cleanup-candidate",
+        "dead-code",
+        "deadcode-hunt",
+        "deadcode:refresh-20260519",
+        "domain:tests",
+        "domain:tools"
+      ],
+      "missing_keyword_guards": []
+    },
+    {
+      "id": "trade-trace-cs0r",
+      "title": "report.compare advertises group_by values that are rejected at runtime",
+      "status": "open",
+      "labels": [
+        "api-contract",
+        "bug",
+        "bughunt",
+        "bughunt:exhaustive-refresh-20260519",
+        "dead-code",
+        "deadcode-hunt",
+        "deadcode:refresh-20260519",
+        "domain:reports",
+        "domain:reports-memory",
+        "needs-owner-confirmation",
+        "public-api",
+        "stale-contract"
+      ],
+      "missing_keyword_guards": []
+    },
+    {
+      "id": "trade-trace-ftnu",
+      "title": "Reconcile residual watch.stale docs with report.watchlist registry",
+      "status": "open",
+      "labels": [
+        "bug",
+        "dead-code",
+        "deadcode-hunt",
+        "deadcode:refresh-20260519",
+        "docs-truth",
+        "domain:docs",
+        "domain:reports",
+        "stale-contract"
+      ],
+      "missing_keyword_guards": []
+    },
+    {
+      "id": "trade-trace-cap6",
+      "title": "Final readback for deadcode refresh 2026-05-19",
+      "status": "open",
+      "labels": [
+        "dead-code",
+        "deadcode-hunt",
+        "deadcode:refresh-20260519",
+        "final-verification",
+        "gate"
+      ],
+      "missing_keyword_guards": []
+    }
+  ]
+}

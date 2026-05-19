@@ -1,0 +1,28 @@
+{
+  "candidates": {
+    "SIMP-001": "trade-trace-hd2r",
+    "SIMP-003": "trade-trace-6x3j",
+    "SIMP-004": "trade-trace-eijx",
+    "SIMP-006": "trade-trace-qnxt",
+    "SIMP-007": "trade-trace-x0po",
+    "SIMP-008": "trade-trace-qs5v",
+    "SIMP-009": "trade-trace-24ia",
+    "SIMP-011": "trade-trace-il2f",
+    "SIMP-012": "trade-trace-54io",
+    "SIMP-013": "trade-trace-42vr",
+    "SIMP-014": "trade-trace-qa2g",
+    "SIMP-015": "trade-trace-ensw",
+    "SIMP-016A": "trade-trace-reh4",
+    "SIMP-016B": "trade-trace-ypbp",
+    "SIMP-018": "trade-trace-hnwp",
+    "SIMP-019": "trade-trace-hiiv"
+  },
+  "gates": {
+    "docs_qc": "trade-trace-gfbd",
+    "final": "trade-trace-1g1h",
+    "investigation_qc": "trade-trace-l8ev",
+    "runtime_qc": "trade-trace-l0qx",
+    "test_qc": "trade-trace-zl03"
+  },
+  "skipped": []
+}

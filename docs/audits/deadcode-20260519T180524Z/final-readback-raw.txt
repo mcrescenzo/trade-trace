@@ -1,0 +1,188 @@
+2026-05-19T18:25:37Z
+## dep list epic
+  trade-trace-8bdd: Remove unused internal decision-matrix/test helpers [P4] (open) via relates-to
+  trade-trace-cap6: Final readback for deadcode refresh 2026-05-19 [P2] (open) via relates-to
+  trade-trace-cs0r: report.compare advertises group_by values that are rejected at runtime [P3] (open) via relates-to
+  trade-trace-ftnu: Reconcile residual watch.stale docs with report.watchlist registry [P3] (open) via relates-to
+  trade-trace-mehh: Align optional embeddings docs and sqlite-vec capability reporting [P2] (open) via relates-to
+
+## dep list final
+  trade-trace-8bdd: Remove unused internal decision-matrix/test helpers [P4] (open) via blocks
+  trade-trace-cs0r: report.compare advertises group_by values that are rejected at runtime [P3] (open) via blocks
+  trade-trace-ftnu: Reconcile residual watch.stale docs with report.watchlist registry [P3] (open) via blocks
+  trade-trace-ldru: Deadcode refresh 2026-05-19: materialize stale-code/docs cleanup backlog [P2] (open) via relates-to
+  trade-trace-mehh: Align optional embeddings docs and sqlite-vec capability reporting [P2] (open) via blocks
+
+## children epic
+[]
+## cycles
+
+✓ No dependency cycles detected
+
+## lint
+Template warnings (4 issues, 4 warnings):
+
+trade-trace-aqpf [bug]: Allow public Polymarket condition IDs through secret scanning
+  ⚠ Missing: ## Steps to Reproduce
+
+trade-trace-hsnz [bug]: Fix decision.add MCP schema for watch and skip decisions
+  ⚠ Missing: ## Steps to Reproduce
+
+trade-trace-2ya5 [bug]: Investigate source.add schema/example mismatch
+  ⚠ Missing: ## Steps to Reproduce
+
+trade-trace-716y [bug]: Investigate python executable assumption in getting-started docs
+  ⚠ Missing: ## Steps to Reproduce
+
+## orphans
+✓ No orphaned issues found
+## duplicates
+{
+  "count": 5,
+  "method": "mechanical",
+  "pairs": [
+    {
+      "issue_a_id": "trade-trace-ug7p",
+      "issue_a_title": "forecast.supersede idempotent retry creates extra replacement forecasts and edges",
+      "issue_b_id": "trade-trace-ld6l",
+      "issue_b_title": "forecast.supersede skips late auto-score when a resolved_final outcome already exists",
+      "method": "mechanical",
+      "similarity": 0.5599371207650055
+    },
+    {
+      "issue_a_id": "trade-trace-boqe",
+      "issue_a_title": "NDJSON exit-code test expects review.bundle to be unsupported after it became implemented",
+      "issue_b_id": "trade-trace-68ew",
+      "issue_b_title": "journal.status golden parity test reads the developer default Trade Trace home",
+      "method": "mechanical",
+      "similarity": 0.48104132129085697
+    },
+    {
+      "issue_a_id": "trade-trace-kynj",
+      "issue_a_title": "Unknown CLI commands bypass the JSON error-envelope contract",
+      "issue_b_id": "trade-trace-0tdt",
+      "issue_b_title": "PRD documents journal.init --enable-embeddings, but the flag is a silent no-op",
+      "method": "mechanical",
+      "similarity": 0.4787087055965838
+    },
+    {
+      "issue_a_id": "trade-trace-l24k",
+      "issue_a_title": "journal.restore trusts manifest paths and can write outside TRADE_TRACE_HOME",
+      "issue_b_id": "trade-trace-68ew",
+      "issue_b_title": "journal.status golden parity test reads the developer default Trade Trace home",
+      "method": "mechanical",
+      "similarity": 0.466407390184561
+    },
+    {
+      "issue_a_id": "trade-trace-4c4i",
+      "issue_a_title": "EPIC: exhaustive repo bughunt refresh 2026-05-19T175941Z",
+      "issue_b_id": "trade-trace-ldru",
+      "issue_b_title": "Deadcode refresh 2026-05-19: materialize stale-code/docs cleanup backlog",
+      "method": "mechanical",
+      "similarity": 0.4616870694223368
+    }
+  ],
+  "schema_version": 1,
+  "threshold": 0.45
+}
+## label query
+○ trade-trace-8bdd [● P4] [task] [cleanup-candidate dead-code deadcode-hunt deadcode:refresh-20260519 domain:tests domain:tools] - Remove unused internal decision-matrix/test helpers (blocks: trade-trace-cap6)
+● trade-trace-cap6 [● P2] [task] [dead-code deadcode-hunt deadcode:refresh-20260519 final-verification gate] - Final readback for deadcode refresh 2026-05-19 (blocked by: trade-trace-8bdd, trade-trace-cs0r, trade-trace-ftnu, trade-trace-mehh)
+○ trade-trace-cs0r [● P3] [bug] [api-contract bug bughunt bughunt:exhaustive-refresh-20260519 dead-code deadcode-hunt deadcode:refresh-20260519 domain:reports domain:reports-memory needs-owner-confirmation public-api stale-contract] - report.compare advertises group_by values that are rejected at runtime (blocks: trade-trace-cap6)
+○ trade-trace-ftnu [● P3] [bug] [bug dead-code deadcode-hunt deadcode:refresh-20260519 docs-truth domain:docs domain:reports stale-contract] - Reconcile residual watch.stale docs with report.watchlist registry (blocks: trade-trace-cap6)
+○ trade-trace-ldru [● P2] [epic] [dead-code deadcode-hunt deadcode:refresh-20260519 epic] - Deadcode refresh 2026-05-19: materialize stale-code/docs cleanup backlog
+○ trade-trace-mehh [● P2] [task] [dead-code deadcode-hunt deadcode:refresh-20260519 domain:docs domain:storage needs-owner-confirmation stale-contract] - Align optional embeddings docs and sqlite-vec capability reporting (blocks: trade-trace-cap6)
+## git status
+## main...origin/main
+ M src/trade_trace/core.py
+ M tests/contracts/test_agent_ergonomics.py
+ M tests/contracts/test_event_enum_coverage.py
+ M tests/contracts/test_grammar.py
+ M tests/contracts/test_report_envelope_completeness.py
+ M tests/integration/test_admin_tools.py
+ M tests/integration/test_calibration_integrity.py
+ M tests/integration/test_coach_override_outcomes.py
+ M tests/integration/test_final_dogfood_verification.py
+ M tests/integration/test_ledger_event_emission.py
+ M tests/integration/test_manual_ledger_flow.py
+ M tests/integration/test_memory_layer.py
+ M tests/integration/test_memory_link.py
+ M tests/integration/test_memory_recall_budgets.py
+ M tests/integration/test_operability_drill.py
+ M tests/integration/test_playbook_layer.py
+ M tests/integration/test_projection_rebuild.py
+ M tests/integration/test_reflection_prompt.py
+ M tests/integration/test_report_calibration.py
+ M tests/integration/test_report_coach.py
+ M tests/integration/test_report_pnl_watchlist.py
+ M tests/integration/test_report_sample_warnings.py
+ M tests/integration/test_report_tag_aggregates.py
+ M tests/integration/test_report_unscored_velocity.py
+ M tests/integration/test_reproducibility_replay.py
+ M tests/integration/test_review_bundle_contract.py
+ M tests/integration/test_scoring_lifecycle.py
+ M tests/integration/test_signal_scan.py
+ M tests/integration/test_source_attach_to_memory_node.py
+ M tests/integration/test_source_quality.py
+ M tests/integration/test_strategy_tools.py
+ M tests/security/test_report_sql_filters.py
+ M tests/security/test_secret_pattern_writes.py
+?? docs/audits/deadcode-20260519T180524Z/
+?? tests/_idempotency_keys.py
+ M src/trade_trace/core.py
+ M tests/contracts/test_agent_ergonomics.py
+ M tests/contracts/test_event_enum_coverage.py
+ M tests/contracts/test_grammar.py
+ M tests/contracts/test_report_envelope_completeness.py
+ M tests/integration/test_admin_tools.py
+ M tests/integration/test_calibration_integrity.py
+ M tests/integration/test_coach_override_outcomes.py
+ M tests/integration/test_final_dogfood_verification.py
+ M tests/integration/test_ledger_event_emission.py
+ M tests/integration/test_manual_ledger_flow.py
+ M tests/integration/test_memory_layer.py
+ M tests/integration/test_memory_link.py
+ M tests/integration/test_memory_recall_budgets.py
+ M tests/integration/test_operability_drill.py
+ M tests/integration/test_playbook_layer.py
+ M tests/integration/test_projection_rebuild.py
+ M tests/integration/test_reflection_prompt.py
+ M tests/integration/test_report_calibration.py
+ M tests/integration/test_report_coach.py
+ M tests/integration/test_report_pnl_watchlist.py
+ M tests/integration/test_report_sample_warnings.py
+ M tests/integration/test_report_tag_aggregates.py
+ M tests/integration/test_report_unscored_velocity.py
+ M tests/integration/test_reproducibility_replay.py
+ M tests/integration/test_review_bundle_contract.py
+ M tests/integration/test_scoring_lifecycle.py
+ M tests/integration/test_signal_scan.py
+ M tests/integration/test_source_attach_to_memory_node.py
+ M tests/integration/test_source_quality.py
+ M tests/integration/test_strategy_tools.py
+ M tests/security/test_report_sql_filters.py
+ M tests/security/test_secret_pattern_writes.py
+?? docs/audits/deadcode-20260519T180524Z/advisor-evidence-packet.md
+?? docs/audits/deadcode-20260519T180524Z/bead-bodies/trade-trace-8bdd-remove-unused-internal-decision-matrix-test-helpers.md
+?? docs/audits/deadcode-20260519T180524Z/bead-bodies/trade-trace-cap6-final-readback-for-deadcode-refresh-2026-05-19.md
+?? docs/audits/deadcode-20260519T180524Z/bead-bodies/trade-trace-cs0r-report-compare-advertises-group_by-values-that-are-rejected-at-runtime.md
+?? docs/audits/deadcode-20260519T180524Z/bead-bodies/trade-trace-ftnu-reconcile-residual-watch-stale-docs-with-report-watchlist-registry.md
+?? docs/audits/deadcode-20260519T180524Z/bead-bodies/trade-trace-ldru-deadcode-refresh-2026-05-19--materialize-stale-code-docs-cleanup-backlog.md
+?? docs/audits/deadcode-20260519T180524Z/bead-bodies/trade-trace-mehh-align-optional-embeddings-docs-and-sqlite-vec-capability-reporting.md
+?? docs/audits/deadcode-20260519T180524Z/bead-bodies/trade-trace-yv9z-decide-disposition-for-stale-exported-documented_group_by-metadata.md
+?? docs/audits/deadcode-20260519T180524Z/body-integrity-readback.json
+?? docs/audits/deadcode-20260519T180524Z/candidate-matrix.json
+?? docs/audits/deadcode-20260519T180524Z/coverage-ledger.jsonl
+?? docs/audits/deadcode-20260519T180524Z/domain-map.md
+?? docs/audits/deadcode-20260519T180524Z/final-readback-raw.txt
+?? docs/audits/deadcode-20260519T180524Z/lane-packets.md
+?? docs/audits/deadcode-20260519T180524Z/mutation-audit.md
+?? docs/audits/deadcode-20260519T180524Z/tracked-manifest.json
+?? tests/_idempotency_keys.py
+?? docs/audits/deadcode-20260519T180524Z/
+## recent log
+* 898d25d (HEAD -> main, origin/main) docs: add exhaustive bughunt audit artifacts
+* 6f62a5f Document AI MCP onboarding (trade-trace-i41s)
+* ddda0b6 Clear static gates for launch validation (trade-trace-ti9e)
+* c09248e Strengthen agent-ready QC coverage
+* 03434e0 Refresh agent-ready documentation

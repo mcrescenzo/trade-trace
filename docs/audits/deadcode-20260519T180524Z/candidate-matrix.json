@@ -1,0 +1,288 @@
+{
+  "run_id": "deadcode-20260519T180524Z",
+  "epic_id": "trade-trace-ldru",
+  "final_verification_id": "trade-trace-cap6",
+  "tracked_file_count": 367,
+  "materialization_summary": {
+    "created_epic": "trade-trace-ldru",
+    "created_candidate_beads": [
+      "trade-trace-mehh",
+      "trade-trace-8bdd",
+      "trade-trace-ftnu"
+    ],
+    "merged_candidate_beads": [
+      "trade-trace-cs0r"
+    ],
+    "closed_duplicate_beads": [
+      "trade-trace-yv9z"
+    ],
+    "matrix_only": [
+      "DC-REFRESH-005"
+    ]
+  },
+  "candidates": [
+    {
+      "id": "DC-REFRESH-001",
+      "source_lane": "storage-docs",
+      "proposed_title": "Align optional embeddings docs and sqlite-vec capability reporting",
+      "subsystem_paths": [
+        "src/trade_trace/storage/database.py",
+        "src/trade_trace/tools/journal.py",
+        "docs/PRD.md",
+        "pyproject.toml"
+      ],
+      "dead_code_class": "stale-config",
+      "symbol_or_entrypoint": "has_sqlite_vec / journal.init optional embeddings docs",
+      "evidence_type": "reference-search+docs-contradiction+entrypoint-map",
+      "reachability_evidence": "has_sqlite_vec definition only in active grep excluding audits; current storage path calls load_sqlite_vec_extension directly; journal.init reports sqlite_vec_available=False; PRD still mentions journal.init --enable-embeddings and sentence-transformers extra mismatch.",
+      "reference_search_scope": "Tracked src, tests, active docs, README, pyproject; docs/audits and audits excluded.",
+      "reference_search_commands": [
+        "git grep -n has_sqlite_vec -- :!docs/audits/** :!audits/**",
+        "git grep -n \"enable-embeddings|sentence-transformers\" -- :!docs/audits/** :!audits/**",
+        "PYTHONPATH=src python3 registry readback via trade_trace.core.default_registry"
+      ],
+      "dynamic_loading_caveats": "sqlite-vec optional extension environment; helper may be intended diagnostic API.",
+      "public_api_or_plugin_surface": "Importable storage helper plus operator-facing journal/docs.",
+      "generated_code_or_reflection_risk": "None found.",
+      "why_might_be_false_positive": "Owner may intentionally keep future diagnostic helper.",
+      "impact_of_keeping": "Confusing optional embeddings capability docs/runtime story.",
+      "recommended_action": "investigate",
+      "safe_removal_validation": "Embeddings/no-network tests if code changes; registry/pyproject readback if docs-only.",
+      "owner_confirmation_needed": true,
+      "severity": "P2",
+      "confidence": "medium",
+      "duplicate_of": null,
+      "related_to": [
+        "trade-trace-rzb",
+        "trade-trace-tka"
+      ],
+      "proposed_bead_title": "Align optional embeddings docs and sqlite-vec capability reporting",
+      "proposed_labels": [
+        "dead-code",
+        "deadcode-hunt",
+        "deadcode:refresh-20260519",
+        "domain:storage",
+        "domain:docs",
+        "needs-owner-confirmation",
+        "stale-contract"
+      ],
+      "acceptance_criteria": [
+        "Owner disposition recorded for has_sqlite_vec",
+        "PRD optional-embeddings text matches live registry/pyproject",
+        "Validation output attached"
+      ],
+      "coordinator_disposition": "needs-owner-confirmation",
+      "disposition_reason": "Unused helper evidence strong but optional public/operator surface needs owner decision.",
+      "materialization_plan": "create-owner-confirmation-task",
+      "materialized_bead_id": "trade-trace-mehh"
+    },
+    {
+      "id": "DC-REFRESH-002",
+      "source_lane": "tools-tests",
+      "proposed_title": "Remove unused internal decision-matrix/test helpers",
+      "subsystem_paths": [
+        "src/trade_trace/tools/decision_matrix.py",
+        "tests/integration/test_report_risk.py"
+      ],
+      "dead_code_class": "unreferenced-symbol",
+      "symbol_or_entrypoint": "COLUMNS; _thesis_for",
+      "evidence_type": "reference-search+test-collection",
+      "reachability_evidence": "Exact-symbol searches excluding audits show definitions only; test file is collected but _thesis_for is not fixture/test/param helper.",
+      "reference_search_scope": "Tracked src/tests and active docs excluding audits.",
+      "reference_search_commands": [
+        "git grep -n COLUMNS -- :!docs/audits/** :!audits/**",
+        "git grep -n _thesis_for -- :!docs/audits/** :!audits/**",
+        "python3 -m pytest --collect-only -q tests"
+      ],
+      "dynamic_loading_caveats": "None found.",
+      "public_api_or_plugin_surface": "Internal module/test helper only.",
+      "generated_code_or_reflection_risk": "None.",
+      "why_might_be_false_positive": "Could be planned future helper but no evidence.",
+      "impact_of_keeping": "Low clutter/misleading helpers.",
+      "recommended_action": "remove",
+      "safe_removal_validation": "ruff targeted files; pytest report_risk/manual_ledger_flow/ledger_event_emission.",
+      "owner_confirmation_needed": false,
+      "severity": "P4",
+      "confidence": "high",
+      "duplicate_of": null,
+      "related_to": [
+        "closed 2026-05-18 _all_columns cleanup, distinct"
+      ],
+      "proposed_bead_title": "Remove unused internal decision-matrix/test helpers",
+      "proposed_labels": [
+        "dead-code",
+        "deadcode-hunt",
+        "deadcode:refresh-20260519",
+        "domain:tools",
+        "domain:tests",
+        "cleanup-candidate"
+      ],
+      "acceptance_criteria": [
+        "COLUMNS and _thesis_for removed or intentionally used",
+        "Exact-symbol search clean",
+        "Targeted ruff/pytest pass"
+      ],
+      "coordinator_disposition": "cleanup-candidate",
+      "disposition_reason": "Internal-only evidence-backed cleanup batched.",
+      "materialization_plan": "create-cleanup-task",
+      "materialized_bead_id": "trade-trace-8bdd"
+    },
+    {
+      "id": "DC-REFRESH-003",
+      "source_lane": "reports-public-api",
+      "proposed_title": "Decide disposition for stale exported DOCUMENTED_GROUP_BY metadata",
+      "subsystem_paths": [
+        "src/trade_trace/reports/compare.py"
+      ],
+      "dead_code_class": "stale-config",
+      "symbol_or_entrypoint": "DOCUMENTED_GROUP_BY",
+      "evidence_type": "reference-search+public-export-review",
+      "reachability_evidence": "Defined/exported but exact internal reference search excluding audits finds no consumers; runtime validation uses CALIBRATION_GROUP_SQL and PNL_GROUP_SQL.",
+      "reference_search_scope": "Tracked src/tests/docs/README/pyproject excluding audits.",
+      "reference_search_commands": [
+        "git grep -n DOCUMENTED_GROUP_BY -- :!docs/audits/** :!audits/**",
+        "source readback of compare.py validation allowlists"
+      ],
+      "dynamic_loading_caveats": "None found internally.",
+      "public_api_or_plugin_surface": "Exported via __all__; downstream users may import it.",
+      "generated_code_or_reflection_risk": "None.",
+      "why_might_be_false_positive": "May be intentional planned metadata.",
+      "impact_of_keeping": "Misleads callers/docs about supported group_by values.",
+      "recommended_action": "investigate",
+      "safe_removal_validation": "pytest report_compare/sql_filters/golden parity plus ruff/source readback.",
+      "owner_confirmation_needed": true,
+      "severity": "P3",
+      "confidence": "medium",
+      "duplicate_of": "trade-trace-cs0r",
+      "related_to": [
+        "trade-trace-4md"
+      ],
+      "proposed_bead_title": "Decide disposition for stale exported DOCUMENTED_GROUP_BY metadata",
+      "proposed_labels": [
+        "dead-code",
+        "deadcode-hunt",
+        "deadcode:refresh-20260519",
+        "domain:reports",
+        "public-api",
+        "needs-owner-confirmation",
+        "stale-contract"
+      ],
+      "acceptance_criteria": [
+        "Owner disposition recorded",
+        "Tests prove metadata matches runtime or is planned-only",
+        "Exports/docs/tests update safely if removed/deprecated"
+      ],
+      "coordinator_disposition": "merge",
+      "disposition_reason": "Merged into existing canonical bug trade-trace-cs0r after duplicate readback; duplicate trade-trace-yv9z closed.",
+      "materialization_plan": "merge-into-existing-open-bug",
+      "materialized_bead_id": "trade-trace-cs0r",
+      "created_duplicate_bead_id": "trade-trace-yv9z",
+      "merged_into_bead_id": "trade-trace-cs0r"
+    },
+    {
+      "id": "DC-REFRESH-004",
+      "source_lane": "docs-reports",
+      "proposed_title": "Reconcile residual watch.stale docs with report.watchlist registry",
+      "subsystem_paths": [
+        "docs/PRD.md",
+        "docs/architecture/operability.md",
+        "docs/architecture/reports.md",
+        "src/trade_trace/clock.py",
+        "src/trade_trace/reports/watchlist.py"
+      ],
+      "dead_code_class": "stale-docs",
+      "symbol_or_entrypoint": "watch.stale",
+      "evidence_type": "docs-contradiction+entrypoint-map",
+      "reachability_evidence": "Live registry has report.watchlist and no watch.stale; active docs/source docstrings still mention watch.stale.",
+      "reference_search_scope": "Tracked active docs/source excluding audits.",
+      "reference_search_commands": [
+        "PYTHONPATH=src python3 registry readback via trade_trace.core.default_registry",
+        "git grep -n watch.stale -- :!docs/audits/** :!audits/**"
+      ],
+      "dynamic_loading_caveats": "Could be planned future alias; docs must say planned/future or implement/test it.",
+      "public_api_or_plugin_surface": "Operator-facing docs and report docs.",
+      "generated_code_or_reflection_risk": "None.",
+      "why_might_be_false_positive": "Could be deliberate future tool name.",
+      "impact_of_keeping": "Users/agents may invoke nonexistent command.",
+      "recommended_action": "document",
+      "safe_removal_validation": "Registry readback plus active-doc grep after fix.",
+      "owner_confirmation_needed": false,
+      "severity": "P3",
+      "confidence": "high",
+      "duplicate_of": null,
+      "related_to": [
+        "trade-trace-ahz",
+        "trade-trace-17p"
+      ],
+      "proposed_bead_title": "Reconcile residual watch.stale docs with report.watchlist registry",
+      "proposed_labels": [
+        "bug",
+        "docs-truth",
+        "dead-code",
+        "deadcode-hunt",
+        "deadcode:refresh-20260519",
+        "domain:docs",
+        "domain:reports",
+        "stale-contract"
+      ],
+      "acceptance_criteria": [
+        "Active docs/docstrings no longer advertise watch.stale as shipped unless registered/tested",
+        "If retained as future alias docs mark it future/deferred",
+        "Validation cites registry readback and active-doc grep"
+      ],
+      "coordinator_disposition": "bug",
+      "disposition_reason": "Concrete stale-contract/docs failure path.",
+      "materialization_plan": "create-docs-truth-bug",
+      "materialized_bead_id": "trade-trace-ftnu"
+    },
+    {
+      "id": "DC-REFRESH-005",
+      "source_lane": "docs-historical",
+      "proposed_title": "CLAUDE.md legacy placeholder line",
+      "subsystem_paths": [
+        "CLAUDE.md"
+      ],
+      "dead_code_class": "stale-docs",
+      "symbol_or_entrypoint": "legacy scaffold placeholder marker",
+      "evidence_type": "docs-readback",
+      "reachability_evidence": "Low-signal root agent guidance placeholder; no active failure path proven.",
+      "reference_search_scope": "Root docs/agent guidance only.",
+      "reference_search_commands": [
+        "direct readback during docs lane"
+      ],
+      "dynamic_loading_caveats": "N/A",
+      "public_api_or_plugin_surface": "Agent guidance owner surface.",
+      "generated_code_or_reflection_risk": "None.",
+      "why_might_be_false_positive": "Could be intentional local convention.",
+      "impact_of_keeping": "Minor docs clutter only.",
+      "recommended_action": "keep",
+      "safe_removal_validation": "N/A unless owner promotes.",
+      "owner_confirmation_needed": true,
+      "severity": "P4",
+      "confidence": "low",
+      "duplicate_of": null,
+      "related_to": [],
+      "proposed_bead_title": "Do not materialize: CLAUDE.md placeholder cleanup",
+      "proposed_labels": [
+        "dead-code",
+        "deadcode-hunt",
+        "deadcode:refresh-20260519",
+        "domain:docs",
+        "needs-owner-confirmation"
+      ],
+      "acceptance_criteria": [],
+      "coordinator_disposition": "keep_no_bead",
+      "disposition_reason": "Advisor/coordinator downgraded as low-signal/noisy; retained matrix-only.",
+      "materialization_plan": "matrix-only-defer",
+      "materialized_bead_id": null
+    }
+  ],
+  "merged_or_closed_duplicates": [
+    {
+      "candidate_id": "DC-REFRESH-003",
+      "closed_duplicate_bead_id": "trade-trace-yv9z",
+      "canonical_bead_id": "trade-trace-cs0r",
+      "reason": "final duplicate scan showed overlap with open bughunt finding"
+    }
+  ]
+}
