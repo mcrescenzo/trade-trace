@@ -29,6 +29,21 @@ from trade_trace.contracts.tool_registry import CLINameCollisionError, ToolRegis
 from trade_trace.core import default_registry, dispatch
 
 
+class StrayPositionalArgsError(Exception):
+    """Raised by `_parse_kv_args` when the remaining argv after command
+    resolution still contains positional tokens. Per bead
+    trade-trace-r5k / DEBT-007 the dispatcher converts this to a typed
+    VALIDATION_ERROR envelope rather than silently dropping the tokens
+    (which previously made malformed CLI calls look successful)."""
+
+    def __init__(self, stray: list[str]) -> None:
+        self.stray = stray
+        super().__init__(
+            f"unrecognized positional argument(s) after command: {stray!r}; "
+            "use `--key value` (or `--flag`) for every option"
+        )
+
+
 def _parse_kv_args(unknown: list[str]) -> dict[str, Any]:
     """Parse `--key value` pairs into a dict per docs/architecture/contracts.md §2.1.
 
@@ -36,13 +51,19 @@ def _parse_kv_args(unknown: list[str]) -> dict[str, Any]:
     - `--key-with-dashes` → `key_with_dashes`.
     - `--foo-json '<json>'` parses the JSON and assigns to `foo` (without the
       `_json` suffix; the suffix is the transport hint, not the domain key).
+
+    Stray positional tokens (anything that isn't consumed as the value
+    of a `--key`) raise `StrayPositionalArgsError` so the dispatcher
+    can surface a typed envelope (bead trade-trace-r5k).
     """
 
     out: dict[str, Any] = {}
+    stray: list[str] = []
     i = 0
     while i < len(unknown):
         token = unknown[i]
         if not token.startswith("--"):
+            stray.append(token)
             i += 1
             continue
         key = token[2:].replace("-", "_")
@@ -72,6 +93,8 @@ def _parse_kv_args(unknown: list[str]) -> dict[str, Any]:
         else:
             out[domain_key] = True
             i += 1
+    if stray:
+        raise StrayPositionalArgsError(stray)
     return out
 
 
@@ -172,7 +195,33 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
         return 2
 
     tool_name, remaining = _invocation_from_args(positional, registry)
-    tool_args = _parse_kv_args(remaining)
+    try:
+        tool_args = _parse_kv_args(remaining)
+    except StrayPositionalArgsError as exc:
+        # Per bead trade-trace-r5k / DEBT-007: surface a typed envelope
+        # (exit 2) instead of silently dropping stray positional tokens.
+        # CLI parity with MCP requires the JSON-envelope shape.
+        err_envelope = ErrorEnvelope(
+            error=ErrorBody(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=str(exc),
+                details={
+                    "field": "argv",
+                    "stray_positional_args": exc.stray,
+                    "tool": tool_name,
+                },
+            ),
+            meta=Meta(
+                tool=tool_name,
+                actor_id=args.actor_id,
+                request_id=args.request_id or uuid.uuid4().hex,
+            ),
+        )
+        print(json.dumps(
+            err_envelope.model_dump(mode="json", exclude_none=True),
+            sort_keys=True,
+        ))
+        return 2
     if args.allow_no_idempotency:
         # MCP-side convention is the underscore-prefixed key; the CLI sets
         # the same key so the dispatcher path is identical between transports.

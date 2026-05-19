@@ -78,3 +78,64 @@ def test_cli_rejects_empty_invocation(token, capsys):
     out = capsys.readouterr()
     assert rc != 0
     assert "usage" in out.err.lower()
+
+
+# -- bead trade-trace-r5k: stray positional tokens are rejected --------
+
+
+def test_cli_rejects_stray_positional_after_valid_command(tmp_path, capsys, monkeypatch):
+    """`tt journal status unexpected-token` previously silently dropped
+    the stray token and returned ok=true. Per bead trade-trace-r5k /
+    DEBT-007 the CLI now returns exit code 2 with a typed
+    VALIDATION_ERROR envelope identifying the offending tokens."""
+
+    import json as _json
+
+    monkeypatch.setenv("TRADE_TRACE_HOME", str(tmp_path))
+    rc = cli_main(["journal", "status", "unexpected-token"])
+    out = capsys.readouterr()
+    assert rc == 2
+    body = _json.loads(out.out.strip())
+    assert body["ok"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert body["error"]["details"]["field"] == "argv"
+    assert body["error"]["details"]["stray_positional_args"] == ["unexpected-token"]
+    assert body["error"]["details"]["tool"] == "journal.status"
+    assert body["meta"]["tool"] == "journal.status"
+
+
+def test_cli_accepts_kv_args_with_no_stray_positionals(tmp_path, capsys, monkeypatch):
+    """The fix must not regress the canonical `--key value` parsing path —
+    `--actor-id` and other recognized flags continue to bind cleanly
+    and the call succeeds."""
+
+    import json as _json
+
+    monkeypatch.setenv("TRADE_TRACE_HOME", str(tmp_path))
+    rc = cli_main([
+        "--actor-id", "agent:r5k", "journal", "status",
+    ])
+    out = capsys.readouterr()
+    assert rc == 0
+    body = _json.loads(out.out.strip())
+    assert body["ok"] is True
+    assert body["meta"]["actor_id"] == "agent:r5k"
+
+
+def test_cli_rejects_multiple_stray_positional_tokens(tmp_path, capsys, monkeypatch):
+    """All stray positionals (not just the first one) are surfaced in
+    `error.details.stray_positional_args` so the caller doesn't have to
+    fix-and-retry one token at a time."""
+
+    import json as _json
+
+    monkeypatch.setenv("TRADE_TRACE_HOME", str(tmp_path))
+    rc = cli_main([
+        "journal", "status", "extra1", "extra2",
+    ])
+    out = capsys.readouterr()
+    assert rc == 2
+    body = _json.loads(out.out.strip())
+    assert body["error"]["details"]["stray_positional_args"] == [
+        "extra1", "extra2",
+    ]
