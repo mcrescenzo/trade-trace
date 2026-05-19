@@ -7,9 +7,39 @@ name = "trade-trace"
 version = "0.0.1rc2"
 description = "Local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Trade Trace contributors" }]
+keywords = [
+    "trading",
+    "journal",
+    "calibration",
+    "mcp",
+    "agents",
+    "llm",
+    "anthropic",
+    "claude",
+    "sqlite",
+    "memory",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
 dependencies = [
     "pydantic>=2.7,<3",
     # MCP is a first-class runtime dependency (trade-trace-o8j5). The
@@ -31,6 +61,13 @@ dev = [
 tt = "trade_trace.cli:main"
 trade-trace = "trade_trace.cli:main"
 trade-trace-mcp = "trade_trace.mcp_server:serve_stdio_main"
+
+[project.urls]
+Homepage = "https://github.com/mcrescenzo/trade-trace"
+Repository = "https://github.com/mcrescenzo/trade-trace"
+Issues = "https://github.com/mcrescenzo/trade-trace/issues"
+Documentation = "https://github.com/mcrescenzo/trade-trace/tree/main/docs"
+Changelog = "https://github.com/mcrescenzo/trade-trace/releases"
 
 [tool.setuptools.packages.find]
 where = ["src"]
