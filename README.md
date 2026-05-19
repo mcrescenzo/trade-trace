@@ -245,6 +245,11 @@ source of truth for exact arguments. Current registered tools are:
 `strategy.show`, `strategy.update`, `thesis.add`, `tool.schema`, and
 `venue.add`.
 
+## Security
+
+See [`SECURITY.md`](./SECURITY.md) for the supported-version policy and
+the GitHub Security Advisories reporting channel for vulnerabilities.
+
 ## License
 
 MIT. See [`LICENSE`](./LICENSE).
