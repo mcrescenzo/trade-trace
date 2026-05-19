@@ -25,6 +25,7 @@ dev = [
 [project.scripts]
 tt = "trade_trace.cli:main"
 trade-trace = "trade_trace.cli:main"
+trade-trace-mcp = "trade_trace.mcp_server:serve_stdio_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

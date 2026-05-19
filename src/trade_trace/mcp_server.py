@@ -1,15 +1,16 @@
-"""MCP server adapter (shell).
+"""MCP server adapter.
 
-The full MCP transport (stdio framing, JSON-RPC, streaming primitives) is
-wired up by a follow-up bead. This module exposes a function-shaped adapter
-that the parity test uses to verify CLI and MCP land on the same core
-dispatch path — which is the M0 deliverable. The actual `mcp` SDK is an
-optional install extra; the import here is lazy so the package itself
-doesn't require it.
+The stdio transport is intentionally narrow: it exposes only the explicit tool
+registry, performs no network listening or dynamic discovery, and dispatches
+all tool calls through the same in-process MCP shim used by parity tests. The
+`mcp` SDK remains an optional install extra; imports are lazy so the base
+package can be installed without MCP server support.
 """
 
 from __future__ import annotations
 
+import asyncio
+import os
 from collections.abc import Mapping
 from typing import Any
 
@@ -131,21 +132,70 @@ def mcp_call(
     return envelope
 
 
-def serve_stdio() -> None:  # pragma: no cover
-    """Placeholder for the real stdio MCP server.
+def _build_stdio_server(registry: ToolRegistry | None = None):
+    """Build the low-level MCP SDK server without starting a transport."""
 
-    Wiring the `mcp` SDK happens in a follow-up bead (the package's optional
-    `[mcp]` install extra ships the dependency). When implemented, this
-    function will:
+    try:
+        from mcp import types
+        from mcp.server import Server
+    except ImportError as exc:  # pragma: no cover - exercised only without optional extra
+        raise RuntimeError(
+            "MCP stdio support requires the optional dependency: "
+            "install trade-trace with `pip install trade-trace[mcp]` or `pip install -e '.[mcp]'`."
+        ) from exc
 
-    1. Construct the default registry (which re-validates CLI name uniqueness).
-    2. Register every tool in the registry as an MCP tool with the same
-       schema the CLI exposes via `--*-json` arguments.
-    3. Dispatch incoming calls through `mcp_call` so the parity contract is
-       preserved transport-by-transport.
+    reg = registry if registry is not None else default_registry()
+    server = Server("trade-trace")
+
+    @server.list_tools()
+    async def _list_tools() -> list[Any]:
+        return [
+            types.Tool(
+                name=spec["name"],
+                description=spec["description"],
+                inputSchema=spec["input_schema"] or {"type": "object", "properties": {}},
+            )
+            for spec in mcp_tool_specs(reg)
+        ]
+
+    @server.call_tool(validate_input=True)
+    async def _call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        envelope = mcp_call(
+            name,
+            arguments,
+            actor_id=stdio_actor_id(os.environ),
+            registry=reg,
+        )
+        return envelope.model_dump(mode="json", exclude_none=True)
+
+    return server
+
+
+async def _serve_stdio_async(registry: ToolRegistry | None = None) -> None:
+    from mcp.server.stdio import stdio_server
+
+    server = _build_stdio_server(registry)
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(read_stream, write_stream, server.create_initialization_options())
+
+
+def serve_stdio(registry: ToolRegistry | None = None) -> None:  # pragma: no cover
+    """Run the trade-trace MCP server on stdio only.
+
+    Actor identity is resolved once per call from ``MCP_ACTOR_ID`` via
+    :func:`stdio_actor_id`; if unset, the deterministic default is
+    ``mcp:default``. Protocol output is written only by the MCP SDK to stdout;
+    callers should send diagnostics to stderr to avoid corrupting JSON-RPC.
     """
 
-    raise NotImplementedError(
-        "stdio MCP server is wired up in a follow-up bead; the in-process "
-        "adapter `mcp_call` already shares core semantics with the CLI."
-    )
+    asyncio.run(_serve_stdio_async(registry))
+
+
+def serve_stdio_main() -> None:  # pragma: no cover
+    """Console-script entry point for ``trade-trace-mcp``."""
+
+    serve_stdio()
+
+
+if __name__ == "__main__":  # pragma: no cover
+    serve_stdio_main()

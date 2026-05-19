@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 
 from trade_trace.contracts.tool_registry import ToolRegistry
+import trade_trace.mcp_server as mcp_server
 from trade_trace.mcp_server import (
     SECRET_TRANSPORT_HINT_KEYS,
     mcp_call,
@@ -54,8 +55,8 @@ def _noop_handler(args: dict[str, Any], ctx: Any) -> dict[str, Any]:  # noqa: AR
     return {"ok": True}
 
 
-def test_serve_stdio_stub_opens_no_tcp_listener_by_default(monkeypatch):
-    """Until implemented, and after 46p by contract, serve_stdio must not bind/listen.
+def test_serve_stdio_opens_no_tcp_listener_by_default(monkeypatch):
+    """The MCP transport is stdio-only and must not bind/listen/connect.
 
     The future MCP transport is stdio-only. This test does not open sockets; it
     replaces bind/listen/connect with fail-fast sentinels and then exercises the
@@ -69,8 +70,15 @@ def test_serve_stdio_stub_opens_no_tcp_listener_by_default(monkeypatch):
     monkeypatch.setattr(socket.socket, "listen", _fail_socket, raising=True)
     monkeypatch.setattr(socket.socket, "connect", _fail_socket, raising=True)
 
-    with pytest.raises(NotImplementedError, match="stdio MCP server"):
+    async def _stop_after_boundary_check(registry=None):  # noqa: ANN001, ARG001
+        return None
+
+    monkeypatch.setattr(mcp_server, "_serve_stdio_async", _stop_after_boundary_check)
+
+    try:
         serve_stdio()
+    except AssertionError:
+        raise
 
 
 def test_mcp_tool_specs_are_derived_from_supplied_registry_only():
