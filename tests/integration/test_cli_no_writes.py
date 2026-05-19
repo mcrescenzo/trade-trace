@@ -122,6 +122,30 @@ def test_cli_accepts_kv_args_with_no_stray_positionals(tmp_path, capsys, monkeyp
     assert body["meta"]["actor_id"] == "agent:r5k"
 
 
+def test_cli_malformed_json_arg_emits_typed_envelope(tmp_path, capsys, monkeypatch):
+    """Per bead trade-trace-lum: a malformed `--*-json` value used to
+    SystemExit with raw stderr — agent callers couldn't parse the
+    failure. The CLI now catches the JSONDecodeError and emits a
+    VALIDATION_ERROR envelope on stdout (exit code 2)."""
+
+    import json as _json
+
+    monkeypatch.setenv("TRADE_TRACE_HOME", str(tmp_path))
+    rc = cli_main([
+        "report", "filter_schema", "--mode-json", "{bad",
+    ])
+    out = capsys.readouterr()
+    assert rc == 2
+    body = _json.loads(out.out.strip())
+    assert body["ok"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert body["error"]["details"]["field"] == "mode-json"
+    assert body["error"]["details"]["reason"] == "invalid_json"
+    assert "decode_error" in body["error"]["details"]
+    assert body["error"]["details"]["tool"] == "report.filter_schema"
+    assert body["meta"]["tool"] == "report.filter_schema"
+
+
 def test_cli_rejects_multiple_stray_positional_tokens(tmp_path, capsys, monkeypatch):
     """All stray positionals (not just the first one) are surfaced in
     `error.details.stray_positional_args` so the caller doesn't have to

@@ -29,6 +29,21 @@ from trade_trace.contracts.tool_registry import CLINameCollisionError, ToolRegis
 from trade_trace.core import default_registry, dispatch
 
 
+class MalformedJsonArgError(Exception):
+    """Per bead trade-trace-lum: invalid JSON in a `--*-json` argument
+    was previously a SystemExit with raw stderr. The dispatcher now
+    catches this and emits a typed VALIDATION_ERROR envelope on
+    stdout so the agent caller can parse it like any other error."""
+
+    def __init__(self, flag: str, value: str, decode_error: str) -> None:
+        self.flag = flag
+        self.value = value
+        self.decode_error = decode_error
+        super().__init__(
+            f"--{flag} value is not valid JSON: {decode_error}"
+        )
+
+
 class StrayPositionalArgsError(Exception):
     """Raised by `_parse_kv_args` when the remaining argv after command
     resolution still contains positional tokens. Per bead
@@ -76,7 +91,12 @@ def _parse_kv_args(unknown: list[str]) -> dict[str, Any]:
                 try:
                     value = json.loads(value)
                 except json.JSONDecodeError as exc:
-                    raise SystemExit(f"--{token[2:]} value is not valid JSON: {exc}") from exc
+                    # Per bead trade-trace-lum: surface a typed envelope
+                    # in main() instead of a raw SystemExit so agent
+                    # callers can parse the failure like any other.
+                    raise MalformedJsonArgError(
+                        token[2:], value, str(exc),
+                    ) from exc
             elif value.lower() in {"true", "false"}:
                 value = value.lower() == "true"
             else:
@@ -197,6 +217,29 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
     tool_name, remaining = _invocation_from_args(positional, registry)
     try:
         tool_args = _parse_kv_args(remaining)
+    except MalformedJsonArgError as exc:
+        err_envelope = ErrorEnvelope(
+            error=ErrorBody(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=str(exc),
+                details={
+                    "field": exc.flag,
+                    "reason": "invalid_json",
+                    "decode_error": exc.decode_error,
+                    "tool": tool_name,
+                },
+            ),
+            meta=Meta(
+                tool=tool_name,
+                actor_id=args.actor_id,
+                request_id=args.request_id or uuid.uuid4().hex,
+            ),
+        )
+        print(json.dumps(
+            err_envelope.model_dump(mode="json", exclude_none=True),
+            sort_keys=True,
+        ))
+        return 2
     except StrayPositionalArgsError as exc:
         # Per bead trade-trace-r5k / DEBT-007: surface a typed envelope
         # (exit 2) instead of silently dropping stray positional tokens.
