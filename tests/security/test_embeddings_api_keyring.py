@@ -11,7 +11,7 @@ from trade_trace.security import keyring as tt_keyring
 from trade_trace.tools.memory import _float32_blob
 
 SERVICE = "trade-trace:embeddings:openai"
-KNOWN_SECRET = "sk-tradetracez6sKnownSecret000001"
+KNOWN_SECRET = "s" + "k" + "-" + "tradetracez6sKnownSecret000001"
 
 
 class FakeKeyring(types.SimpleNamespace):
@@ -66,7 +66,7 @@ def test_embeddings_api_keyring_round_trip_store_load_delete(monkeypatch):
 
 
 def test_embeddings_api_keyring_rejects_insecure_plaintext_backend(monkeypatch):
-    secret = "sk-insecurebackendsecret0001"
+    secret = "s" + "k" + "-" + "insecurebackendsecret0001"
 
     class PlaintextKeyring:
         __module__ = "keyrings.alt.file"
@@ -119,7 +119,7 @@ def test_embeddings_api_keyring_rejects_null_fail_backend(monkeypatch):
 
 
 def test_embeddings_api_keyring_backend_failure_does_not_echo_secret(monkeypatch):
-    secret = "sk-backendfailuresecret0001"
+    secret = "s" + "k" + "-" + "backendfailuresecret0001"
 
     class FailingSecureKeyring(FakeKeyring):
         def set_password(self, service: str, username: str, value: str) -> None:

@@ -62,14 +62,23 @@ def _seed_instrument(home: Path) -> tuple[str, str]:
 # -- pattern fixtures ----------------------------------------------
 
 
+# Dummy secrets per bead trade-trace-awxq: built from non-contiguous
+# parts so public secret scanners (gitleaks, GitHub secret scanning,
+# etc.) cannot flag the source file. The runtime value still satisfies
+# the trade_trace regex in `src/trade_trace/security/patterns.py`.
+_SK = "s" + "k" + "-"
+_XOXB = "xo" + "xb" + "-"
+_ZERO_X = "0" + "x"
+_EYJ = "ey" + "J"
+
 SECRET_FIXTURES = {
-    "api_key": "sk-ABCDEFGHIJKLMNOP12345678",  # sk- + 24 alphanum (>=20)
-    "slack_token": "xoxb-123456789-987654321-ABCDEFG",
-    "ethereum_address": "0x1234567890abcdef1234567890abcdef12345678",
+    "api_key": _SK + ("FAKEKEY" * 4)[:24],
+    "slack_token": _XOXB + "0" * 9 + "-" + "1" * 9 + "-" + "FAKETKN",
+    "ethereum_address": _ZERO_X + "abcdef0123" * 4,
     "jwt": (
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-        ".eyJzdWIiOiIxMjM0NTY3ODkwIn0"
-        ".abcdef1234567890ABCDEF"
+        _EYJ + "hbGciOiJIUzI1NiIsInR5cCI6IktKV1RGSVgifQ"
+        "." + _EYJ + "zdWJfZml4dHVyZSI6IjFmaXh0dXJlIn0"
+        "." + "fixture" + "1234567890ABCDEFGHIJ"
     ),
 }
 
@@ -265,7 +274,7 @@ def test_metadata_json_rejects_raw_json_secret_value(home):
     env = _mcp(home, "venue.add", {
         "name": "PM",
         "kind": "prediction_market",
-        "metadata_json": '{"notes": ["leaked xoxb-1234567890-ABCDEF"]}',
+        "metadata_json": '{"notes": ["leaked ' + _XOXB + '1234567890-ABCDEF"]}',
     })
     assert env.ok is False
     assert env.error.code.value == "VALIDATION_ERROR"
@@ -434,7 +443,7 @@ BENIGN_CORPUS = [
      "sha1 hash: abcdef1234567890abcdef1234567890abcdef12"),
     # `sk-` followed by fewer than 20 chars (below api_key threshold).
     ("short_skdash",
-     "instrument symbol sk-1234567"),
+     "instrument symbol " + _SK + "1234567"),
     # Three short dot-separated chunks (below jwt segment minimum).
     ("short_dotted",
      "file.name.txt is a path, not a token"),
@@ -498,7 +507,7 @@ def test_polymarket_condition_id_is_not_flagged_as_ethereum_address(home: Path):
 
     from trade_trace.security import scan_text
 
-    condition_id = "0x5caf6459052e0fcc736c368f97b5ea98e6bf264507f2e94ac8d69fcc441b1bae"
+    condition_id = "0" + "x" + "5caf6459052e0fcc736c368f97b5ea98e6bf264507f2e94ac8d69fcc441b1bae"
     matches = scan_text(condition_id)
     assert not any(m.pattern_kind == "ethereum_address" for m in matches), (
         f"condition id falsely matched ethereum_address: {matches}"
@@ -511,7 +520,7 @@ def test_real_ethereum_address_still_flagged():
 
     from trade_trace.security import scan_text
 
-    text = "send to 0x1234567890abcdef1234567890abcdef12345678 by EOD"
+    text = "send to " + "0" + "x" + "1234567890abcdef" * 2 + "12345678 by EOD"
     matches = scan_text(text)
     assert any(m.pattern_kind == "ethereum_address" for m in matches)
 
@@ -532,7 +541,7 @@ def test_instrument_metadata_with_polymarket_condition_id_succeeds(home: Path):
         "external_id": "polymarket:ukraine-nato:2027",
         "metadata_json": {
             "polymarket_slug": "ukraine-agrees-not-to-join-nato-before-2027",
-            "condition_id": "0x5caf6459052e0fcc736c368f97b5ea98e6bf264507f2e94ac8d69fcc441b1bae",
+            "condition_id": "0" + "x" + "5caf6459052e0fcc736c368f97b5ea98e6bf264507f2e94ac8d69fcc441b1bae",
         },
         "idempotency_key": "aqpf-inst",
     }).model_dump(mode="json", exclude_none=True)

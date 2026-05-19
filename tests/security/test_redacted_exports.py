@@ -20,6 +20,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+# Dummy secret prefixes built from non-contiguous parts so the
+# source file itself cannot be flagged by public secret scanners
+# (trade-trace-awxq).
+_SK = "s" + "k" + "-"
+_XOXB = "xo" + "xb" + "-"
+_ZX = "0" + "x"
+_EYJ = "ey" + "J"
+
 from trade_trace.events import EventWriter
 from trade_trace.exporter import (
     SECRET_PATTERNS,
@@ -46,13 +54,13 @@ def test_scan_detects_each_documented_pattern():
     """operability.md §6.3 lists four patterns. The scanner detects each."""
 
     fixtures = {
-        "api_key": "talking about sk-ABCDEFGH1234567890abcdef in a note",
-        "slack_token": "leaked xoxb-12345-67890-abcdef in chat",
-        "ethereum_address": "address 0x1234567890abcdef1234567890abcdef12345678",
+        "api_key": "talking about " + _SK + "FIXTUREFIXTUREFIXTUREXX in a note",
+        "slack_token": "leaked " + _XOXB + "00000-11111-FAKEFIXTURE in chat",
+        "ethereum_address": "address " + _ZX + "abcdef0123" * 4,
         "jwt": (
-            "header eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-            "eyJzdWIiOiIxMjM0NTY3ODkwIn0."
-            "abcdef1234567890ABCDEF"
+            "header " + _EYJ + "fixture_alg_segment_for_local_only_test_abc."
+            + _EYJ + "fixture_payload_segment_for_local_only_test_xyz."
+            "fixture1234567890ABCDEF"
         ),
     }
     for pattern_name, text in fixtures.items():
@@ -95,7 +103,7 @@ def test_drain_emits_warning_for_secret_shaped_payload(tmp_path: Path):
             payload={
                 "instrument_id": "i_1",
                 "type": "skip",
-                "reason": "skipping; openai key was sk-ABCDEFGHIJKLMNOP1234",
+                "reason": "skipping; openai key was " + _SK + "FIXTUREFIXTUREFIXTU1234",
             },
             actor_id="agent:default",
             idempotency_key="dec-with-secret",
@@ -115,7 +123,7 @@ def test_drain_emits_warning_for_secret_shaped_payload(tmp_path: Path):
     # silently redact (operability.md §7 calls this an "audit warning"
     # not a filter).
     line = json.loads(result.exported_files[0].read_text())
-    assert "sk-ABCDEFGHIJKLMNOP1234" in line["args"]["reason"]
+    assert _SK + "FIXTUREFIXTUREFIXTU1234" in line["args"]["reason"]
 
 
 def test_drain_does_not_block_on_secrets(tmp_path: Path):
@@ -130,7 +138,7 @@ def test_drain_does_not_block_on_secrets(tmp_path: Path):
             payload={
                 "instrument_id": "i_1",
                 "type": "skip",
-                "reason": "wallet 0x1234567890abcdef1234567890abcdef12345678",
+                "reason": "wallet " + _ZX + "abcdef0123" * 4 + ",",
             },
             actor_id="agent:default",
             idempotency_key="dec-eth",
@@ -184,7 +192,7 @@ def test_export_is_full_local_not_redacted(tmp_path: Path):
             payload={
                 "instrument_id": "i_1",
                 "type": "skip",
-                "reason": "leaked sk-ABCDEFGHIJKL12345678 in journal",
+                "reason": "leaked " + _SK + "FIXTUREFIXTU12345678 in journal",
                 "tags": ["secrets-paste"],
             },
             actor_id="agent:default",
@@ -196,6 +204,6 @@ def test_export_is_full_local_not_redacted(tmp_path: Path):
 
     line = json.loads(result.exported_files[0].read_text())
     # The reason field still contains the raw secret (full-local export).
-    assert "sk-ABCDEFGHIJKL12345678" in line["args"]["reason"]
+    assert _SK + "FIXTUREFIXTU12345678" in line["args"]["reason"]
     # And the operator got a stderr-equivalent surface via the result.
     assert result.secret_warnings, "expected the drain to surface the warning"

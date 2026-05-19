@@ -201,7 +201,7 @@ def test_decision_add_silently_drops_credential_args(home: Path):
         "instrument_id": inst["data"]["id"],
         "type": "skip",
         "reason": "spread too wide",
-        "private_key": "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "private_key": "0" + "x" + "deadbeef" * 5,  # constructed per trade-trace-awxq
     }, actor_id="agent:default").model_dump(mode="json")
     assert env["ok"] is True
     db = open_database(db_path(home), create_parent=False)

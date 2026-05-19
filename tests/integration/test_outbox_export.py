@@ -338,7 +338,7 @@ def test_secret_warning_carries_actionable_metadata(tmp_path: Path):
         # rejects this on normal write paths, but a direct INSERT
         # simulates an upstream bug or backup-restore that bypassed
         # the guard — exactly the case this warning catches.
-        secret = "sk-ABCDEFGHIJKLMNOP12345678"
+        secret = "s" + "k" + "-" + "FIXTUREFIXTUREFIXTUREXX1"
         db.connection.execute(
             "INSERT INTO events(event_type, subject_kind, subject_id, "
             "payload_json, actor_id, created_at) "
