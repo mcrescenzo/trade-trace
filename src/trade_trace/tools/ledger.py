@@ -1815,6 +1815,60 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
 # required fields. The runtime decision matrix in `decision_matrix.py`
 # enforces per-type R/X constraints uniformly and returns a typed
 # VALIDATION_ERROR envelope on violation.
+# Hand-crafted JSON schema for source.add per bead trade-trace-2ya5.
+# Storage migrations 003 pin `kind` to a 10-value enum and `stance` to a
+# 3-value enum; the auto-derived schema only emitted the field types as
+# strings, so an agent following `tool.schema --tool source.add` saw a
+# valid-looking payload that storage then rejected with a raw SQLite
+# CHECK constraint error. Surfacing the enums here lets the agent pick a
+# valid value up-front.
+_SOURCE_ADD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "kind": {
+            "type": "string",
+            "enum": [
+                "url", "pdf", "image", "tweet", "news_article",
+                "research_doc", "transcript", "chart_image", "note", "other",
+            ],
+        },
+        "stance": {
+            "type": "string",
+            "enum": ["supports", "contradicts", "neutral"],
+        },
+        "uri": {"type": "string"},
+        "title": {"type": "string"},
+        "note": {"type": "string"},
+        "ref": {"type": "string"},
+        "freshness_at": {"type": "string"},
+        "content_hash": {"type": "string"},
+        "captured_at": {"type": "string"},
+        "media_type": {"type": "string"},
+        "storage_kind": {
+            "type": "string",
+            "enum": ["url", "local_path", "inline_text", "external_ref"],
+        },
+        "retrieved_at": {"type": "string"},
+        "source_author": {"type": "string"},
+        "publisher": {"type": "string"},
+        "excerpt": {"type": "string"},
+        "extracted_text": {"type": "string"},
+        "summary": {"type": "string"},
+        "redaction_status": {"type": "string"},
+        "metadata_json": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["kind", "idempotency_key"],
+    "description": (
+        "source.add — kind and stance use storage-pinned enums "
+        "(persistence.md §5.2 / migration 003). Free-text fields "
+        "(title/note/excerpt/extracted_text/summary) are scanned at "
+        "write time for sensitive-shaped substrings per trade-trace-sy1."
+    ),
+}
+
+
 _DECISION_ADD_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -1871,7 +1925,7 @@ def register_ledger_tools(registry: ToolRegistry) -> None:
     # resolve.record is an alias for outcome.add (PRD §4.4).
     registry.register("resolve.record", _outcome_add, is_write=True, **_examples_for("outcome.add"))
     registry.register("resolve.pending", _resolve_pending)
-    registry.register("source.add", _source_add, is_write=True, **_examples_for("source.add"))
+    registry.register("source.add", _source_add, is_write=True, json_schema=_SOURCE_ADD_SCHEMA, **_examples_for("source.add"))
     registry.register("source.attach_to_thesis", _make_source_attacher("thesis"), is_write=True)
     registry.register("source.attach_to_decision", _make_source_attacher("decision"), is_write=True)
     registry.register("source.attach_to_forecast", _make_source_attacher("forecast"), is_write=True)

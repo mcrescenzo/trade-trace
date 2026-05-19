@@ -760,3 +760,35 @@ def test_forecast_supersede_auto_scores_against_existing_resolved_final(home):
     assert score["score"] == pytest.approx(0.04, abs=1e-6), score
     # Late-recorded flag is set (the outcome predates this forecast).
     assert score.get("late_recorded") is True, score
+
+
+def test_source_add_tool_schema_example_succeeds(home):
+    """Per trade-trace-2ya5: `tool.schema --tool source.add` advertises
+    an example payload that must succeed against the actual handler.
+    Previously the example used `kind="news"` which the storage CHECK
+    constraint rejected; the schema also did not enumerate the allowed
+    kinds/stances, so the agent couldn't pick a valid value from the
+    schema."""
+
+    schema_env = _envelope(home, "tool.schema", {"tool": "source.add"})
+    assert schema_env["ok"] is True, schema_env
+    example = schema_env["data"]["example_minimal"]
+
+    # The schema-advertised example must succeed against the journal as-is
+    # (apart from the home arg the helper supplies).
+    env = _envelope(home, "source.add", example)
+    assert env["ok"] is True, (
+        f"tool.schema example_minimal payload should succeed but got {env}"
+    )
+
+    # And the json_schema must enumerate the storage-pinned values for
+    # `kind` so an agent can pick a valid choice without re-reading the
+    # SQLite CHECK constraint.
+    json_schema = schema_env["data"]["json_schema"]
+    kind_enum = json_schema["properties"]["kind"].get("enum")
+    assert kind_enum is not None
+    assert set(kind_enum) >= {
+        "news_article", "research_doc", "url", "note", "other",
+    }
+    stance_enum = json_schema["properties"]["stance"].get("enum")
+    assert set(stance_enum) == {"supports", "contradicts", "neutral"}

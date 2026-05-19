@@ -149,13 +149,13 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
     },
     "source.add": {
         "minimal": {
-            "kind": "news",
+            "kind": "news_article",
             "stance": "supports",
             "uri": "https://example.com/article",
             "idempotency_key": _IDEM,
         },
         "rich": {
-            "kind": "news",
+            "kind": "news_article",
             "stance": "supports",
             "uri": "https://example.com/article",
             "title": "AI demand drives chip sales",
