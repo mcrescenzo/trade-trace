@@ -231,3 +231,65 @@ def test_link_returns_event_id_on_meta(home):
     })
     assert env.ok
     assert isinstance(env.meta.event_id, int) and env.meta.event_id > 0
+
+
+# -- playbook_version endpoint validation (trade-trace-40dz) ---
+
+
+def _seed_playbook_version(home: Path) -> str:
+    """Create a playbook + a version via propose_version (which requires
+    a provenance reflection node) and return the version id."""
+
+    pb = _mcp(home, "playbook.create", {
+        "name": "40dz-fixture", "description": "fixture playbook",
+        "idempotency_key": "40dz-playbook-create",
+    })
+    assert pb.ok, pb
+    refl = _mcp(home, "memory.retain", {
+        "node_type": "reflection", "body": "fixture reflection",
+        "idempotency_key": "40dz-reflection",
+    })
+    assert refl.ok, refl
+    pv = _mcp(home, "playbook.propose_version", {
+        "playbook_id": pb.data["id"],
+        "rules_json": '[{"text": "r1"}]',
+        "provenance_reflection_node_id": refl.data["id"],
+        "idempotency_key": "40dz-pv",
+    })
+    assert pv.ok, pv
+    return pv.data["id"]
+
+
+def test_memory_link_rejects_missing_playbook_version(home):
+    """Per trade-trace-40dz: `memory.link` claims `playbook_version` as a
+    valid endpoint kind. The endpoint-existence check must verify the
+    target row in `playbook_versions`; an unknown id must return
+    NOT_FOUND, not pass through unchecked."""
+
+    src_node, _ = _seed_two_nodes(home)
+    env = _mcp(home, "memory.link", {
+        "source_kind": "memory_node", "source_id": src_node,
+        "target_kind": "playbook_version", "target_id": "pbv_does_not_exist",
+        "edge_type": "supports",
+        "idempotency_key": "40dz-missing-pv",
+    })
+    assert env.ok is False, env
+    assert env.error.code.value == "NOT_FOUND"
+    assert env.error.details.get("entity_kind") == "playbook_version"
+
+
+def test_memory_link_accepts_existing_playbook_version(home):
+    """A valid `playbook_version` id (from playbook.create) is accepted
+    as an edge endpoint."""
+
+    src_node, _ = _seed_two_nodes(home)
+    pv_id = _seed_playbook_version(home)
+    env = _mcp(home, "memory.link", {
+        "source_kind": "memory_node", "source_id": src_node,
+        "target_kind": "playbook_version", "target_id": pv_id,
+        "edge_type": "supports",
+        "idempotency_key": "40dz-existing-pv",
+    })
+    assert env.ok, env
+    assert env.data["target_kind"] == "playbook_version"
+    assert env.data["target_id"] == pv_id

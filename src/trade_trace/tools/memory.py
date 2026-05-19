@@ -86,12 +86,18 @@ ENDPOINT_TABLES: Final[dict[str, str]] = {
     "source": "sources",
     "signal": "signals",
     "strategy": "strategies",
+    # `playbook_version` was wired up with the M4 playbook infrastructure
+    # (bead trade-trace-40dz). Edges into a phantom playbook_version
+    # previously passed unchecked, weakening playbook provenance and
+    # review-bundle traceability.
+    "playbook_version": "playbook_versions",
 }
-"""Tables we can verify rows in. `review` and `playbook_version` lack a
-backing table in MVP (review.bundle and the playbook infrastructure land
-in P1); for those endpoints we accept the id without existence check and
-let the FK chain catch later violations. `strategy` was added with the
-M3 strategies table (bead ubp)."""
+"""Tables we can verify rows in. `review` is the only endpoint without
+a backing table in MVP; `review.bundle` produces ephemeral packets
+rather than a persisted row. For `review` we accept the id without an
+existence check and let downstream consumers branch on it. `strategy`
+was added with the M3 strategies table (bead ubp). `playbook_version`
+was added with the M4 playbook infrastructure (bead trade-trace-40dz)."""
 
 
 # -- memory.retain --------------------------------------------------
