@@ -9,7 +9,6 @@ with the standalone reports.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from collections import defaultdict
 from collections.abc import Iterable
@@ -19,10 +18,12 @@ from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.reports._filter_support import applied_filter_view, enforce_supported_filter
 from trade_trace.reports.calibration import (
     DEFAULT_MIN_SAMPLE,
+    _apply_scored_row_filters,
     _build_examples,
     _compute_metrics,
     _empty_metrics,
-    _resolve_p_yes_and_y,
+    _materialize_scored_row,
+    _scored_row_base_where,
     _ScoredRow,
 )
 from trade_trace.reports.calibration import (
@@ -244,25 +245,11 @@ def _compare_pnl(conn: sqlite3.Connection, *, group_by: str, raw_filter: dict[st
 
 
 def _load_grouped_scored_rows(conn: sqlite3.Connection, rf: ReportFilter, group_expr: str) -> Iterable[tuple[str, str, _ScoredRow]]:
-    where = [
-        "fs.metric = 'brier_binary'", "fs.score IS NOT NULL", "f.kind = 'binary'",
-        "NOT EXISTS (SELECT 1 FROM edges e WHERE e.source_kind = 'outcome' AND e.target_kind = 'outcome' AND e.edge_type = 'supersedes' AND e.target_id = o.id)",
-    ]
+    where = _scored_row_base_where()
     params: list[Any] = []
-    if rf.actors.actor_id:
-        where.append(f"f.actor_id IN ({', '.join('?' for _ in rf.actors.actor_id)})")
-        params.extend(rf.actors.actor_id)
-    if rf.instrument.venue_id:
-        where.append(f"i.venue_id IN ({', '.join('?' for _ in rf.instrument.venue_id)})")
-        params.extend(rf.instrument.venue_id)
-    if rf.strategy.strategy_id is not None:
-        if rf.strategy.strategy_id == "__none__":
-            where.append("t.strategy_id IS NULL")
-        else:
-            where.append("t.strategy_id = ?")
-            params.append(rf.strategy.strategy_id)
-    if not rf.outcome.include_late_recorded:
-        where.append("COALESCE(json_extract(fs.metadata_json, '$.late_recorded'), 0) = 0")
+    _apply_scored_row_filters(
+        rf, where, params, include_late_recorded_predicate=True,
+    )
     sql = f"""
         SELECT fs.id, fs.forecast_id, fs.outcome_id, fs.metadata_json, f.yes_label,
                o.outcome_label, {group_expr} AS group_value
@@ -275,15 +262,19 @@ def _load_grouped_scored_rows(conn: sqlite3.Connection, rf: ReportFilter, group_
         WHERE {' AND '.join(where)}
     """
     for score_id, forecast_id, outcome_id, metadata_json, yes_label, outcome_label, group_value in conn.execute(sql, params).fetchall():
-        p_yes, y = _resolve_p_yes_and_y(conn, forecast_id=forecast_id, yes_label=yes_label, outcome_label=outcome_label)
-        if p_yes is None or y is None:
+        materialized = _materialize_scored_row(
+            conn,
+            score_id=score_id,
+            forecast_id=forecast_id,
+            outcome_id=outcome_id,
+            metadata_json=metadata_json,
+            yes_label=yes_label,
+            outcome_label=outcome_label,
+        )
+        if materialized is None:
             continue
-        try:
-            late = bool(json.loads(metadata_json or "{}").get("late_recorded"))
-        except json.JSONDecodeError:
-            late = False
         key = str(group_value) if group_value is not None else "__none__"
-        yield key, f"group_by={key}", _ScoredRow(forecast_id, score_id, outcome_id, p_yes, y, late)
+        yield key, f"group_by={key}", materialized
 
 
 def _group_filter_view(rf: ReportFilter, group_by: str, key: str, *, report: str) -> dict[str, Any]:

@@ -139,12 +139,13 @@ def report_calibration(
 # -- data loading --------------------------------------------------------
 
 
-def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_ScoredRow]:
-    """Return every scored binary forecast row resolved against its YES
-    probability. Excludes scores with `score IS NULL` (failed) and scores
-    whose outcome is itself superseded (scoring.md §5.1)."""
+def _scored_row_base_where() -> list[str]:
+    """The base WHERE clauses every scored-row loader applies
+    (trade-trace-qnxt). Shared between `_load_scored_rows` (calibration)
+    and `_load_grouped_scored_rows` (compare). Returns a fresh list so
+    callers can extend it freely."""
 
-    where = [
+    return [
         "fs.metric = 'brier_binary'",
         "fs.score IS NOT NULL",
         "f.kind = 'binary'",
@@ -154,7 +155,18 @@ def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_Score
               AND e.edge_type = 'supersedes' AND e.target_id = o.id
           )""",
     ]
-    params: list[Any] = []
+
+
+def _apply_scored_row_filters(
+    rf: ReportFilter,
+    where: list[str],
+    params: list[Any],
+    *,
+    include_late_recorded_predicate: bool = False,
+) -> None:
+    """Append the ReportFilter-driven WHERE clauses both scored-row
+    loaders share (trade-trace-qnxt). Mutates `where` and `params` in
+    place to match the original inline behavior."""
 
     if rf.actors.actor_id:
         where.append(f"f.actor_id IN ({_placeholders(len(rf.actors.actor_id))})")
@@ -168,6 +180,57 @@ def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_Score
         else:
             where.append("t.strategy_id = ?")
             params.append(rf.strategy.strategy_id)
+    if include_late_recorded_predicate and not rf.outcome.include_late_recorded:
+        where.append(
+            "COALESCE(json_extract(fs.metadata_json, '$.late_recorded'), 0) = 0"
+        )
+
+
+def _materialize_scored_row(
+    conn: sqlite3.Connection,
+    *,
+    score_id: str,
+    forecast_id: str,
+    outcome_id: str,
+    metadata_json: str | None,
+    yes_label: str | None,
+    outcome_label: str,
+) -> _ScoredRow | None:
+    """Shared post-fetch reconstruction (trade-trace-qnxt). Returns None
+    when the p_yes/y pair can't be resolved (the original loaders both
+    `continue`d in that case)."""
+
+    try:
+        meta = json.loads(metadata_json or "{}")
+    except json.JSONDecodeError:
+        meta = {}
+    late = bool(meta.get("late_recorded"))
+    p_yes, y = _resolve_p_yes_and_y(
+        conn,
+        forecast_id=forecast_id,
+        yes_label=yes_label,
+        outcome_label=outcome_label,
+    )
+    if p_yes is None or y is None:
+        return None
+    return _ScoredRow(
+        forecast_id=forecast_id,
+        score_id=score_id,
+        outcome_id=outcome_id,
+        p_yes=p_yes,
+        y=y,
+        late_recorded=late,
+    )
+
+
+def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_ScoredRow]:
+    """Return every scored binary forecast row resolved against its YES
+    probability. Excludes scores with `score IS NULL` (failed) and scores
+    whose outcome is itself superseded (scoring.md §5.1)."""
+
+    where = _scored_row_base_where()
+    params: list[Any] = []
+    _apply_scored_row_filters(rf, where, params)
 
     sql = f"""
         SELECT fs.id, fs.forecast_id, fs.outcome_id, fs.score, fs.metadata_json,
@@ -180,31 +243,19 @@ def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_Score
         JOIN outcomes o ON o.id = fs.outcome_id
         WHERE {' AND '.join(where)}
         """
-    cur = conn.execute(sql, params)
     rows: list[_ScoredRow] = []
-    for score_id, forecast_id, outcome_id, _score, metadata_json, yes_label, outcome_label in cur.fetchall():
-        try:
-            meta = json.loads(metadata_json or "{}")
-        except json.JSONDecodeError:
-            meta = {}
-        late = bool(meta.get("late_recorded"))
-        # Reconstruct p_yes and y from the forecast_outcomes + resolved label.
-        p_yes, y = _resolve_p_yes_and_y(
+    for score_id, forecast_id, outcome_id, _score, metadata_json, yes_label, outcome_label in conn.execute(sql, params).fetchall():
+        materialized = _materialize_scored_row(
             conn,
+            score_id=score_id,
             forecast_id=forecast_id,
+            outcome_id=outcome_id,
+            metadata_json=metadata_json,
             yes_label=yes_label,
             outcome_label=outcome_label,
         )
-        if p_yes is None or y is None:
-            continue
-        rows.append(_ScoredRow(
-            forecast_id=forecast_id,
-            score_id=score_id,
-            outcome_id=outcome_id,
-            p_yes=p_yes,
-            y=y,
-            late_recorded=late,
-        ))
+        if materialized is not None:
+            rows.append(materialized)
     return rows
 
 
