@@ -73,6 +73,17 @@ SUPPORTED_FILTER_FIELDS: dict[str, frozenset[str]] = {
     # contract by composition. Direct callers may only pass the empty
     # filter shape today.
     "report.coach": frozenset(),
+    # review.bundle scopes its decision selection through the same
+    # actor/instrument/strategy spine as calibration, plus the
+    # decision_at time window (the selection ordering uses
+    # decisions.created_at).
+    "review.bundle": frozenset({
+        "actors.actor_id",
+        "instrument.venue_id",
+        "strategy.strategy_id",
+        "time_window.decision_at_gte",
+        "time_window.decision_at_lt",
+    }),
 }
 
 
