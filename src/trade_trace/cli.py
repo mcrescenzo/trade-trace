@@ -13,6 +13,7 @@ without changing the contract surface.
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import sys
 import uuid
@@ -274,6 +275,19 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
     if args.confirm:
         tool_args["confirm"] = True
         tool_args["_confirm"] = True
+    if (
+        tool_name == "journal.config_set"
+        and tool_args.get("key") == "embeddings.provider"
+        and tool_args.get("value") == "api:openai"
+        and tool_args.get("_confirm")
+        and not tool_args.get("api_key")
+    ):
+        print(
+            "Warning: api:openai embeddings may send memory text to OpenAI. "
+            "The API key will be stored only in the OS keyring.",
+            file=sys.stderr,
+        )
+        tool_args["api_key"] = getpass.getpass("OpenAI API key: ")
 
     envelope = dispatch(
         tool_name,

@@ -16,7 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0"]
-embeddings = ["sqlite-vec==0.1.6"]
+embeddings = ["sqlite-vec==0.1.6", "keyring>=25"]
 dev = [
     "pytest>=8",
     "ruff>=0.5",

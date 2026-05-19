@@ -51,6 +51,15 @@ def test_admin_tool_registered(tool):
     assert tool in default_registry().names()
 
 
+def test_admin_config_set_description_documents_embeddings_behavior():
+    desc = default_registry().get("journal.config_set").description.lower()
+    assert "enum {none, local, api:openai}" in desc
+    assert "secure os keyring" in desc
+    assert "noninteractive" in desc
+    assert "no openai network call" in desc
+    assert "unsupported_capability" not in desc
+
+
 # -- journal.repair ---------------------------------------------
 
 
@@ -213,15 +222,15 @@ def test_journal_config_set_embeddings_provider_none_succeeds(home):
     assert env.ok
 
 
-def test_journal_config_set_embeddings_provider_api_unsupported(home):
-    """External API providers remain unsupported/no-network in the local substrate."""
+def test_journal_config_set_embeddings_provider_api_preview_without_key(home):
+    """Previewing API provider switch does not require or persist an API key."""
 
     env = _mcp(home, "journal.config_set", {
         "key": "embeddings.provider", "value": "api:openai",
     })
-    assert env.ok is False
-    assert env.error.code.value == "UNSUPPORTED_CAPABILITY"
-    assert env.error.details["deferred_to_bead"] == "trade-trace-a4p"
+    assert env.ok is True
+    assert env.data["preview_only"] is True
+    assert env.data["would_write"]["value"] == "api:openai"
 
 
 def test_journal_config_set_embeddings_provider_rejects_unknown_value(home):

@@ -67,6 +67,10 @@ from trade_trace.tools._helpers import now_iso, require
 from trade_trace.tools.errors import ToolError
 
 
+OPENAI_EMBEDDINGS_KEYRING_SERVICE = "trade-trace:embeddings:openai"
+EMBEDDINGS_API_KEY_ARG = "api_key"
+
+
 def _confirm_requested(args: dict[str, Any]) -> bool:
     """Return True when either CLI `--confirm` or MCP `_confirm: true`
     was passed. The CLI flag parser surfaces it as `confirm=True`."""
@@ -336,14 +340,12 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                 details={"field": "value", "value": value,
                          "allowed": sorted(allowed)},
             )
-        if value != "none" and value != "local":
+        if value == "api:openai" and _confirm_requested(args) and not args.get(EMBEDDINGS_API_KEY_ARG):
             raise ToolError(
-                ErrorCode.UNSUPPORTED_CAPABILITY,
-                "embeddings.provider != 'none' is deferred to bead "
-                "trade-trace-a4p (sqlite-vec + bge-small + keyring). "
-                "The config surface accepts the value once that bead lands.",
-                details={"setting": "embeddings.provider", "value": value,
-                         "deferred_to_bead": "trade-trace-a4p"},
+                ErrorCode.VALIDATION_ERROR,
+                "api:openai requires an API key supplied by an interactive CLI prompt "
+                "or a non-persisted api_key argument; the key is stored only in the OS keyring",
+                details={"field": "api_key", "secret_storage": "os_keyring"},
             )
 
     home = resolve_home(args.get("home"))
@@ -371,6 +373,13 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
             },
         }
 
+    if key == "embeddings.provider" and value == "api:openai":
+        # Consume the secret only to populate the OS keyring. Never persist it
+        # in config, events, outbox, return data, or logs.
+        from trade_trace.security.keyring import store_api_key
+
+        store_api_key(OPENAI_EMBEDDINGS_KEYRING_SERVICE, str(args[EMBEDDINGS_API_KEY_ARG]))
+
     db = open_database(path, create_parent=False)
     try:
         db.connection.execute(
@@ -383,7 +392,10 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         db.connection.commit()
     finally:
         db.close()
-    return {"preview_only": False, "key": key, "value": value}
+    result = {"preview_only": False, "key": key, "value": value}
+    if key == "embeddings.provider" and value == "api:openai":
+        result["api_key_storage"] = "os_keyring"
+    return result
 
 
 # -- model.* and memory.reindex stubs (bead a4p) ------------------
@@ -460,9 +472,14 @@ def register_admin_tools(registry: ToolRegistry) -> None:
         description=(
             "Persist a key=value pair into the config table. The "
             "embeddings.provider key is validated against the closed "
-            "enum {none, local, api:openai}; non-'none' values "
-            "currently surface UNSUPPORTED_CAPABILITY pointing at "
-            "bead trade-trace-a4p."
+            "enum {none, local, api:openai}. 'none' disables semantic "
+            "embeddings, 'local' enables local/stub semantic ranking, and "
+            "'api:openai' stores a required API key only in a validated secure "
+            "OS keyring. A raw key argument is accepted only for MCP/CLI "
+            "noninteractive setup, is never returned, and is not persisted by "
+            "the app. memory.recall currently resolves that key as a gate but "
+            "uses the local/stub query embedding path; no OpenAI network call "
+            "is implemented here."
         ),
     )
     registry.register(

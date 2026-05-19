@@ -1024,6 +1024,22 @@ def _semantic_rank(
 ) -> list[str]:
     if not in_scope:
         return []
+    if provider.startswith("api:"):
+        from trade_trace.security.keyring import load_api_key
+
+        # Resolve at call time and keep the secret in this stack frame only.
+        # No caching and no return/error payload includes this value. For this
+        # bead, api:openai support stops at keyring/key-presence gating: query
+        # embeddings are still produced by the deterministic local stub below,
+        # and no OpenAI/network embedding call is implemented here.
+        if provider == "api:openai":
+            service = "trade-trace:embeddings:openai"
+        else:
+            return []
+        api_key = load_api_key(service)
+        if not api_key:
+            return []
+        del api_key
     try:
         rows = conn.execute(
             "SELECT node_id, embedding, dim, model_id FROM memory_node_embeddings "
