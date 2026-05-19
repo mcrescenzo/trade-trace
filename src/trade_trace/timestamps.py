@@ -51,6 +51,7 @@ TIMESTAMP_API_GOVERNED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
         ("memory_nodes", "invalidated_at"),
         ("memory_nodes", "valid_from"),
         ("memory_nodes", "valid_to"),
+        ("memory_node_embeddings", "created_at"),
         ("memory_node_stats", "last_recalled_at"),
         ("memory_recall_events", "as_of"),
         ("memory_recall_events", "created_at"),
