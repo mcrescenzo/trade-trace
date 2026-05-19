@@ -1,0 +1,162 @@
+[
+  {
+    "coordinator_disposition": "materialized",
+    "domain": "build-package-ci-release",
+    "materialized_bead_id": "trade-trace-qasx",
+    "risk": "low",
+    "spec_id": "NTD-001",
+    "title": "Add release distribution metadata validation before PyPI publish",
+    "track": "maintenance"
+  },
+  {
+    "coordinator_disposition": "materialized",
+    "domain": "storage-persistence-events-schema",
+    "materialized_bead_id": "trade-trace-3elt",
+    "risk": "medium",
+    "spec_id": "NTD-002",
+    "title": "Investigate schema/meta diagnostics for non-table migrations",
+    "track": "investigation"
+  },
+  {
+    "coordinator_disposition": "materialized",
+    "domain": "storage-persistence-events-schema",
+    "materialized_bead_id": "trade-trace-gkt3",
+    "risk": "low",
+    "spec_id": "NTD-003",
+    "title": "Decide semantic-key event policy alignment",
+    "track": "design"
+  },
+  {
+    "coordinator_disposition": "materialized",
+    "domain": "domain-tools-ledger-memory-playbook",
+    "materialized_bead_id": "trade-trace-40dz",
+    "risk": "medium",
+    "spec_id": "NTD-004",
+    "title": "Validate memory.link playbook_version endpoints against playbook_versions",
+    "track": "maintenance"
+  },
+  {
+    "coordinator_disposition": "materialized",
+    "domain": "domain-tools-ledger-memory-playbook",
+    "materialized_bead_id": "trade-trace-dew2",
+    "risk": "medium",
+    "spec_id": "NTD-005",
+    "title": "Design JSONL replay taxonomy for landed write surfaces",
+    "track": "design"
+  },
+  {
+    "coordinator_disposition": "materialized",
+    "domain": "domain-tools-ledger-memory-playbook",
+    "materialized_bead_id": "trade-trace-arcx",
+    "risk": "medium",
+    "spec_id": "NTD-006",
+    "title": "Validate memory.retain meta_json object shape at direct retain boundary",
+    "track": "maintenance"
+  },
+  {
+    "coordinator_disposition": "materialized",
+    "domain": "reports-projections-export",
+    "materialized_bead_id": "trade-trace-iip4",
+    "risk": "medium",
+    "spec_id": "NTD-007",
+    "title": "Investigate projection rebuild diagnostics for corrupt memory recall JSON",
+    "track": "investigation"
+  },
+  {
+    "coordinator_disposition": "materialized",
+    "domain": "reports-projections-export",
+    "materialized_bead_id": "trade-trace-7h2u",
+    "risk": "high",
+    "spec_id": "NTD-008",
+    "title": "Decide position_id reopen semantics for replay and projections",
+    "track": "design"
+  },
+  {
+    "coordinator_disposition": "materialized",
+    "domain": "security-boundaries",
+    "materialized_bead_id": "trade-trace-8n98",
+    "risk": "medium",
+    "spec_id": "NTD-009",
+    "title": "Harden log redaction behavior beyond secret scan input cap",
+    "track": "maintenance"
+  },
+  {
+    "coordinator_disposition": "merged_into_existing",
+    "merged_into_bead_id": "trade-trace-kynj",
+    "reason": "Merged instead of fresh no-tech-debt bead; live bughunt bead already owns the concrete bug.",
+    "title": "CLI unknown-command JSON envelope"
+  },
+  {
+    "coordinator_disposition": "merged_into_existing",
+    "merged_into_bead_id": "trade-trace-pybt",
+    "reason": "Merged/related; live bughunt bead owns repeated/comma array parser contract failure.",
+    "title": "CLI argument grammar/parser behavior"
+  },
+  {
+    "coordinator_disposition": "merged_into_existing",
+    "merged_into_bead_id": "trade-trace-68ew",
+    "reason": "Merged into existing golden parity/test-harness bug.",
+    "title": "Golden parity developer-home leak"
+  },
+  {
+    "coordinator_disposition": "merged_into_existing",
+    "merged_into_bead_id": "trade-trace-boqe",
+    "reason": "Merged into existing test expectation bug rather than generic coverage debt.",
+    "title": "Golden/NDJSON stale review.bundle expectation"
+  },
+  {
+    "coordinator_disposition": "merged_into_existing",
+    "merged_into_bead_id": "trade-trace-3i33",
+    "reason": "Related rather than duplicated; existing bead owns missing tool schemas/help for agent-safe MCP usage.",
+    "title": "MCP stdio/schema/help coverage"
+  },
+  {
+    "coordinator_disposition": "merged_into_existing",
+    "merged_into_bead_id": "trade-trace-0tdt",
+    "reason": "Merged into existing docs-truth bug for journal.init --enable-embeddings no-op.",
+    "title": "PRD embeddings flag docs drift"
+  },
+  {
+    "coordinator_disposition": "merged_into_existing",
+    "merged_into_bead_id": "trade-trace-mehh",
+    "reason": "Merged into existing deadcode/docs-truth bead.",
+    "title": "Embeddings/sqlite-vec docs capability drift"
+  },
+  {
+    "coordinator_disposition": "merged_into_existing",
+    "merged_into_bead_id": "trade-trace-ftnu",
+    "reason": "Merged into existing stale report docs bead.",
+    "title": "Residual report/watch docs drift"
+  },
+  {
+    "coordinator_disposition": "merged_into_existing",
+    "merged_into_bead_id": "trade-trace-cs0r",
+    "reason": "Merged into existing public API stale-contract bug.",
+    "title": "Report compare docs/API contract drift"
+  },
+  {
+    "coordinator_disposition": "deferred_not_materialized",
+    "reason": "Deferred/merge-only due live dirty-history contamination and existing idempotency work; do not create fresh until clean-tree reproduction.",
+    "title": "test fixture idempotency enforcement"
+  },
+  {
+    "coordinator_disposition": "deferred_not_materialized",
+    "reason": "Weak without concrete broken anchor/link evidence or release gate failure.",
+    "title": "markdown/link checker gap"
+  },
+  {
+    "coordinator_disposition": "deferred_not_materialized",
+    "reason": "Weak without concrete cross-test contamination evidence.",
+    "title": "dogfood fixture isolation"
+  },
+  {
+    "coordinator_disposition": "deferred_not_materialized",
+    "reason": "Design/API semantics; not materialized with redaction-cap task.",
+    "title": "security match offset semantics"
+  },
+  {
+    "coordinator_disposition": "deferred_not_materialized",
+    "reason": "Split from direct memory.link endpoint validation; create later only if separate edge-audit evidence warrants it.",
+    "title": "edge-audit playbook_version orphan coverage"
+  }
+]

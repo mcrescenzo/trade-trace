@@ -1,0 +1,10 @@
+$ bd dep cycles
+rc=0
+
+STDOUT:
+
+✓ No dependency cycles detected
+
+
+STDERR:
+

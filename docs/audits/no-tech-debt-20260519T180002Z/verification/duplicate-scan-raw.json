@@ -1,0 +1,808 @@
+{
+  "count": 100,
+  "method": "mechanical",
+  "pairs": [
+    {
+      "issue_a_id": "trade-trace-24ia",
+      "issue_a_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "issue_b_id": "trade-trace-qs5v",
+      "issue_b_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "method": "mechanical",
+      "similarity": 0.7303815311242805
+    },
+    {
+      "issue_a_id": "trade-trace-reh4",
+      "issue_a_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.7292202086460002
+    },
+    {
+      "issue_a_id": "trade-trace-gfbd",
+      "issue_a_title": "SIMP-QC: docs/source-of-truth validation after docs simplifications",
+      "issue_b_id": "trade-trace-zl03",
+      "issue_b_title": "SIMP-QC: test-support and security-fixture behavior preservation",
+      "method": "mechanical",
+      "similarity": 0.707541588218966
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-qs5v",
+      "issue_b_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "method": "mechanical",
+      "similarity": 0.7074260456297858
+    },
+    {
+      "issue_a_id": "trade-trace-hnwp",
+      "issue_a_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "issue_b_id": "trade-trace-reh4",
+      "issue_b_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "method": "mechanical",
+      "similarity": 0.7014558214483899
+    },
+    {
+      "issue_a_id": "trade-trace-reh4",
+      "issue_a_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "issue_b_id": "trade-trace-qs5v",
+      "issue_b_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "method": "mechanical",
+      "similarity": 0.7007089259934776
+    },
+    {
+      "issue_a_id": "trade-trace-hnwp",
+      "issue_a_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.6937981342878838
+    },
+    {
+      "issue_a_id": "trade-trace-ensw",
+      "issue_a_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "issue_b_id": "trade-trace-il2f",
+      "issue_b_title": "SIMP-011: Single-source MCP setup docs and tool-registry discovery guidance",
+      "method": "mechanical",
+      "similarity": 0.691658212042426
+    },
+    {
+      "issue_a_id": "trade-trace-6x3j",
+      "issue_a_title": "SIMP-003: Investigate splitting monolithic SQLite migrations into versioned modules without changing schema",
+      "issue_b_id": "trade-trace-eijx",
+      "issue_b_title": "SIMP-004: Investigate central schema-governed enum and timestamp registries without weakening explicit audits",
+      "method": "mechanical",
+      "similarity": 0.688261260649494
+    },
+    {
+      "issue_a_id": "trade-trace-qs5v",
+      "issue_a_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.6872678026054047
+    },
+    {
+      "issue_a_id": "trade-trace-hnwp",
+      "issue_a_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "issue_b_id": "trade-trace-qs5v",
+      "issue_b_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "method": "mechanical",
+      "similarity": 0.6859213157990485
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-reh4",
+      "issue_b_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "method": "mechanical",
+      "similarity": 0.6850541739804952
+    },
+    {
+      "issue_a_id": "trade-trace-54io",
+      "issue_a_title": "SIMP-012: Tightly de-duplicate AGENTS.md and CLAUDE.md without changing session policy",
+      "issue_b_id": "trade-trace-il2f",
+      "issue_b_title": "SIMP-011: Single-source MCP setup docs and tool-registry discovery guidance",
+      "method": "mechanical",
+      "similarity": 0.6834778389548268
+    },
+    {
+      "issue_a_id": "trade-trace-reh4",
+      "issue_a_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "issue_b_id": "trade-trace-ensw",
+      "issue_b_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "method": "mechanical",
+      "similarity": 0.6814259515574814
+    },
+    {
+      "issue_a_id": "trade-trace-reh4",
+      "issue_a_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "issue_b_id": "trade-trace-24ia",
+      "issue_b_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "method": "mechanical",
+      "similarity": 0.678972043554116
+    },
+    {
+      "issue_a_id": "trade-trace-qs5v",
+      "issue_a_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "issue_b_id": "trade-trace-qnxt",
+      "issue_b_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "method": "mechanical",
+      "similarity": 0.6778103963664334
+    },
+    {
+      "issue_a_id": "trade-trace-24ia",
+      "issue_a_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.6752722476107021
+    },
+    {
+      "issue_a_id": "trade-trace-x0po",
+      "issue_a_title": "SIMP-007: Co-locate or auto-register report filter support declarations to reduce drift",
+      "issue_b_id": "trade-trace-qnxt",
+      "issue_b_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "method": "mechanical",
+      "similarity": 0.6752118128326523
+    },
+    {
+      "issue_a_id": "trade-trace-6x3j",
+      "issue_a_title": "SIMP-003: Investigate splitting monolithic SQLite migrations into versioned modules without changing schema",
+      "issue_b_id": "trade-trace-ypbp",
+      "issue_b_title": "SIMP-016B: Investigate replacing exporter secret-scanning private alias with a public security adapter",
+      "method": "mechanical",
+      "similarity": 0.6704546574489715
+    },
+    {
+      "issue_a_id": "trade-trace-ensw",
+      "issue_a_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "issue_b_id": "trade-trace-54io",
+      "issue_b_title": "SIMP-012: Tightly de-duplicate AGENTS.md and CLAUDE.md without changing session policy",
+      "method": "mechanical",
+      "similarity": 0.6700870608706129
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-ensw",
+      "issue_b_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "method": "mechanical",
+      "similarity": 0.6678650863516259
+    },
+    {
+      "issue_a_id": "trade-trace-gfbd",
+      "issue_a_title": "SIMP-QC: docs/source-of-truth validation after docs simplifications",
+      "issue_b_id": "trade-trace-l0qx",
+      "issue_b_title": "SIMP-QC: runtime/report contract characterization after simplification tasks",
+      "method": "mechanical",
+      "similarity": 0.6677656952477553
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-qnxt",
+      "issue_b_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "method": "mechanical",
+      "similarity": 0.6667102527821208
+    },
+    {
+      "issue_a_id": "trade-trace-ensw",
+      "issue_a_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "issue_b_id": "trade-trace-24ia",
+      "issue_b_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "method": "mechanical",
+      "similarity": 0.6625577952712833
+    },
+    {
+      "issue_a_id": "trade-trace-ensw",
+      "issue_a_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.6606403364824291
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-24ia",
+      "issue_b_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "method": "mechanical",
+      "similarity": 0.6576244055377722
+    },
+    {
+      "issue_a_id": "trade-trace-6x3j",
+      "issue_a_title": "SIMP-003: Investigate splitting monolithic SQLite migrations into versioned modules without changing schema",
+      "issue_b_id": "trade-trace-42vr",
+      "issue_b_title": "SIMP-013: Investigate single-sourcing release quality gates and package version",
+      "method": "mechanical",
+      "similarity": 0.6576101900999083
+    },
+    {
+      "issue_a_id": "trade-trace-qa2g",
+      "issue_a_title": "SIMP-014: Investigate separating current capability status from design-only architecture docs",
+      "issue_b_id": "trade-trace-42vr",
+      "issue_b_title": "SIMP-013: Investigate single-sourcing release quality gates and package version",
+      "method": "mechanical",
+      "similarity": 0.6567740224506489
+    },
+    {
+      "issue_a_id": "trade-trace-ypbp",
+      "issue_a_title": "SIMP-016B: Investigate replacing exporter secret-scanning private alias with a public security adapter",
+      "issue_b_id": "trade-trace-eijx",
+      "issue_b_title": "SIMP-004: Investigate central schema-governed enum and timestamp registries without weakening explicit audits",
+      "method": "mechanical",
+      "similarity": 0.6563877291324308
+    },
+    {
+      "issue_a_id": "trade-trace-qnxt",
+      "issue_a_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.6555921718920621
+    },
+    {
+      "issue_a_id": "trade-trace-ypbp",
+      "issue_a_title": "SIMP-016B: Investigate replacing exporter secret-scanning private alias with a public security adapter",
+      "issue_b_id": "trade-trace-qa2g",
+      "issue_b_title": "SIMP-014: Investigate separating current capability status from design-only architecture docs",
+      "method": "mechanical",
+      "similarity": 0.6553926046784715
+    },
+    {
+      "issue_a_id": "trade-trace-ensw",
+      "issue_a_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "issue_b_id": "trade-trace-x0po",
+      "issue_b_title": "SIMP-007: Co-locate or auto-register report filter support declarations to reduce drift",
+      "method": "mechanical",
+      "similarity": 0.6511362917922764
+    },
+    {
+      "issue_a_id": "trade-trace-ypbp",
+      "issue_a_title": "SIMP-016B: Investigate replacing exporter secret-scanning private alias with a public security adapter",
+      "issue_b_id": "trade-trace-42vr",
+      "issue_b_title": "SIMP-013: Investigate single-sourcing release quality gates and package version",
+      "method": "mechanical",
+      "similarity": 0.6489609441343487
+    },
+    {
+      "issue_a_id": "trade-trace-ensw",
+      "issue_a_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "issue_b_id": "trade-trace-qs5v",
+      "issue_b_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "method": "mechanical",
+      "similarity": 0.6474216585798583
+    },
+    {
+      "issue_a_id": "trade-trace-24ia",
+      "issue_a_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "issue_b_id": "trade-trace-qnxt",
+      "issue_b_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "method": "mechanical",
+      "similarity": 0.643825848678673
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-x0po",
+      "issue_b_title": "SIMP-007: Co-locate or auto-register report filter support declarations to reduce drift",
+      "method": "mechanical",
+      "similarity": 0.6428515912156231
+    },
+    {
+      "issue_a_id": "trade-trace-l8ev",
+      "issue_a_title": "SIMP-QC: investigation decisions before implementation refactors",
+      "issue_b_id": "trade-trace-zl03",
+      "issue_b_title": "SIMP-QC: test-support and security-fixture behavior preservation",
+      "method": "mechanical",
+      "similarity": 0.6427991327569516
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.642548904787523
+    },
+    {
+      "issue_a_id": "trade-trace-qs5v",
+      "issue_a_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "issue_b_id": "trade-trace-x0po",
+      "issue_b_title": "SIMP-007: Co-locate or auto-register report filter support declarations to reduce drift",
+      "method": "mechanical",
+      "similarity": 0.6411008561488412
+    },
+    {
+      "issue_a_id": "trade-trace-hnwp",
+      "issue_a_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "issue_b_id": "trade-trace-24ia",
+      "issue_b_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "method": "mechanical",
+      "similarity": 0.6403477023641406
+    },
+    {
+      "issue_a_id": "trade-trace-l8ev",
+      "issue_a_title": "SIMP-QC: investigation decisions before implementation refactors",
+      "issue_b_id": "trade-trace-gfbd",
+      "issue_b_title": "SIMP-QC: docs/source-of-truth validation after docs simplifications",
+      "method": "mechanical",
+      "similarity": 0.6390216076964452
+    },
+    {
+      "issue_a_id": "trade-trace-zl03",
+      "issue_a_title": "SIMP-QC: test-support and security-fixture behavior preservation",
+      "issue_b_id": "trade-trace-l0qx",
+      "issue_b_title": "SIMP-QC: runtime/report contract characterization after simplification tasks",
+      "method": "mechanical",
+      "similarity": 0.6385198225098767
+    },
+    {
+      "issue_a_id": "trade-trace-6x3j",
+      "issue_a_title": "SIMP-003: Investigate splitting monolithic SQLite migrations into versioned modules without changing schema",
+      "issue_b_id": "trade-trace-qa2g",
+      "issue_b_title": "SIMP-014: Investigate separating current capability status from design-only architecture docs",
+      "method": "mechanical",
+      "similarity": 0.6379768421517673
+    },
+    {
+      "issue_a_id": "trade-trace-reh4",
+      "issue_a_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "issue_b_id": "trade-trace-qnxt",
+      "issue_b_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "method": "mechanical",
+      "similarity": 0.6379448338077748
+    },
+    {
+      "issue_a_id": "trade-trace-reh4",
+      "issue_a_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "issue_b_id": "trade-trace-x0po",
+      "issue_b_title": "SIMP-007: Co-locate or auto-register report filter support declarations to reduce drift",
+      "method": "mechanical",
+      "similarity": 0.6367636414239662
+    },
+    {
+      "issue_a_id": "trade-trace-42vr",
+      "issue_a_title": "SIMP-013: Investigate single-sourcing release quality gates and package version",
+      "issue_b_id": "trade-trace-eijx",
+      "issue_b_title": "SIMP-004: Investigate central schema-governed enum and timestamp registries without weakening explicit audits",
+      "method": "mechanical",
+      "similarity": 0.6362510285361755
+    },
+    {
+      "issue_a_id": "trade-trace-ensw",
+      "issue_a_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "issue_b_id": "trade-trace-qnxt",
+      "issue_b_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "method": "mechanical",
+      "similarity": 0.6355358698620617
+    },
+    {
+      "issue_a_id": "trade-trace-reh4",
+      "issue_a_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "issue_b_id": "trade-trace-il2f",
+      "issue_b_title": "SIMP-011: Single-source MCP setup docs and tool-registry discovery guidance",
+      "method": "mechanical",
+      "similarity": 0.6348755808134553
+    },
+    {
+      "issue_a_id": "trade-trace-hnwp",
+      "issue_a_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "issue_b_id": "trade-trace-ensw",
+      "issue_b_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "method": "mechanical",
+      "similarity": 0.6313405992216312
+    },
+    {
+      "issue_a_id": "trade-trace-1g1h",
+      "issue_a_title": "SIMP-FINAL: verify materialized simplification backlog completion and behavior preservation",
+      "issue_b_id": "trade-trace-l8ev",
+      "issue_b_title": "SIMP-QC: investigation decisions before implementation refactors",
+      "method": "mechanical",
+      "similarity": 0.6307998472313543
+    },
+    {
+      "issue_a_id": "trade-trace-qa2g",
+      "issue_a_title": "SIMP-014: Investigate separating current capability status from design-only architecture docs",
+      "issue_b_id": "trade-trace-eijx",
+      "issue_b_title": "SIMP-004: Investigate central schema-governed enum and timestamp registries without weakening explicit audits",
+      "method": "mechanical",
+      "similarity": 0.6305120849156959
+    },
+    {
+      "issue_a_id": "trade-trace-x0po",
+      "issue_a_title": "SIMP-007: Co-locate or auto-register report filter support declarations to reduce drift",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.6294084969229343
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-hnwp",
+      "issue_b_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "method": "mechanical",
+      "similarity": 0.624341293715168
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-54io",
+      "issue_b_title": "SIMP-012: Tightly de-duplicate AGENTS.md and CLAUDE.md without changing session policy",
+      "method": "mechanical",
+      "similarity": 0.6238710972973931
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-il2f",
+      "issue_b_title": "SIMP-011: Single-source MCP setup docs and tool-registry discovery guidance",
+      "method": "mechanical",
+      "similarity": 0.6225199809884999
+    },
+    {
+      "issue_a_id": "trade-trace-1g1h",
+      "issue_a_title": "SIMP-FINAL: verify materialized simplification backlog completion and behavior preservation",
+      "issue_b_id": "trade-trace-gfbd",
+      "issue_b_title": "SIMP-QC: docs/source-of-truth validation after docs simplifications",
+      "method": "mechanical",
+      "similarity": 0.6202269483577846
+    },
+    {
+      "issue_a_id": "trade-trace-ensw",
+      "issue_a_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "issue_b_id": "trade-trace-qa2g",
+      "issue_b_title": "SIMP-014: Investigate separating current capability status from design-only architecture docs",
+      "method": "mechanical",
+      "similarity": 0.6180972835096368
+    },
+    {
+      "issue_a_id": "trade-trace-reh4",
+      "issue_a_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "issue_b_id": "trade-trace-54io",
+      "issue_b_title": "SIMP-012: Tightly de-duplicate AGENTS.md and CLAUDE.md without changing session policy",
+      "method": "mechanical",
+      "similarity": 0.6153419375139839
+    },
+    {
+      "issue_a_id": "trade-trace-1g1h",
+      "issue_a_title": "SIMP-FINAL: verify materialized simplification backlog completion and behavior preservation",
+      "issue_b_id": "trade-trace-zl03",
+      "issue_b_title": "SIMP-QC: test-support and security-fixture behavior preservation",
+      "method": "mechanical",
+      "similarity": 0.6105285677749728
+    },
+    {
+      "issue_a_id": "trade-trace-qa2g",
+      "issue_a_title": "SIMP-014: Investigate separating current capability status from design-only architecture docs",
+      "issue_b_id": "trade-trace-il2f",
+      "issue_b_title": "SIMP-011: Single-source MCP setup docs and tool-registry discovery guidance",
+      "method": "mechanical",
+      "similarity": 0.6102325938905134
+    },
+    {
+      "issue_a_id": "trade-trace-24ia",
+      "issue_a_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "issue_b_id": "trade-trace-x0po",
+      "issue_b_title": "SIMP-007: Co-locate or auto-register report filter support declarations to reduce drift",
+      "method": "mechanical",
+      "similarity": 0.6093164598124268
+    },
+    {
+      "issue_a_id": "trade-trace-hnwp",
+      "issue_a_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "issue_b_id": "trade-trace-x0po",
+      "issue_b_title": "SIMP-007: Co-locate or auto-register report filter support declarations to reduce drift",
+      "method": "mechanical",
+      "similarity": 0.60783919045339
+    },
+    {
+      "issue_a_id": "trade-trace-hnwp",
+      "issue_a_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "issue_b_id": "trade-trace-qnxt",
+      "issue_b_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "method": "mechanical",
+      "similarity": 0.6071715462195879
+    },
+    {
+      "issue_a_id": "trade-trace-l8ev",
+      "issue_a_title": "SIMP-QC: investigation decisions before implementation refactors",
+      "issue_b_id": "trade-trace-l0qx",
+      "issue_b_title": "SIMP-QC: runtime/report contract characterization after simplification tasks",
+      "method": "mechanical",
+      "similarity": 0.6054948649243325
+    },
+    {
+      "issue_a_id": "trade-trace-il2f",
+      "issue_a_title": "SIMP-011: Single-source MCP setup docs and tool-registry discovery guidance",
+      "issue_b_id": "trade-trace-qs5v",
+      "issue_b_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "method": "mechanical",
+      "similarity": 0.6046473543069724
+    },
+    {
+      "issue_a_id": "trade-trace-reh4",
+      "issue_a_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "issue_b_id": "trade-trace-ypbp",
+      "issue_b_title": "SIMP-016B: Investigate replacing exporter secret-scanning private alias with a public security adapter",
+      "method": "mechanical",
+      "similarity": 0.6030605699115238
+    },
+    {
+      "issue_a_id": "trade-trace-54io",
+      "issue_a_title": "SIMP-012: Tightly de-duplicate AGENTS.md and CLAUDE.md without changing session policy",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.6024883564860142
+    },
+    {
+      "issue_a_id": "trade-trace-il2f",
+      "issue_a_title": "SIMP-011: Single-source MCP setup docs and tool-registry discovery guidance",
+      "issue_b_id": "trade-trace-24ia",
+      "issue_b_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "method": "mechanical",
+      "similarity": 0.6003288412036305
+    },
+    {
+      "issue_a_id": "trade-trace-qs5v",
+      "issue_a_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "issue_b_id": "trade-trace-eijx",
+      "issue_b_title": "SIMP-004: Investigate central schema-governed enum and timestamp registries without weakening explicit audits",
+      "method": "mechanical",
+      "similarity": 0.599405124161486
+    },
+    {
+      "issue_a_id": "trade-trace-54io",
+      "issue_a_title": "SIMP-012: Tightly de-duplicate AGENTS.md and CLAUDE.md without changing session policy",
+      "issue_b_id": "trade-trace-qnxt",
+      "issue_b_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "method": "mechanical",
+      "similarity": 0.5954788604188481
+    },
+    {
+      "issue_a_id": "trade-trace-54io",
+      "issue_a_title": "SIMP-012: Tightly de-duplicate AGENTS.md and CLAUDE.md without changing session policy",
+      "issue_b_id": "trade-trace-qs5v",
+      "issue_b_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "method": "mechanical",
+      "similarity": 0.5929192918413329
+    },
+    {
+      "issue_a_id": "trade-trace-ypbp",
+      "issue_a_title": "SIMP-016B: Investigate replacing exporter secret-scanning private alias with a public security adapter",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.5916275381668952
+    },
+    {
+      "issue_a_id": "trade-trace-il2f",
+      "issue_a_title": "SIMP-011: Single-source MCP setup docs and tool-registry discovery guidance",
+      "issue_b_id": "trade-trace-x0po",
+      "issue_b_title": "SIMP-007: Co-locate or auto-register report filter support declarations to reduce drift",
+      "method": "mechanical",
+      "similarity": 0.5905594995068763
+    },
+    {
+      "issue_a_id": "trade-trace-reh4",
+      "issue_a_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "issue_b_id": "trade-trace-eijx",
+      "issue_b_title": "SIMP-004: Investigate central schema-governed enum and timestamp registries without weakening explicit audits",
+      "method": "mechanical",
+      "similarity": 0.5881112233455962
+    },
+    {
+      "issue_a_id": "trade-trace-54io",
+      "issue_a_title": "SIMP-012: Tightly de-duplicate AGENTS.md and CLAUDE.md without changing session policy",
+      "issue_b_id": "trade-trace-x0po",
+      "issue_b_title": "SIMP-007: Co-locate or auto-register report filter support declarations to reduce drift",
+      "method": "mechanical",
+      "similarity": 0.5871870597923231
+    },
+    {
+      "issue_a_id": "trade-trace-il2f",
+      "issue_a_title": "SIMP-011: Single-source MCP setup docs and tool-registry discovery guidance",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.5868525061656928
+    },
+    {
+      "issue_a_id": "trade-trace-1g1h",
+      "issue_a_title": "SIMP-FINAL: verify materialized simplification backlog completion and behavior preservation",
+      "issue_b_id": "trade-trace-l0qx",
+      "issue_b_title": "SIMP-QC: runtime/report contract characterization after simplification tasks",
+      "method": "mechanical",
+      "similarity": 0.5852488095559374
+    },
+    {
+      "issue_a_id": "trade-trace-6x3j",
+      "issue_a_title": "SIMP-003: Investigate splitting monolithic SQLite migrations into versioned modules without changing schema",
+      "issue_b_id": "trade-trace-hd2r",
+      "issue_b_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "method": "mechanical",
+      "similarity": 0.584745537237609
+    },
+    {
+      "issue_a_id": "trade-trace-hnwp",
+      "issue_a_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "issue_b_id": "trade-trace-54io",
+      "issue_b_title": "SIMP-012: Tightly de-duplicate AGENTS.md and CLAUDE.md without changing session policy",
+      "method": "mechanical",
+      "similarity": 0.5828343858946196
+    },
+    {
+      "issue_a_id": "trade-trace-6x3j",
+      "issue_a_title": "SIMP-003: Investigate splitting monolithic SQLite migrations into versioned modules without changing schema",
+      "issue_b_id": "trade-trace-qs5v",
+      "issue_b_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "method": "mechanical",
+      "similarity": 0.5813598345481066
+    },
+    {
+      "issue_a_id": "trade-trace-54io",
+      "issue_a_title": "SIMP-012: Tightly de-duplicate AGENTS.md and CLAUDE.md without changing session policy",
+      "issue_b_id": "trade-trace-24ia",
+      "issue_b_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "method": "mechanical",
+      "similarity": 0.5800706418074915
+    },
+    {
+      "issue_a_id": "trade-trace-24ia",
+      "issue_a_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "issue_b_id": "trade-trace-eijx",
+      "issue_b_title": "SIMP-004: Investigate central schema-governed enum and timestamp registries without weakening explicit audits",
+      "method": "mechanical",
+      "similarity": 0.5729632712934292
+    },
+    {
+      "issue_a_id": "trade-trace-il2f",
+      "issue_a_title": "SIMP-011: Single-source MCP setup docs and tool-registry discovery guidance",
+      "issue_b_id": "trade-trace-qnxt",
+      "issue_b_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "method": "mechanical",
+      "similarity": 0.5719441292317051
+    },
+    {
+      "issue_a_id": "trade-trace-hnwp",
+      "issue_a_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "issue_b_id": "trade-trace-ypbp",
+      "issue_b_title": "SIMP-016B: Investigate replacing exporter secret-scanning private alias with a public security adapter",
+      "method": "mechanical",
+      "similarity": 0.5714157444848168
+    },
+    {
+      "issue_a_id": "trade-trace-6x3j",
+      "issue_a_title": "SIMP-003: Investigate splitting monolithic SQLite migrations into versioned modules without changing schema",
+      "issue_b_id": "trade-trace-24ia",
+      "issue_b_title": "SIMP-009: Add explicit test data builders for direct-SQL and MCP ledger setup",
+      "method": "mechanical",
+      "similarity": 0.5676514498663081
+    },
+    {
+      "issue_a_id": "trade-trace-ypbp",
+      "issue_a_title": "SIMP-016B: Investigate replacing exporter secret-scanning private alias with a public security adapter",
+      "issue_b_id": "trade-trace-ensw",
+      "issue_b_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "method": "mechanical",
+      "similarity": 0.5665730383090337
+    },
+    {
+      "issue_a_id": "trade-trace-6x3j",
+      "issue_a_title": "SIMP-003: Investigate splitting monolithic SQLite migrations into versioned modules without changing schema",
+      "issue_b_id": "trade-trace-ensw",
+      "issue_b_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "method": "mechanical",
+      "similarity": 0.5653200238005556
+    },
+    {
+      "issue_a_id": "trade-trace-hnwp",
+      "issue_a_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "issue_b_id": "trade-trace-il2f",
+      "issue_b_title": "SIMP-011: Single-source MCP setup docs and tool-registry discovery guidance",
+      "method": "mechanical",
+      "similarity": 0.5652709585794593
+    },
+    {
+      "issue_a_id": "trade-trace-6x3j",
+      "issue_a_title": "SIMP-003: Investigate splitting monolithic SQLite migrations into versioned modules without changing schema",
+      "issue_b_id": "trade-trace-reh4",
+      "issue_b_title": "SIMP-016A: Centralize credential and secret-key vocabulary for MCP and credential audits",
+      "method": "mechanical",
+      "similarity": 0.5636120729690226
+    },
+    {
+      "issue_a_id": "trade-trace-qa2g",
+      "issue_a_title": "SIMP-014: Investigate separating current capability status from design-only architecture docs",
+      "issue_b_id": "trade-trace-54io",
+      "issue_b_title": "SIMP-012: Tightly de-duplicate AGENTS.md and CLAUDE.md without changing session policy",
+      "method": "mechanical",
+      "similarity": 0.5622594521163697
+    },
+    {
+      "issue_a_id": "trade-trace-qnxt",
+      "issue_a_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "issue_b_id": "trade-trace-eijx",
+      "issue_b_title": "SIMP-004: Investigate central schema-governed enum and timestamp registries without weakening explicit audits",
+      "method": "mechanical",
+      "similarity": 0.5620772048546501
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-eijx",
+      "issue_b_title": "SIMP-004: Investigate central schema-governed enum and timestamp registries without weakening explicit audits",
+      "method": "mechanical",
+      "similarity": 0.561458248271117
+    },
+    {
+      "issue_a_id": "trade-trace-ypbp",
+      "issue_a_title": "SIMP-016B: Investigate replacing exporter secret-scanning private alias with a public security adapter",
+      "issue_b_id": "trade-trace-qs5v",
+      "issue_b_title": "SIMP-008: Centralize repeated test home and MCP/CLI fixtures without reducing isolation",
+      "method": "mechanical",
+      "similarity": 0.5609472110919895
+    },
+    {
+      "issue_a_id": "trade-trace-eijx",
+      "issue_a_title": "SIMP-004: Investigate central schema-governed enum and timestamp registries without weakening explicit audits",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.5607763242591045
+    },
+    {
+      "issue_a_id": "trade-trace-ug7p",
+      "issue_a_title": "forecast.supersede idempotent retry creates extra replacement forecasts and edges",
+      "issue_b_id": "trade-trace-ld6l",
+      "issue_b_title": "forecast.supersede skips late auto-score when a resolved_final outcome already exists",
+      "method": "mechanical",
+      "similarity": 0.5599371207650055
+    },
+    {
+      "issue_a_id": "trade-trace-6x3j",
+      "issue_a_title": "SIMP-003: Investigate splitting monolithic SQLite migrations into versioned modules without changing schema",
+      "issue_b_id": "trade-trace-hiiv",
+      "issue_b_title": "SIMP-019: Extract light schema/table audit helpers for security tests without hiding assertions",
+      "method": "mechanical",
+      "similarity": 0.5597043832398172
+    },
+    {
+      "issue_a_id": "trade-trace-ensw",
+      "issue_a_title": "SIMP-015: Extend docs validation for anchors and canonical-source drift",
+      "issue_b_id": "trade-trace-42vr",
+      "issue_b_title": "SIMP-013: Investigate single-sourcing release quality gates and package version",
+      "method": "mechanical",
+      "similarity": 0.5569316158717101
+    },
+    {
+      "issue_a_id": "trade-trace-6x3j",
+      "issue_a_title": "SIMP-003: Investigate splitting monolithic SQLite migrations into versioned modules without changing schema",
+      "issue_b_id": "trade-trace-qnxt",
+      "issue_b_title": "SIMP-006: Extract small shared report-row and result helpers where report semantics already match",
+      "method": "mechanical",
+      "similarity": 0.556616884878242
+    },
+    {
+      "issue_a_id": "trade-trace-hnwp",
+      "issue_a_title": "SIMP-018: Consolidate duplicated no-network pytest fixtures with explicit coverage variants",
+      "issue_b_id": "trade-trace-eijx",
+      "issue_b_title": "SIMP-004: Investigate central schema-governed enum and timestamp registries without weakening explicit audits",
+      "method": "mechanical",
+      "similarity": 0.5562079600073692
+    },
+    {
+      "issue_a_id": "trade-trace-hd2r",
+      "issue_a_title": "SIMP-001: Centralize CLI and dispatcher error-envelope construction",
+      "issue_b_id": "trade-trace-ypbp",
+      "issue_b_title": "SIMP-016B: Investigate replacing exporter secret-scanning private alias with a public security adapter",
+      "method": "mechanical",
+      "similarity": 0.5548485470861264
+    }
+  ],
+  "schema_version": 1,
+  "threshold": 0.45
+}
