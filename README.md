@@ -1,4 +1,16 @@
-# Trade Trace
+## MCP stdio server
+
+Install the optional MCP extra to run the stdio server:
+
+```bash
+pip install -e '.[mcp]'
+trade-trace-mcp
+```
+
+The server communicates on stdin/stdout only. Tool calls use `MCP_ACTOR_ID` as
+the actor id when set; otherwise they default to `mcp:default`. Do not write
+logs to stdout while the server is running because stdout is reserved for the
+MCP JSON-RPC protocol.
 
 **A local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents.**
 
@@ -78,16 +90,25 @@ tt journal init
 ```
 
 The published package (`pip install trade-trace`) ships once the MVP M1–M4
-write surface lands. Requirements today: Python 3.11+, SQLite with FTS5.
-The base wheel will ship `sqlite-vec` and `sentence-transformers` as runtime
-dependencies once M3 lands.
+write surface lands. Requirements today: Python 3.11+, SQLite with FTS5
+(see `docs/architecture/persistence.md` §2.1 for the build-dependency
+policy).
+
+The MVP base wheel is **single-dep**: only `pydantic>=2.7` (see
+`pyproject.toml`). Vector recall and the semantic strategy are deferred
+to P1+ per bead trade-trace-a4p; the `sqlite-vec` and
+`sentence-transformers` runtime deps will land as an opt-in extra
+(`pip install trade-trace[embeddings]`) when that bead ships. Earlier
+docs that promised "the base wheel will ship sqlite-vec and
+sentence-transformers" are now obsolete — see bead trade-trace-tka.
 
 **Vectors are off by default in MVP**: a fresh `journal.init` makes zero
-outbound network calls (verified by `tests/security/test_no_network_default.py`).
-MVP recall runs with FTS5 + graph + temporal retrieval. Opt in to semantic
-recall via `tt config set embeddings.provider local` (one-time model-weight
-download, ~130 MB; lands in M3) or `tt model import <path>` for air-gapped
-installs. See [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md)
+outbound network calls (verified by
+`tests/security/test_no_network_default.py`). MVP recall runs with FTS5
++ graph + temporal retrieval. The semantic strategy plus
+`tt config set embeddings.provider local` and `tt model import <path>`
+ship behind bead trade-trace-a4p. See
+[`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md)
 §8.
 
 Trade Trace never fetches trading data, broker data, market prices, order books, or outcomes. The agent calling it supplies all market data through the structured ingestion APIs. The single opt-in outbound path (embedding model download) carries no trading data; the optional API-embeddings path is separately opt-in and warned about at configure time. See [`PRD.md`](./docs/PRD.md) §2.4.1.

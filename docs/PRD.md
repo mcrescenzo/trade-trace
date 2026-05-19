@@ -110,7 +110,7 @@ Period- or tag-scoped reflections remain valid, but periods and tags are not MVP
 
 - yfinance, Polymarket Gamma, and similar external APIs are explicitly out of scope; see §2.4.
 - `sqlite-vec` is optional/verified at init; MVP recall runs with FTS5 + graph + temporal retrieval. Vector recall is off by default and opt-in (§2.4.1).
-- Local embedding models are downloaded/cache-managed only when explicitly enabled (§2.4.1, [`memory-layer.md`](./architecture/memory-layer.md) §8). The base wheel ships `sqlite-vec` and `sentence-transformers` as runtime dependencies but never auto-downloads model weights.
+- Local embedding models are downloaded/cache-managed only when explicitly enabled (§2.4.1, [`memory-layer.md`](./architecture/memory-layer.md) §8). The MVP base wheel ships **only** `pydantic` as a runtime dependency (see `pyproject.toml`); `sqlite-vec` and `sentence-transformers` are deferred to a `[embeddings]` install extra per bead trade-trace-a4p. Earlier text claiming the base wheel ships these is obsolete — see bead trade-trace-tka for the reconciliation.
 - ForecastBench export is ForecastBench-inspired/TBD until the current external schema is verified.
 - No claim is made that LLMs have reached forecasting parity with human superforecasters.
 
