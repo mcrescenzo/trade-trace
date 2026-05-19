@@ -357,6 +357,23 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
             "journal not initialized; run `tt journal init` first",
             details={"home": str(home), "db_path": str(path)},
         )
+
+    # Per bead trade-trace-b10: journal.config_set is a mutating admin
+    # tool and must follow the same confirm/preview contract every
+    # other admin tool uses (operability.md §2z7). Without --confirm
+    # the call returns ok=true with meta.preview_only=true describing
+    # what *would* be written; with --confirm it persists.
+    if not _confirm_requested(args):
+        _set_preview_meta(ctx)
+        return {
+            "preview_only": True,
+            "would_write": {
+                "key": key,
+                "value": value,
+                "home": str(home),
+            },
+        }
+
     db = open_database(path, create_parent=False)
     try:
         db.connection.execute(
@@ -369,7 +386,7 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         db.connection.commit()
     finally:
         db.close()
-    return {"key": key, "value": value}
+    return {"preview_only": False, "key": key, "value": value}
 
 
 # -- model.* and memory.reindex stubs (bead a4p) ------------------

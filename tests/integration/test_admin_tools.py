@@ -162,6 +162,7 @@ def test_journal_restore_detects_corrupted_backup(home, tmp_path):
 def test_journal_config_set_persists_value(home):
     env = _mcp(home, "journal.config_set", {
         "key": "report.calibration.min_sample", "value": "30",
+        "_confirm": True,
     })
     assert env.ok
     # Re-read directly.
@@ -178,9 +179,36 @@ def test_journal_config_set_persists_value(home):
     assert row[0] == "30"
 
 
+def test_journal_config_set_preview_does_not_persist(home):
+    """Per bead trade-trace-b10: without --confirm the call must return
+    preview_only=true and write nothing to the config table."""
+
+    env = _mcp(home, "journal.config_set", {
+        "key": "report.calibration.min_sample", "value": "30",
+        # Note: no _confirm flag.
+    })
+    assert env.ok, env
+    assert env.data["preview_only"] is True
+    assert env.data["would_write"]["key"] == "report.calibration.min_sample"
+    assert env.data["would_write"]["value"] == "30"
+
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            "SELECT value FROM config WHERE key = ?",
+            ("report.calibration.min_sample",),
+        ).fetchone()
+    finally:
+        db.close()
+    assert row is None, "preview must not write any config row"
+
+
 def test_journal_config_set_embeddings_provider_none_succeeds(home):
     env = _mcp(home, "journal.config_set", {
         "key": "embeddings.provider", "value": "none",
+        "_confirm": True,
     })
     assert env.ok
 
