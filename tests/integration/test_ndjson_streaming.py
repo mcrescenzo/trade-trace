@@ -161,14 +161,26 @@ def test_exit_code_three_on_invariant_violation(tmp_path: Path):
 
 
 def test_exit_code_one_on_other_error(tmp_path: Path):
-    """A NOT_FOUND or STORAGE_ERROR maps to exit code 1."""
+    """A NOT_FOUND or STORAGE_ERROR maps to exit code 1 (everything that
+    is not VALIDATION_ERROR / INVARIANT_VIOLATION).
 
-    # journal.status against an uninitialized home succeeds (reports schema_version=0).
-    # An UNSUPPORTED_CAPABILITY (review.bundle) is exit 1 since it's neither
-    # VALIDATION nor INVARIANT.
+    The original test asserted `review bundle` was UNSUPPORTED_CAPABILITY,
+    but review.bundle is now a shipped report (trade-trace-da6t). Use
+    `forecast.supersede` with a nonexistent prior_forecast_id instead —
+    a fresh journal returns NOT_FOUND with the canonical exit-1 mapping.
+    """
+
+    home = _init_home(tmp_path)
     rc, _ = _cli_lines([
-        "review", "bundle",
-        "--filter-json", "{}",
+        "forecast", "supersede",
+        "--home", str(home),
+        "--prior-forecast-id", "fc_does_not_exist",
+        "--kind", "binary",
+        "--outcomes-json", json.dumps([
+            {"outcome_label": "YES", "probability": 0.5},
+            {"outcome_label": "NO", "probability": 0.5},
+        ]),
+        "--idempotency-key", "da6t-exit-one",
     ])
     assert rc == 1
 

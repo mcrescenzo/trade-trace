@@ -30,13 +30,18 @@ def _normalize(envelope: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def test_journal_status_parity():
+def test_journal_status_parity(tmp_path):
+    """Pin `home` to a tmp_path so the test asserts the contract for an
+    uninitialized journal regardless of the operator's default
+    `$TRADE_TRACE_HOME` state (trade-trace-cwdl)."""
+
     registry = build_registry()
+    home = tmp_path / "home"
 
     # MCP path (in-process)
     mcp_env = mcp_call(
         "journal.status",
-        {},
+        {"home": str(home)},
         actor_id="agent:default",
         request_id="req-mcp",
         registry=registry,
@@ -53,6 +58,8 @@ def test_journal_status_parity():
                 "req-cli",
                 "journal",
                 "status",
+                "--home",
+                str(home),
             ],
             registry=registry,
         )
