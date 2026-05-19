@@ -242,9 +242,14 @@ def test_scoring_state_enum(tmp_path: Path):
         db.close()
 
 
-def test_strategy_id_nullable_no_fk(tmp_path: Path):
-    """`strategy_id` is reserved as nullable TEXT without FK (strategies
-    table is M3)."""
+def test_strategy_id_nullable_with_new_row_validation(tmp_path: Path):
+    """Per bead trade-trace-z4q / DEBT-012: `strategy_id` stays
+    nullable TEXT without a hard FK (SQLite can't add FKs via
+    ALTER TABLE) but migration 010 installs BEFORE INSERT triggers
+    on `decisions` and `theses` that reject new rows pointing at a
+    nonexistent strategy. NULL stays legal (the canonical "no
+    strategy"). Rows that predate migration 010 are grandfathered
+    and not retroactively validated."""
 
     db = _db(tmp_path)
     try:
@@ -254,24 +259,72 @@ def test_strategy_id_nullable_no_fk(tmp_path: Path):
                 VALUES ('v_1', 'manual', 'manual', '2026-05-18T14:00:00Z', 'agent:default');
             INSERT INTO instruments(id, venue_id, title, asset_class, created_at, actor_id)
                 VALUES ('i_1', 'v_1', 'Test', 'prediction_market', '2026-05-18T14:00:00Z', 'agent:default');
+            INSERT INTO strategies(id, name, slug, status, created_at, updated_at, actor_id)
+                VALUES ('strat_real', 'Real', 'real', 'active',
+                        '2026-05-18T14:00:00Z', '2026-05-18T14:00:00Z', 'agent:default');
             """
         )
-        # NULL strategy_id allowed.
+
+        # NULL strategy_id stays allowed.
         db.connection.execute(
             "INSERT INTO decisions(id, instrument_id, type, strategy_id, created_at, actor_id) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            ("d_1", "i_1", "skip", None, "2026-05-18T14:00:00Z", "agent:default"),
+            ("d_1", "i_1", "skip", None,
+             "2026-05-18T14:00:00Z", "agent:default"),
         )
-        # Arbitrary string strategy_id allowed (no FK check until M3 strategies).
+
+        db.connection.execute(
+            "INSERT INTO theses(id, instrument_id, side, body, strategy_id, created_at, actor_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("t_1", "i_1", "yes", "...", None,
+             "2026-05-18T14:00:00Z", "agent:default"),
+        )
+
+        # Real strategy_id allowed on both tables.
         db.connection.execute(
             "INSERT INTO decisions(id, instrument_id, type, strategy_id, created_at, actor_id) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            ("d_2", "i_1", "skip", "some-future-strategy-id", "2026-05-18T14:00:00Z", "agent:default"),
+            ("d_2", "i_1", "skip", "strat_real",
+             "2026-05-18T14:00:00Z", "agent:default"),
         )
+        db.connection.execute(
+            "INSERT INTO theses(id, instrument_id, side, body, strategy_id, created_at, actor_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("t_2", "i_1", "yes", "...", "strat_real",
+             "2026-05-18T14:00:00Z", "agent:default"),
+        )
+
+        # Nonexistent strategy_id rejected by the new-row trigger.
+        with pytest.raises(sqlite3.IntegrityError) as exc:
+            db.connection.execute(
+                "INSERT INTO decisions(id, instrument_id, type, strategy_id, created_at, actor_id) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                ("d_3", "i_1", "skip", "strat_nope",
+                 "2026-05-18T14:00:00Z", "agent:default"),
+            )
+        assert "VALIDATION_ERROR" in str(exc.value)
+        assert "decisions.strategy_id" in str(exc.value)
+        assert "nonexistent strategy" in str(exc.value)
+
+        # Same contract holds for theses.
+        with pytest.raises(sqlite3.IntegrityError) as exc:
+            db.connection.execute(
+                "INSERT INTO theses(id, instrument_id, side, body, "
+                "strategy_id, created_at, actor_id) VALUES "
+                "(?, ?, ?, ?, ?, ?, ?)",
+                ("t_nope", "i_1", "yes", "...", "strat_nope",
+                 "2026-05-18T14:00:00Z", "agent:default"),
+            )
+        assert "VALIDATION_ERROR" in str(exc.value)
+        assert "theses.strategy_id" in str(exc.value)
+        assert "nonexistent strategy" in str(exc.value)
+
         count = db.connection.execute(
-            "SELECT COUNT(*) FROM decisions WHERE strategy_id IS NULL OR strategy_id IS NOT NULL"
+            "SELECT COUNT(*) FROM decisions WHERE strategy_id IS NULL "
+            "OR strategy_id IS NOT NULL"
         ).fetchone()[0]
         assert count == 2
+        assert db.connection.execute("SELECT COUNT(*) FROM theses").fetchone()[0] == 2
     finally:
         db.close()
 
