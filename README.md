@@ -3,7 +3,7 @@
 Install the optional MCP extra to run the stdio server:
 
 ```bash
-pip install -e '.[mcp]'
+pip install -e .
 export TRADE_TRACE_HOME="$HOME/.trade-trace"
 tt journal init
 trade-trace-mcp
@@ -106,9 +106,9 @@ The development install is `pip install -e .`; the package install is
 `pip install trade-trace` once published.
 
 The base wheel remains lightweight: only `pydantic>=2.7` is required at
-runtime (see `pyproject.toml`). Optional MCP support installs with
-`trade-trace[mcp]`; optional embedding support installs with
-`trade-trace[embeddings]` (or `pip install -e '.[mcp,embeddings]'` from a
+runtime (see `pyproject.toml`). MCP support is included by default;
+optional embedding support installs with `trade-trace[embeddings]`
+(or `pip install -e '.[embeddings]'` from a
 checkout). The embeddings extra provides `sqlite-vec` and OS keyring
 support for vector recall, local model import/warm, API-provider keys,
 and `memory.reindex`.

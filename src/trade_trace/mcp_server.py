@@ -135,13 +135,17 @@ def mcp_call(
 def _build_stdio_server(registry: ToolRegistry | None = None):
     """Build the low-level MCP SDK server without starting a transport."""
 
+    # MCP is a required base dependency now (trade-trace-o8j5); the
+    # narrow try/except remains so any future repackaging that pins
+    # against an incompatible MCP SDK surfaces a clean error.
     try:
         from mcp import types
         from mcp.server import Server
-    except ImportError as exc:  # pragma: no cover - exercised only without optional extra
+    except ImportError as exc:  # pragma: no cover - base dep should always be present
         raise RuntimeError(
-            "MCP stdio support requires the optional dependency: "
-            "install trade-trace with `pip install trade-trace[mcp]` or `pip install -e '.[mcp]'`."
+            "MCP runtime failed to import even though it is declared as a "
+            "base dependency in pyproject.toml. Reinstall trade-trace "
+            "(`pip install -e .`) or report this as a packaging bug."
         ) from exc
 
     reg = registry if registry is not None else default_registry()

@@ -12,10 +12,14 @@ requires-python = ">=3.11"
 authors = [{ name = "Trade Trace contributors" }]
 dependencies = [
     "pydantic>=2.7,<3",
+    # MCP is a first-class runtime dependency (trade-trace-o8j5). The
+    # `[mcp]` extra below is preserved as an empty alias so existing
+    # install recipes (`pip install trade-trace[mcp]`) keep working.
+    "mcp>=1.0",
 ]
 
 [project.optional-dependencies]
-mcp = ["mcp>=1.0"]
+mcp = []  # back-compat alias; mcp is now a base runtime dependency
 embeddings = ["sqlite-vec==0.1.6", "keyring>=25"]
 dev = [
     "pytest>=8",

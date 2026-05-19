@@ -7,7 +7,7 @@ Trade Trace runs as a local MCP stdio server. IDE clients should launch `trade-t
 Install Trade Trace with the optional MCP dependency in the Python environment your IDE can reach:
 
 ```bash
-pip install -e '.[mcp]'
+pip install -e .
 command -v trade-trace-mcp
 ```
 

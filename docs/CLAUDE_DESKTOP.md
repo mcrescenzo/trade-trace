@@ -7,7 +7,7 @@ Trade Trace runs as a local MCP stdio server. Claude Desktop launches `trade-tra
 Install Trade Trace with the optional MCP dependency in the Python environment Claude Desktop can reach:
 
 ```bash
-pip install -e '.[mcp]'
+pip install -e .
 command -v trade-trace-mcp
 ```
 

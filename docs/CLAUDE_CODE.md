@@ -7,7 +7,7 @@ Trade Trace runs as a local MCP stdio server. It does not expose an HTTP port an
 From the Trade Trace checkout or package environment, install the optional MCP extra and confirm the console script is on your PATH:
 
 ```bash
-pip install -e '.[mcp]'
+pip install -e .
 trade-trace-mcp
 ```
 
