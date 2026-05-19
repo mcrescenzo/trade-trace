@@ -1,0 +1,4075 @@
+{
+  "run_id": "20260519T175941Z",
+  "repo": "/home/hermes/code/trade-trace",
+  "tracked_total": 330,
+  "classifications": [
+    {
+      "path": ".beads/.gitignore",
+      "classification": "config",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": ".beads/README.md",
+      "classification": "config",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": ".beads/config.yaml",
+      "classification": "config",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": ".beads/metadata.json",
+      "classification": "config",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": ".claude/settings.json",
+      "classification": "config",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "classification": "config",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": ".github/workflows/workflow.yml",
+      "classification": "config",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": ".gitignore",
+      "classification": "config",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "AGENTS.md",
+      "classification": "packaging",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "CLAUDE.md",
+      "classification": "packaging",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "LICENSE",
+      "classification": "packaging",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "README.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/advisor-gate-packet.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-001.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-002.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-003.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-004.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-005.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-006.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-007.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-008.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-011.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-012.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-013.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-014.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-015.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-016.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-017.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-018.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-019.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-020.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-021.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-022.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-023.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-024.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-025.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-026.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-027.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-028.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-029.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-031.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-033.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-034.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-035.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-036.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-037.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-038.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-039.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-040.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/DEBT-041.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/EPIC-no-tech-debt.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bead-bodies/FINAL-verification.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bug-body-lint-repair-log.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/bughunt-crosslink-noise-repair.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/central-debt-matrix-summary.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/central-debt-matrix.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/coverage-ledger.jsonl",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/coverage-summary.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/domain-map.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/lane-reports/lane-0.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/lane-reports/lane-1.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/lane-reports/lane-2.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/lane-reports/lane-3.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/lane-reports/lane-4.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/lane-reports/lane-5.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/lane-reports/lane-6.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/lane-reports/lane-7.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/mutation-audit-postwrite.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/mutation-map-prewrite.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/beads-export-final.jsonl",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/candidate-integrity-readback.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/cycles-after-readback-repair.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/dep-list-epic-focused.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/dep-list-final-gate-focused.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/duplicate-disposition.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/duplicates-final.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/duplicates-pre-mutation.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/final-hygiene-1.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/final-hygiene-2.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/final-hygiene-3.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/graph-focused.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/in-progress-pre-mutation.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/lint-after-readback-repair.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/open-pre-mutation.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/preflight-current.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/readback-all-no-tech-debt-long.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/readback-sentinel-aq0.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/readback-sentinel-epic.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/readback-sentinel-final.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/readback-sentinel-qfxw.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/readback-trade-trace-0r7.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/readback-trade-trace-2d3.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/readback-trade-trace-5lx.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/readback-trade-trace-74b.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "audits/no-tech-debt-20260518/verification/validation-current.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/AGENT_GUIDE.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/AI_AGENT_MCP_GETTING_STARTED.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/CLAUDE_CODE.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/CLAUDE_DESKTOP.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/IDE_MCP_SETUP.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/PRD.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-011"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": ""
+    },
+    {
+      "path": "docs/VISION.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/contracts.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/dogfood-protocol.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/forecastbench-compatibility.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/http-sse-subscribe.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/imports.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/memory-layer.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/operability.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/opportunity-analysis.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/persistence.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/reports.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/risk-units.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/scoring.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/architecture/security.md",
+      "classification": "docs-contract",
+      "owner_lane": "docs-packaging-ci-contracts",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/advisor_packet.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/bead-bodies/CAND-001.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/bead-bodies/CAND-002.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/bead-bodies/CAND-003.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/bead-bodies/CAND-004.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/bead-bodies/CAND-005.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/bead-bodies/CAND-006.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/bead-bodies/CAND-007.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/bead-bodies/CAND-008.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/bead-bodies/CAND-011.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/bead-bodies/CAND-012.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/bead-bodies/CAND-014.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/candidate_matrix.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/candidate_to_bead_map.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/coverage_ledger.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/coverage_summary.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/domain_map.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/duplicate_disposition.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/epic_body.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/epic_id.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/final_closeout_verification.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/final_gate_body.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/final_gate_id.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/lane-packets/cli-mcp-contracts-tools.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/lane-packets/docs-packaging-ci-ops.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/lane-packets/reports-memory-playbook-strategy.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/lane-packets/storage-events-domain-security.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/lane-packets/tests-fixtures-crosscutting.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/manifest.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/materialization_commands.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/materialization_output.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/materialize_bugs.py",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/mutation_audit.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/post_publication_verification.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/bughunt-20260519T030623Z/primary_evidence.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/advisor-evidence-packet.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/advisor-review.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/bead-bodies/CRT-001.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/bead-bodies/CRT-002.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/bead-bodies/DOC-001.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/bead-bodies/DOC-002A.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/bead-bodies/DOC-002B.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/bead-bodies/TST-001.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/body-integrity-readback.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/candidate-matrix.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/coverage-ledger.csv",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/domain-map.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/epic-body.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/final-gate-body.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/final-readback-after-duplicate-repair.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/final-readback-raw.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/final-summary.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/lane-packets.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/markdown-link-check.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/mutation-audit.md",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/mutation-command-log.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/pre-mutation-snapshot.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/registered-tools.txt",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/static-analysis.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "docs/audits/deadcode-2026-05-18/tracked-manifest.json",
+      "classification": "docs-historical",
+      "owner_lane": "historical-audit-artifacts",
+      "inspection_depth": "grouped-not-read-with-rationale",
+      "lenses_applied": [
+        "grouped-historical"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Prior audit artifacts are historical evidence and duplicate-avoidance inputs; grouped unless referenced by current docs/runtime."
+    },
+    {
+      "path": "pyproject.toml",
+      "classification": "packaging",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/__init__.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/cli.py",
+      "classification": "source",
+      "owner_lane": "cli-mcp-contracts-tools",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-001",
+        "CAND-002"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/clock.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/contracts/__init__.py",
+      "classification": "source",
+      "owner_lane": "cli-mcp-contracts-tools",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/contracts/envelope.py",
+      "classification": "source",
+      "owner_lane": "cli-mcp-contracts-tools",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/contracts/errors.py",
+      "classification": "source",
+      "owner_lane": "cli-mcp-contracts-tools",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/contracts/grammar.py",
+      "classification": "source",
+      "owner_lane": "cli-mcp-contracts-tools",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/contracts/json_schema_derive.py",
+      "classification": "source",
+      "owner_lane": "cli-mcp-contracts-tools",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/contracts/report_filter.py",
+      "classification": "source",
+      "owner_lane": "cli-mcp-contracts-tools",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/contracts/tool_registry.py",
+      "classification": "source",
+      "owner_lane": "cli-mcp-contracts-tools",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-003"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/core.py",
+      "classification": "source",
+      "owner_lane": "cli-mcp-contracts-tools",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/events/__init__.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/events/log.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/events/semantic_keys.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/events/unit_of_work.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/exporter.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/mcp_server.py",
+      "classification": "source",
+      "owner_lane": "cli-mcp-contracts-tools",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-003"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/models/__init__.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/models/ledger.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/models/memory.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/projections.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/__init__.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/_filter_support.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/buckets.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/calibration.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/coach.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/compare.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-008"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/decision_velocity.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/integrity.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/opportunity.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/playbook_adherence.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/pnl.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/risk.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/source_quality.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/tag_aggregates.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/unscored.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/reports/watchlist.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/security/__init__.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/security/keyring.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/security/patterns.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/storage/__init__.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/storage/database.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/storage/edge_audit.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/storage/migrations.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/storage/paths.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/storage/policy.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/timestamps.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/__init__.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/_examples.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/_helpers.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/admin.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-009",
+        "CAND-010"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/csv_import.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/decision_matrix.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/errors.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/fixture.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/imports.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/journal.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-011"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/ledger.py",
+      "classification": "source",
+      "owner_lane": "storage-events-integrity",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-004",
+        "CAND-005"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/memory.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/playbook.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/reflection.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-006",
+        "CAND-007"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/reports.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/review_bundle.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-013"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/signals.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/tools/strategy.py",
+      "classification": "source",
+      "owner_lane": "reports-memory-strategy-playbook",
+      "inspection_depth": "read-directly",
+      "lenses_applied": [
+        "contract",
+        "failure-mode"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "src/trade_trace/version.py",
+      "classification": "source",
+      "owner_lane": "security-config-ops",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": ""
+    },
+    {
+      "path": "tests/__init__.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/conftest.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/contracts/__init__.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/contracts/test_agent_ergonomics.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/contracts/test_cli_name_uniqueness.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/contracts/test_envelope.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/contracts/test_event_enum_coverage.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/contracts/test_grammar.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/contracts/test_json_schema_derivation.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/contracts/test_report_envelope_completeness.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/docs/test_markdown_links.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/golden/__init__.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/golden/test_cli_mcp_parity.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/golden/test_journal_status_parity.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "runtime-tested",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-012"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/__init__.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_admin_tools.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_append_only.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_bucket_constants.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_calibration_integrity.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_cli_no_writes.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_coach_override_outcomes.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_csv_import.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_edge_endpoint_audit.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_edges.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_embeddings_sqlite_vec_substrate.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_final_dogfood_verification.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_fixture_seed.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_idempotency.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_import_jsonl_replay.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_journal_init.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_jsonl_atomic_write.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_jsonl_contract.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_jsonl_replay_readiness.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_ledger_event_emission.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_manual_ledger_flow.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_mcp_stdio_server.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_memory_layer.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_memory_link.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_memory_recall_budgets.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_memory_retrieval_constants.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_migration_policy.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_migrations.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_ndjson_streaming.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "runtime-tested",
+      "lenses_applied": [
+        "contract",
+        "failure-mode",
+        "validation"
+      ],
+      "candidate_ids_found": [
+        "CAND-013"
+      ],
+      "evidence_handle": "primary_evidence.txt",
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_operability_drill.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_outbox_export.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_p1_stub_columns.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_playbook_layer.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_projection_rebuild.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_reflection_prompt.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_report_calibration.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_report_coach.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_report_compare.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_report_filter.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_report_opportunity.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_report_pnl_watchlist.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_report_risk.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_report_sample_warnings.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_report_tag_aggregates.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_report_unscored_velocity.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_reproducibility_replay.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_rescan_scoring_stub.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_review_bundle_contract.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_schema.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_scoring_lifecycle.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_scoring_p1.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_semantic_keys.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_signal_scan.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_signals_schema.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_source_attach_to_memory_node.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_source_quality.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_strategy_tools.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/integration/test_transactions.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/property/__init__.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/property/test_scoring_properties.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/__init__.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/test_embeddings_api_keyring.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/test_embeddings_off_by_default.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/test_file_permissions.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/test_mcp_stdio_boundary.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/test_mvp_boundary_audit.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/test_no_credentials.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/test_no_network_default.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/test_no_telemetry_packages.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/test_redacted_exports.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/test_report_sql_filters.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/security/test_secret_pattern_writes.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/test_smoke.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    },
+    {
+      "path": "tests/test_timestamps.py",
+      "classification": "test",
+      "owner_lane": "tests-fixtures-crosscutting",
+      "inspection_depth": "search-hit-reviewed",
+      "lenses_applied": [
+        "search-review"
+      ],
+      "candidate_ids_found": [],
+      "evidence_handle": null,
+      "caveats": "Full pytest plus targeted searches covered tests; specific failing tests opened directly."
+    }
+  ]
+}

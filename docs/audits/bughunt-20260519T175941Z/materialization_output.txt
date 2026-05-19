@@ -1,0 +1,76 @@
+$ bd create 'EPIC: exhaustive repo bughunt refresh 2026-05-19T175941Z' --type epic --priority P2 --labels bughunt,bughunt:exhaustive-refresh-20260519 --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/epic_body.md --acceptance 'Relation-based bughunt epic remains open while related bug findings are open; artifacts and final verification readbacks are durable.' --silent
+trade-trace-4c4i
+$ bd create 'Final verification: exhaustive bughunt refresh 2026-05-19T175941Z' --type task --priority P2 --labels bughunt,bughunt-gate,bughunt:exhaustive-refresh-20260519 --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/final_gate_body.md --acceptance 'Candidate disposition, Beads readbacks, duplicate scan, cycles/lint/orphans, artifact disposition, and final report are saved.' --silent
+trade-trace-ck50
+$ bd dep relate trade-trace-4c4i trade-trace-ck50
+✓ Linked trade-trace-4c4i ↔ trade-trace-ck50
+$ bd update trade-trace-3i33 --add-label bug --add-label bughunt --add-label bughunt:exhaustive-refresh-20260519 --add-label domain:cli-contracts --append-notes 'Repo-bughunt refresh 20260519T175941Z: CAND-003 merged here instead of creating a duplicate. Additional evidence saved in docs/audits/bughunt-20260519T175941Z/primary_evidence.txt: default_registry has 66 tools, 55 missing registry json_schema / empty MCP inputSchema; `tt tool schema --tool memory.recall` returns json_schema null. This is the systemic version of the same tool.schema/CLI-help failure already described here. Related epic: trade-trace-4c4i.'
+✓ Updated issue: trade-trace-3i33 — Fill missing tool schemas and CLI help for agent-safe MCP usage
+$ bd dep relate trade-trace-4c4i trade-trace-3i33
+✓ Linked trade-trace-4c4i ↔ trade-trace-3i33
+$ bd create 'Unknown CLI commands bypass the JSON error-envelope contract' --type bug --priority P2 --labels bug,bughunt,bughunt:exhaustive-refresh-20260519,domain:cli-contracts,api-contract --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/bead-bodies/CAND-001.md --acceptance 'Unknown CLI invocations return parseable ErrorEnvelope JSON on stdout; Exit code remains non-zero; Contract/golden test asserts JSON envelope, not only SystemExit/non-zero' --silent
+trade-trace-kynj
+$ bd dep relate trade-trace-4c4i trade-trace-kynj
+✓ Linked trade-trace-4c4i ↔ trade-trace-kynj
+$ bd create 'CLI parser documents repeated/comma array flags but passes strings or last value' --type bug --priority P2 --labels bug,bughunt,bughunt:exhaustive-refresh-20260519,domain:cli-contracts,api-contract --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/bead-bodies/CAND-002.md --acceptance 'Documented array encoding works or docs require --*-json only; Repeated list args do not silently drop earlier values; Contract tests cover real list-valued tool argument' --silent
+trade-trace-pybt
+$ bd dep relate trade-trace-4c4i trade-trace-pybt
+✓ Linked trade-trace-4c4i ↔ trade-trace-pybt
+$ bd create 'forecast.supersede idempotent retry creates extra replacement forecasts and edges' --type bug --priority P1 --labels bug,bughunt,bughunt:exhaustive-refresh-20260519,domain:storage-integrity,data-integrity,idempotency --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/bead-bodies/CAND-004.md --acceptance 'Exact forecast.supersede replay returns original replacement id with idempotent_replay=true; No forecast/outcome/edge/event/outbox counts increase on replay; Conflicting payload fails before relational writes' --silent
+trade-trace-ug7p
+$ bd dep relate trade-trace-4c4i trade-trace-ug7p
+✓ Linked trade-trace-4c4i ↔ trade-trace-ug7p
+$ bd dep relate trade-trace-ug7p trade-trace-cpz2
+✓ Linked trade-trace-ug7p ↔ trade-trace-cpz2
+$ bd dep relate trade-trace-ug7p trade-trace-re4
+✓ Linked trade-trace-ug7p ↔ trade-trace-re4
+$ bd create 'forecast.supersede skips late auto-score when a resolved_final outcome already exists' --type bug --priority P2 --labels bug,bughunt,bughunt:exhaustive-refresh-20260519,domain:storage-integrity,data-integrity --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/bead-bodies/CAND-005.md --acceptance 'Supersede after resolved_final writes forecast_scores row for replacement; forecast.scored event emitted in same transaction; Regression covers ambiguous yes_label recovery via supersede' --silent
+trade-trace-ld6l
+$ bd dep relate trade-trace-4c4i trade-trace-ld6l
+✓ Linked trade-trace-4c4i ↔ trade-trace-ld6l
+$ bd dep relate trade-trace-ld6l trade-trace-re4
+✓ Linked trade-trace-ld6l ↔ trade-trace-re4
+$ bd create 'reflection.prompt_for_outcome can attach the wrong forecast/thesis for multi-forecast instruments' --type bug --priority P2 --labels bug,bughunt,bughunt:exhaustive-refresh-20260519,domain:reports-memory,api-contract --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/bead-bodies/CAND-006.md --acceptance 'Packet forecast id is linked to requested outcome via forecast_scores/canonical relation; Packet thesis id equals returned forecast.thesis_id; Regression covers two forecasts on one instrument' --silent
+trade-trace-vzmq
+$ bd dep relate trade-trace-4c4i trade-trace-vzmq
+✓ Linked trade-trace-4c4i ↔ trade-trace-vzmq
+$ bd create 'report.compare advertises group_by values that are rejected at runtime' --type bug --priority P3 --labels bug,bughunt,bughunt:exhaustive-refresh-20260519,domain:reports-memory,api-contract --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/bead-bodies/CAND-008.md --acceptance 'Advertised group_by values match runtime behavior; Tests cover every advertised group_by or schema omits unsupported values; Errors distinguish invalid from unsupported-for-base-report' --silent
+trade-trace-cs0r
+$ bd dep relate trade-trace-4c4i trade-trace-cs0r
+✓ Linked trade-trace-4c4i ↔ trade-trace-cs0r
+$ bd create 'journal.restore trusts manifest paths and can write outside TRADE_TRACE_HOME' --type bug --priority P1 --labels bug,bughunt,bughunt:exhaustive-refresh-20260519,domain:security-ops,security --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/bead-bodies/CAND-009.md --acceptance 'Restore rejects traversal/absolute/drive paths and resolved outputs outside home; Valid journal.backup manifests still restore; Regression proves no outside file is created for malicious manifest' --silent
+trade-trace-l24k
+$ bd dep relate trade-trace-4c4i trade-trace-l24k
+✓ Linked trade-trace-4c4i ↔ trade-trace-l24k
+$ bd create 'Fresh direct import of trade_trace.tools.admin fails with circular ImportError' --type bug --priority P3 --labels bug,bughunt,bughunt:exhaustive-refresh-20260519,domain:security-ops,runtime,domain:package-runtime --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/bead-bodies/CAND-010.md --acceptance 'Fresh imports of trade_trace.tools.admin and trade_trace.tools.errors succeed; Core CLI/MCP startup still succeeds; Direct-import smoke tests added' --silent
+trade-trace-9oxn
+$ bd dep relate trade-trace-4c4i trade-trace-9oxn
+✓ Linked trade-trace-4c4i ↔ trade-trace-9oxn
+$ bd create 'PRD documents journal.init --enable-embeddings, but the flag is a silent no-op' --type bug --priority P3 --labels bug,bughunt,bughunt:exhaustive-refresh-20260519,domain:docs-ops,docs-truth --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/bead-bodies/CAND-011.md --acceptance 'Either implement journal.init --enable-embeddings or remove docs claim; No docs imply silent successful embedding opt-in unless status changes; Validation confirms documented setup path truth' --silent
+trade-trace-0tdt
+$ bd dep relate trade-trace-4c4i trade-trace-0tdt
+✓ Linked trade-trace-4c4i ↔ trade-trace-0tdt
+$ bd create 'journal.status golden parity test reads the developer default Trade Trace home' --type bug --priority P2 --labels bug,bughunt,bughunt:exhaustive-refresh-20260519,domain:tests,test-failure --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/bead-bodies/CAND-012.md --acceptance 'Test uses isolated temporary home; Passes with real default home initialized or absent; Full suite no longer fails on machine state' --silent
+trade-trace-68ew
+$ bd dep relate trade-trace-4c4i trade-trace-68ew
+✓ Linked trade-trace-4c4i ↔ trade-trace-68ew
+$ bd create 'NDJSON exit-code test expects review.bundle to be unsupported after it became implemented' --type bug --priority P2 --labels bug,bughunt,bughunt:exhaustive-refresh-20260519,domain:tests,test-failure,test-harness --body-file /home/hermes/code/trade-trace/docs/audits/bughunt-20260519T175941Z/bead-bodies/CAND-013.md --acceptance 'Test exercises current real error path for rc=1; review.bundle success is not used as unsupported fixture; Targeted and relevant review bundle tests pass' --silent
+trade-trace-boqe
+$ bd dep relate trade-trace-4c4i trade-trace-boqe
+✓ Linked trade-trace-4c4i ↔ trade-trace-boqe
+{
+  "EPIC": "trade-trace-4c4i",
+  "FINAL": "trade-trace-ck50",
+  "CAND-003": "trade-trace-3i33",
+  "CAND-001": "trade-trace-kynj",
+  "CAND-002": "trade-trace-pybt",
+  "CAND-004": "trade-trace-ug7p",
+  "CAND-005": "trade-trace-ld6l",
+  "CAND-006": "trade-trace-vzmq",
+  "CAND-008": "trade-trace-cs0r",
+  "CAND-009": "trade-trace-l24k",
+  "CAND-010": "trade-trace-9oxn",
+  "CAND-011": "trade-trace-0tdt",
+  "CAND-012": "trade-trace-68ew",
+  "CAND-013": "trade-trace-boqe"
+}

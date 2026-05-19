@@ -1,0 +1,584 @@
+[
+  {
+    "id": "CAND-001",
+    "raw_source_ref": "lane-packets/lane-0.md",
+    "source_lane": "cli-mcp-contracts-tools",
+    "proposed_title": "Unknown CLI commands bypass the JSON error-envelope contract",
+    "subsystem_paths": [
+      "src/trade_trace/cli.py",
+      "src/trade_trace/core.py",
+      "docs/architecture/contracts.md",
+      "tests/golden/test_journal_status_parity.py"
+    ],
+    "bug_class": "api-contract",
+    "evidence_type": "runtime-probe",
+    "evidence": "primary_evidence.txt unknown_cli_command_envelope: rc=1, stdout empty, stderr raw unknown-command text; cli.py _invocation_from_args raises SystemExit before dispatch.",
+    "observed_behavior": "Invalid CLI invocation prints raw stderr and no JSON.",
+    "expected_behavior": "Invalid CLI invocation returns stable ErrorEnvelope JSON and non-zero exit.",
+    "impact": "Agent callers cannot parse errors for typo/unregistered commands, breaking CLI/MCP parity.",
+    "severity": "P2",
+    "confidence": "high",
+    "duplicate_of": null,
+    "related_to": [],
+    "proposed_bead_title": "Unknown CLI commands bypass the JSON error-envelope contract",
+    "proposed_bead_body": "Context:\ncli-mcp-contracts-tools \u2014 src/trade_trace/cli.py, src/trade_trace/core.py, docs/architecture/contracts.md, tests/golden/test_journal_status_parity.py\n\nObserved behavior:\nInvalid CLI invocation prints raw stderr and no JSON.\n\nExpected behavior:\nInvalid CLI invocation returns stable ErrorEnvelope JSON and non-zero exit.\n\nEvidence:\nprimary_evidence.txt unknown_cli_command_envelope: rc=1, stdout empty, stderr raw unknown-command text; cli.py _invocation_from_args raises SystemExit before dispatch.\n\nFailure mode / impact:\nAgent callers cannot parse errors for typo/unregistered commands, breaking CLI/MCP parity.\n\n## Steps to Reproduce\nTRADE_TRACE_HOME=$(mktemp -d) python3 -m trade_trace.cli nonexistent tool\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: none.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\nTRADE_TRACE_HOME=$(mktemp -d) python3 -m trade_trace.cli nonexistent tool\n\nAcceptance criteria:\n- Unknown CLI invocations return parseable ErrorEnvelope JSON on stdout\n- Exit code remains non-zero\n- Contract/golden test asserts JSON envelope, not only SystemExit/non-zero\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-001 in domain cli-mcp-contracts-tools.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:cli-contracts",
+      "api-contract"
+    ],
+    "validation_command": "TRADE_TRACE_HOME=$(mktemp -d) python3 -m trade_trace.cli nonexistent tool",
+    "acceptance_criteria": [
+      "Unknown CLI invocations return parseable ErrorEnvelope JSON on stdout",
+      "Exit code remains non-zero",
+      "Contract/golden test asserts JSON envelope, not only SystemExit/non-zero"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback.",
+    "materialized_bead_id": "trade-trace-kynj",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-0.md"
+    ]
+  },
+  {
+    "id": "CAND-002",
+    "raw_source_ref": "lane-packets/lane-0.md",
+    "source_lane": "cli-mcp-contracts-tools",
+    "proposed_title": "CLI parser documents repeated/comma array flags but passes strings or last value",
+    "subsystem_paths": [
+      "src/trade_trace/cli.py",
+      "docs/architecture/contracts.md",
+      "src/trade_trace/tools/memory.py"
+    ],
+    "bug_class": "api-contract",
+    "evidence_type": "python-probe",
+    "evidence": "primary_evidence.txt parse_arrays_and_mcp_schemas: repeated node_types -> scalar last value; comma list -> scalar string; docs/contracts.md documents array flags.",
+    "observed_behavior": "Repeated array flags overwrite and comma arrays remain strings.",
+    "expected_behavior": "Documented repeated/comma array syntax works, or docs/schema narrow to JSON-only arrays.",
+    "impact": "Docs-following agents cannot pass list filters; values may be silently dropped.",
+    "severity": "P2",
+    "confidence": "high",
+    "duplicate_of": null,
+    "related_to": [],
+    "proposed_bead_title": "CLI parser documents repeated/comma array flags but passes strings or last value",
+    "proposed_bead_body": "Context:\ncli-mcp-contracts-tools \u2014 src/trade_trace/cli.py, docs/architecture/contracts.md, src/trade_trace/tools/memory.py\n\nObserved behavior:\nRepeated array flags overwrite and comma arrays remain strings.\n\nExpected behavior:\nDocumented repeated/comma array syntax works, or docs/schema narrow to JSON-only arrays.\n\nEvidence:\nprimary_evidence.txt parse_arrays_and_mcp_schemas: repeated node_types -> scalar last value; comma list -> scalar string; docs/contracts.md documents array flags.\n\nFailure mode / impact:\nDocs-following agents cannot pass list filters; values may be silently dropped.\n\n## Steps to Reproduce\npython3 - <<PY ... _parse_kv_args repeated/comma assertions ... PY\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: none.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\npython3 - <<PY ... _parse_kv_args repeated/comma assertions ... PY\n\nAcceptance criteria:\n- Documented array encoding works or docs require --*-json only\n- Repeated list args do not silently drop earlier values\n- Contract tests cover real list-valued tool argument\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-002 in domain cli-mcp-contracts-tools.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:cli-contracts",
+      "api-contract"
+    ],
+    "validation_command": "python3 - <<PY ... _parse_kv_args repeated/comma assertions ... PY",
+    "acceptance_criteria": [
+      "Documented array encoding works or docs require --*-json only",
+      "Repeated list args do not silently drop earlier values",
+      "Contract tests cover real list-valued tool argument"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback.",
+    "materialized_bead_id": "trade-trace-pybt",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-0.md"
+    ]
+  },
+  {
+    "id": "CAND-003",
+    "raw_source_ref": "lane-packets/lane-0.md + lane-packets/lane-4.md",
+    "source_lane": "cli-mcp-contracts-tools",
+    "proposed_title": "Tool/MCP schema contract is false for most registered tools",
+    "subsystem_paths": [
+      "src/trade_trace/contracts/tool_registry.py",
+      "src/trade_trace/mcp_server.py",
+      "docs/PRD.md",
+      "docs/AI_AGENT_MCP_GETTING_STARTED.md",
+      "docs/AGENT_GUIDE.md"
+    ],
+    "bug_class": "api-contract",
+    "evidence_type": "registry-probe",
+    "evidence": "primary_evidence.txt: default_registry has 66 tools, 55 missing registry schemas / empty MCP schemas; tool schema memory.recall returns json_schema null.",
+    "observed_behavior": "Most tools expose null/empty schemas despite docs telling agents to rely on tool.schema/MCP inputSchema.",
+    "expected_behavior": "Every public tool exposes useful schema, or docs/contract truthfully limits schema availability.",
+    "impact": "Agent integrations cannot discover/validate payloads from documented source of truth.",
+    "severity": "P2",
+    "confidence": "high",
+    "duplicate_of": null,
+    "related_to": [
+      "trade-trace-2ya5"
+    ],
+    "proposed_bead_title": "Tool/MCP schema contract is false for most registered tools",
+    "proposed_bead_body": "Context:\ncli-mcp-contracts-tools \u2014 src/trade_trace/contracts/tool_registry.py, src/trade_trace/mcp_server.py, docs/PRD.md, docs/AI_AGENT_MCP_GETTING_STARTED.md, docs/AGENT_GUIDE.md\n\nObserved behavior:\nMost tools expose null/empty schemas despite docs telling agents to rely on tool.schema/MCP inputSchema.\n\nExpected behavior:\nEvery public tool exposes useful schema, or docs/contract truthfully limits schema availability.\n\nEvidence:\nprimary_evidence.txt: default_registry has 66 tools, 55 missing registry schemas / empty MCP schemas; tool schema memory.recall returns json_schema null.\n\nFailure mode / impact:\nAgent integrations cannot discover/validate payloads from documented source of truth.\n\n## Steps to Reproduce\npython3 registry probe asserting no unexpected null schemas\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: DOC-CI-CONTRACT-001.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\npython3 registry probe asserting no unexpected null schemas\n\nAcceptance criteria:\n- All public tools expose useful non-null schemas or docs narrow schema contract\n- MCP inputSchema no longer unconstrained for tools requiring inputs\n- Contract test guards schema/docs parity\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-003 in domain cli-mcp-contracts-tools.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:cli-contracts",
+      "domain:docs-ops",
+      "api-contract"
+    ],
+    "validation_command": "python3 registry probe asserting no unexpected null schemas",
+    "acceptance_criteria": [
+      "All public tools expose useful non-null schemas or docs narrow schema contract",
+      "MCP inputSchema no longer unconstrained for tools requiring inputs",
+      "Contract test guards schema/docs parity"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Accepted as one systemic registry/schema contract bug; raw DOC-CI-CONTRACT-001 is merged here rather than materialized separately.",
+    "materialized_bead_id": null,
+    "merged_into_bead_id": "trade-trace-3i33",
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-0.md + lane-packets/lane-4.md"
+    ]
+  },
+  {
+    "id": "CAND-004",
+    "raw_source_ref": "lane-packets/lane-1.md",
+    "source_lane": "storage-events-integrity",
+    "proposed_title": "forecast.supersede idempotent retry creates extra replacement forecasts and edges",
+    "subsystem_paths": [
+      "src/trade_trace/tools/ledger.py",
+      "src/trade_trace/events/log.py",
+      "docs/architecture/persistence.md"
+    ],
+    "bug_class": "data-integrity",
+    "evidence_type": "trace/static-probe",
+    "evidence": "lane-packets/lane-1.md dynamic temp-journal proof plus primary_evidence.txt ledger snippet: _forecast_supersede inserts rows before any replay check; EventWriter replay can occur after relational inserts.",
+    "observed_behavior": "Same idempotency key replay can create a different replacement forecast and duplicate supersedes edges/events.",
+    "expected_behavior": "Replay returns original replacement forecast without any new rows/events; conflicting payload fails before writes.",
+    "impact": "Retry after timeout corrupts forecast lineage and breaks event-log/relational consistency.",
+    "severity": "P1",
+    "confidence": "high",
+    "duplicate_of": null,
+    "related_to": [
+      "trade-trace-cpz2",
+      "trade-trace-re4"
+    ],
+    "proposed_bead_title": "forecast.supersede idempotent retry creates extra replacement forecasts and edges",
+    "proposed_bead_body": "Context:\nstorage-events-integrity \u2014 src/trade_trace/tools/ledger.py, src/trade_trace/events/log.py, docs/architecture/persistence.md\n\nObserved behavior:\nSame idempotency key replay can create a different replacement forecast and duplicate supersedes edges/events.\n\nExpected behavior:\nReplay returns original replacement forecast without any new rows/events; conflicting payload fails before writes.\n\nEvidence:\nlane-packets/lane-1.md dynamic temp-journal proof plus primary_evidence.txt ledger snippet: _forecast_supersede inserts rows before any replay check; EventWriter replay can occur after relational inserts.\n\nFailure mode / impact:\nRetry after timeout corrupts forecast lineage and breaks event-log/relational consistency.\n\n## Steps to Reproduce\npytest tests/integration/test_ledger_event_emission.py tests/integration/test_idempotency.py -q\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: trade-trace-cpz2, trade-trace-re4.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\npytest tests/integration/test_ledger_event_emission.py tests/integration/test_idempotency.py -q\n\nAcceptance criteria:\n- Exact forecast.supersede replay returns original replacement id with idempotent_replay=true\n- No forecast/outcome/edge/event/outbox counts increase on replay\n- Conflicting payload fails before relational writes\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-004 in domain storage-events-integrity.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:storage-integrity",
+      "data-integrity",
+      "idempotency"
+    ],
+    "validation_command": "pytest tests/integration/test_ledger_event_emission.py tests/integration/test_idempotency.py -q",
+    "acceptance_criteria": [
+      "Exact forecast.supersede replay returns original replacement id with idempotent_replay=true",
+      "No forecast/outcome/edge/event/outbox counts increase on replay",
+      "Conflicting payload fails before relational writes"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Accepted after inspecting trade-trace-cpz2 and trade-trace-re4: existing cpz2 covers missing idempotency-key enforcement; closed re4 covers two-transaction supersede atomicity. This candidate has a distinct failure mode with idempotency_key present: replay writes extra replacement forecast/edges after EventWriter replay.",
+    "materialized_bead_id": "trade-trace-ug7p",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-1.md"
+    ]
+  },
+  {
+    "id": "CAND-005",
+    "raw_source_ref": "lane-packets/lane-1.md",
+    "source_lane": "storage-events-integrity",
+    "proposed_title": "forecast.supersede skips late auto-score when a resolved_final outcome already exists",
+    "subsystem_paths": [
+      "src/trade_trace/tools/ledger.py",
+      "docs/architecture/scoring.md"
+    ],
+    "bug_class": "data-integrity",
+    "evidence_type": "docs-contract/static-probe",
+    "evidence": "primary_evidence.txt forecast_supersede_static_snippet: forecast.add late trigger calls _score_one_forecast; supersede docstring says auto-scoring intentionally not replicated; scoring docs require forecast.created trigger.",
+    "observed_behavior": "Supersede-created replacement forecast remains unscored after an existing resolved_final outcome.",
+    "expected_behavior": "Supersede-created forecast triggers same late scoring path as forecast.add or contract/docs explicitly exclude it.",
+    "impact": "Calibration/report substrates omit corrected replacement forecasts until manual repair.",
+    "severity": "P2",
+    "confidence": "high",
+    "duplicate_of": null,
+    "related_to": [
+      "trade-trace-re4"
+    ],
+    "proposed_bead_title": "forecast.supersede skips late auto-score when a resolved_final outcome already exists",
+    "proposed_bead_body": "Context:\nstorage-events-integrity \u2014 src/trade_trace/tools/ledger.py, docs/architecture/scoring.md\n\nObserved behavior:\nSupersede-created replacement forecast remains unscored after an existing resolved_final outcome.\n\nExpected behavior:\nSupersede-created forecast triggers same late scoring path as forecast.add or contract/docs explicitly exclude it.\n\nEvidence:\nprimary_evidence.txt forecast_supersede_static_snippet: forecast.add late trigger calls _score_one_forecast; supersede docstring says auto-scoring intentionally not replicated; scoring docs require forecast.created trigger.\n\nFailure mode / impact:\nCalibration/report substrates omit corrected replacement forecasts until manual repair.\n\n## Steps to Reproduce\npytest tests/integration/test_scoring_lifecycle.py tests/integration/test_ledger_event_emission.py tests/integration/test_report_calibration.py -q\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: trade-trace-re4.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\npytest tests/integration/test_scoring_lifecycle.py tests/integration/test_ledger_event_emission.py tests/integration/test_report_calibration.py -q\n\nAcceptance criteria:\n- Supersede after resolved_final writes forecast_scores row for replacement\n- forecast.scored event emitted in same transaction\n- Regression covers ambiguous yes_label recovery via supersede\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-005 in domain storage-events-integrity.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:storage-integrity",
+      "data-integrity"
+    ],
+    "validation_command": "pytest tests/integration/test_scoring_lifecycle.py tests/integration/test_ledger_event_emission.py tests/integration/test_report_calibration.py -q",
+    "acceptance_criteria": [
+      "Supersede after resolved_final writes forecast_scores row for replacement",
+      "forecast.scored event emitted in same transaction",
+      "Regression covers ambiguous yes_label recovery via supersede"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback.",
+    "materialized_bead_id": "trade-trace-ld6l",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-1.md"
+    ]
+  },
+  {
+    "id": "CAND-006",
+    "raw_source_ref": "lane-packets/lane-2.md",
+    "source_lane": "reports-memory-strategy-playbook",
+    "proposed_title": "reflection.prompt_for_outcome can attach the wrong forecast/thesis for multi-forecast instruments",
+    "subsystem_paths": [
+      "src/trade_trace/tools/reflection.py",
+      "docs/architecture/memory-layer.md"
+    ],
+    "bug_class": "api-contract",
+    "evidence_type": "static-trace",
+    "evidence": "primary_evidence.txt reflection_static_snippet: reflection selects earliest forecast/thesis by instrument_id, while docs promise original forecast/thesis resolved by outcome.",
+    "observed_behavior": "Packet selects earliest forecast/thesis on instrument, not the forecast scored by the requested outcome.",
+    "expected_behavior": "Packet selects forecast via forecast_scores/outcome relation and thesis via forecast.thesis_id.",
+    "impact": "Agents reflect on the wrong trade/forecast and compute wrong calibration delta.",
+    "severity": "P2",
+    "confidence": "high",
+    "duplicate_of": null,
+    "related_to": [],
+    "proposed_bead_title": "reflection.prompt_for_outcome can attach the wrong forecast/thesis for multi-forecast instruments",
+    "proposed_bead_body": "Context:\nreports-memory-strategy-playbook \u2014 src/trade_trace/tools/reflection.py, docs/architecture/memory-layer.md\n\nObserved behavior:\nPacket selects earliest forecast/thesis on instrument, not the forecast scored by the requested outcome.\n\nExpected behavior:\nPacket selects forecast via forecast_scores/outcome relation and thesis via forecast.thesis_id.\n\nEvidence:\nprimary_evidence.txt reflection_static_snippet: reflection selects earliest forecast/thesis by instrument_id, while docs promise original forecast/thesis resolved by outcome.\n\nFailure mode / impact:\nAgents reflect on the wrong trade/forecast and compute wrong calibration delta.\n\n## Steps to Reproduce\nTRADE_TRACE_HOME=$(mktemp -d) pytest -q tests/integration -k \"reflection or prompt_for_outcome\"\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: none.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\nTRADE_TRACE_HOME=$(mktemp -d) pytest -q tests/integration -k \"reflection or prompt_for_outcome\"\n\nAcceptance criteria:\n- Packet forecast id is linked to requested outcome via forecast_scores/canonical relation\n- Packet thesis id equals returned forecast.thesis_id\n- Regression covers two forecasts on one instrument\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-006 in domain reports-memory-strategy-playbook.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:reports-memory",
+      "api-contract"
+    ],
+    "validation_command": "TRADE_TRACE_HOME=$(mktemp -d) pytest -q tests/integration -k \"reflection or prompt_for_outcome\"",
+    "acceptance_criteria": [
+      "Packet forecast id is linked to requested outcome via forecast_scores/canonical relation",
+      "Packet thesis id equals returned forecast.thesis_id",
+      "Regression covers two forecasts on one instrument"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback.",
+    "materialized_bead_id": "trade-trace-vzmq",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-2.md"
+    ]
+  },
+  {
+    "id": "CAND-007",
+    "raw_source_ref": "lane-packets/lane-2.md",
+    "source_lane": "reports-memory-strategy-playbook",
+    "proposed_title": "reflection.prompt_for_outcome omits strategy-scoped prior reflections despite documented packet scope",
+    "subsystem_paths": [
+      "src/trade_trace/tools/reflection.py",
+      "docs/architecture/memory-layer.md"
+    ],
+    "bug_class": "api-contract",
+    "evidence_type": "static-docs-caveat",
+    "evidence": "primary_evidence.txt reflection_static_snippet: prior_reflections query includes instrument/outcome but no strategy; memory-layer docs say instrument/strategy.",
+    "observed_behavior": "Strategy-targeted reflections are not included in packet.prior_reflections.",
+    "expected_behavior": "Strategy-scoped prior reflections included when the outcome\u2019s source forecast/thesis/decision resolves to that strategy, or docs/tool description narrow scope.",
+    "impact": "Strategy learning loop can omit relevant prior strategy lessons.",
+    "severity": "P3",
+    "confidence": "medium",
+    "duplicate_of": null,
+    "related_to": [],
+    "proposed_bead_title": "reflection.prompt_for_outcome omits strategy-scoped prior reflections despite documented packet scope",
+    "proposed_bead_body": "Context:\nreports-memory-strategy-playbook \u2014 src/trade_trace/tools/reflection.py, docs/architecture/memory-layer.md\n\nObserved behavior:\nStrategy-targeted reflections are not included in packet.prior_reflections.\n\nExpected behavior:\nStrategy-scoped prior reflections included when the outcome\u2019s source forecast/thesis/decision resolves to that strategy, or docs/tool description narrow scope.\n\nEvidence:\nprimary_evidence.txt reflection_static_snippet: prior_reflections query includes instrument/outcome but no strategy; memory-layer docs say instrument/strategy.\n\nFailure mode / impact:\nStrategy learning loop can omit relevant prior strategy lessons.\n\n## Steps to Reproduce\nTRADE_TRACE_HOME=$(mktemp -d) pytest -q tests/integration -k \"reflection or memory\"\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Static mismatch is plausible but depends on canonical outcome\u2192strategy resolution; defer until CAND-006 linkage semantics are fixed or dynamically reproduced. Possible overlap: none.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\nTRADE_TRACE_HOME=$(mktemp -d) pytest -q tests/integration -k \"reflection or memory\"\n\nAcceptance criteria:\n- Dynamic repro clarifies outcome\u2192strategy resolution\n- If accepted, strategy reflections appear with correct as_of filtering\n- Docs/tool description reconciled if scope is intentionally narrower\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-007 in domain reports-memory-strategy-playbook.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:reports-memory",
+      "needs-more-evidence"
+    ],
+    "validation_command": "TRADE_TRACE_HOME=$(mktemp -d) pytest -q tests/integration -k \"reflection or memory\"",
+    "acceptance_criteria": [
+      "Dynamic repro clarifies outcome\u2192strategy resolution",
+      "If accepted, strategy reflections appear with correct as_of filtering",
+      "Docs/tool description reconciled if scope is intentionally narrower"
+    ],
+    "coordinator_disposition": "needs-more-evidence",
+    "disposition_reason": "Static mismatch is plausible but depends on canonical outcome\u2192strategy resolution; defer until CAND-006 linkage semantics are fixed or dynamically reproduced.",
+    "materialized_bead_id": null,
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-2.md"
+    ]
+  },
+  {
+    "id": "CAND-008",
+    "raw_source_ref": "lane-packets/lane-2.md",
+    "source_lane": "reports-memory-strategy-playbook",
+    "proposed_title": "report.compare advertises group_by values that are rejected at runtime",
+    "subsystem_paths": [
+      "src/trade_trace/reports/compare.py",
+      "docs/PRD.md",
+      "tests/integration/test_report_compare.py"
+    ],
+    "bug_class": "api-contract",
+    "evidence_type": "static-docs-code",
+    "evidence": "primary_evidence.txt report_compare_static_snippet: DOCUMENTED_GROUP_BY/PRD list playbook_version_id/liquidity_bucket/confidence_bucket; CALIBRATION_GROUP_SQL/PNL_GROUP_SQL omit them and reject unsupported group_by.",
+    "observed_behavior": "Documented/in-code group_by values are rejected by runtime allowlists.",
+    "expected_behavior": "Advertised group_by values match runtime behavior or schema/docs are narrowed by base_report.",
+    "impact": "Agents receive validation errors for documented report.compare inputs.",
+    "severity": "P3",
+    "confidence": "medium-high",
+    "duplicate_of": null,
+    "related_to": [],
+    "proposed_bead_title": "report.compare advertises group_by values that are rejected at runtime",
+    "proposed_bead_body": "Context:\nreports-memory-strategy-playbook \u2014 src/trade_trace/reports/compare.py, docs/PRD.md, tests/integration/test_report_compare.py\n\nObserved behavior:\nDocumented/in-code group_by values are rejected by runtime allowlists.\n\nExpected behavior:\nAdvertised group_by values match runtime behavior or schema/docs are narrowed by base_report.\n\nEvidence:\nprimary_evidence.txt report_compare_static_snippet: DOCUMENTED_GROUP_BY/PRD list playbook_version_id/liquidity_bucket/confidence_bucket; CALIBRATION_GROUP_SQL/PNL_GROUP_SQL omit them and reject unsupported group_by.\n\nFailure mode / impact:\nAgents receive validation errors for documented report.compare inputs.\n\n## Steps to Reproduce\nTRADE_TRACE_HOME=$(mktemp -d) pytest -q tests/integration/test_report_compare.py\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: none.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\nTRADE_TRACE_HOME=$(mktemp -d) pytest -q tests/integration/test_report_compare.py\n\nAcceptance criteria:\n- Advertised group_by values match runtime behavior\n- Tests cover every advertised group_by or schema omits unsupported values\n- Errors distinguish invalid from unsupported-for-base-report\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-008 in domain reports-memory-strategy-playbook.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:reports-memory",
+      "api-contract"
+    ],
+    "validation_command": "TRADE_TRACE_HOME=$(mktemp -d) pytest -q tests/integration/test_report_compare.py",
+    "acceptance_criteria": [
+      "Advertised group_by values match runtime behavior",
+      "Tests cover every advertised group_by or schema omits unsupported values",
+      "Errors distinguish invalid from unsupported-for-base-report"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback.",
+    "materialized_bead_id": "trade-trace-cs0r",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-2.md"
+    ]
+  },
+  {
+    "id": "CAND-009",
+    "raw_source_ref": "lane-packets/lane-3.md",
+    "source_lane": "security-config-ops",
+    "proposed_title": "journal.restore trusts manifest paths and can write outside TRADE_TRACE_HOME",
+    "subsystem_paths": [
+      "src/trade_trace/tools/admin.py"
+    ],
+    "bug_class": "security",
+    "evidence_type": "runtime-probe",
+    "evidence": "primary_evidence.txt restore runtime recheck: manifest path ../../evil.txt restored /tmp/evil.txt outside home; admin.py copies home / entry[path] without normalization.",
+    "observed_behavior": "Confirmed restore copies traversal path outside requested home.",
+    "expected_behavior": "Restore rejects absolute/traversal paths and constrains output under TRADE_TRACE_HOME before copy.",
+    "impact": "Tampered backup can write/corrupt files outside journal home with process permissions.",
+    "severity": "P1",
+    "confidence": "high",
+    "duplicate_of": null,
+    "related_to": [],
+    "proposed_bead_title": "journal.restore trusts manifest paths and can write outside TRADE_TRACE_HOME",
+    "proposed_bead_body": "Context:\nsecurity-config-ops \u2014 src/trade_trace/tools/admin.py\n\nObserved behavior:\nConfirmed restore copies traversal path outside requested home.\n\nExpected behavior:\nRestore rejects absolute/traversal paths and constrains output under TRADE_TRACE_HOME before copy.\n\nEvidence:\nprimary_evidence.txt restore runtime recheck: manifest path ../../evil.txt restored /tmp/evil.txt outside home; admin.py copies home / entry[path] without normalization.\n\nFailure mode / impact:\nTampered backup can write/corrupt files outside journal home with process permissions.\n\n## Steps to Reproduce\npython3 -m pytest tests/security/test_restore_manifest_paths.py -q\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: none.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\npython3 -m pytest tests/security/test_restore_manifest_paths.py -q\n\nAcceptance criteria:\n- Restore rejects traversal/absolute/drive paths and resolved outputs outside home\n- Valid journal.backup manifests still restore\n- Regression proves no outside file is created for malicious manifest\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-009 in domain security-config-ops.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:security-ops",
+      "security"
+    ],
+    "validation_command": "python3 -m pytest tests/security/test_restore_manifest_paths.py -q",
+    "acceptance_criteria": [
+      "Restore rejects traversal/absolute/drive paths and resolved outputs outside home",
+      "Valid journal.backup manifests still restore",
+      "Regression proves no outside file is created for malicious manifest"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback.",
+    "materialized_bead_id": "trade-trace-l24k",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-3.md"
+    ]
+  },
+  {
+    "id": "CAND-010",
+    "raw_source_ref": "lane-packets/lane-3.md",
+    "source_lane": "security-config-ops",
+    "proposed_title": "Fresh direct import of trade_trace.tools.admin fails with circular ImportError",
+    "subsystem_paths": [
+      "src/trade_trace/tools/__init__.py",
+      "src/trade_trace/tools/errors.py",
+      "src/trade_trace/contracts/__init__.py",
+      "src/trade_trace/contracts/grammar.py",
+      "src/trade_trace/tools/admin.py"
+    ],
+    "bug_class": "runtime",
+    "evidence_type": "import-probe",
+    "evidence": "primary_evidence.txt direct_import_admin: ImportError cannot import ToolError from partially initialized trade_trace.tools.errors.",
+    "observed_behavior": "Fresh `import trade_trace.tools.admin` fails unless import order seeded.",
+    "expected_behavior": "Representative public modules import directly in fresh process.",
+    "impact": "Package consumers/tests/admin integrations can fail on import-order-dependent cycle.",
+    "severity": "P3",
+    "confidence": "high",
+    "duplicate_of": null,
+    "related_to": [],
+    "proposed_bead_title": "Fresh direct import of trade_trace.tools.admin fails with circular ImportError",
+    "proposed_bead_body": "Context:\nsecurity-config-ops \u2014 src/trade_trace/tools/__init__.py, src/trade_trace/tools/errors.py, src/trade_trace/contracts/__init__.py, src/trade_trace/contracts/grammar.py, src/trade_trace/tools/admin.py\n\nObserved behavior:\nFresh `import trade_trace.tools.admin` fails unless import order seeded.\n\nExpected behavior:\nRepresentative public modules import directly in fresh process.\n\nEvidence:\nprimary_evidence.txt direct_import_admin: ImportError cannot import ToolError from partially initialized trade_trace.tools.errors.\n\nFailure mode / impact:\nPackage consumers/tests/admin integrations can fail on import-order-dependent cycle.\n\n## Steps to Reproduce\npython3 - <<PY\nimport trade_trace.tools.admin; import trade_trace.tools.errors\nPY\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: none.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\npython3 - <<PY\nimport trade_trace.tools.admin; import trade_trace.tools.errors\nPY\n\nAcceptance criteria:\n- Fresh imports of trade_trace.tools.admin and trade_trace.tools.errors succeed\n- Core CLI/MCP startup still succeeds\n- Direct-import smoke tests added\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-010 in domain security-config-ops.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:security-ops",
+      "runtime",
+      "domain:package-runtime"
+    ],
+    "validation_command": "python3 - <<PY\nimport trade_trace.tools.admin; import trade_trace.tools.errors\nPY",
+    "acceptance_criteria": [
+      "Fresh imports of trade_trace.tools.admin and trade_trace.tools.errors succeed",
+      "Core CLI/MCP startup still succeeds",
+      "Direct-import smoke tests added"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Accepted but downgraded per advisor: direct admin module import is an import-order/package-runtime defect, not proven to block CLI/MCP registration. Concrete but lower severity.",
+    "materialized_bead_id": "trade-trace-9oxn",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-3.md"
+    ]
+  },
+  {
+    "id": "CAND-011",
+    "raw_source_ref": "lane-packets/lane-4.md",
+    "source_lane": "docs-packaging-ci-contracts",
+    "proposed_title": "PRD documents journal.init --enable-embeddings, but the flag is a silent no-op",
+    "subsystem_paths": [
+      "docs/PRD.md",
+      "src/trade_trace/tools/journal.py",
+      "src/trade_trace/cli.py"
+    ],
+    "bug_class": "docs-truth",
+    "evidence_type": "runtime-probe",
+    "evidence": "primary_evidence.txt journal_init_enable_embeddings_noop: command ok=true, journal status embeddings_provider none; tools/journal.py ignores flag.",
+    "observed_behavior": "Documented opt-in flag is accepted but leaves embeddings disabled.",
+    "expected_behavior": "Flag either works as documented or docs remove it and unsupported flags do not imply success.",
+    "impact": "Agents/operators believe vector recall is enabled when it is not.",
+    "severity": "P3",
+    "confidence": "high",
+    "duplicate_of": null,
+    "related_to": [],
+    "proposed_bead_title": "PRD documents journal.init --enable-embeddings, but the flag is a silent no-op",
+    "proposed_bead_body": "Context:\ndocs-packaging-ci-contracts \u2014 docs/PRD.md, src/trade_trace/tools/journal.py, src/trade_trace/cli.py\n\nObserved behavior:\nDocumented opt-in flag is accepted but leaves embeddings disabled.\n\nExpected behavior:\nFlag either works as documented or docs remove it and unsupported flags do not imply success.\n\nEvidence:\nprimary_evidence.txt journal_init_enable_embeddings_noop: command ok=true, journal status embeddings_provider none; tools/journal.py ignores flag.\n\nFailure mode / impact:\nAgents/operators believe vector recall is enabled when it is not.\n\n## Steps to Reproduce\ntmp=$(mktemp -d); TRADE_TRACE_HOME=$tmp python3 -m trade_trace.cli journal init --enable-embeddings; TRADE_TRACE_HOME=$tmp python3 -m trade_trace.cli journal status\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: none.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\ntmp=$(mktemp -d); TRADE_TRACE_HOME=$tmp python3 -m trade_trace.cli journal init --enable-embeddings; TRADE_TRACE_HOME=$tmp python3 -m trade_trace.cli journal status\n\nAcceptance criteria:\n- Either implement journal.init --enable-embeddings or remove docs claim\n- No docs imply silent successful embedding opt-in unless status changes\n- Validation confirms documented setup path truth\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-011 in domain docs-packaging-ci-contracts.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:docs-ops",
+      "docs-truth"
+    ],
+    "validation_command": "tmp=$(mktemp -d); TRADE_TRACE_HOME=$tmp python3 -m trade_trace.cli journal init --enable-embeddings; TRADE_TRACE_HOME=$tmp python3 -m trade_trace.cli journal status",
+    "acceptance_criteria": [
+      "Either implement journal.init --enable-embeddings or remove docs claim",
+      "No docs imply silent successful embedding opt-in unless status changes",
+      "Validation confirms documented setup path truth"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback.",
+    "materialized_bead_id": "trade-trace-0tdt",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-4.md"
+    ]
+  },
+  {
+    "id": "CAND-012",
+    "raw_source_ref": "lane-packets/lane-5.md",
+    "source_lane": "tests-fixtures-crosscutting",
+    "proposed_title": "journal.status golden parity test reads the developer default Trade Trace home",
+    "subsystem_paths": [
+      "tests/golden/test_journal_status_parity.py",
+      "src/trade_trace/storage/paths.py"
+    ],
+    "bug_class": "test-flake",
+    "evidence_type": "test-failure",
+    "evidence": "Full pytest and targeted pytest fail: schema_version 10 != 0; lane-packets/lane-5.md isolated TRADE_TRACE_HOME temp run passes.",
+    "observed_behavior": "Test reads ~/.trade-trace/XDG default and fails when initialized.",
+    "expected_behavior": "Test uses tmp_path/monkeypatched home and is hermetic.",
+    "impact": "Full suite false-red depends on developer/CI machine state.",
+    "severity": "P2",
+    "confidence": "high",
+    "duplicate_of": null,
+    "related_to": [],
+    "proposed_bead_title": "journal.status golden parity test reads the developer default Trade Trace home",
+    "proposed_bead_body": "Context:\ntests-fixtures-crosscutting \u2014 tests/golden/test_journal_status_parity.py, src/trade_trace/storage/paths.py\n\nObserved behavior:\nTest reads ~/.trade-trace/XDG default and fails when initialized.\n\nExpected behavior:\nTest uses tmp_path/monkeypatched home and is hermetic.\n\nEvidence:\nFull pytest and targeted pytest fail: schema_version 10 != 0; lane-packets/lane-5.md isolated TRADE_TRACE_HOME temp run passes.\n\nFailure mode / impact:\nFull suite false-red depends on developer/CI machine state.\n\n## Steps to Reproduce\npython3 -m pytest -q tests/golden/test_journal_status_parity.py::test_journal_status_parity\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: none.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\npython3 -m pytest -q tests/golden/test_journal_status_parity.py::test_journal_status_parity\n\nAcceptance criteria:\n- Test uses isolated temporary home\n- Passes with real default home initialized or absent\n- Full suite no longer fails on machine state\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-012 in domain tests-fixtures-crosscutting.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:tests",
+      "test-failure"
+    ],
+    "validation_command": "python3 -m pytest -q tests/golden/test_journal_status_parity.py::test_journal_status_parity",
+    "acceptance_criteria": [
+      "Test uses isolated temporary home",
+      "Passes with real default home initialized or absent",
+      "Full suite no longer fails on machine state"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback.",
+    "materialized_bead_id": "trade-trace-68ew",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-5.md"
+    ]
+  },
+  {
+    "id": "CAND-013",
+    "raw_source_ref": "lane-packets/lane-5.md",
+    "source_lane": "tests-fixtures-crosscutting",
+    "proposed_title": "NDJSON exit-code test expects review.bundle to be unsupported after it became implemented",
+    "subsystem_paths": [
+      "tests/integration/test_ndjson_streaming.py",
+      "src/trade_trace/tools/review_bundle.py",
+      "src/trade_trace/cli.py"
+    ],
+    "bug_class": "test-failure",
+    "evidence_type": "test-failure",
+    "evidence": "Full pytest and targeted pytest fail: test_exit_code_one_on_other_error asserts rc 1, but review.bundle returns rc 0; review_bundle.py registers functional handler.",
+    "observed_behavior": "Stale test uses successful review.bundle call as unsupported-capability error.",
+    "expected_behavior": "Exit-code test uses a current real error path or updates expectations for review.bundle success.",
+    "impact": "Full suite false-red on stale unsupported-capability assumption.",
+    "severity": "P2",
+    "confidence": "high",
+    "duplicate_of": null,
+    "related_to": [],
+    "proposed_bead_title": "NDJSON exit-code test expects review.bundle to be unsupported after it became implemented",
+    "proposed_bead_body": "Context:\ntests-fixtures-crosscutting \u2014 tests/integration/test_ndjson_streaming.py, src/trade_trace/tools/review_bundle.py, src/trade_trace/cli.py\n\nObserved behavior:\nStale test uses successful review.bundle call as unsupported-capability error.\n\nExpected behavior:\nExit-code test uses a current real error path or updates expectations for review.bundle success.\n\nEvidence:\nFull pytest and targeted pytest fail: test_exit_code_one_on_other_error asserts rc 1, but review.bundle returns rc 0; review_bundle.py registers functional handler.\n\nFailure mode / impact:\nFull suite false-red on stale unsupported-capability assumption.\n\n## Steps to Reproduce\npython3 -m pytest -q tests/integration/test_ndjson_streaming.py::test_exit_code_one_on_other_error\n\nDuplicate check:\nCompared against existing open and closed bughunt items in preflight_prior_bughunt_readback.txt. Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback. Possible overlap: none.\n\nSuggested fix direction:\nRepair the cited contract/runtime path with the smallest behavior-preserving change; add the listed regression proof.\n\nValidation:\npython3 -m pytest -q tests/integration/test_ndjson_streaming.py::test_exit_code_one_on_other_error\n\nAcceptance criteria:\n- Test exercises current real error path for rc=1\n- review.bundle success is not used as unsupported fixture\n- Targeted and relevant review bundle tests pass\n\nProvenance:\nDiscovered by repo-bughunt candidate CAND-013 in domain tests-fixtures-crosscutting.",
+    "proposed_labels": [
+      "bug",
+      "bughunt",
+      "bughunt:exhaustive-refresh-20260519",
+      "domain:tests",
+      "test-failure",
+      "test-harness"
+    ],
+    "validation_command": "python3 -m pytest -q tests/integration/test_ndjson_streaming.py::test_exit_code_one_on_other_error",
+    "acceptance_criteria": [
+      "Test exercises current real error path for rc=1",
+      "review.bundle success is not used as unsupported fixture",
+      "Targeted and relevant review bundle tests pass"
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Evidence threshold met; no exact duplicate found in prior open/closed bughunt readback.",
+    "materialized_bead_id": "trade-trace-boqe",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "primary_evidence.txt",
+      "lane-packets/lane-5.md"
+    ]
+  }
+]
