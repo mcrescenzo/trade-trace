@@ -89,3 +89,25 @@ def test_strategy_performance_single_strategy_absent_is_empty(home):
     assert env["ok"], env
     assert env["data"]["groups"] == []
     assert env["data"]["summary"]["sample_size"] == 0
+
+
+# -- documented group_by matches runtime (trade-trace-cs0r) -----------
+
+
+def test_documented_group_by_matches_runtime_support():
+    """Per trade-trace-cs0r: `DOCUMENTED_GROUP_BY` must equal the union
+    of the per-base-report runtime allowlists. Adding a value to the
+    docs without wiring the SQL mapping silently breaks agents."""
+
+    from trade_trace.reports.compare import (
+        CALIBRATION_GROUP_SQL,
+        DOCUMENTED_GROUP_BY,
+        PNL_GROUP_SQL,
+        SUPPORTED_GROUP_BY_BY_BASE_REPORT,
+    )
+
+    assert DOCUMENTED_GROUP_BY == set(CALIBRATION_GROUP_SQL) | set(PNL_GROUP_SQL)
+    assert SUPPORTED_GROUP_BY_BY_BASE_REPORT == {
+        "calibration": set(CALIBRATION_GROUP_SQL),
+        "pnl": set(PNL_GROUP_SQL),
+    }

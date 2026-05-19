@@ -382,7 +382,7 @@ Trading-native reports (forecast-vs-market edge, calibration-by-liquidity-bucket
 
 Comparison and per-strategy reporting are deferred to P1:
 
-- `report.compare(group_by, filter)` — runs the same metric set across groups (`agent_id`, `model_id`, `strategy_id`, `playbook_version_id`, `decision_type`, `venue_id`, `asset_class`, `liquidity_bucket`, `confidence_bucket`, `environment`) and returns a per-group `ReportGroup` for side-by-side comparison. The data is captured from M1 onward (segmentation fields are MVP); the report itself is P1.
+- `report.compare(group_by, filter)` — runs the same metric set across groups and returns a per-group `ReportGroup` for side-by-side comparison. Live `group_by` values (per `trade_trace.reports.compare.SUPPORTED_GROUP_BY_BY_BASE_REPORT`): for `base_report="calibration"` — `agent_id`, `model_id`, `strategy_id`, `decision_type`, `venue_id`, `asset_class`, `environment`, `instrument_id`, `outcome_status`, `status`; for `base_report="pnl"` — `instrument_id`, `status`, `venue_id`, `asset_class`. Deferred to P1+ (segmentation columns are reserved at M1; the SQL mapping lands per a future bead): `playbook_version_id`, `liquidity_bucket`, `confidence_bucket`. See trade-trace-cs0r.
 - `report.strategy_performance` — single-strategy convenience wrapper around the filter pattern; per-strategy P&L, calibration trend, mistake-tag frequency, playbook adherence summary.
 - `report.risk` and `report.opportunity` — P1; see [`risk-units.md`](./architecture/risk-units.md) and [`opportunity-analysis.md`](./architecture/opportunity-analysis.md).
 

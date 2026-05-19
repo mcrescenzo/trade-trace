@@ -50,9 +50,20 @@ PNL_GROUP_SQL: dict[str, str] = {
     "asset_class": "i.asset_class",
 }
 
-DOCUMENTED_GROUP_BY = {
-    "agent_id", "model_id", "strategy_id", "playbook_version_id", "decision_type",
-    "venue_id", "asset_class", "liquidity_bucket", "confidence_bucket", "environment",
+# Per trade-trace-cs0r: this set used to advertise group_by values
+# that the runtime allowlists rejected. It now reflects the actual
+# union of `CALIBRATION_GROUP_SQL` and `PNL_GROUP_SQL`. Per-base-report
+# subsets live below so an agent can pick a group_by that matches the
+# base it's about to compare. `playbook_version_id`, `liquidity_bucket`,
+# and `confidence_bucket` are P1+ design surfaces (PRD §4 lists them as
+# the broader analytic ambition); promoting them here requires landing
+# the SQL mapping AND a regression test first.
+DOCUMENTED_GROUP_BY: set[str] = (
+    set(CALIBRATION_GROUP_SQL) | set(PNL_GROUP_SQL)
+)
+SUPPORTED_GROUP_BY_BY_BASE_REPORT: dict[str, set[str]] = {
+    "calibration": set(CALIBRATION_GROUP_SQL),
+    "pnl": set(PNL_GROUP_SQL),
 }
 
 SUPPORTED_BASE_REPORTS = {"calibration", "pnl"}
@@ -289,4 +300,9 @@ def _group_filter_view(rf: ReportFilter, group_by: str, key: str, *, report: str
     return view
 
 
-__all__ = ["report_compare", "report_strategy_performance", "DOCUMENTED_GROUP_BY"]
+__all__ = [
+    "DOCUMENTED_GROUP_BY",
+    "SUPPORTED_GROUP_BY_BY_BASE_REPORT",
+    "report_compare",
+    "report_strategy_performance",
+]
