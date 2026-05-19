@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from trade_trace.mcp_server import mcp_call
@@ -12,6 +13,7 @@ from trade_trace.tools import memory as memory_tools
 def _init(home: Path) -> None:
     env = mcp_call("journal.init", {"home": str(home)})
     assert env.ok, env
+
 
 
 def test_embeddings_provider_none_does_not_load_sqlite_vec(monkeypatch, tmp_path: Path):
@@ -40,6 +42,26 @@ def test_embeddings_provider_none_does_not_load_sqlite_vec(monkeypatch, tmp_path
 def test_embeddings_provider_local_loads_sqlite_vec_when_configured(monkeypatch, tmp_path: Path):
     home = tmp_path / "home"
     _init(home)
+    from trade_trace.tools import admin
+
+    payload = b"deterministic tiny bge-small test fixture\n"
+    monkeypatch.setattr(admin, "_trusted_bge_small_lock", lambda: ({
+        "path": "config.json",
+        "size": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    },))
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return payload
+
+    monkeypatch.setattr(admin.urllib.request, "urlopen", lambda url, *, timeout: _Response())
     env = mcp_call("journal.config_set", {
         "home": str(home),
         "key": "embeddings.provider",

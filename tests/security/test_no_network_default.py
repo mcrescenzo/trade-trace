@@ -273,8 +273,8 @@ def test_export_drain_runs_under_no_network(no_network, tmp_path: Path):
 # A stronger guard than the runtime fixture: walk the src/ tree and
 # fail the test if any module imports a network-capable library or
 # uses subprocess in a way that could reach the network. The allowlist
-# is empty (no network libs are needed for MVP); any new use must be
-# explicitly added here with a justification comment.
+# contains only documented, opt-in network paths; any new use must be
+# explicitly added here with a justification comment and docs/bead coverage.
 
 
 _DEFAULT_FORBIDDEN_IMPORTS = (
@@ -304,18 +304,33 @@ traffic. urllib.parse is intentionally listed even though parse is
 network-free — it surfaces accidental imports of urllib.request via
 the same module path."""
 
-_ALLOWED_NETWORK_IMPORT_FILES: tuple[str, ...] = ()
+_ALLOWED_NETWORK_IMPORT_FILES: tuple[str, ...] = (
+    # trade-trace-89x: `model.import` may lazily download the pinned
+    # bge-small local embedding model only after the operator has opted into
+    # `embeddings.provider=local` and trusted model files are missing. Default
+    # journal.init/status/schema and representative registry smoke tests above
+    # still run under the socket/DNS no_network fixture, preserving the default
+    # air-gap guarantee.
+    "src/trade_trace/tools/admin.py",
+)
 """Paths under src/ allowed to import a forbidden network library.
-Empty by design — MVP makes no outbound calls. Adding an entry here
-requires the bead acceptance criteria to revise the air-gap promise."""
+Narrow by design — default MVP behavior makes no outbound calls. Adding an
+entry here requires the bead acceptance criteria and security docs to justify
+the opt-in boundary without weakening default air-gap behavior."""
 
 
 def test_no_forbidden_network_imports_in_src():
     """Static audit: src/ must not import any network-capable library
-    unless its file path is on the explicit allowlist. The list is
-    empty in MVP because the air-gap promise (PRD §2.4.1, VISION
-    safety §) is a first-class invariant. Adding a real network
+    unless its file path is on the explicit allowlist. The allowlist is
+    intentionally tiny because the default air-gap promise (PRD §2.4.1,
+    VISION safety §) is a first-class invariant. Adding a real network
     dependency is a docs + bead change, not a silent import."""
+
+    assert _ALLOWED_NETWORK_IMPORT_FILES == ("src/trade_trace/tools/admin.py",), (
+        "Only the trade-trace-89x opt-in local embeddings model.import path may "
+        "import urllib.request; future network imports need explicit docs + bead "
+        "review and must not weaken default no-network behavior."
+    )
 
     root = Path(__file__).resolve().parents[2] / "src" / "trade_trace"
     offenders: list[tuple[Path, str, int]] = []
@@ -337,7 +352,7 @@ def test_no_forbidden_network_imports_in_src():
     assert not offenders, (
         "src/ imports forbidden network library/SDK without an "
         "allowlist entry; either remove the import or, if the air-gap "
-        f"promise has been revised, update _ALLOWED_NETWORK_IMPORT_FILES.\n"
+        "promise has been revised, update _ALLOWED_NETWORK_IMPORT_FILES.\n"
         + "\n".join(f"  {p}:{ln}  {pattern!r}" for p, pattern, ln in offenders)
     )
 

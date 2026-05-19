@@ -25,7 +25,7 @@ addendum.
 |---|---|---|
 | Journal SQLite database | `$TRADE_TRACE_HOME/trade-trace.sqlite` | Every decision, thesis, forecast, outcome, source. The primary historical record. |
 | JSONL export outbox | `$TRADE_TRACE_HOME/export/jsonl/<YYYY>/<MM>/<DD>/*.jsonl` | A redundant audit log: one file per committed event, replayable on a fresh DB (persistence.md §4). |
-| Embeddings model weights | `~/.cache/trade-trace/...` (when an embeddings provider is enabled) | Local model artifacts. No agent input is sent over the network when `embeddings.provider = none` (the default). |
+| Embeddings model weights | `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/` (only after `embeddings.provider = local` or `tt model import --path ...`) | Local model artifacts verified against Trade Trace-pinned SHA-256/size lock data for an immutable HuggingFace revision. Source-provided manifests are not trusted. No agent input is sent over the network when `embeddings.provider = none` (the default). |
 | OS keyring entry (P1) | OS keyring | When a hosted embeddings provider is wired (P1), the API key lives in the OS keyring, never in tool args. |
 
 Notably *not* held: broker credentials, exchange API keys, wallet seed
@@ -160,9 +160,28 @@ Adding a new persisted free-text column to a migration requires:
   `tests/security/test_no_telemetry_packages.py` pins the set against
   the deny-list `{analytics, telemetry, sentry, mixpanel, segment,
   datadog, rollbar, posthog}`.
-- The only opt-in outbound path is the embeddings provider (P1). When
-  unset (the MVP default), `embeddings.provider = none` and zero
-  outbound traffic is generated.
+- The only opt-in outbound paths are embeddings providers. With the
+  default `embeddings.provider = none`, Trade Trace creates no HTTP
+  client, downloads no model files, and generates zero outbound traffic.
+- The local embeddings path is behind an explicit network flag boundary:
+  only `tt journal config_set --key embeddings.provider --value local
+  --confirm` may perform the one-shot model download, and only when
+  `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/` is absent or fails
+  verification against Trade Trace-pinned lock data. Re-running the switch
+  after a verified model is present does not contact the network.
+- The download allowlist is the pinned HuggingFace model repository URL
+  `https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/5c38ec7c405ec4b44b94cc5a9bb96e735b38267a/...`.
+  That is consistent with the threat model because the operator has
+  opted into local embeddings, no journal text or API key is uploaded,
+  and every downloaded artifact is verified against Trade Trace-shipped
+  relative-path, size, and SHA-256 lock entries before activation. The
+  code does not fetch or trust a model repository manifest.
+- Air-gapped installs use `tt model import --path <pre-staged
+  BAAI/bge-small-en-v1.5> --confirm`. That path only reads local files,
+  ignores any source-provided manifest as proof, rejects symlinks/path
+  traversal, verifies the same pinned lock data, and copies only the
+  allowlisted files into `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/`;
+  it performs zero outbound calls.
 
 ## 8. Redaction of `review.bundle` (Contract; Impl is P1)
 

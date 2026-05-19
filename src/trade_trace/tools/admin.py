@@ -13,11 +13,10 @@ In MVP, fully functional:
   - journal.restore   (here; --confirm required; reads manifest)
   - journal.config_set (here; persists key=value into the config table)
 
-Contract-only (return UNSUPPORTED_CAPABILITY pointing at the future
-embeddings work in trade-trace-a4p):
-  - model.import      (air-gap model staging path; a4p)
-  - model.warm        (lazy warm of the local embedder; a4p)
-  - memory.reindex    (re-embed all nodes when provider changes; a4p)
+Embeddings admin paths:
+  - model.import      (opt-in local model staging/download path; 89x)
+  - model.warm        (lazy warm of the local embedder; 89x)
+  - memory.reindex    (re-embed all nodes when provider changes; 89x)
 
 Tools that mutate state respect the `--confirm` (CLI) / `_confirm: true`
 (MCP) flag per the operability contract: without it they return
@@ -31,9 +30,18 @@ import hashlib
 import json
 import os
 import shutil
+import sqlite3
 import stat
-from pathlib import Path
+import urllib.request
+from pathlib import Path, PureWindowsPath
 from typing import Any
+
+from trade_trace.contracts.errors import ErrorCode
+from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
+from trade_trace.storage import open_database, resolve_home
+from trade_trace.storage.paths import db_path
+from trade_trace.tools._helpers import now_iso, require
+from trade_trace.tools.errors import ToolError
 
 
 def _tighten_file(path: Path) -> None:
@@ -59,16 +67,25 @@ def _tighten_dir(path: Path) -> None:
     except (OSError, PermissionError):
         pass
 
-from trade_trace.contracts.errors import ErrorCode
-from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
-from trade_trace.storage import open_database, resolve_home
-from trade_trace.storage.paths import db_path
-from trade_trace.tools._helpers import now_iso, require
-from trade_trace.tools.errors import ToolError
-
-
 OPENAI_EMBEDDINGS_KEYRING_SERVICE = "trade-trace:embeddings:openai"
 EMBEDDINGS_API_KEY_ARG = "api_key"
+BGE_SMALL_MODEL_ID = "BAAI/bge-small-en-v1.5"
+BGE_SMALL_REVISION = "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
+BGE_SMALL_MODEL_DIRNAME = "bge-small-en-v1.5"
+BGE_SMALL_TARGET_SUBDIR = Path("models") / BGE_SMALL_MODEL_DIRNAME
+BGE_SMALL_HF_BASE_URL = f"https://huggingface.co/{BGE_SMALL_MODEL_ID}/resolve/{BGE_SMALL_REVISION}"
+BGE_SMALL_LOCK: tuple[dict[str, Any], ...] = (
+    {"path": "config.json", "size": 743, "sha256": "094f8e891b932f2000c92cfc663bac4c62069f5d8af5b5278c4306aef3084750"},
+    {"path": "tokenizer.json", "size": 711396, "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"},
+    {"path": "tokenizer_config.json", "size": 366, "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"},
+    {"path": "vocab.txt", "size": 231508, "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"},
+    {"path": "special_tokens_map.json", "size": 125, "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"},
+    {"path": "modules.json", "size": 349, "sha256": "84e40c8e006c9b1d6c122e02cba9b02458120b5fb0c87b746c41e0207cf642cf"},
+    {"path": "sentence_bert_config.json", "size": 52, "sha256": "84e39fda68ccbff05bfa723ae9c0e70e23e2ec373b76e0f8c6e71af72a693cbf"},
+    {"path": "1_Pooling/config.json", "size": 190, "sha256": "d1caf60c96f5fba2157c0c26b76d80818fad6cf0b8eb5e73ec372ff9818eba5c"},
+    {"path": "config_sentence_transformers.json", "size": 124, "sha256": "940d5f50db195fa6e5e6a4f122c095f77880de259d74b14a65779ed48bdd7c56"},
+    {"path": "model.safetensors", "size": 133466304, "sha256": "f34dad568ecbc8f2452ae7ea84e72884e1bab4f299cec39fd8f978b5fba8d3c9"},
+)
 
 
 def _confirm_requested(args: dict[str, Any]) -> bool:
@@ -85,7 +102,160 @@ def _set_preview_meta(ctx: ToolContext) -> None:
     ctx.meta_hints["preview_only"] = True
 
 
+def _model_target_dir(home: Path) -> Path:
+    return home / BGE_SMALL_TARGET_SUBDIR
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _trusted_bge_small_lock() -> tuple[dict[str, Any], ...]:
+    """Return Trade Trace-pinned bge-small file hashes/sizes.
+
+    Tests may monkeypatch this narrow seam with tiny fixture files. Source
+    directories and HuggingFace metadata are never trusted as proof.
+    """
+
+    return BGE_SMALL_LOCK
+
+
+def _safe_model_relpath(rel: str) -> Path:
+    if not isinstance(rel, str) or not rel:
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "invalid trusted model path", details={"path": rel})
+    path = Path(rel)
+    win = PureWindowsPath(rel)
+    if path.is_absolute() or win.is_absolute() or win.drive or ".." in path.parts or ".." in win.parts:
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "invalid trusted model path", details={"path": rel})
+    return path
+
+
+def _resolve_under(root: Path, rel: str) -> Path:
+    rel_path = _safe_model_relpath(rel)
+    root_resolved = root.resolve(strict=False)
+    candidate = (root / rel_path).resolve(strict=False)
+    if root_resolved != candidate and root_resolved not in candidate.parents:
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "model path escapes root", details={"root": str(root), "path": rel})
+    return candidate
+
+
+def _trusted_model_entries() -> tuple[tuple[str, int, str], ...]:
+    entries: list[tuple[str, int, str]] = []
+    seen: set[str] = set()
+    for entry in _trusted_bge_small_lock():
+        rel = entry.get("path") if isinstance(entry, dict) else None
+        size = entry.get("size") if isinstance(entry, dict) else None
+        expected = entry.get("sha256") if isinstance(entry, dict) else None
+        if not isinstance(rel, str):
+            raise ToolError(ErrorCode.INVARIANT_VIOLATION, "invalid trusted model path", details={"path": rel})
+        _safe_model_relpath(rel)
+        if rel in seen:
+            raise ToolError(ErrorCode.INVARIANT_VIOLATION, "duplicate trusted model path", details={"path": rel})
+        if not isinstance(size, int) or size < 0:
+            raise ToolError(ErrorCode.INVARIANT_VIOLATION, "invalid trusted model size", details={"path": rel})
+        if not isinstance(expected, str) or len(expected) != 64:
+            raise ToolError(ErrorCode.INVARIANT_VIOLATION, "invalid trusted model sha256", details={"path": rel})
+        seen.add(rel)
+        entries.append((rel, size, expected))
+    if not entries:
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "trusted model lock is empty")
+    return tuple(entries)
+
+
+def _verify_model_dir(model_dir: Path) -> dict[str, Any]:
+    verified: list[str] = []
+    for rel, expected_size, expected in _trusted_model_entries():
+        candidate = _resolve_under(model_dir, rel)
+        if candidate.is_symlink() or not candidate.is_file():
+            raise ToolError(
+                ErrorCode.INVARIANT_VIOLATION,
+                f"trusted model file missing or not regular {rel!r}",
+                details={"path": rel, "candidate": str(candidate)},
+            )
+        actual_size = candidate.stat().st_size
+        if actual_size != expected_size:
+            raise ToolError(
+                ErrorCode.INVARIANT_VIOLATION,
+                f"size mismatch on model file {rel!r}",
+                details={"path": rel, "expected_size": expected_size, "actual_size": actual_size},
+            )
+        actual = _sha256_file(candidate)
+        if actual != expected:
+            raise ToolError(
+                ErrorCode.INVARIANT_VIOLATION,
+                f"sha256 mismatch on model file {rel!r}",
+                details={"path": rel, "expected_sha256": expected, "actual_sha256": actual},
+            )
+        verified.append(rel)
+    return {"model_id": BGE_SMALL_MODEL_ID, "revision": BGE_SMALL_REVISION, "verified_files": verified}
+
+
+def _model_files_present(home: Path) -> bool:
+    try:
+        _verify_model_dir(_model_target_dir(home))
+        return True
+    except ToolError:
+        return False
+
+
+def _atomic_replace_dir(src: Path, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    _tighten_dir(dest.parent)
+    staging = dest.parent / f".{dest.name}.staging"
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+    for rel, _size, _sha in _trusted_model_entries():
+        source = _resolve_under(src, rel)
+        if source.is_symlink() or not source.is_file():
+            raise ToolError(ErrorCode.INVARIANT_VIOLATION, "trusted model file missing or not regular", details={"path": rel})
+        out = _resolve_under(staging, rel)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, out, follow_symlinks=False)
+    _verify_model_dir(staging)
+    if dest.exists():
+        shutil.rmtree(dest)
+    staging.replace(dest)
+    _tighten_dir(dest)
+
+
+def _download_bge_small_model(home: Path) -> dict[str, Any]:
+    """One-shot opt-in download seam for BAAI/bge-small-en-v1.5.
+
+    The production path is intentionally explicit and narrow: it downloads only
+    Trade Trace-pinned allowlisted files at an immutable HuggingFace revision,
+    then verifies SHA-256 and size before activation.
+    """
+
+    target = _model_target_dir(home)
+    if _model_files_present(home):
+        verified = _verify_model_dir(target)
+        return {"downloaded": False, "target": str(target), **verified}
+    tmp = target.parent / f".{target.name}.download"
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    tmp.mkdir(parents=True, exist_ok=True)
+    try:
+        for rel, _size, _sha in _trusted_model_entries():
+            out = _resolve_under(tmp, rel)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            url = f"{BGE_SMALL_HF_BASE_URL}/{urllib.request.pathname2url(rel)}"
+            with urllib.request.urlopen(url, timeout=300) as response:  # nosec B310 - explicit opt-in URL
+                out.write_bytes(response.read())
+        _atomic_replace_dir(tmp, target)
+    finally:
+        if tmp.exists():
+            shutil.rmtree(tmp)
+    verified = _verify_model_dir(target)
+    return {"downloaded": True, "target": str(target), "source_url": BGE_SMALL_HF_BASE_URL, **verified}
+
+
 # -- journal.repair ----------------------------------------------
+
 
 
 def _journal_repair(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -373,26 +543,53 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
             },
         }
 
-    if key == "embeddings.provider" and value == "api:openai":
+    model_download: dict[str, Any] | None = None
+    if key == "embeddings.provider" and value == "local":
+        # Opt-in boundary: the only lazy outbound path fires on an explicit
+        # provider switch to local, and only when the verified model directory
+        # is missing. Air-gap installs can avoid this path with model.import.
+        if not _model_files_present(home):
+            model_download = _download_bge_small_model(home)
+        else:
+            model_download = {"downloaded": False, "target": str(_model_target_dir(home))}
+    elif key == "embeddings.provider" and value == "api:openai":
         # Consume the secret only to populate the OS keyring. Never persist it
         # in config, events, outbox, return data, or logs.
         from trade_trace.security.keyring import store_api_key
 
         store_api_key(OPENAI_EMBEDDINGS_KEYRING_SERVICE, str(args[EMBEDDINGS_API_KEY_ARG]))
 
-    db = open_database(path, create_parent=False)
-    try:
-        db.connection.execute(
-            "INSERT INTO config(key, value, updated_at) "
-            "VALUES (?, ?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET "
-            "value = excluded.value, updated_at = excluded.updated_at",
-            (key, value, now_iso()),
-        )
-        db.connection.commit()
-    finally:
-        db.close()
+    if key == "embeddings.provider":
+        # Avoid loading sqlite-vec while changing the provider row; the extension
+        # is optional and should not be required merely to toggle config.
+        conn = sqlite3.connect(str(path), isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO config(key, value, updated_at) "
+                "VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET "
+                "value = excluded.value, updated_at = excluded.updated_at",
+                (key, value, now_iso()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    else:
+        db = open_database(path, create_parent=False)
+        try:
+            db.connection.execute(
+                "INSERT INTO config(key, value, updated_at) "
+                "VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET "
+                "value = excluded.value, updated_at = excluded.updated_at",
+                (key, value, now_iso()),
+            )
+            db.connection.commit()
+        finally:
+            db.close()
     result = {"preview_only": False, "key": key, "value": value}
+    if model_download is not None:
+        result["model"] = model_download
     if key == "embeddings.provider" and value == "api:openai":
         result["api_key_storage"] = "os_keyring"
     return result
@@ -401,14 +598,41 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
 # -- model.* and memory.reindex stubs (bead a4p) ------------------
 
 
-def _model_import_stub(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    raise ToolError(
-        ErrorCode.UNSUPPORTED_CAPABILITY,
-        "model.import requires the embeddings opt-in path (sqlite-vec + "
-        "bge-small + OS keyring) — deferred to bead trade-trace-a4p.",
-        details={"deferred_to_bead": "trade-trace-a4p",
-                 "phase": "MVP-contract-only"},
-    )
+def _model_import(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """Copy a pre-staged BAAI/bge-small-en-v1.5 directory into
+    $TRADE_TRACE_HOME/models/bge-small-en-v1.5 without touching the network.
+    The source is verified against the Trade Trace-pinned model lock (immutable
+    HuggingFace revision, allowlisted relative paths, SHA-256, and size). Any
+    source-provided manifests are ignored and are never trusted as proof.
+    """
+
+    home = resolve_home(args.get("home"))
+    raw_path = require(args, "path")
+    src = Path(str(raw_path))
+    if not src.is_dir():
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "model.import --path must point at a pre-staged model directory",
+            details={"path": str(src)},
+        )
+    verified = _verify_model_dir(src)
+    target = _model_target_dir(home)
+    if not _confirm_requested(args):
+        _set_preview_meta(ctx)
+        return {
+            "preview_only": True,
+            "would_copy": {"src": str(src), "target": str(target)},
+            **verified,
+        }
+    _atomic_replace_dir(src, target)
+    copied = _verify_model_dir(target)
+    return {
+        "preview_only": False,
+        "model_id": BGE_SMALL_MODEL_ID,
+        "src": str(src),
+        "target": str(target),
+        **copied,
+    }
 
 
 def _model_warm_stub(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -484,13 +708,14 @@ def register_admin_tools(registry: ToolRegistry) -> None:
     )
     registry.register(
         "model.import",
-        _model_import_stub,
+        _model_import,
         is_write=True,
         description=(
-            "[Deferred to trade-trace-a4p] Copy a pre-staged embedding "
-            "model under $TRADE_TRACE_HOME/models/ — air-gap path for "
-            "the SEMANTIC recall strategy. Currently surfaces "
-            "UNSUPPORTED_CAPABILITY."
+            "Copy a pre-staged BAAI/bge-small-en-v1.5 model directory under "
+            "$TRADE_TRACE_HOME/models/bge-small-en-v1.5 for air-gap SEMANTIC "
+            "recall. Requires --confirm to write; verifies every file's "
+            "SHA-256 and size against Trade Trace-pinned lock data and "
+            "performs zero outbound network calls."
         ),
     )
     registry.register(

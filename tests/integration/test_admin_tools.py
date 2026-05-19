@@ -245,9 +245,124 @@ def test_journal_config_set_embeddings_provider_rejects_unknown_value(home):
 
 
 # -- deferred stubs -------------------------------------------
+# -- model.import / embeddings local lazy model path ------------
 
 
-@pytest.mark.parametrize("tool", ["model.import", "model.warm", "memory.reindex"])
+def _write_fixture_model(path: Path, *, payload: bytes | None = None, manifest_hash: str | None = None) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    payload = payload or b"deterministic tiny bge-small test fixture\n"
+    (path / "config.json").write_bytes(payload)
+    # A source-provided manifest may exist, but production code must ignore it.
+    digest = manifest_hash or hashlib.sha256(payload).hexdigest()
+    (path / "trade-trace-model-manifest.json").write_text(json.dumps({
+        "model_id": "BAAI/bge-small-en-v1.5",
+        "files": [{"path": "config.json", "size": len(payload), "sha256": digest}],
+    }, sort_keys=True))
+    return path
+
+
+def _patch_tiny_trusted_lock(monkeypatch, payload: bytes):
+    from trade_trace.tools import admin
+
+    monkeypatch.setattr(admin, "_trusted_bge_small_lock", lambda: ({
+        "path": "config.json",
+        "size": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    },))
+    return admin
+
+
+def test_model_import_air_gap_succeeds_with_sockets_patched(home, tmp_path, monkeypatch):
+    import socket
+
+    def _block(*args, **kwargs):
+        raise RuntimeError("network access is disabled in this test")
+
+    monkeypatch.setattr(socket, "socket", _block)
+    payload = b"deterministic tiny bge-small test fixture\n"
+    _patch_tiny_trusted_lock(monkeypatch, payload)
+    src = _write_fixture_model(tmp_path / "BAAI" / "bge-small-en-v1.5", payload=payload)
+    env = _mcp(home, "model.import", {"path": str(src), "_confirm": True})
+    assert env.ok, env
+    target = home / "models" / "bge-small-en-v1.5"
+    assert (target / "config.json").read_bytes() == (src / "config.json").read_bytes()
+    assert env.data["verified_files"] == ["config.json"]
+
+
+def test_model_import_rejects_malicious_self_manifest(home, tmp_path, monkeypatch):
+    trusted_payload = b"trusted fixture\n"
+    _patch_tiny_trusted_lock(monkeypatch, trusted_payload)
+    malicious_payload = b"malicious replacement with matching self manifest\n"
+    src = _write_fixture_model(
+        tmp_path / "BAAI" / "bge-small-en-v1.5",
+        payload=malicious_payload,
+        manifest_hash=hashlib.sha256(malicious_payload).hexdigest(),
+    )
+    env = _mcp(home, "model.import", {"path": str(src), "_confirm": True})
+    assert env.ok is False
+    assert env.error.code.value == "INVARIANT_VIOLATION"
+    assert "mismatch" in env.error.message.lower()
+
+
+def test_config_set_embeddings_provider_local_lazy_download_first_switch(home, monkeypatch):
+    payload = b"deterministic tiny bge-small test fixture\n"
+    admin = _patch_tiny_trusted_lock(monkeypatch, payload)
+    calls = []
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return payload
+
+    def _fake_urlopen(url, *, timeout):
+        calls.append((url, timeout))
+        assert url == f"{admin.BGE_SMALL_HF_BASE_URL}/config.json"
+        return _Response()
+
+    monkeypatch.setattr(admin.urllib.request, "urlopen", _fake_urlopen)
+    first = _mcp(home, "journal.config_set", {
+        "key": "embeddings.provider", "value": "local", "_confirm": True,
+    })
+    assert first.ok, first
+    assert first.data["model"]["downloaded"] is True
+    assert calls == [(f"{admin.BGE_SMALL_HF_BASE_URL}/config.json", 300)]
+
+    second = _mcp(home, "journal.config_set", {
+        "key": "embeddings.provider", "value": "local", "_confirm": True,
+    })
+    assert second.ok, second
+    assert second.data["model"]["downloaded"] is False
+    assert calls == [(f"{admin.BGE_SMALL_HF_BASE_URL}/config.json", 300)]
+
+
+def test_download_rejects_bad_trusted_lock_path_before_urlopen(home, monkeypatch):
+    from trade_trace.tools import admin
+
+    monkeypatch.setattr(admin, "_trusted_bge_small_lock", lambda: ({
+        "path": "../escape.bin", "size": 1, "sha256": "0" * 64,
+    },))
+
+    def _fail_urlopen(*args, **kwargs):
+        raise AssertionError("urlopen must not be called for invalid lock paths")
+
+    monkeypatch.setattr(admin.urllib.request, "urlopen", _fail_urlopen)
+    env = _mcp(home, "journal.config_set", {
+        "key": "embeddings.provider", "value": "local", "_confirm": True,
+    })
+    assert env.ok is False
+    assert env.error.code.value == "INVARIANT_VIOLATION"
+    assert not (home / "escape.bin").exists()
+
+
+# -- deferred stubs -------------------------------------------
+
+
+@pytest.mark.parametrize("tool", ["model.warm", "memory.reindex"])
 def test_deferred_stub_returns_unsupported_with_bead_link(home, tool):
     env = _mcp(home, tool, {})
     assert env.ok is False
