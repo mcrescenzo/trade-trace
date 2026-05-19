@@ -56,7 +56,7 @@ enforced at the schema/Pydantic-validator layer:
 
 The system clock is the source of "now." For test determinism, an
 injectable `clock` is available to the implementation: tests fake `now`
-to verify time-passing signals (`watch.stale`, `report.unscored_forecasts`)
+to verify time-passing signals (`report.watchlist`, `report.unscored_forecasts`)
 and bi-temporal validity filters.
 
 `now` is read at most once per tool call and cached for the duration of

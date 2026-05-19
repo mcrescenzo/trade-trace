@@ -84,7 +84,7 @@ Playbooks codify rules; strategies (§2.12) group decisions by edge thesis. The 
 
 ### 2.7 Coach signals
 
-No background scheduler or daemon exists in MVP. Write-triggered signals may be persisted during ordinary writes. Time-passing signals, such as stale watches and unscored forecasts, are generated lazily by `report.coach`, `watch.stale`, `report.unscored_forecasts`, or an explicit maintenance scan. External scheduling is out of scope.
+No background scheduler or daemon exists in MVP. Write-triggered signals may be persisted during ordinary writes. Time-passing signals, such as stale watches and unscored forecasts, are generated lazily by `report.coach`, `report.watchlist`, `report.unscored_forecasts`, or an explicit maintenance scan. External scheduling is out of scope.
 
 ### 2.8 Credentials and security
 
@@ -365,7 +365,7 @@ Deterministic reports:
 - `report.calibration` — binary Brier, log score, reliability buckets, ECE, sharpness, and a sample-prevalence baseline, computed over scored binary forecasts matching the filter. Full output shape and formulas in [`scoring.md`](./architecture/scoring.md) §3 and §7 and `reports.md` §4. Returns `sample_warning` when the filtered set is below the configurable minimum (default 20 scored forecasts).
 - `report.mistakes` / `report.strengths` — tag counts and co-occurrence over decisions and reviews.
 - `report.pnl` — paper/actual P&L aggregates where position projections have enough fills to compute realized/unrealized P&L. Returns a `data_coverage` field reporting how many positions could and could not be computed.
-- `report.watchlist` and `watch.stale` — lazy stale-watch detection.
+- `report.watchlist` — lazy stale-watch detection (the `watch.stale` historical name was rolled into `report.watchlist`; see trade-trace-ftnu).
 - `report.unscored_forecasts` — lazy time-passed unscored detection.
 - `report.playbook_adherence` — driven by `decision_playbook_rules`; surfaces considered/followed/overridden/not_applicable counts and override outcomes.
 - `report.decision_velocity`.

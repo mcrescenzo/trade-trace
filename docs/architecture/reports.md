@@ -268,7 +268,7 @@ data_coverage (`positions_with_marks / total_positions`). Groups are
 typically by `agent_id`, `model_id`, `strategy_id`, or `instrument_id`
 depending on the caller's `group_by`.
 
-### 4.4 `report.watchlist` and `watch.stale`
+### 4.4 `report.watchlist` (stale-watch surface; rolled in the historical `watch.stale` name per trade-trace-ftnu)
 
 Lists `watch`/`skip` decisions with no follow-up decision past a
 threshold (default 30 days; configurable). Per-row: original decision,

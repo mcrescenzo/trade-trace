@@ -1,6 +1,6 @@
 """`report.watchlist` per trade-trace-nxn.
 
-Lists outstanding `watch`-type decisions. The `watch.stale` sub-mode
+Lists outstanding `watch`-type decisions. (The historical `watch.stale` name was rolled into this report; see trade-trace-ftnu.) The stale sub-mode
 (reports.md naming) surfaces watches whose last update exceeds a
 freshness threshold — "I said I'd revisit this and never did."
 
