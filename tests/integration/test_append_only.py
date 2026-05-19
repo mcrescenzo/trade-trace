@@ -19,6 +19,7 @@ from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
 
 APPEND_ONLY_TABLES = [
+    "events",
     "snapshots",
     "theses",
     "forecasts",
@@ -47,6 +48,8 @@ def _seed_minimal(conn: sqlite3.Connection) -> None:
             VALUES ('v_1', 'manual', 'manual', '2026-05-18T14:00:00Z', 'agent:default');
         INSERT INTO instruments(id, venue_id, title, asset_class, created_at, actor_id)
             VALUES ('i_1', 'v_1', 'Test', 'prediction_market', '2026-05-18T14:00:00Z', 'agent:default');
+        INSERT INTO events(event_type, subject_kind, subject_id, payload_json, actor_id, created_at)
+            VALUES ('audit.seeded', 'instrument', 'i_1', '{}', 'agent:default', '2026-05-18T14:00:00Z');
         INSERT INTO theses(id, instrument_id, side, body, created_at, actor_id)
             VALUES ('t_1', 'i_1', 'yes', '...', '2026-05-18T14:00:00Z', 'agent:default');
         INSERT INTO forecasts(id, thesis_id, kind, created_at, actor_id)

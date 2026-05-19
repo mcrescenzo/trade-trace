@@ -499,8 +499,9 @@ def _migration_003_m1_ledger(conn: sqlite3.Connection) -> None:
     # Tables that are strictly append-only: snapshots, theses, forecasts,
     # forecast_outcomes, forecast_scores, decisions, decision_tags,
     # outcomes, sources, edges, position_events.
-    # NOT in this list: events/outbox (own append-only rules in M0 migration
-    # 002), positions (projection - mutable by definition), and the M0
+    # NOT in this list: events/outbox (M0 tables; events append-only triggers
+    # are added by migration 009 while outbox remains mutable), positions
+    # (projection - mutable by definition), and the M0
     # `meta`/`config` k/v tables (which allow upserts).
     append_only_tables = [
         "snapshots",
@@ -982,6 +983,40 @@ def _migration_008_playbooks(conn: sqlite3.Connection) -> None:
             )
 
 
+def _migration_009_events_append_only(conn: sqlite3.Connection) -> None:
+    """Harden the durable `events` audit log as append-only.
+
+    `outbox` intentionally remains mutable because exporters update queue
+    state (`state`, `exported_at`, `error_text`, `attempt_count`).
+    """
+
+    update_msg = (
+        "append-only invariant: UPDATE on events is forbidden; "
+        "append a new event to record follow-up state (persistence.md §8)"
+    )
+    delete_msg = (
+        "append-only invariant: DELETE on events is forbidden (persistence.md §8)"
+    )
+    conn.execute(
+        f"""
+        CREATE TRIGGER trg_events_no_update
+        BEFORE UPDATE ON events
+        BEGIN
+            SELECT RAISE(ABORT, '{update_msg}');
+        END
+        """
+    )
+    conn.execute(
+        f"""
+        CREATE TRIGGER trg_events_no_delete
+        BEFORE DELETE ON events
+        BEGIN
+            SELECT RAISE(ABORT, '{delete_msg}');
+        END
+        """
+    )
+
+
 MIGRATIONS: list[Migration] = [
     _migration_001_meta_table,
     _migration_002_events_outbox,
@@ -991,6 +1026,7 @@ MIGRATIONS: list[Migration] = [
     _migration_006_memory_layer,
     _migration_007_strategies,
     _migration_008_playbooks,
+    _migration_009_events_append_only,
 ]
 
 
