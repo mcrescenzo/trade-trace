@@ -633,3 +633,82 @@ def test_no_credential_args_accepted(home):
         assert "broker_token" not in meta
     finally:
         db.close()
+
+
+def test_forecast_supersede_replay_returns_original_replacement(home):
+    """Per trade-trace-ug7p: replaying forecast.supersede with the same
+    idempotency_key must return the original replacement forecast id and
+    must NOT create a second forecast row, second edge row, or any extra
+    events. Prior to the fix, the handler INSERTed the new forecast BEFORE
+    consulting the event-log replay check, so retries corrupted lineage."""
+
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+
+    _, thesis_id = _setup_thesis(home)
+    first = _envelope(home, "forecast.add", {
+        "thesis_id": thesis_id,
+        "kind": "binary",
+        "outcomes": [
+            {"outcome_label": "YES", "probability": 0.5},
+            {"outcome_label": "NO", "probability": 0.5},
+        ],
+    })
+    key = "ug7p-supersede-replay-v1"
+    args = {
+        "prior_forecast_id": first["data"]["id"],
+        "kind": "binary",
+        "yes_label": "YES",
+        "outcomes": [
+            {"outcome_label": "YES", "probability": 0.7},
+            {"outcome_label": "NO", "probability": 0.3},
+        ],
+        "idempotency_key": key,
+    }
+    first_env = _envelope(home, "forecast.supersede", args)
+    assert first_env["ok"] is True
+    new_id = first_env["data"]["id"]
+
+    # Snapshot row counts after the first call
+    db = open_database(db_path(home))
+    try:
+        forecasts_before = db.connection.execute("SELECT COUNT(*) FROM forecasts").fetchone()[0]
+        edges_before = db.connection.execute(
+            "SELECT COUNT(*) FROM edges WHERE edge_type='supersedes'"
+        ).fetchone()[0]
+        events_before = db.connection.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+    finally:
+        db.close()
+
+    # Replay with the same key. The replay path must return the original
+    # replacement id and must not produce new rows.
+    replay_env = _envelope(home, "forecast.supersede", args)
+    assert replay_env["ok"] is True
+    assert replay_env["data"]["id"] == new_id, (
+        f"replay returned a different replacement id "
+        f"({replay_env['data']['id']} != {new_id})"
+    )
+    assert replay_env["data"]["supersedes_prior_forecast_id"] == first["data"]["id"]
+    assert replay_env["meta"].get("idempotent_replay") is True
+
+    db = open_database(db_path(home))
+    try:
+        forecasts_after = db.connection.execute("SELECT COUNT(*) FROM forecasts").fetchone()[0]
+        edges_after = db.connection.execute(
+            "SELECT COUNT(*) FROM edges WHERE edge_type='supersedes'"
+        ).fetchone()[0]
+        events_after = db.connection.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+    finally:
+        db.close()
+    assert forecasts_after == forecasts_before, (
+        "replay created a second forecast row "
+        f"(was {forecasts_before}, now {forecasts_after})"
+    )
+    assert edges_after == edges_before, (
+        "replay created a second supersedes edge "
+        f"(was {edges_before}, now {edges_after})"
+    )
+    assert events_after == events_before, (
+        "replay appended new event rows "
+        f"(was {events_before}, now {events_after})"
+    )

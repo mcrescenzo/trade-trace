@@ -1633,6 +1633,37 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                 )
             thesis_id = prior_row[0]
 
+            # Replay short-circuit per trade-trace-ug7p / data-integrity.
+            # Without this, retries with the same idempotency_key would
+            # insert a fresh forecast row and supersedes edge before the
+            # EventWriter's replay detection in emit_event ran, corrupting
+            # forecast lineage and event/relational consistency.
+            replay = check_idempotency_replay(
+                uow, event_type="forecast.created",
+                actor_id=ctx.actor_id, idempotency_key=idempotency_key,
+            )
+            if replay is not None:
+                replayed_id = replay["id"]
+                emit_event(
+                    uow, event_type="forecast.created",
+                    subject_kind="forecast", subject_id=replayed_id,
+                    payload=replay,
+                    actor_id=ctx.actor_id, idempotency_key=idempotency_key,
+                    ctx=ctx,
+                )
+                row = uow.conn.execute(
+                    "SELECT created_at FROM forecasts WHERE id = ?",
+                    (replayed_id,),
+                ).fetchone()
+                return {
+                    "id": replayed_id,
+                    "thesis_id": thesis_id,
+                    "kind": kind,
+                    "scoring_state": "pending",
+                    "created_at": row[0] if row else None,
+                    "supersedes_prior_forecast_id": prior_id,
+                }
+
             new_forecast_id = args.get("id") or new_id("fc")
             created_at = now_iso()
 
