@@ -16,6 +16,10 @@ import sqlite3
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.reports._filter_support import (
+    applied_filter_view,
+    enforce_supported_filter,
+)
 
 DEFAULT_ADHERENCE_MIN_SAMPLE = 10
 """reports.md §3.2: min 10 decisions with adherence rows."""
@@ -34,16 +38,19 @@ def report_playbook_adherence(
 ) -> dict[str, Any]:
     """Compute the playbook-adherence panel.
 
-    `raw_filter` accepts the standard ReportFilter shape; this report
-    honors `decision.tags_any`, `decision.decision_type`, and the
-    actor/segmentation slices via the underlying SQL JOIN to
-    `decisions`. `playbook_id` and `strategy_id` are top-level scoping
-    knobs (not part of ReportFilter) used by the playbook.adherence
-    wrapper.
+    `raw_filter` accepts the standard ReportFilter shape but no
+    ReportFilter leaves are joined into the underlying SQL today — any
+    non-default value is rejected with VALIDATION_ERROR via
+    `enforce_supported_filter` (bead trade-trace-d4k) so the result
+    cannot silently broaden past the agent's intent. `playbook_id` and
+    `strategy_id` are top-level scoping knobs (not part of
+    ReportFilter) used by the playbook.adherence wrapper and are
+    honored here.
     """
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    filter_dict = rf.model_dump()
+    enforce_supported_filter(rf, report="report.playbook_adherence")
+    filter_dict = applied_filter_view(rf, report="report.playbook_adherence")
 
     sql = (
         "SELECT dpr.id, dpr.decision_id, dpr.playbook_version_id, "

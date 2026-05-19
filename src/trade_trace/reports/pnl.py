@@ -12,6 +12,10 @@ import sqlite3
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.reports._filter_support import (
+    applied_filter_view,
+    enforce_supported_filter,
+)
 
 DEFAULT_PNL_MIN_SAMPLE = 5
 
@@ -23,6 +27,8 @@ def report_pnl(
     min_sample: int = DEFAULT_PNL_MIN_SAMPLE,
 ) -> dict[str, Any]:
     rf = ReportFilter.model_validate(raw_filter or {})
+    enforce_supported_filter(rf, report="report.pnl")
+    filter_view = applied_filter_view(rf, report="report.pnl")
     cur = conn.execute(
         "SELECT id, instrument_id, kind, status, realized_pnl, unrealized_pnl "
         "FROM positions"
@@ -60,7 +66,7 @@ def report_pnl(
                 "closed_count": sum(1 for i in items if i[3] == "closed"),
                 "open_count": sum(1 for i in items if i[3] == "open"),
             },
-            "filter": rf.model_dump(),
+            "filter": filter_view,
             "record_ids": {"positions": [i[0] for i in items]},
             "examples": [
                 {"kind": "position", "id": i[0],
@@ -74,7 +80,7 @@ def report_pnl(
     summary: dict[str, Any] = {
         "sample_size": len(rows),
         "sample_warning": sample_warning,
-        "filter": rf.model_dump(),
+        "filter": filter_view,
         "metrics": {
             "realized_pnl": round(realized, 6),
             "unrealized_pnl": round(unrealized, 6),

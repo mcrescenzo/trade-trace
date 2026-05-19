@@ -238,6 +238,71 @@ def test_unknown_filter_field_rejected(home):
     assert env["error"]["code"] == "VALIDATION_ERROR"
 
 
+# -- disjoint-actor scoping per bead trade-trace-d4k -------------------
+#
+# Seed two scored forecasts under two different actor_ids and prove that
+# calibration's `actors.actor_id` filter actually narrows the set —
+# before d4k landed the filter was echoed but ignored, so the report
+# would have returned both rows regardless of the filter.
+
+
+def _seed_scored_forecast_for_actor(
+    home: Path, *, actor_id: str, p_yes: float, suffix: str,
+) -> str:
+    venue = mcp_call("venue.add", {
+        "home": str(home), "name": f"PM-{suffix}", "kind": "prediction_market",
+    }, actor_id=actor_id).model_dump(mode="json", exclude_none=True)
+    inst = mcp_call("instrument.add", {
+        "home": str(home), "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market", "title": f"X-{suffix}",
+    }, actor_id=actor_id).model_dump(mode="json", exclude_none=True)
+    thesis = mcp_call("thesis.add", {
+        "home": str(home), "instrument_id": inst["data"]["id"],
+        "side": "yes", "body": "...",
+    }, actor_id=actor_id).model_dump(mode="json", exclude_none=True)
+    f = mcp_call("forecast.add", {
+        "home": str(home), "thesis_id": thesis["data"]["id"], "kind": "binary",
+        "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": p_yes},
+            {"outcome_label": "no", "probability": 1.0 - p_yes},
+        ],
+    }, actor_id=actor_id).model_dump(mode="json", exclude_none=True)
+    mcp_call("outcome.add", {
+        "home": str(home), "instrument_id": inst["data"]["id"],
+        "resolved_at": "2026-06-30T00:00:00Z",
+        "outcome_label": "yes", "status": "resolved_final",
+    }, actor_id=actor_id).model_dump(mode="json", exclude_none=True)
+    return f["data"]["id"]
+
+
+def test_calibration_actor_filter_excludes_other_actors_rows(home):
+    fid_a = _seed_scored_forecast_for_actor(
+        home, actor_id="agent:A", p_yes=0.7, suffix="a",
+    )
+    fid_b = _seed_scored_forecast_for_actor(
+        home, actor_id="agent:B", p_yes=0.3, suffix="b",
+    )
+
+    env_all = _envelope(home, "report.calibration", {"min_sample": 1})
+    assert env_all["data"]["summary"]["sample_size"] == 2
+
+    env_a = _envelope(home, "report.calibration", {
+        "filter": {"actors": {"actor_id": ["agent:A"]}},
+        "min_sample": 1,
+    })
+    assert env_a["data"]["summary"]["sample_size"] == 1
+    assert env_a["data"]["groups"][0]["record_ids"]["forecasts"] == [fid_a]
+    assert fid_b not in env_a["data"]["groups"][0]["record_ids"]["forecasts"]
+
+    env_b = _envelope(home, "report.calibration", {
+        "filter": {"actors": {"actor_id": ["agent:B"]}},
+        "min_sample": 1,
+    })
+    assert env_b["data"]["summary"]["sample_size"] == 1
+    assert env_b["data"]["groups"][0]["record_ids"]["forecasts"] == [fid_b]
+
+
 # -- reliability bins ---------------------------------------------
 
 

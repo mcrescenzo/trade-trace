@@ -16,6 +16,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.reports._filter_support import (
+    applied_filter_view,
+    enforce_supported_filter,
+)
 from trade_trace.tools._helpers import now_iso
 
 DEFAULT_STALE_THRESHOLD_DAYS = 14
@@ -29,6 +33,8 @@ def report_watchlist(
     stale_threshold_days: int = DEFAULT_STALE_THRESHOLD_DAYS,
 ) -> dict[str, Any]:
     rf = ReportFilter.model_validate(raw_filter or {})
+    enforce_supported_filter(rf, report="report.watchlist")
+    filter_view = applied_filter_view(rf, report="report.watchlist")
     cur = conn.execute(
         "SELECT id, instrument_id, created_at, reason, review_by "
         "FROM decisions WHERE type = 'watch' ORDER BY created_at DESC"
@@ -49,7 +55,7 @@ def report_watchlist(
                 "review_by": r[4],
                 "age_days": _age_days(r[2]),
             },
-            "filter": rf.model_dump(),
+            "filter": filter_view,
             "record_ids": {"decisions": [r[0]], "instruments": [r[1]]},
             "examples": [{"kind": "decision", "id": r[0],
                           "summary": r[3] or "(no reason)"}],
@@ -63,7 +69,7 @@ def report_watchlist(
     summary: dict[str, Any] = {
         "sample_size": len(rows),
         "sample_warning": None,
-        "filter": rf.model_dump(),
+        "filter": filter_view,
         "metrics": {
             "watch_count": len(rows),
             "mode": "stale" if stale else "all",

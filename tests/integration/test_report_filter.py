@@ -172,3 +172,109 @@ def test_report_filter_schema_serialization_mode():
     )
     assert env["ok"] is True
     assert env["data"]["mode"] == "serialization"
+
+
+# -- per-report supported-filter rejection contract (beads d4k / ke1) ------
+#
+# Each report.* tool now declares the exact set of ReportFilter leaves it
+# applies at SQL time; any non-default value in an unsupported leaf is
+# rejected with VALIDATION_ERROR rather than silently broadened to global
+# rows. These tests pin the contract per report so a future regression
+# (e.g. a report drops a leaf without trimming its supported set) lands
+# as a clear test failure.
+
+
+def _journal_home(tmp_path: Path) -> Path:
+    h = tmp_path / "home"
+    assert mcp_call("journal.init", {"home": str(h)}).ok
+    return h
+
+
+# Each row is (report tool, MCP args mixed in alongside `filter`, a leaf
+# the report does NOT support). Reports with no SQL-applied filter leaves
+# get `decision.decision_type` as the canary; reports that do apply a
+# leaf get one chosen from outside their supported set.
+_UNSUPPORTED_LEAF_CASES = [
+    ("report.calibration", {}, {"decision": {"decision_type": ["actual_enter"]}},
+     "decision.decision_type"),
+    ("report.mistakes", {}, {"actors": {"actor_id": ["agent:foo"]}},
+     "actors.actor_id"),
+    ("report.strengths", {}, {"actors": {"actor_id": ["agent:foo"]}},
+     "actors.actor_id"),
+    ("report.pnl", {}, {"instrument": {"venue_id": ["v_x"]}},
+     "instrument.venue_id"),
+    ("report.watchlist", {}, {"actors": {"actor_id": ["agent:foo"]}},
+     "actors.actor_id"),
+    ("report.unscored_forecasts", {}, {"strategy": {"strategy_id": "s_x"}},
+     "strategy.strategy_id"),
+    ("report.playbook_adherence", {}, {"decision": {"decision_type": ["actual_enter"]}},
+     "decision.decision_type"),
+    ("report.decision_velocity", {}, {"actors": {"actor_id": ["agent:foo"]}},
+     "actors.actor_id"),
+    ("report.coach", {}, {"actors": {"actor_id": ["agent:foo"]}},
+     "actors.actor_id"),
+]
+
+
+@pytest.mark.parametrize(
+    "tool,extra,filter_input,unsupported_leaf",
+    _UNSUPPORTED_LEAF_CASES,
+)
+def test_report_rejects_unsupported_filter_leaf(
+    tmp_path, tool, extra, filter_input, unsupported_leaf,
+):
+    """Per d4k/ke1: a non-default value in a ReportFilter leaf the report
+    does not apply at SQL time must be rejected with VALIDATION_ERROR and
+    the offending leaf surfaced in `error.details`."""
+
+    home = _journal_home(tmp_path)
+    env = mcp_call(
+        tool,
+        {"home": str(home), "filter": filter_input, **extra},
+        actor_id="agent:default",
+    )
+    assert env.ok is False, (
+        f"{tool} accepted unsupported filter leaf {unsupported_leaf!r}; "
+        "must reject to avoid silently broadening"
+    )
+    assert env.error.code.value == "VALIDATION_ERROR"
+    details = env.error.details
+    assert details["field"] == "filter"
+    assert details["report"] == tool
+    assert unsupported_leaf in details["unsupported_filter_paths"]
+
+
+def test_calibration_supports_actor_strategy_instrument_and_late_recorded(
+    tmp_path,
+):
+    """Calibration's declared supported set is the source of truth; pin
+    it so a future drift (add or remove) is visible in this test rather
+    than silently changing behavior across the report surface."""
+
+    from trade_trace.reports._filter_support import SUPPORTED_FILTER_FIELDS
+
+    assert SUPPORTED_FILTER_FIELDS["report.calibration"] == frozenset({
+        "actors.actor_id",
+        "instrument.venue_id",
+        "strategy.strategy_id",
+        "outcome.include_late_recorded",
+    })
+
+
+def test_empty_supported_set_reports_accept_empty_filter(tmp_path):
+    """Reports with an empty supported set still accept the empty
+    ReportFilter (the default) — only non-default unsupported leaves
+    trigger rejection."""
+
+    home = _journal_home(tmp_path)
+    for tool in (
+        "report.mistakes", "report.strengths", "report.pnl",
+        "report.watchlist", "report.unscored_forecasts",
+        "report.playbook_adherence", "report.coach",
+    ):
+        env = mcp_call(
+            tool,
+            {"home": str(home), "filter": {}},
+            actor_id="agent:default",
+        )
+        assert env.ok, f"{tool} rejected the empty filter: {env}"

@@ -35,8 +35,31 @@ from trade_trace.reports import (
     report_unscored_forecasts,
     report_watchlist,
 )
+from trade_trace.reports._filter_support import (
+    SUPPORTED_FILTER_FIELDS,
+    UnsupportedFilterError,
+)
 from trade_trace.tools._helpers import open_db_for_args
 from trade_trace.tools.errors import ToolError
+
+
+def _unsupported_filter_to_tool_error(exc: UnsupportedFilterError) -> ToolError:
+    """Translate a typed UnsupportedFilterError into a VALIDATION_ERROR
+    envelope. The agent gets the offending leaf paths and the supported
+    set so it can prune its input and retry."""
+
+    return ToolError(
+        ErrorCode.VALIDATION_ERROR,
+        str(exc),
+        details={
+            "field": "filter",
+            "report": exc.report,
+            "unsupported_filter_paths": exc.paths,
+            "supported_filter_paths": sorted(
+                SUPPORTED_FILTER_FIELDS.get(exc.report, frozenset())
+            ),
+        },
+    )
 
 
 def _propagate_report_meta(ctx: ToolContext, data: dict[str, Any]) -> None:
@@ -106,6 +129,8 @@ def _report_calibration(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                 f"ReportFilter validation failed: {exc.errors()}",
                 details={"field": "filter", "validation_errors": exc.errors()},
             ) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
         # Embed integrity diagnostics in the panel so the panel can never
         # be read without the denominator/hygiene context.
         data["integrity_diagnostics"] = report_calibration_integrity(db.connection)
@@ -139,6 +164,8 @@ def _report_playbook_adherence(
                 f"ReportFilter validation failed: {exc.errors()}",
                 details={"field": "filter", "validation_errors": exc.errors()},
             ) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
     finally:
         db.close()
     _propagate_report_meta(ctx, data)
@@ -208,6 +235,8 @@ def _report_unscored_forecasts(args: dict[str, Any], ctx: ToolContext) -> dict[s
                 f"ReportFilter validation failed: {exc.errors()}",
                 details={"field": "filter", "validation_errors": exc.errors()},
             ) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
     finally:
         db.close()
     _propagate_report_meta(ctx, data)
@@ -238,6 +267,8 @@ def _report_decision_velocity(args: dict[str, Any], ctx: ToolContext) -> dict[st
                 f"ReportFilter validation failed: {exc.errors()}",
                 details={"field": "filter", "validation_errors": exc.errors()},
             ) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
     finally:
         db.close()
     _propagate_report_meta(ctx, data)
@@ -259,6 +290,8 @@ def _make_filter_only_report(fn):
                     f"ReportFilter validation failed: {exc.errors()}",
                     details={"field": "filter", "validation_errors": exc.errors()},
                 ) from exc
+            except UnsupportedFilterError as exc:
+                raise _unsupported_filter_to_tool_error(exc) from exc
         finally:
             db.close()
         _propagate_report_meta(ctx, data)
@@ -294,6 +327,8 @@ def _report_watchlist(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 f"ReportFilter validation failed: {exc.errors()}",
                 details={"field": "filter", "validation_errors": exc.errors()},
             ) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
     finally:
         db.close()
     _propagate_report_meta(ctx, data)
@@ -319,6 +354,8 @@ def _report_coach(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 f"ReportFilter validation failed: {exc.errors()}",
                 details={"field": "filter", "validation_errors": exc.errors()},
             ) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
         except TradingAdvicePhraseError as exc:
             raise ToolError(
                 ErrorCode.INVARIANT_VIOLATION,

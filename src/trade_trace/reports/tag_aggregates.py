@@ -22,6 +22,10 @@ import sqlite3
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.reports._filter_support import (
+    applied_filter_view,
+    enforce_supported_filter,
+)
 
 DEFAULT_TAG_MIN_SAMPLE = 10
 
@@ -35,6 +39,7 @@ def report_mistakes(
     return _tag_ranked_report(
         conn, raw_filter=raw_filter, min_sample=min_sample,
         order="desc", label="recurring mistakes",
+        report="report.mistakes",
     )
 
 
@@ -47,6 +52,7 @@ def report_strengths(
     return _tag_ranked_report(
         conn, raw_filter=raw_filter, min_sample=min_sample,
         order="asc", label="recurring strengths",
+        report="report.strengths",
     )
 
 
@@ -57,8 +63,11 @@ def _tag_ranked_report(
     min_sample: int,
     order: str,
     label: str,
+    report: str,
 ) -> dict[str, Any]:
     rf = ReportFilter.model_validate(raw_filter or {})
+    enforce_supported_filter(rf, report=report)
+    filter_view = applied_filter_view(rf, report=report)
 
     rows = conn.execute(
         """
@@ -101,7 +110,7 @@ def _tag_ranked_report(
                     round(mean_brier, 6) if mean_brier is not None else None
                 ),
             },
-            "filter": rf.model_dump(),
+            "filter": filter_view,
             "record_ids": {
                 "decisions": decision_ids,
                 "forecasts": forecast_ids,
@@ -126,7 +135,7 @@ def _tag_ranked_report(
     summary: dict[str, Any] = {
         "sample_size": len(rows),
         "sample_warning": None,
-        "filter": rf.model_dump(),
+        "filter": filter_view,
         "metrics": {"tag_count": len(by_tag), "ordering": order, "label": label},
         "caveats": [],
     }

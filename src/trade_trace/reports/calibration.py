@@ -13,7 +13,11 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
-from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
+from trade_trace.reports._filter_support import (
+    applied_filter_view,
+    enforce_supported_filter,
+)
 
 DEFAULT_MIN_SAMPLE = 20
 """Per reports.md §3.2 / scoring.md §7.1: N=20 is the calibration floor."""
@@ -53,7 +57,8 @@ def report_calibration(
     """
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    rows = _load_scored_rows(conn)
+    enforce_supported_filter(rf, report="report.calibration")
+    rows = _load_scored_rows(conn, rf)
 
     # Late-recorded default exclusion (dogfood-protocol.md §2.2).
     if rf.outcome.include_late_recorded:
@@ -95,7 +100,7 @@ def report_calibration(
     summary = {
         "sample_size": sample_size,
         "sample_warning": sample_warning,
-        "filter": rf.model_dump(),
+        "filter": applied_filter_view(rf, report="report.calibration"),
         "metrics": metrics,
         "caveats": caveats,
         "late_recorded_excluded": excluded_late,
@@ -105,7 +110,7 @@ def report_calibration(
             "key": "all",
             "label": "All scored binary forecasts in filter",
             "metrics": metrics,
-            "filter": rf.model_dump(),
+            "filter": applied_filter_view(rf, report="report.calibration"),
             "record_ids": group_record_ids,
             "examples": _build_examples(conn, included_rows, max_examples=3),
             "sample_size": sample_size,
@@ -125,29 +130,48 @@ def report_calibration(
 # -- data loading --------------------------------------------------------
 
 
-def _load_scored_rows(conn: sqlite3.Connection) -> list[_ScoredRow]:
+def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_ScoredRow]:
     """Return every scored binary forecast row resolved against its YES
     probability. Excludes scores with `score IS NULL` (failed) and scores
     whose outcome is itself superseded (scoring.md §5.1)."""
 
-    cur = conn.execute(
-        """
+    where = [
+        "fs.metric = 'brier_binary'",
+        "fs.score IS NOT NULL",
+        "f.kind = 'binary'",
+        """NOT EXISTS (
+            SELECT 1 FROM edges e
+            WHERE e.source_kind = 'outcome' AND e.target_kind = 'outcome'
+              AND e.edge_type = 'supersedes' AND e.target_id = o.id
+          )""",
+    ]
+    params: list[Any] = []
+
+    if rf.actors.actor_id:
+        where.append(f"f.actor_id IN ({_placeholders(len(rf.actors.actor_id))})")
+        params.extend(rf.actors.actor_id)
+    if rf.instrument.venue_id:
+        where.append(f"i.venue_id IN ({_placeholders(len(rf.instrument.venue_id))})")
+        params.extend(rf.instrument.venue_id)
+    if rf.strategy.strategy_id is not None:
+        if rf.strategy.strategy_id == STRATEGY_NONE_SENTINEL:
+            where.append("t.strategy_id IS NULL")
+        else:
+            where.append("t.strategy_id = ?")
+            params.append(rf.strategy.strategy_id)
+
+    sql = f"""
         SELECT fs.id, fs.forecast_id, fs.outcome_id, fs.score, fs.metadata_json,
                f.yes_label,
                o.outcome_label
         FROM forecast_scores fs
         JOIN forecasts f ON f.id = fs.forecast_id
+        JOIN theses t ON t.id = f.thesis_id
+        JOIN instruments i ON i.id = t.instrument_id
         JOIN outcomes o ON o.id = fs.outcome_id
-        WHERE fs.metric = 'brier_binary'
-          AND fs.score IS NOT NULL
-          AND f.kind = 'binary'
-          AND NOT EXISTS (
-            SELECT 1 FROM edges e
-            WHERE e.source_kind = 'outcome' AND e.target_kind = 'outcome'
-              AND e.edge_type = 'supersedes' AND e.target_id = o.id
-          )
+        WHERE {' AND '.join(where)}
         """
-    )
+    cur = conn.execute(sql, params)
     rows: list[_ScoredRow] = []
     for score_id, forecast_id, outcome_id, _score, metadata_json, yes_label, outcome_label in cur.fetchall():
         try:
@@ -173,6 +197,10 @@ def _load_scored_rows(conn: sqlite3.Connection) -> list[_ScoredRow]:
             late_recorded=late,
         ))
     return rows
+
+
+def _placeholders(count: int) -> str:
+    return ", ".join("?" for _ in range(count))
 
 
 def _resolve_p_yes_and_y(

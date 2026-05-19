@@ -148,14 +148,29 @@ def test_strategy_id_sentinel_does_not_pass_through_as_sql_literal(home):
         assert env.data["summary"]["sample_size"] == 0
 
 
-def test_filter_round_trips_through_filter_echo(home):
-    """The report echoes the filter back. The echoed filter must equal
-    the input (modulo defaults) — proving the filter was parsed, not
-    interpolated."""
+def test_supported_actor_filter_round_trips_and_applies_cleanly(home):
+    """Calibration historically accepts actors.actor_id. Per d4k/ke1 it
+    must therefore apply the filter safely and echo it as applied, not
+    reject it and not silently broaden to global rows."""
 
     env = _mcp(home, "report.calibration", {
         "filter": {"actors": {"actor_id": ["agent:foo"]}},
     })
-    assert env.ok
+    assert env.ok, env
+    assert env.data["summary"]["sample_size"] == 0
     echoed = env.data["summary"]["filter"]
     assert echoed["actors"]["actor_id"] == ["agent:foo"]
+
+
+def test_supported_filter_field_round_trips_through_echo(home):
+    """The supported subset still echoes back unchanged — the new
+    contract narrows what's accepted but does not garble what's echoed."""
+
+    env = _mcp(home, "report.calibration", {
+        "filter": {"outcome": {"include_late_recorded": True}},
+    })
+    assert env.ok, env
+    echoed = env.data["summary"]["filter"]
+    assert echoed["outcome"]["include_late_recorded"] is True
+    # Defaults remain in unrelated groups.
+    assert echoed["actors"]["actor_id"] == []
