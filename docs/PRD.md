@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-18
 **Status:** Clean planning draft
-**Companion docs:** [`VISION.md`](./VISION.md), [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md), [`docs/architecture/scoring.md`](./docs/architecture/scoring.md), [`docs/architecture/persistence.md`](./docs/architecture/persistence.md), [`docs/architecture/contracts.md`](./docs/architecture/contracts.md), [`docs/architecture/operability.md`](./docs/architecture/operability.md), [`docs/architecture/reports.md`](./docs/architecture/reports.md), [`docs/architecture/imports.md`](./docs/architecture/imports.md), [`docs/architecture/risk-units.md`](./docs/architecture/risk-units.md), [`docs/architecture/opportunity-analysis.md`](./docs/architecture/opportunity-analysis.md), [`docs/architecture/dogfood-protocol.md`](./docs/architecture/dogfood-protocol.md)
+**Companion docs:** [`VISION.md`](./VISION.md), [`docs/architecture/memory-layer.md`](./architecture/memory-layer.md), [`docs/architecture/scoring.md`](./architecture/scoring.md), [`docs/architecture/persistence.md`](./architecture/persistence.md), [`docs/architecture/contracts.md`](./architecture/contracts.md), [`docs/architecture/operability.md`](./architecture/operability.md), [`docs/architecture/reports.md`](./architecture/reports.md), [`docs/architecture/imports.md`](./architecture/imports.md), [`docs/architecture/risk-units.md`](./architecture/risk-units.md), [`docs/architecture/opportunity-analysis.md`](./architecture/opportunity-analysis.md), [`docs/architecture/dogfood-protocol.md`](./architecture/dogfood-protocol.md)
 
 Trade Trace is a local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents. It records decisions, resolves outcomes, scores supported forecasts, stores reflections, evolves playbooks, and recalls prior learning. It never executes trades, never queries external venues for market data, never handles execution credentials, and is not a human dashboard.
 
@@ -16,26 +16,26 @@ MVP vertical slice:
 2. Structured manual ingestion of instruments, snapshots, theses, binary forecasts, and decisions
 3. Optional grouping of decisions, theses, and reviews under named strategies for scoped reports, recall, and reflection (see §2.12 and §4.6)
 4. Structured manual outcome entry with a typed resolution status
-5. Binary Brier scoring (see [`scoring.md`](./docs/architecture/scoring.md))
+5. Binary Brier scoring (see [`scoring.md`](./architecture/scoring.md))
 6. Deterministic reports and `report.coach`
 7. Agent-written reflection
 8. Playbook version update with normalized adherence tracking (considered, followed, overridden, not_applicable)
 9. Token-budgeted recall of prior observations, reflections, and playbook rules in the next decision
 10. Source/evidence capture attached to theses, decisions, and forecasts
 
-Deferred or optional after the manual loop: `sqlite-vec` embeddings, JSONL/CSV import implementations (the write schemas are import-ready in MVP — see [`imports.md`](./docs/architecture/imports.md)), multi-class/scalar scoring, trading-native edge/market reports (forecast-vs-market, calibration-by-liquidity-bucket, skipped-positive-edge review), `report.strategy_performance`, `report.compare`, `report.risk` and risk-unit fields (see [`risk-units.md`](./docs/architecture/risk-units.md)), `report.opportunity` and path-dependent analysis (see [`opportunity-analysis.md`](./docs/architecture/opportunity-analysis.md)), exact ForecastBench submission compatibility, web viewer, sync, HTTP/SSE transport, and websockets.
+Deferred or optional after the manual loop: `sqlite-vec` embeddings, JSONL/CSV import implementations (the write schemas are import-ready in MVP — see [`imports.md`](./architecture/imports.md)), multi-class/scalar scoring, trading-native edge/market reports (forecast-vs-market, calibration-by-liquidity-bucket, skipped-positive-edge review), `report.strategy_performance`, `report.compare`, `report.risk` and risk-unit fields (see [`risk-units.md`](./architecture/risk-units.md)), `report.opportunity` and path-dependent analysis (see [`opportunity-analysis.md`](./architecture/opportunity-analysis.md)), exact ForecastBench submission compatibility, web viewer, sync, HTTP/SSE transport, and websockets.
 
-Trade Trace does not fetch trading data, broker data, market prices, or outcomes from external services. The agent supplies all market data through the structured ingestion APIs. The one outbound-network path is the optional local embedding model download (off by default in MVP — see §2.4 and [`memory-layer.md`](./docs/architecture/memory-layer.md) §8), which never carries trading data and is explicitly opt-in.
+Trade Trace does not fetch trading data, broker data, market prices, or outcomes from external services. The agent supplies all market data through the structured ingestion APIs. The one outbound-network path is the optional local embedding model download (off by default in MVP — see §2.4 and [`memory-layer.md`](./architecture/memory-layer.md) §8), which never carries trading data and is explicitly opt-in.
 
 ## 2. Locked product decisions
 
 ### 2.1 Memory layer
 
-The memory layer is built in-house, modeled on Retain / Recall / Reflect but trading-specific. Memory nodes link to ledger rows, carry confidence/decay metadata, and can participate in typed graph recall. No external memory framework is a runtime dependency. See [`memory-layer.md`](./docs/architecture/memory-layer.md).
+The memory layer is built in-house, modeled on Retain / Recall / Reflect but trading-specific. Memory nodes link to ledger rows, carry confidence/decay metadata, and can participate in typed graph recall. No external memory framework is a runtime dependency. See [`memory-layer.md`](./architecture/memory-layer.md).
 
 ### 2.2 State model
 
-The SQLite database is the source of truth. It separates immutable event/source tables from mutable or rebuildable projections. See [`persistence.md`](./docs/architecture/persistence.md) for the full event/outbox/idempotency contract.
+The SQLite database is the source of truth. It separates immutable event/source tables from mutable or rebuildable projections. See [`persistence.md`](./architecture/persistence.md) for the full event/outbox/idempotency contract.
 
 - `position_events` are source of truth; `positions` is a projection derived from them.
 - `memory_nodes` are immutable; recall telemetry belongs in `memory_node_stats` or recall events/projections, not on the node row.
@@ -44,7 +44,7 @@ The SQLite database is the source of truth. It separates immutable event/source 
 
 ### 2.3 CLI and MCP parity
 
-One internal core API backs both MCP and CLI. Tool schemas, validation semantics, result meaning, and error codes must be equivalent after transport normalization. JSON byte identity is not required because MCP framing, streaming, and transport metadata differ from CLI stdout/NDJSON. See [`contracts.md`](./docs/architecture/contracts.md) for the envelope and error code list.
+One internal core API backs both MCP and CLI. Tool schemas, validation semantics, result meaning, and error codes must be equivalent after transport normalization. JSON byte identity is not required because MCP framing, streaming, and transport metadata differ from CLI stdout/NDJSON. See [`contracts.md`](./architecture/contracts.md) for the envelope and error code list.
 
 ### 2.4 No trading-data fetching
 
@@ -61,13 +61,13 @@ One — and only one — path in Trade Trace makes outbound network calls: the o
 - **Disjoint from trading data.** The download fetches model weights; it never transmits trading records, snapshots, theses, or any journal data outward.
 - **Disableable.** `tt config set embeddings.provider none` removes the SEMANTIC strategy entirely. Air-gapped installs may pre-stage the model with `tt model import <path>` instead.
 
-Remote embedding *providers* (OpenAI, etc.) are a separate, also-opt-in path covered in [`memory-layer.md`](./docs/architecture/memory-layer.md) §8.3. They DO send memory text outward and carry an explicit warning at configure time. They are never enabled by default.
+Remote embedding *providers* (OpenAI, etc.) are a separate, also-opt-in path covered in [`memory-layer.md`](./architecture/memory-layer.md) §8.3. They DO send memory text outward and carry an explicit warning at configure time. They are never enabled by default.
 
 This is the complete outbound-network surface. There is no telemetry, no usage analytics, no auto-update, no webhook, no broker integration, no market-data fetch.
 
 ### 2.5 Forecast model
 
-MVP scoring is binary only. See [`scoring.md`](./docs/architecture/scoring.md) for invariants, the exact Brier formula (single-probability form), the resolution status enum, and the lifecycle of a forecast row.
+MVP scoring is binary only. See [`scoring.md`](./architecture/scoring.md) for invariants, the exact Brier formula (single-probability form), the resolution status enum, and the lifecycle of a forecast row.
 
 - Binary prediction markets: score directly against resolved YES/NO outcome.
 - Equity/crypto directional forecasts: may be expressed as binary derived events, e.g. `AAPL closes above 200 at horizon` or `BTC return > 0 by horizon`.
@@ -100,7 +100,7 @@ Tags are free-form sub-classifiers and coexist with a row's optional `strategy_i
 
 ### 2.10 Edges
 
-Generic edges require endpoint validation against allowed endpoint kinds and existing IDs. Edge endpoint kinds include memory nodes and ledger rows including instruments and venues. Do not use `contradicts` for administrative edge deletion. Edges are append-only; correction is by `supersedes`. Administrative deletion (`retracts`/`tombstones`) is deferred until a concrete need arises — see [`memory-layer.md`](./docs/architecture/memory-layer.md) §5.
+Generic edges require endpoint validation against allowed endpoint kinds and existing IDs. Edge endpoint kinds include memory nodes and ledger rows including instruments and venues. Do not use `contradicts` for administrative edge deletion. Edges are append-only; correction is by `supersedes`. Administrative deletion (`retracts`/`tombstones`) is deferred until a concrete need arises — see [`memory-layer.md`](./architecture/memory-layer.md) §5.
 
 Strategies are first-class edge endpoints (added to the kind enum in §3.2). Reflections can target a strategy directly via an `about` edge, and `memory.recall` accepts a strategy as context.
 
@@ -110,7 +110,7 @@ Period- or tag-scoped reflections remain valid, but periods and tags are not MVP
 
 - yfinance, Polymarket Gamma, and similar external APIs are explicitly out of scope; see §2.4.
 - `sqlite-vec` is optional/verified at init; MVP recall runs with FTS5 + graph + temporal retrieval. Vector recall is off by default and opt-in (§2.4.1).
-- Local embedding models are downloaded/cache-managed only when explicitly enabled (§2.4.1, [`memory-layer.md`](./docs/architecture/memory-layer.md) §8). The base wheel ships `sqlite-vec` and `sentence-transformers` as runtime dependencies but never auto-downloads model weights.
+- Local embedding models are downloaded/cache-managed only when explicitly enabled (§2.4.1, [`memory-layer.md`](./architecture/memory-layer.md) §8). The base wheel ships `sqlite-vec` and `sentence-transformers` as runtime dependencies but never auto-downloads model weights.
 - ForecastBench export is ForecastBench-inspired/TBD until the current external schema is verified.
 - No claim is made that LLMs have reached forecasting parity with human superforecasters.
 
@@ -133,9 +133,9 @@ Strategies are not introduced as a runtime requirement: the column is nullable a
 All write APIs include common metadata from MVP:
 
 - `id` — server-generated unless the tool documents an explicit override.
-- `created_at` — UTC ISO 8601 timestamp; mandatory UTC (see [`operability.md`](./docs/architecture/operability.md) §2.1).
+- `created_at` — UTC ISO 8601 timestamp; mandatory UTC (see [`operability.md`](./architecture/operability.md) §2.1).
 - `actor_id` or `actor` — string with grammar `<role>:<name>` where `<role>` is one of `agent`, `cli`, `import`, `system` and `<name>` is `[a-z0-9][a-z0-9._-]{0,63}`. Examples: `agent:default`, `cli:user`, `import:polymarket-csv-2026-05`. Used in idempotency scope.
-- `idempotency_key` — **required by default** for retryable writes (creation tools). The MCP and CLI surfaces both refuse retryable writes without a key unless the caller passes the explicit `--allow-no-idempotency` flag (CLI) or `_allow_no_idempotency: true` argument (MCP). Uniqueness scope and conflict behavior in [`persistence.md`](./docs/architecture/persistence.md) §5. Read tools, list tools, and admin tools do not require a key. Grammar: `[A-Za-z0-9._:-]{1,128}`; server compares post-trim, case-sensitive.
+- `idempotency_key` — **required by default** for retryable writes (creation tools). The MCP and CLI surfaces both refuse retryable writes without a key unless the caller passes the explicit `--allow-no-idempotency` flag (CLI) or `_allow_no_idempotency: true` argument (MCP). Uniqueness scope and conflict behavior in [`persistence.md`](./architecture/persistence.md) §5. Read tools, list tools, and admin tools do not require a key. Grammar: `[A-Za-z0-9._:-]{1,128}`; server compares post-trim, case-sensitive.
 - `agent_id` — optional logical trading-agent identifier (e.g. `agent:polymarket-scout`). Distinct from `actor_id`: `actor_id` is who initiated the write; `agent_id` is which logical agent the work belongs to. Reporting dimension only.
 - `model_id` — optional model/model-family identifier (e.g. `claude-opus-4-7`). Reporting dimension only.
 - `environment` — optional enum: `paper`, `actual_recorded`, `simulation`, `backtest_import`, `manual_review`. Reporting dimension only; defaults unset.
@@ -165,7 +165,7 @@ The four segmentation fields (`agent_id`, `model_id`, `environment`, `run_id`) s
 #### `theses`
 - `id`, `instrument_id`, `version`, `parent_thesis_id`, `side`, `time_horizon_at`, `confidence_label`
 - `body`, `falsification_criteria`, `exit_triggers`, `risk_notes`, `created_at`, `actor_id`
-- `valid_from` (default `created_at`), `valid_to` (nullable; default `time_horizon_at` if set, else `NULL`), `invalidated_at` (nullable), `invalidated_by` (nullable FK to a superseding `theses.id` or `outcomes.id`) — bi-temporal fields per [`operability.md`](./docs/architecture/operability.md) §2.
+- `valid_from` (default `created_at`), `valid_to` (nullable; default `time_horizon_at` if set, else `NULL`), `invalidated_at` (nullable), `invalidated_by` (nullable FK to a superseding `theses.id` or `outcomes.id`) — bi-temporal fields per [`operability.md`](./architecture/operability.md) §2.
 - `strategy_id` (nullable FK to `strategies.id`; optional grouping per §2.12). Column reserved in M1; the `strategies` table itself ships in M3.
 - Segmentation: `agent_id`, `model_id`, `environment`, `run_id` (all nullable; see §2 common metadata).
 - `side` enum: `long`, `short`, `yes`, `no`, `flat_neutral`, `pairs_long_short`. `yes`/`no` are the standard prediction-market direction; `long`/`short` are directional positions in any non-prediction market; `flat_neutral` is the explicit "no directional view" stance (relevant for theses that say "spread compression" or "volatility expansion" without picking a side); `pairs_long_short` covers composite strategies.
@@ -177,11 +177,11 @@ The four segmentation fields (`agent_id`, `model_id`, `environment`, `run_id`) s
 - `scoring_support` (`supported`, `unsupported`) — capability: can this `kind` be scored by the installed scorer?
 - `scoring_state` (`pending`, `scored`, `failed`, `superseded`) — lifecycle: what has happened to this forecast?
 - `created_at`, `actor_id`
-- `valid_from` (default `created_at`), `valid_to` (default `resolution_at`), `invalidated_at` (nullable), `invalidated_by` (nullable; FK to a superseding forecast or to the outcome that resolved it). Bi-temporal fields per [`operability.md`](./docs/architecture/operability.md) §2.
+- `valid_from` (default `created_at`), `valid_to` (default `resolution_at`), `invalidated_at` (nullable), `invalidated_by` (nullable; FK to a superseding forecast or to the outcome that resolved it). Bi-temporal fields per [`operability.md`](./architecture/operability.md) §2.
 - Segmentation: `agent_id`, `model_id`, `environment`, `run_id` (all nullable).
-- `yes_label` is set at create time only and is **immutable**. If omitted at create time, scoring applies the heuristic in [`scoring.md`](./docs/architecture/scoring.md) §3.2 on resolution. If the heuristic fails, the forecast is scored as `failed` with `details.reason = "yes_label_ambiguous"`; the caller's recovery path is to issue `forecast.supersede` writing a new forecast row with an explicit `yes_label`. There is no `forecast.set_yes_label` tool; the append-only invariant on `forecasts` is strict.
+- `yes_label` is set at create time only and is **immutable**. If omitted at create time, scoring applies the heuristic in [`scoring.md`](./architecture/scoring.md) §3.2 on resolution. If the heuristic fails, the forecast is scored as `failed` with `details.reason = "yes_label_ambiguous"`; the caller's recovery path is to issue `forecast.supersede` writing a new forecast row with an explicit `yes_label`. There is no `forecast.set_yes_label` tool; the append-only invariant on `forecasts` is strict.
 - `resolution_rule_text` is a free-text statement of the rule that determines YES/NO at resolution, recorded at forecast creation. Reduces hindsight ambiguity in calibration replay; explicitly carrying the rule lets later analysis distinguish "forecast was wrong" from "resolution rule was ambiguous."
-- MVP supports binary scoring only; non-binary rows are recorded with `scoring_support = 'unsupported'` and remain `pending` forever unless a future scorer ships. See [`scoring.md`](./docs/architecture/scoring.md).
+- MVP supports binary scoring only; non-binary rows are recorded with `scoring_support = 'unsupported'` and remain `pending` forever unless a future scorer ships. See [`scoring.md`](./architecture/scoring.md).
 
 #### `forecast_outcomes`
 - `id`, `forecast_id`, `outcome_label`, `probability`, `lower_bound`, `upper_bound`
@@ -246,7 +246,7 @@ Forbidden-but-supplied fields raise `VALIDATION_ERROR` with `details.field` set.
 
 #### `outcomes`
 - `id`, `instrument_id`, `resolved_at`, `outcome_label`, `outcome_value`
-- `status` (`resolved_final`, `resolved_provisional`, `ambiguous`, `disputed`, `void`, `cancelled`) — see [`scoring.md`](./docs/architecture/scoring.md) §5.
+- `status` (`resolved_final`, `resolved_provisional`, `ambiguous`, `disputed`, `void`, `cancelled`) — see [`scoring.md`](./architecture/scoring.md) §5.
 - `source`, `confidence`, `metadata_json`, `created_at`, `actor_id`
 - Segmentation: `agent_id`, `model_id`, `environment`, `run_id` (all nullable).
 - `outcome_value` is a `REAL` column. For binary outcomes, it carries `0.0` or `1.0` matching the realized indicator. For scalar outcomes it carries the realized scalar. For categorical outcomes it is `NULL` and the categorical winner is identified by `outcome_label` only.
@@ -259,7 +259,7 @@ Forbidden-but-supplied fields raise `VALIDATION_ERROR` with `details.field` set.
 - `stance` enum: `supports`, `contradicts`, `neutral`. The stance produces the corresponding edge type (`supports`, `contradicts`, or `about`) when the source is attached via §4.5.
 - `storage_kind` enum: `url`, `local_path`, `inline_text`, `external_ref`. Note: Trade Trace **never fetches a `url` or reads a `local_path` automatically**. URLs and paths are stored as metadata only. Inline text is the canonical local-content path. `external_ref` covers opaque references the agent will resolve elsewhere. Content-addressed blob storage is explicitly deferred (P2+).
 - `hash_algorithm` enum: `sha256`, `sha512`, `blake3`, `none`. Required when `content_hash` is populated.
-- `redaction_status` enum: `none`, `redacted`, `sensitive`. `sensitive` flags content that should never appear in shared review bundles (see [`reports.md`](./docs/architecture/reports.md) §5).
+- `redaction_status` enum: `none`, `redacted`, `sensitive`. `sensitive` flags content that should never appear in shared review bundles (see [`reports.md`](./architecture/reports.md) §5).
 - Attached to theses, decisions, forecasts, and memory nodes through edges.
 
 #### `reviews`
@@ -288,7 +288,7 @@ Forbidden-but-supplied fields raise `VALIDATION_ERROR` with `details.field` set.
 
 #### `events`
 - `id`, `event_type`, `subject_kind`, `subject_id`, `payload_json`, `actor_id`, `idempotency_key`, `request_id`, `created_at`
-- Append-only event log. One row per committed write. Unique on `(event_type, actor_id, idempotency_key)` when the key is present. Full schema and idempotency semantics in [`persistence.md`](./docs/architecture/persistence.md).
+- Append-only event log. One row per committed write. Unique on `(event_type, actor_id, idempotency_key)` when the key is present. Full schema and idempotency semantics in [`persistence.md`](./architecture/persistence.md).
 
 #### `outbox`
 - `id`, `event_id`, `export_kind`, `state` (`pending`, `exported`, `failed`), `exported_at`, `error_text`, `attempt_count`
@@ -299,17 +299,17 @@ Forbidden-but-supplied fields raise `VALIDATION_ERROR` with `details.field` set.
 #### `memory_nodes`
 - `id`, `node_type` (`observation`, `reflection`, `playbook_rule`)
 - `version`, `parent_node_id`, `title`, `body`, `meta_json`, `confidence_base`, `decay_rate_per_day`, `importance`, `created_at`, `actor_id`
-- `valid_from` (default `created_at`), `valid_to` (nullable), `invalidated_at` (nullable), `invalidated_by` (nullable FK to a superseding `memory_nodes.id`). Bi-temporal fields per [`operability.md`](./docs/architecture/operability.md) §2.
+- `valid_from` (default `created_at`), `valid_to` (nullable), `invalidated_at` (nullable), `invalidated_by` (nullable FK to a superseding `memory_nodes.id`). Bi-temporal fields per [`operability.md`](./architecture/operability.md) §2.
 - Segmentation: `agent_id`, `model_id`, `environment`, `run_id` (all nullable).
-- `node_type` enum is exactly three values. `semantic_claim` from earlier drafts has collapsed into `reflection`-with-slow-decay (writer sets `decay_rate_per_day = 0.0005` or similar); `coach_signal` has moved to the separate `signals` table because its author (the system) and lifecycle (short-lived notification) differ. See [`memory-layer.md`](./docs/architecture/memory-layer.md) §3 for the per-type defaults and required `meta_json` fields.
-- `importance` is an integer in `[1, 10]` set by the writer at create time; defaults to `5` if omitted. Feeds reflection-threshold logic and recall ranking. Importance does not decay — it is a fixed signal of the writer's judgement at write time. The retrieval-time confidence model still applies separately (decay + supersession; see [`memory-layer.md`](./docs/architecture/memory-layer.md) §6).
+- `node_type` enum is exactly three values. `semantic_claim` from earlier drafts has collapsed into `reflection`-with-slow-decay (writer sets `decay_rate_per_day = 0.0005` or similar); `coach_signal` has moved to the separate `signals` table because its author (the system) and lifecycle (short-lived notification) differ. See [`memory-layer.md`](./architecture/memory-layer.md) §3 for the per-type defaults and required `meta_json` fields.
+- `importance` is an integer in `[1, 10]` set by the writer at create time; defaults to `5` if omitted. Feeds reflection-threshold logic and recall ranking. Importance does not decay — it is a fixed signal of the writer's judgement at write time. The retrieval-time confidence model still applies separately (decay + supersession; see [`memory-layer.md`](./architecture/memory-layer.md) §6).
 - Embeddings live in the separate `memory_node_embeddings` table (below), not on this row, so a node can have zero or multiple embeddings (one per provider/dim).
 - Immutable. Updates create new nodes; older rows stay readable.
 
 #### `memory_node_embeddings`
 - `memory_node_id` (FK to `memory_nodes.id`), `provider` (e.g. `local:bge-small-en-v1.5`, `api:openai:text-embedding-3-small`), `dim` (integer), `embedding` (BLOB; `sqlite-vec`-managed), `created_at`
-- Primary key: `(memory_node_id, provider)`. A node may have at most one embedding per provider; switching providers either re-embeds (eager via `tt memory reindex --confirm`) or leaves old vectors stale until reindex completes. See [`memory-layer.md`](./docs/architecture/memory-layer.md) §8.4.
-- Append-only; replaced rows on reindex use `DELETE` + `INSERT` within a single transaction (the one place a memory-side `DELETE` is allowed; see [`persistence.md`](./docs/architecture/persistence.md) §8).
+- Primary key: `(memory_node_id, provider)`. A node may have at most one embedding per provider; switching providers either re-embeds (eager via `tt memory reindex --confirm`) or leaves old vectors stale until reindex completes. See [`memory-layer.md`](./architecture/memory-layer.md) §8.4.
+- Append-only; replaced rows on reindex use `DELETE` + `INSERT` within a single transaction (the one place a memory-side `DELETE` is allowed; see [`persistence.md`](./architecture/persistence.md) §8).
 
 #### `memory_node_stats`
 - `memory_node_id`, `recall_count`, `last_recalled_at`, `updated_at`
@@ -317,7 +317,7 @@ Forbidden-but-supplied fields raise `VALIDATION_ERROR` with `details.field` set.
 
 #### `memory_recall_events`
 - `id`, `request_id`, `actor_id`, `query_text`, `context_kind`, `context_id`, `strategies_used` (JSON array of `"bm25"`/`"semantic"`/`"temporal"`/`"graph"`), `node_ids_returned` (JSON array, top-k order), `created_at`
-- Append-only event log for recall telemetry. Drives `memory_node_stats` projection (per [`persistence.md`](./docs/architecture/persistence.md) §7) and supports the `report.calibration` and DoD §10.2 #11/#15 traceability checks. Recall is a read tool from the agent's perspective; persistence of recall events is an append-only side effect (see [`persistence.md`](./docs/architecture/persistence.md) §7 for transaction handling).
+- Append-only event log for recall telemetry. Drives `memory_node_stats` projection (per [`persistence.md`](./architecture/persistence.md) §7) and supports the `report.calibration` and DoD §10.2 #11/#15 traceability checks. Recall is a read tool from the agent's perspective; persistence of recall events is an append-only side effect (see [`persistence.md`](./architecture/persistence.md) §7 for transaction handling).
 
 #### `signals`
 - `id`, `kind`, `severity`, `body`, `meta_json`, `related_refs_json`, `created_at`, `expires_at`, `actor_id`
@@ -325,12 +325,12 @@ Forbidden-but-supplied fields raise `VALIDATION_ERROR` with `details.field` set.
 - `severity` enum: `info`, `warn`, `critical`.
 - `related_refs_json` is an array of `{kind, id}` pointers to ledger rows the signal references.
 - `actor_id` is the system actor (`system:report.coach`, `system:resolve.pending_scan`, etc.) since signals are emitted by the system, not the agent.
-- Append-only; stale signals are filtered by `created_at` or `expires_at`, never deleted. See [`memory-layer.md`](./docs/architecture/memory-layer.md) §4 for the rationale of keeping signals out of `memory_nodes`.
+- Append-only; stale signals are filtered by `created_at` or `expires_at`, never deleted. See [`memory-layer.md`](./architecture/memory-layer.md) §4 for the rationale of keeping signals out of `memory_nodes`.
 
 #### `edges`
 - `id`, `source_kind`, `source_id`, `target_kind`, `target_id`, `edge_type`, `weight`, `created_at`, `actor_id`
 - Allowed endpoint kinds: `memory_node`, `decision`, `thesis`, `position`, `forecast`, `outcome`, `snapshot`, `review`, `playbook_version`, `source`, `instrument`, `venue`, `signal`, `strategy`.
-- Edge types (7, matching [`memory-layer.md`](./docs/architecture/memory-layer.md) §5): `about`, `derived_from`, `supports`, `contradicts`, `supersedes`, `violates`, `follows`.
+- Edge types (7, matching [`memory-layer.md`](./architecture/memory-layer.md) §5): `about`, `derived_from`, `supports`, `contradicts`, `supersedes`, `violates`, `follows`.
 - Deferred edge types until a concrete need arises: `links`, `retracts`, `tombstones`. Append-only; correction is via `supersedes`. `contradicts` is semantic evidence and is never used for administrative deletion.
 - Endpoint IDs are validated before insertion. **M1 endpoint enum** (minimum sufficient for source attachments and outcome corrections): `decision`, `thesis`, `forecast`, `outcome`, `snapshot`, `instrument`, `venue`, `source`, `review`, `playbook_version`. **M1 edge type enum**: `about`, `supports`, `contradicts`, `supersedes`. The `memory_node`, `signal`, and `strategy` endpoint kinds and the `derived_from`, `violates`, `follows` edge types are added with the memory layer and strategies in M3; pre-M3 writes that pass these kinds or types are rejected with `VALIDATION_ERROR`.
 
@@ -338,31 +338,31 @@ Forbidden-but-supplied fields raise `VALIDATION_ERROR` with `details.field` set.
 
 ### 4.0 Core ledger write tools
 
-The MVP slice's manual ingestion path is exposed as one tool per write table. Every tool below follows the common-metadata contract from §2 (mandatory `actor_id`, mandatory `idempotency_key` for retryable writes unless `_allow_no_idempotency: true`, optional segmentation fields), the success/error envelope from [`contracts.md`](./docs/architecture/contracts.md), and the transaction model from [`persistence.md`](./docs/architecture/persistence.md) §6.
+The MVP slice's manual ingestion path is exposed as one tool per write table. Every tool below follows the common-metadata contract from §2 (mandatory `actor_id`, mandatory `idempotency_key` for retryable writes unless `_allow_no_idempotency: true`, optional segmentation fields), the success/error envelope from [`contracts.md`](./architecture/contracts.md), and the transaction model from [`persistence.md`](./architecture/persistence.md) §6.
 
 - **`venue.add(name, kind, *, metadata_json?)`** — creates a `venues` row. `kind` ∈ §3.1 venues enum.
 - **`instrument.add(venue_id, asset_class, title, *, external_id?, symbol?, currency_or_collateral?, expiration_or_resolution_at?, resolution_criteria_text?, contract_multiplier?, metadata_json?)`** — creates an `instruments` row. `asset_class` ∈ §3.1 instruments enum.
 - **`snapshot.add(instrument_id, captured_at, *, source?, source_url?, price?, bid?, ask?, mid?, spread?, volume?, open_interest?, implied_probability?, liquidity_depth_json?, metadata_json?)`** — appends a `snapshots` row. Immutable; corrections create new snapshots.
 - **`thesis.add(instrument_id, side, body, *, time_horizon_at?, confidence_label?, falsification_criteria?, exit_triggers?, risk_notes?, strategy_id?, parent_thesis_id?, valid_from?, valid_to?)`** — creates a `theses` row. If `parent_thesis_id` is supplied, the new row is the next `version`; a `supersedes` edge is emitted from new → old.
 - **`forecast.add(thesis_id, kind, outcomes, *, resolution_at?, yes_label?, resolution_rule_text?)`** — creates a `forecasts` row plus exactly N `forecast_outcomes` rows. Binary forecasts must satisfy the §3.1 invariants on outcomes. `yes_label` is set here and only here; once written it is immutable.
-- **`forecast.supersede(prior_forecast_id, *, ...same args as forecast.add except thesis_id)`** — appends a new `forecasts` row, sets the prior row's `scoring_state = 'superseded'` (via supersedes-edge invalidation, not in-place mutation; see [`scoring.md`](./docs/architecture/scoring.md) §4.2), and emits a `supersedes` edge new → prior. The recovery path when an earlier forecast's `yes_label` was ambiguous or wrong.
+- **`forecast.supersede(prior_forecast_id, *, ...same args as forecast.add except thesis_id)`** — appends a new `forecasts` row, sets the prior row's `scoring_state = 'superseded'` (via supersedes-edge invalidation, not in-place mutation; see [`scoring.md`](./architecture/scoring.md) §4.2), and emits a `supersedes` edge new → prior. The recovery path when an earlier forecast's `yes_label` was ambiguous or wrong.
 - **`decision.add(instrument_id, type, *, thesis_id?, forecast_id?, snapshot_id?, side?, quantity?, price?, fees?, slippage?, reason?, playbook_version_id?, review_by?, strategy_id?, tags?)`** — creates a `decisions` row, validated against the §3.1 required-field matrix for `type`. Tags are written to `decision_tags` in the same transaction. `actual_*`-type decisions are journal records only — no execution side effect, ever.
-- **`outcome.add(instrument_id, resolved_at, outcome_label, status, *, outcome_value?, source?, confidence?, metadata_json?)`** — appends an `outcomes` row. Equivalent to `resolve.record` (§4.4); both names resolve to the same internal handler. `outcome.add` is the canonical name; `resolve.record` is retained as an alias for callers that already use it. Triggers auto-scoring per [`scoring.md`](./docs/architecture/scoring.md) §6 when `status = 'resolved_final'`.
+- **`outcome.add(instrument_id, resolved_at, outcome_label, status, *, outcome_value?, source?, confidence?, metadata_json?)`** — appends an `outcomes` row. Equivalent to `resolve.record` (§4.4); both names resolve to the same internal handler. `outcome.add` is the canonical name; `resolve.record` is retained as an alias for callers that already use it. Triggers auto-scoring per [`scoring.md`](./architecture/scoring.md) §6 when `status = 'resolved_final'`.
 
 ### 4.1 Memory
 
 - `memory.retain(node_type, body, *, title?, tags?, meta_json?, importance?, confidence_base?, decay_rate_per_day?, valid_from?, valid_to?, edges?)` writes a node. `node_type` ∈ {`observation`, `reflection`, `playbook_rule`}. The `edges` parameter lets the caller specify outgoing edges in the same call so reflection-without-edges never happens.
-- `memory.recall(query?, context?, strategies?, k?, max_chars?, compact?, include_body?, include_provenance?, min_confidence?, node_types?, mode?)` retrieves by FTS5, graph, temporal, and optionally vector similarity. Default `k = 10`; default `max_chars = 8000`; default `min_confidence = 0.0`. Accepts a `node_types` array (subset of the three node types) to scope recall by type. Accepts a `mode` parameter (`fused` (default) or `per_strategy`): `fused` returns one ranked list via RRF; `per_strategy` returns a `{bm25: [...], temporal: [...], semantic: [...], graph: [...]}` shape so the agent can triangulate without seeing only the combined ranking. Also accepts a `context: {kind, id}` parameter; valid kinds include row-backed targets (instrument, decision, thesis, playbook version, signal) and `strategy` once §2.12 ships in M3. Full contract in [`memory-layer.md`](./docs/architecture/memory-layer.md) §4 and §7.
+- `memory.recall(query?, context?, strategies?, k?, max_chars?, compact?, include_body?, include_provenance?, min_confidence?, node_types?, mode?)` retrieves by FTS5, graph, temporal, and optionally vector similarity. Default `k = 10`; default `max_chars = 8000`; default `min_confidence = 0.0`. Accepts a `node_types` array (subset of the three node types) to scope recall by type. Accepts a `mode` parameter (`fused` (default) or `per_strategy`): `fused` returns one ranked list via RRF; `per_strategy` returns a `{bm25: [...], temporal: [...], semantic: [...], graph: [...]}` shape so the agent can triangulate without seeing only the combined ranking. Also accepts a `context: {kind, id}` parameter; valid kinds include row-backed targets (instrument, decision, thesis, playbook version, signal) and `strategy` once §2.12 ships in M3. Full contract in [`memory-layer.md`](./architecture/memory-layer.md) §4 and §7.
 - `memory.reflect(target, body, *, importance?, derived_from?, supports?, contradicts?, supersedes?, ...)` is sugar over `retain(node_type=reflection)` and creates `about`/provenance edges. The `target` accepts row-backed kinds (decision, position, instrument, playbook_version, signal, outcome, forecast) and `strategy` (M3+).
 - `reflection.prompt_for_outcome(outcome_id, *, include_forecast?, include_thesis?, include_prior_reflections?)` — deterministic, no-LLM tool that emits a structured prompt packet bundling the resolved outcome, the original thesis and forecast, the agent's prior reflections on this instrument/strategy, and the calibration delta. The caller (a separate LLM) decides what to write back via `memory.reflect`. The system never auto-generates reflections.
 
 ### 4.2 Reports and coach
 
-All deterministic reports accept a `filter` argument conforming to the `ReportFilter` schema in [`reports.md`](./docs/architecture/reports.md) §2, return `ReportResult` envelopes with drill-down IDs and sample-size warnings (see `reports.md` §3), and support truncation/cursor semantics. The `filter` argument honors the canonical strategy-id sentinel from §2.12 (omitted/`null` = no filter; `"__none__"` = rows with no strategy). Filter wiring lands in M2; pre-strategy data simply has `strategy_id = NULL` and is included by an unfiltered call.
+All deterministic reports accept a `filter` argument conforming to the `ReportFilter` schema in [`reports.md`](./architecture/reports.md) §2, return `ReportResult` envelopes with drill-down IDs and sample-size warnings (see `reports.md` §3), and support truncation/cursor semantics. The `filter` argument honors the canonical strategy-id sentinel from §2.12 (omitted/`null` = no filter; `"__none__"` = rows with no strategy). Filter wiring lands in M2; pre-strategy data simply has `strategy_id = NULL` and is included by an unfiltered call.
 
 Deterministic reports:
 
-- `report.calibration` — binary Brier, log score, reliability buckets, ECE, sharpness, and a sample-prevalence baseline, computed over scored binary forecasts matching the filter. Full output shape and formulas in [`scoring.md`](./docs/architecture/scoring.md) §3 and §7 and `reports.md` §4. Returns `sample_warning` when the filtered set is below the configurable minimum (default 20 scored forecasts).
+- `report.calibration` — binary Brier, log score, reliability buckets, ECE, sharpness, and a sample-prevalence baseline, computed over scored binary forecasts matching the filter. Full output shape and formulas in [`scoring.md`](./architecture/scoring.md) §3 and §7 and `reports.md` §4. Returns `sample_warning` when the filtered set is below the configurable minimum (default 20 scored forecasts).
 - `report.mistakes` / `report.strengths` — tag counts and co-occurrence over decisions and reviews.
 - `report.pnl` — paper/actual P&L aggregates where position projections have enough fills to compute realized/unrealized P&L. Returns a `data_coverage` field reporting how many positions could and could not be computed.
 - `report.watchlist` and `watch.stale` — lazy stale-watch detection.
@@ -370,8 +370,8 @@ Deterministic reports:
 - `report.playbook_adherence` — driven by `decision_playbook_rules`; surfaces considered/followed/overridden/not_applicable counts and override outcomes.
 - `report.decision_velocity`.
 - `report.filter_schema` — returns the canonical `ReportFilter` Pydantic schema as JSON, so an agent can introspect valid fields without hitting the docs.
-- `report.calibration_integrity` — six anti-goodhart hygiene diagnostics (forecast_coverage, unsupported_rate, ambiguous_rate, disputed_rate, void_cancelled_rate, suspicious_late_rate). Embedded in `report.calibration.data.integrity_diagnostics` and surfaced as a standalone tool. See [`reports.md`](./docs/architecture/reports.md) §4.8. (Bead trade-trace-jzn.)
-- `report.source_quality` — five provenance hygiene diagnostics (missing_sources_on_actual_enter, stale_sources, contradictory_sources, duplicated_sources, sensitive_sources) over the source-attachment graph. See [`reports.md`](./docs/architecture/reports.md) §4.9. (Bead trade-trace-l9q.)
+- `report.calibration_integrity` — six anti-goodhart hygiene diagnostics (forecast_coverage, unsupported_rate, ambiguous_rate, disputed_rate, void_cancelled_rate, suspicious_late_rate). Embedded in `report.calibration.data.integrity_diagnostics` and surfaced as a standalone tool. See [`reports.md`](./architecture/reports.md) §4.8. (Bead trade-trace-jzn.)
+- `report.source_quality` — five provenance hygiene diagnostics (missing_sources_on_actual_enter, stale_sources, contradictory_sources, duplicated_sources, sensitive_sources) over the source-attachment graph. See [`reports.md`](./architecture/reports.md) §4.9. (Bead trade-trace-l9q.)
 - `tool.schema` — per-tool introspection: returns description, CLI invocation, example_minimal/example_rich payloads (for write tools), and required_metadata notes (actor_id pattern, idempotency_key pattern, dry-run support flags). Omit `tool` to enumerate the full tool catalog. (Bead trade-trace-268.)
 
 Every write tool accepts `--dry-run` (CLI) / `_dry_run: true` (MCP): the dispatcher rolls back the wrapping transaction so the call returns the would-be IDs and payload without persisting any rows. `meta.dry_run=true` echoes back on the envelope (success or error). (Bead trade-trace-268.)
@@ -384,9 +384,9 @@ Comparison and per-strategy reporting are deferred to P1:
 
 - `report.compare(group_by, filter)` — runs the same metric set across groups (`agent_id`, `model_id`, `strategy_id`, `playbook_version_id`, `decision_type`, `venue_id`, `asset_class`, `liquidity_bucket`, `confidence_bucket`, `environment`) and returns a per-group `ReportGroup` for side-by-side comparison. The data is captured from M1 onward (segmentation fields are MVP); the report itself is P1.
 - `report.strategy_performance` — single-strategy convenience wrapper around the filter pattern; per-strategy P&L, calibration trend, mistake-tag frequency, playbook adherence summary.
-- `report.risk` and `report.opportunity` — P1; see [`risk-units.md`](./docs/architecture/risk-units.md) and [`opportunity-analysis.md`](./docs/architecture/opportunity-analysis.md).
+- `report.risk` and `report.opportunity` — P1; see [`risk-units.md`](./architecture/risk-units.md) and [`opportunity-analysis.md`](./architecture/opportunity-analysis.md).
 
-`review.bundle(filter, *, max_records?, include_sources?, include_reflections?, include_playbook?)` packages a bounded case set as deterministic JSON for an external review loop (a separate LLM or a human reviewer). It selects records by filter, includes their theses/forecasts/outcomes/reflections, and includes attached sources subject to `sources.redaction_status`. Sources marked `sensitive` are never included; sources marked `redacted` have `body`/`extracted_text` omitted. The bundle does not call an LLM and does not provide advice. Full spec in [`reports.md`](./docs/architecture/reports.md) §5. MVP ships the contract; P1 ships the implementation.
+`review.bundle(filter, *, max_records?, include_sources?, include_reflections?, include_playbook?)` packages a bounded case set as deterministic JSON for an external review loop (a separate LLM or a human reviewer). It selects records by filter, includes their theses/forecasts/outcomes/reflections, and includes attached sources subject to `sources.redaction_status`. Sources marked `sensitive` are never included; sources marked `redacted` have `body`/`extracted_text` omitted. The bundle does not call an LLM and does not provide advice. Full spec in [`reports.md`](./architecture/reports.md) §5. MVP ships the contract; P1 ships the implementation.
 
 ### 4.3 Playbooks
 
@@ -400,8 +400,8 @@ MVP captures the active playbook version and normalized adherence records on eve
 
 ### 4.4 Resolution
 
-- `resolve.pending` — returns forecasts past their `resolution_at` without an `outcomes` row, or with an outcome row whose `status != 'resolved_final'`. Idempotent read. Accepts `filter` (the `ReportFilter` schema from [`reports.md`](./docs/architecture/reports.md) §2), optional `cursor`, and `limit` (default 100, max 1000). Returns deterministic ordering by `resolution_at ASC, forecast_id ASC` so cursor pagination is stable.
-- `resolve.record` — alias of `outcome.add` (§4.0). Writes an `outcomes` row with the required `status`, optionally attaches evidence via `source.attach_to_*` in the same logical operation (separate edge writes; see [`persistence.md`](./docs/architecture/persistence.md) §6), and triggers auto-scoring when `status = 'resolved_final'` and the forecast is scoring-supported. Either name resolves to the same handler; success envelopes echo `meta.tool` with the name the caller used.
+- `resolve.pending` — returns forecasts past their `resolution_at` without an `outcomes` row, or with an outcome row whose `status != 'resolved_final'`. Idempotent read. Accepts `filter` (the `ReportFilter` schema from [`reports.md`](./architecture/reports.md) §2), optional `cursor`, and `limit` (default 100, max 1000). Returns deterministic ordering by `resolution_at ASC, forecast_id ASC` so cursor pagination is stable.
+- `resolve.record` — alias of `outcome.add` (§4.0). Writes an `outcomes` row with the required `status`, optionally attaches evidence via `source.attach_to_*` in the same logical operation (separate edge writes; see [`persistence.md`](./architecture/persistence.md) §6), and triggers auto-scoring when `status = 'resolved_final'` and the forecast is scoring-supported. Either name resolves to the same handler; success envelopes echo `meta.tool` with the name the caller used.
 
 These tools exist because outcomes lag decisions: the agent session that resolves a forecast is usually not the same session that made the decision.
 
@@ -432,18 +432,18 @@ JSONL import is the canonical local-ingestion path. Each line is a `{tool, args}
 - `import.validate(file, *, max_errors?)` — dry-run path. Parses, validates, and reports `validated`, `would_create`, `would_replay`, `errors[]`, and `warnings[]` without writing.
 - `import.commit(file, *, halt_on_error?)` — write path. Wraps the JSONL stream in a single transaction by default (atomic import); per-row transactions opt-in via `transaction_mode='per_row'` for very large files where atomicity is impractical.
 
-CSV-fills import (P1) is documented in [`imports.md`](./docs/architecture/imports.md) §3 and shares the validation/dry-run/idempotency contract.
+CSV-fills import (P1) is documented in [`imports.md`](./architecture/imports.md) §3 and shares the validation/dry-run/idempotency contract.
 
-The MVP commitment is the **import-ready write schema**: every core write tool in §4.0 is callable from the same JSONL handler the import tools use. The MVP does not require shipping `import.validate`/`import.commit` implementations; they may land in early P1. See [`imports.md`](./docs/architecture/imports.md) for the full contract.
+The MVP commitment is the **import-ready write schema**: every core write tool in §4.0 is callable from the same JSONL handler the import tools use. The MVP does not require shipping `import.validate`/`import.commit` implementations; they may land in early P1. See [`imports.md`](./architecture/imports.md) for the full contract.
 
 ## 5. Storage
 
-- Primary store: SQLite at `$TRADE_TRACE_HOME/trade-trace.sqlite`, WAL mode, single-writer assumption for MVP (see [`operability.md`](./docs/architecture/operability.md) §3 for second-writer behavior).
+- Primary store: SQLite at `$TRADE_TRACE_HOME/trade-trace.sqlite`, WAL mode, single-writer assumption for MVP (see [`operability.md`](./architecture/operability.md) §3 for second-writer behavior).
 - Required recall: SQLite FTS5 + graph + temporal queries.
 - Optional vector recall: `sqlite-vec` if installed and verified at `journal.init`/`journal.status`. Off by default in MVP; opt-in per §2.4.1.
-- Event/outbox tables record committed writes for audit/export. JSONL export is generated from the outbox; see [`persistence.md`](./docs/architecture/persistence.md).
-- Migrations are versioned and preserve data. Migration policy (forward-only with documented schema-version field; enum extensions are non-breaking; column removals are major) detailed in [`operability.md`](./docs/architecture/operability.md) §4.
-- File permissions default to user-only where supported. Logging policy, crash-recovery contract, blob-size caps, and outbox JSONL file format detailed in [`operability.md`](./docs/architecture/operability.md).
+- Event/outbox tables record committed writes for audit/export. JSONL export is generated from the outbox; see [`persistence.md`](./architecture/persistence.md).
+- Migrations are versioned and preserve data. Migration policy (forward-only with documented schema-version field; enum extensions are non-breaking; column removals are major) detailed in [`operability.md`](./architecture/operability.md) §4.
+- File permissions default to user-only where supported. Logging policy, crash-recovery contract, blob-size caps, and outbox JSONL file format detailed in [`operability.md`](./architecture/operability.md).
 
 ## 6. Output contract
 
@@ -451,7 +451,7 @@ The MVP commitment is the **import-ready write schema**: every core write tool i
 - `--human` may add prose to stderr only.
 - MCP uses normal MCP framing and may stream according to transport capabilities.
 - CLI and MCP must be schema/semantic equivalents after transport normalization, not byte-level twins.
-- Success and error envelopes have the shapes defined in [`contracts.md`](./docs/architecture/contracts.md). Stable error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `IDEMPOTENCY_CONFLICT`, `UNSUPPORTED_CAPABILITY`, `STORAGE_ERROR`, `SCORING_UNSUPPORTED`, `SCORING_NOT_READY`, `INVARIANT_VIOLATION`, `MARKET_NOT_RESOLVED`, `MARKET_AMBIGUOUS`.
+- Success and error envelopes have the shapes defined in [`contracts.md`](./architecture/contracts.md). Stable error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `IDEMPOTENCY_CONFLICT`, `UNSUPPORTED_CAPABILITY`, `STORAGE_ERROR`, `SCORING_UNSUPPORTED`, `SCORING_NOT_READY`, `INVARIANT_VIOLATION`, `MARKET_NOT_RESOLVED`, `MARKET_AMBIGUOUS`.
 
 ## 7. Safety and privacy
 
@@ -476,16 +476,16 @@ The MVP commitment is the **import-ready write schema**: every core write tool i
 - Core write tools per §4.0: `venue.add`, `instrument.add`, `snapshot.add`, `thesis.add`, `forecast.add`, `forecast.supersede`, `decision.add`, `outcome.add` / `resolve.record`
 - `journal.init`, `journal.status`, `journal.schema`, JSONL export drain
 - Manual end-to-end write path: instrument → snapshot → thesis → binary forecast → decision → outcome
-- Idempotency contract and result/error envelope per [`contracts.md`](./docs/architecture/contracts.md) and [`persistence.md`](./docs/architecture/persistence.md)
+- Idempotency contract and result/error envelope per [`contracts.md`](./architecture/contracts.md) and [`persistence.md`](./architecture/persistence.md)
 - `source.add`, `source.attach_to_*` with provenance fields per §3.1 sources (writes `about`/`supports`/`contradicts` rows into the M1 `edges` table)
 - Outcome correction path per §3.1 outcomes (new `outcomes` row + `supersedes` edge in the M1 `edges` table)
 - `resolve.pending`, `resolve.record`
 
 ### M2 — Binary scoring and deterministic reports
-- `forecast_scores` binary Brier on supported outcome writes (single-probability form per [`scoring.md`](./docs/architecture/scoring.md))
-- `ReportFilter` schema and `report.filter_schema` per [`reports.md`](./docs/architecture/reports.md)
+- `forecast_scores` binary Brier on supported outcome writes (single-probability form per [`scoring.md`](./architecture/scoring.md))
+- `ReportFilter` schema and `report.filter_schema` per [`reports.md`](./architecture/reports.md)
 - Calibration (Brier + log score + reliability bins + ECE + sharpness + baseline per `scoring.md` §7), watchlist, unscored forecast, tag, decision velocity, and basic P&L reports
-- Drill-down envelope on all reports per [`reports.md`](./docs/architecture/reports.md) §3 (aggregate → filter → contributing record IDs → examples)
+- Drill-down envelope on all reports per [`reports.md`](./architecture/reports.md) §3 (aggregate → filter → contributing record IDs → examples)
 - Optional `filter` parameter on every report per §2.12 strategy-id sentinel semantics; the filter operates on the still-nullable column reserved in M1, so calls without an active strategy match all rows
 - Lazy coach-signal generation in reports/explicit scans (writes to the `signals` table)
 
@@ -496,7 +496,7 @@ The MVP commitment is the **import-ready write schema**: every core write tool i
 - FTS5 + graph + temporal recall; optional vector recall when SEMANTIC strategy is enabled per §2.4.1
 - `strategies` table and `strategy.{create,list,show,update}` tools per §4.6
 - `strategy` (and `signal`) added to the edge endpoint kind enum (§3.2)
-- `memory.recall(context: {kind: "strategy", id})` and `memory.reflect(target: strategy)` per [`memory-layer.md`](./docs/architecture/memory-layer.md) §7 and §9
+- `memory.recall(context: {kind: "strategy", id})` and `memory.reflect(target: strategy)` per [`memory-layer.md`](./architecture/memory-layer.md) §7 and §9
 
 ### M4 — Playbook loop
 - Playbooks, versions, playbook rule nodes
@@ -506,10 +506,10 @@ The MVP commitment is the **import-ready write schema**: every core write tool i
 - Playbook version update with reflection provenance
 
 ### P1
-- JSONL import implementation (`import.validate`, `import.commit`) per [`imports.md`](./docs/architecture/imports.md)
-- CSV-fills import (including optional `strategy_id` column) per [`imports.md`](./docs/architecture/imports.md) §3
-- Risk-unit fields and `report.risk` per [`risk-units.md`](./docs/architecture/risk-units.md)
-- Path-dependent analysis and `report.opportunity` per [`opportunity-analysis.md`](./docs/architecture/opportunity-analysis.md)
+- JSONL import implementation (`import.validate`, `import.commit`) per [`imports.md`](./architecture/imports.md)
+- CSV-fills import (including optional `strategy_id` column) per [`imports.md`](./architecture/imports.md) §3
+- Risk-unit fields and `report.risk` per [`risk-units.md`](./architecture/risk-units.md)
+- Path-dependent analysis and `report.opportunity` per [`opportunity-analysis.md`](./architecture/opportunity-analysis.md)
 - `report.compare` implementation (segmentation data is captured from M1)
 - `review.bundle` implementation (the contract ships in MVP per §4.2; the implementation is P1)
 - Multi-class/categorical scoring and ranked probability score
@@ -531,11 +531,11 @@ The MVP commitment is the **import-ready write schema**: every core write tool i
 - `journal.init` is idempotent.
 - Every tool has a JSON schema; `report.filter_schema` and `journal.schema` surface them at runtime.
 - Every write carries `actor_id`/actor metadata; retryable writes require `idempotency_key` by default and replay-safely. The `--allow-no-idempotency` opt-out is exercised by tests of at-least-once import paths only.
-- CLI and MCP outputs are semantically equivalent after transport normalization (verified by the golden-test suite in [`contracts.md`](./docs/architecture/contracts.md) §7).
+- CLI and MCP outputs are semantically equivalent after transport normalization (verified by the golden-test suite in [`contracts.md`](./architecture/contracts.md) §7).
 - Append-only invariants hold for source/event tables.
 - `positions`, `memory_node_stats` can be rebuilt from source data via `journal.rebuild_projections`.
-- Binary Brier scores match reference calculations using the single-probability form. Log score, ECE, sharpness, and the sample-prevalence baseline match reference formulas in [`scoring.md`](./docs/architecture/scoring.md) §3 and §7.
-- Reliability-diagram bin boundaries are deterministic given the bin policy in [`scoring.md`](./docs/architecture/scoring.md) §7.2.
+- Binary Brier scores match reference calculations using the single-probability form. Log score, ECE, sharpness, and the sample-prevalence baseline match reference formulas in [`scoring.md`](./architecture/scoring.md) §3 and §7.
+- Reliability-diagram bin boundaries are deterministic given the bin policy in [`scoring.md`](./architecture/scoring.md) §7.2.
 - Binary forecast invariants hold: exactly two outcomes, probabilities in `[0,1]`, sum to `1.0` within `1e-6`, distinct labels.
 - Auto-scoring is blocked when the linked `outcomes.status != 'resolved_final'`.
 - An `IDEMPOTENCY_CONFLICT` is raised only on semantically incompatible payload reuse; pure replay succeeds and reports `meta.idempotent_replay: true`.
@@ -563,7 +563,7 @@ The MVP is done when **both** the plumbing criteria and the loop-useful criteria
 
 ### 10.2 Loop-useful criteria (the loop helps)
 
-Each criterion has a deterministic protocol and measurable assertion in [`dogfood-protocol.md`](./docs/architecture/dogfood-protocol.md) §5; `c1r` (Final Verification) runs the protocol against the trade-trace-8dv fixture.
+Each criterion has a deterministic protocol and measurable assertion in [`dogfood-protocol.md`](./architecture/dogfood-protocol.md) §5; `c1r` (Final Verification) runs the protocol against the trade-trace-8dv fixture.
 
 10. At least one report identifies a recurring error or strength pattern that the agent did not call out in advance. (Protocol: §5.1.)
 11. At least one `memory.recall` result is explicitly cited in a later thesis, traceable via a `derived_from` or `supports` edge. (Protocol: §5.2; "agent did not already know this" construction in §6.)
@@ -578,9 +578,9 @@ The validation question for the MVP is whether the loop **made the LLM trader au
 ## 11. Remaining open questions
 
 1. Exact ForecastBench export shape: verify against the current schema before promising compatibility.
-2. ~~Surfacing "the agent did not already know this" for the §10.2 usefulness criterion~~ Resolved by [`dogfood-protocol.md`](./docs/architecture/dogfood-protocol.md) §6: the construction relies on the union of `derived_from`/`supports`/`about` edges from the new thesis (and its same-transaction decision/forecast rows) plus the immediately-preceding `memory_recall_events` row's `node_ids_returned`. No `prior_knowledge` boolean column is needed; the property is computable from existing data and surfaces in `report.coach`.
+2. ~~Surfacing "the agent did not already know this" for the §10.2 usefulness criterion~~ Resolved by [`dogfood-protocol.md`](./architecture/dogfood-protocol.md) §6: the construction relies on the union of `derived_from`/`supports`/`about` edges from the new thesis (and its same-transaction decision/forecast rows) plus the immediately-preceding `memory_recall_events` row's `node_ids_returned`. No `prior_knowledge` boolean column is needed; the property is computable from existing data and surfaces in `report.coach`.
 3. **Strategy ↔ playbook coupling.** A future `playbook_strategy_link(playbook_version_id, strategy_id, role)` join table is considered and explicitly deferred. Orthogonality (§2.6, §2.12) is the MVP stance. Promote when dogfood shows that playbooks consistently follow strategy boundaries (e.g., one strategy "owns" a rule set used nowhere else) and `(strategy × playbook)` filtering on `report.playbook_adherence` becomes insufficient.
-4. **Strategy versioning.** Hypotheses evolve. MVP captures evolution as `strategy.updated` events in the `events` log (per §3.1 and [`persistence.md`](./docs/architecture/persistence.md)). Promote to a `strategy_versions` table when point-in-time queries like "what was this strategy's hypothesis on the date I made decision X" become load-bearing for reflection or reporting.
+4. **Strategy versioning.** Hypotheses evolve. MVP captures evolution as `strategy.updated` events in the `events` log (per §3.1 and [`persistence.md`](./architecture/persistence.md)). Promote to a `strategy_versions` table when point-in-time queries like "what was this strategy's hypothesis on the date I made decision X" become load-bearing for reflection or reporting.
 5. **Many-to-many decision↔strategy.** Pairs trades and basket strategies arguably belong to multiple strategies at once. MVP uses a single nullable `strategy_id` FK; the workaround is a composite strategy row (e.g., `pairs-trade-AAPL-MSFT`). Promote to a `decision_strategies` join table when dogfood produces concrete cases where the composite-row workaround loses information that reports actually consume.
 6. **`strategy_id` filter sentinel.** §2.12 defines `"__none__"` as the "no strategy" selector. The sentinel string is chosen rather than a separate boolean (`strategy_present: false`) to keep the report-tool surface consistent across filters. Revisit if a second non-null sentinel becomes necessary (e.g., "strategies in any of \{...\}").
 7. **`account_label` promotion from `metadata_json`.** Segmentation by portfolio/account bucket is currently a `metadata_json` key, not a first-class column, to avoid implying broker-account semantics. Promote to a first-class column on `decisions`/`positions`/`outcomes` when dogfood produces reports that actually need to filter or group by it. Demoting a first-class column is more expensive than promoting from JSON.
@@ -588,4 +588,4 @@ The validation question for the MVP is whether the loop **made the LLM trader au
 9. **Letta-style core memory block.** A small pinned "session_context" rewritable scratchpad surfaced on every relevant call is interesting; deferred because the MVP loop runs without it and the cost of adding it later is small.
 10. **Source-typed decay profiles.** FinMem-style shallow/intermediate/deep decay buckets per `sources.kind` could feed temporal weighting in recall. Currently each `memory_node.decay_rate_per_day` is writer-set per node; layered decay-by-source is a P1+ refinement.
 
-Closed in this pass (no longer open): the embedding-default-on/off ambiguity (resolved off-default per §2.4.1), the re-embedding policy (resolved eager per [`memory-layer.md`](./docs/architecture/memory-layer.md) §8.4), multi-writer behavior (specified in [`operability.md`](./docs/architecture/operability.md) §3), memory taxonomy drift (resolved to 3 node types), edge-taxonomy drift (resolved to 7 types), and outcome-correction mechanism (resolved to supersedes-edge per §3.1 outcomes).
+Closed in this pass (no longer open): the embedding-default-on/off ambiguity (resolved off-default per §2.4.1), the re-embedding policy (resolved eager per [`memory-layer.md`](./architecture/memory-layer.md) §8.4), multi-writer behavior (specified in [`operability.md`](./architecture/operability.md) §3), memory taxonomy drift (resolved to 3 node types), edge-taxonomy drift (resolved to 7 types), and outcome-correction mechanism (resolved to supersedes-edge per §3.1 outcomes).

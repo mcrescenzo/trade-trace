@@ -2,14 +2,14 @@
 
 Status: clean planning draft. Date: 2026-05-18.
 
-Companion docs: [PRD.md](../../PRD.md), [VISION.md](../../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [reports.md](reports.md), [memory-layer.md](memory-layer.md),
 [operability.md](operability.md).
 
 ## 1. Purpose
 
-[PRD](../../PRD.md) §10.2 lists seven "loop-useful" acceptance criteria
+[PRD](../PRD.md) §10.2 lists seven "loop-useful" acceptance criteria
 (#10–#16) for the MVP. These criteria distinguish "the plumbing runs"
 (§10.1) from "the loop actually helps." They are inherently easier to
 hand-wave than to verify.
@@ -28,7 +28,7 @@ is the contract the fixture must satisfy.
 
 ### 2.1 Decision before outcome (locked)
 
-[VISION.md](../../VISION.md) Principle 1 is load-bearing: a forecast
+[VISION.md](../VISION.md) Principle 1 is load-bearing: a forecast
 recorded after its outcome cannot be a calibration measurement of the
 agent, only a record of imported history. The dogfood protocol
 operationalizes the principle as follows.
@@ -103,7 +103,7 @@ the property without a join.
 
 ### 2.4 Evidence / source warning policy (locked)
 
-[VISION.md](../../VISION.md) Principle 9 and `memory-layer.md`
+[VISION.md](../VISION.md) Principle 9 and `memory-layer.md`
 emphasize evidence capture; PRD §4.5 makes source attachment a
 first-class write. The policy:
 
@@ -201,12 +201,12 @@ The dogfood fixture must contain at least:
 
 | Item | Minimum count | Notes |
 |---|---|---|
-| Decisions | 30 | Exercises [`PRD`](../../PRD.md) §3.1 required-field matrix across at least 8 of the 13 `decisions.type` values, including `skip`, `paper_enter`, `paper_exit`, `hold`, `update_thesis`, `resolved`, and `review`. |
+| Decisions | 30 | Exercises [`PRD`](../PRD.md) §3.1 required-field matrix across at least 8 of the 13 `decisions.type` values, including `skip`, `paper_enter`, `paper_exit`, `hold`, `update_thesis`, `resolved`, and `review`. |
 | Reflections (memory nodes, `node_type=reflection`) | 10 | At least 2 with `meta_json.scope_kind="period"`, 2 with `meta_json.scope_kind="tag"`, and the rest row-backed via `about` edges. |
 | Resolved binary forecasts (`scoring_state=scored`, non-late-recorded) | 5 | Resolved against `outcomes.status="resolved_final"`. |
 | Strategies | 2 | One `active`, one previously-`updated` (to exercise the `strategy.updated` event). |
 | Playbook version updates | 1 | A `playbook.propose_version` event whose `provenance_reflection_node_id` references a reflection in the fixture. |
-| Later adherence rows | 2 | One `decision_playbook_rules.status="followed"` and one `status="overridden"` referencing the new version. The `overridden` row's decision has an outcome captured per [`PRD`](../../PRD.md) §10.2 #12. |
+| Later adherence rows | 2 | One `decision_playbook_rules.status="followed"` and one `status="overridden"` referencing the new version. The `overridden` row's decision has an outcome captured per [`PRD`](../PRD.md) §10.2 #12. |
 | Stale watch | 1 | A `watch` decision older than `config.report.watchlist.stale_days` (default 30) with no follow-up decision. |
 | Unscored forecast (live, not late-recorded) | 1 | Past `resolution_at` with no `outcomes` row, surfaceable by `report.unscored_forecasts`. |
 | Sources with `redaction_status="none"` | ≥3 | Normal attached evidence. |

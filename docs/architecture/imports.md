@@ -10,7 +10,7 @@ replays through the same core dispatcher used by MCP/CLI. The shipped JSONL
 export path (outbox drain) is the replay-input format; underscore-prefixed
 export transport metadata is ignored on input.
 
-Companion docs: [PRD.md](../../PRD.md), [persistence.md](persistence.md),
+Companion docs: [PRD.md](../PRD.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md), [operability.md](operability.md).
 
 ## 1. Purpose

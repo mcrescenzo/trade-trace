@@ -11,7 +11,7 @@ without metric scrape (operability §6 is the contract; the JSON-logs
 shape is contract-locked but Prometheus / OpenTelemetry exporters are
 P1).
 
-Companion docs: [PRD.md](../../PRD.md), [VISION.md](../../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [memory-layer.md](memory-layer.md), [persistence.md](persistence.md),
 [scoring.md](scoring.md), [contracts.md](contracts.md),
 [reports.md](reports.md), [imports.md](imports.md).

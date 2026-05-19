@@ -12,7 +12,7 @@ report.risk, report.opportunity. review.bundle ships as a
 contract-only stub (UNSUPPORTED_CAPABILITY); the §5 spec is the
 binding contract for the P1 implementation.
 
-Companion docs: [PRD.md](../../PRD.md), [VISION.md](../../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md), [memory-layer.md](memory-layer.md).
 

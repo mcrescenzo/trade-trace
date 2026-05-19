@@ -8,7 +8,7 @@ deterministic-replay meta fields, CLI/MCP parity tests. The only
 known additive extension is `meta.preview_only` (bead trade-trace-2z7)
 and `meta.dry_run` (bead 268), both backward-compatible.
 
-Companion docs: [PRD.md](../../PRD.md), [VISION.md](../../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [memory-layer.md](memory-layer.md).
 
@@ -197,7 +197,7 @@ contract change requiring a version bump.
 
 | Code | When |
 |---|---|
-| `VALIDATION_ERROR` | Input failed schema validation (wrong type, missing required field, value out of range, forbidden field set per the decision required-field matrix in [PRD](../../PRD.md) §3.1). |
+| `VALIDATION_ERROR` | Input failed schema validation (wrong type, missing required field, value out of range, forbidden field set per the decision required-field matrix in [PRD](../PRD.md) §3.1). |
 | `NOT_FOUND` | The referenced entity doesn't exist. |
 | `IDEMPOTENCY_CONFLICT` | A retry with the same `idempotency_key` carried a semantically different payload than the original write. See [persistence.md](persistence.md) §5.2 for the per-event-type comparison policy. |
 | `UNSUPPORTED_CAPABILITY` | The call targets a capability the server doesn't support in this configuration (e.g. vector recall when `embeddings.provider = none`). |

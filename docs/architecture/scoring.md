@@ -10,7 +10,7 @@ returns UNSUPPORTED_CAPABILITY today). Anti-goodhart integrity
 diagnostics (bead trade-trace-jzn) are embedded under
 `report.calibration.data.integrity_diagnostics`.
 
-Companion docs: [PRD.md](../../PRD.md), [VISION.md](../../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [memory-layer.md](memory-layer.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md).
 
@@ -81,7 +81,7 @@ When a binary forecast is created, the caller MAY pass `yes_label` to
 explicitly identify which of the two outcome labels is YES. `yes_label` is
 **immutable** once written — there is no `forecast.set_yes_label` tool, and
 no in-place mutation of `forecasts` rows is permitted (the append-only
-invariant on `forecasts` is strict; see [PRD](../../PRD.md) §3.1).
+invariant on `forecasts` is strict; see [PRD](../PRD.md) §3.1).
 
 If `yes_label` is omitted at create time, the scorer applies the following
 heuristic on resolution:
@@ -93,7 +93,7 @@ heuristic on resolution:
 4. Otherwise, the forecast transitions to `scoring_state = 'failed'` with
    `forecast_scores` row carrying `score = NULL` and
    `metadata_json.failure_reason = "yes_label_ambiguous"`. The caller's
-   recovery path is `forecast.supersede` ([PRD](../../PRD.md) §4.0): write a
+   recovery path is `forecast.supersede` ([PRD](../PRD.md) §4.0): write a
    new forecast row with an explicit `yes_label`, which sets the prior
    forecast's `scoring_state = 'superseded'` via the supersedes-edge
    invalidation path (§4.2).
@@ -138,7 +138,7 @@ Values:
   corresponding `forecast_scores` row with `score = NULL` and
   `metadata_json.failure_reason`.
 - `superseded`: the forecast has been replaced by a newer version via
-  `forecast.supersede` ([PRD](../../PRD.md) §4.0). A `supersedes` edge
+  `forecast.supersede` ([PRD](../PRD.md) §4.0). A `supersedes` edge
   links the new forecast row to the old; the old forecast is no longer
   scored. The `parent_thesis_id` chain on `theses` does NOT automatically
   supersede dependent forecasts — forecast supersession is explicit so
@@ -197,7 +197,7 @@ corrections produce a new row and use a `supersedes` edge (`source_kind =
 'outcome'`, `target_kind = 'outcome'`, `edge_type = 'supersedes'`) to mark
 the older row inactive. There is no `parent_outcome_id` column on
 `outcomes` — the supersedes edge is the single canonical correction
-mechanism (resolving an earlier draft ambiguity in [PRD](../../PRD.md)
+mechanism (resolving an earlier draft ambiguity in [PRD](../PRD.md)
 §3.1 outcomes and [persistence.md](persistence.md) §8). Each row carries
 an explicit `status`:
 
@@ -213,7 +213,7 @@ an explicit `status`:
 **Hard invariant:** the scorer auto-scores a forecast only when the
 associated outcome row has `status = 'resolved_final'` AND that row is
 not itself superseded by a newer outcome row via a `supersedes` edge
-([PRD](../../PRD.md) §3.1 outcomes). Any other status — or a superseded
+([PRD](../PRD.md) §3.1 outcomes). Any other status — or a superseded
 `resolved_final` row — leaves the forecast in `scoring_state = 'pending'`
 until a new `outcomes` row with `status = 'resolved_final'` becomes the
 non-superseded head.
@@ -302,7 +302,7 @@ boundaries.
 
 ## 7. Calibration Report Depth (MVP)
 
-The MVP `report.calibration` ([PRD](../../PRD.md) §4.2) emits a fixed set
+The MVP `report.calibration` ([PRD](../PRD.md) §4.2) emits a fixed set
 of metrics over scored binary forecasts in the filtered set. Per-forecast
 Brier scores from §3 are the substrate; this section defines the aggregate
 metrics, the reliability-bin policy, and the report envelope.
@@ -311,7 +311,7 @@ A "calibration substrate" that emits only Brier is under-spec'd for the
 LLM-forecasting field: every contemporary benchmark (ForecastBench,
 Manifold, Brier.fyi) reports a richer panel. The MVP report emits the full
 panel because the marginal implementation cost over Brier-only is small and
-several DoD criteria ([PRD](../../PRD.md) §10.2 #14, #16) depend on it.
+several DoD criteria ([PRD](../PRD.md) §10.2 #14, #16) depend on it.
 
 ### 7.1 Aggregate metrics
 

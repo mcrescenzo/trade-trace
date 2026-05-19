@@ -2,7 +2,7 @@
 
 Status: P1 design draft. Date: 2026-05-18.
 
-Companion docs: [PRD.md](../../PRD.md), [reports.md](reports.md),
+Companion docs: [PRD.md](../PRD.md), [reports.md](reports.md),
 [risk-units.md](risk-units.md), [scoring.md](scoring.md).
 
 ## 1. Purpose

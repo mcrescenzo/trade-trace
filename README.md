@@ -20,7 +20,7 @@ Trade Trace records trading decisions an LLM agent makes and helps the agent imp
 - Not a generic agent memory framework. The schema is trading-shaped.
 - Not a backtesting engine, tax accountant, social platform, or source of financial advice.
 
-For the full vision, see [`VISION.md`](./VISION.md). For the working PRD, see [`PRD.md`](./PRD.md).
+For the full vision, see [`VISION.md`](./docs/VISION.md). For the working PRD, see [`PRD.md`](./docs/PRD.md).
 
 ## Status
 
@@ -55,8 +55,8 @@ What works today:
 
 Design artifacts:
 
-- [`VISION.md`](./VISION.md) — north star
-- [`PRD.md`](./PRD.md) — working PRD and MVP scope
+- [`VISION.md`](./docs/VISION.md) — north star
+- [`PRD.md`](./docs/PRD.md) — working PRD and MVP scope
 - [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md) — memory layer spec (node taxonomy, retrieval, bi-temporal validity, embeddings posture)
 - [`docs/architecture/scoring.md`](./docs/architecture/scoring.md) — forecast scoring (Brier, log score, ECE, sharpness, reliability bins, lifecycle, `failure_reason` enum)
 - [`docs/architecture/persistence.md`](./docs/architecture/persistence.md) — events, outbox, idempotency (incl. §5.2.1 per-event-type structural-field registry)
@@ -90,7 +90,7 @@ download, ~130 MB; lands in M3) or `tt model import <path>` for air-gapped
 installs. See [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md)
 §8.
 
-Trade Trace never fetches trading data, broker data, market prices, order books, or outcomes. The agent calling it supplies all market data through the structured ingestion APIs. The single opt-in outbound path (embedding model download) carries no trading data; the optional API-embeddings path is separately opt-in and warned about at configure time. See [`PRD.md`](./PRD.md) §2.4.1.
+Trade Trace never fetches trading data, broker data, market prices, order books, or outcomes. The agent calling it supplies all market data through the structured ingestion APIs. The single opt-in outbound path (embedding model download) carries no trading data; the optional API-embeddings path is separately opt-in and warned about at configure time. See [`PRD.md`](./docs/PRD.md) §2.4.1.
 
 ## MVP vertical slice
 

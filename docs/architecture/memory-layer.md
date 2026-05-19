@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-18
 **Status:** Refined draft v3 (supersedes v2; PRD §3.2/§4.1 alignment now committed)
-**Parent:** [`../../PRD.md`](../../PRD.md) §5 & §4.2
+**Parent:** [`../../PRD.md`](../PRD.md) §5 & §4.2
 
 This note details the memory layer's node taxonomy, edge semantics, retrieval strategies, embedding policy, and confidence model. The PRD owns the schema rows; this doc owns the semantic intent. As of v3, the PRD schema and this doc are aligned on the 3-node-type taxonomy, the 7-edge-type taxonomy, the separate `memory_node_embeddings` table, the `signals` table, and the `memory_recall_events` event log.
 
