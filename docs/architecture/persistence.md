@@ -36,6 +36,26 @@ truth. The database runs in WAL mode with a single-writer assumption for
 MVP; multi-writer behavior is specified in [`operability.md`](operability.md)
 §3.
 
+### 2.1 SQLite build dependencies
+
+Two SQLite-build features are **required** (not optional) for the
+journal to migrate cleanly:
+
+- **WAL mode** — set on every connection via `PRAGMA journal_mode = WAL`.
+  All modern SQLite builds support it.
+- **FTS5** — virtual-table extension powering the BM25 backbone of
+  `memory.recall`. Migration 006 preflights FTS5 availability and
+  aborts with a typed `FTS5UnavailableError` carrying remediation
+  text if the build lacks it (bead trade-trace-qis). Most CPython
+  distributions on Linux/macOS/Windows ship FTS5 by default; the
+  failure path generally only hits minimal Alpine/musl builds. The
+  remediation is to install a SQLite (or Python distribution)
+  compiled with `-DSQLITE_ENABLE_FTS5`.
+
+`sqlite-vec` (the vector backend used by the embeddings opt-in path) is
+**optional**: when missing the embeddings strategy is silently
+unavailable, but the rest of the recall pipeline keeps working.
+
 Three classes of table:
 
 - **Source/event tables** (`events`, `outcomes`, `snapshots`, `theses`,

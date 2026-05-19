@@ -77,6 +77,75 @@ def test_no_downgrade(tmp_path: Path):
         db.close()
 
 
+def test_memory_layer_migration_requires_fts5(tmp_path: Path, monkeypatch):
+    """Per bead trade-trace-qis / DEBT-013: when the host SQLite build
+    lacks FTS5, migration 006 must raise the typed
+    `FTS5UnavailableError` BEFORE creating any memory-layer tables.
+    The previous behavior was an opaque `OperationalError` partway
+    through after some tables had been created, leaving callers with
+    no remediation hint and a partially-migrated schema."""
+
+    from trade_trace.storage.migrations import FTS5UnavailableError
+    import sqlite3
+
+    def _fts5_unavailable(conn: sqlite3.Connection) -> None:
+        # Simulate the OperationalError SQLite raises when FTS5 is not
+        # compiled in while creating the FTS5 virtual table in the
+        # migration preflight.
+        raise FTS5UnavailableError() from sqlite3.OperationalError(
+            "no such module: fts5"
+        )
+
+    db = _open(tmp_path)
+    try:
+        # Stop just before migration 006 so it's the next one to run.
+        apply_pending_migrations(db.connection, target_version=5)
+        baseline = current_version(db.connection)
+        assert baseline == 5
+
+        monkeypatch.setattr(
+            "trade_trace.storage.migrations._require_fts5",
+            _fts5_unavailable,
+        )
+
+        with pytest.raises(FTS5UnavailableError) as exc:
+            apply_pending_migrations(db.connection)
+
+        # The descriptive remediation hint is part of the contract.
+        msg = str(exc.value)
+        assert "FTS5" in msg
+        assert "memory" in msg.lower()
+        assert (
+            "compiled" in msg.lower()
+            or "rebuild" in msg.lower()
+            or "build" in msg.lower()
+        )
+
+        # Schema version stays at the baseline; the memory-layer tables
+        # do not exist.
+        assert current_version(db.connection) == baseline
+        for table in ("memory_nodes", "memory_node_fts", "memory_recall_events"):
+            row = db.connection.execute(
+                "SELECT name FROM sqlite_master WHERE name = ?", (table,),
+            ).fetchone()
+            assert row is None, f"{table!r} leaked despite FTS5 failure"
+    finally:
+        db.close()
+
+
+def test_require_fts5_passes_on_modern_sqlite(tmp_path: Path):
+    """The positive case — most CPython distributions ship FTS5, so
+    `_require_fts5` must be a no-op on a default SQLite connection."""
+
+    from trade_trace.storage.migrations import _require_fts5
+
+    db = _open(tmp_path)
+    try:
+        _require_fts5(db.connection)  # no exception
+    finally:
+        db.close()
+
+
 def test_partial_migration_rolls_back(tmp_path: Path, monkeypatch):
     """A migration that raises mid-loop must leave schema_version unchanged."""
 

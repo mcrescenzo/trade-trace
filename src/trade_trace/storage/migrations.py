@@ -18,6 +18,39 @@ from collections.abc import Callable
 
 from trade_trace.storage.policy import check_no_reverse_migration
 
+
+class FTS5UnavailableError(RuntimeError):
+    """The host SQLite build does not have FTS5 compiled in.
+
+    Trade Trace's memory-layer recall path depends on FTS5 (the BM25
+    backbone of `memory.recall`) so the migration cannot run on a
+    SQLite that lacks the extension. The error includes remediation
+    text the operator can paste into a search engine.
+
+    Raised by migration 006 per bead trade-trace-qis / DEBT-013.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "FTS5 is required for the memory layer but the host SQLite "
+            "build does not include it. Install a SQLite (or Python "
+            "distribution) compiled with -DSQLITE_ENABLE_FTS5 (most "
+            "official CPython distributions on Linux/macOS/Windows ship "
+            "FTS5; minimal Alpine/musl builds sometimes do not). See "
+            "docs/architecture/persistence.md for the dependency policy."
+        )
+
+
+def _require_fts5(conn: sqlite3.Connection) -> None:
+    """Preflight FTS5 availability. Raises `FTS5UnavailableError` with
+    actionable remediation text if the host SQLite build lacks FTS5."""
+
+    try:
+        conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS __qis_fts_check USING fts5(x)")
+        conn.execute("DROP TABLE IF EXISTS __qis_fts_check")
+    except sqlite3.OperationalError as exc:  # pragma: no cover - exercised via test
+        raise FTS5UnavailableError() from exc
+
 Migration = Callable[[sqlite3.Connection], None]
 
 
@@ -713,7 +746,15 @@ def _migration_006_memory_layer(conn: sqlite3.Connection) -> None:
     Append-only triggers cover `memory_nodes` and `memory_recall_events`;
     `memory_node_stats` is rebuildable so UPDATE/DELETE are allowed there
     (the projection-rebuild path needs them).
+
+    Preflight: FTS5 is a hard dependency of the recall path (bead
+    trade-trace-qis / DEBT-013). Migration aborts up front with a
+    descriptive `FTS5UnavailableError` rather than failing partway
+    through with a generic OperationalError after some tables have
+    been created.
     """
+
+    _require_fts5(conn)
 
     conn.execute(
         """
