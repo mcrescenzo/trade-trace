@@ -88,18 +88,39 @@ session — that's a workflow violation, not an exemption.
 
 ## Build & Test
 
-_Add your build and test commands here_
+Trade Trace is a Python package; quality gates run via `ruff`, `mypy`,
+and `pytest`. The dev install:
 
 ```bash
-# Example:
-# npm install
-# npm test
+pip install -e ".[dev]"
+ruff check src tests
+mypy src
+pytest -q
 ```
+
+See [`docs/RELEASE_CHECKLIST.md`](./docs/RELEASE_CHECKLIST.md) for
+the pre-publish gate sequence.
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+A local-only journal + memory + calibration substrate for LLM trading
+agents. The surface is a JSON-first CLI (`tt`) and an MCP stdio
+server (`trade-trace-mcp`), both dispatching through the shared
+registry in `src/trade_trace/core.py`. Storage is SQLite (WAL +
+FTS5); events are append-only with idempotency. See
+[`docs/architecture/`](./docs/architecture/) for the per-surface
+specs (each file's `Status:` header marks shipped vs design content
+per trade-trace-qea7).
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+- Tool handlers return `dict`; the dispatcher wraps them in the typed
+  envelope contract in `docs/architecture/contracts.md`.
+- Writes are append-only; every retryable write requires an
+  `idempotency_key` (per trade-trace-cpz2).
+- Free-text fields are scanned for embedded secrets at write time
+  (`tests/security/test_secret_pattern_writes.py`).
+- Tests live under `tests/{contracts,integration,security,golden,docs}`.
+  Architecture and decision docs live under `docs/architecture/`; the
+  taxonomy is documented in
+  [`docs/architecture/docs-taxonomy.md`](./docs/architecture/docs-taxonomy.md).

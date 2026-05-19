@@ -1,16 +1,11 @@
 # Agent Instructions
 
-This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
-
-## Quick Reference
-
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work atomically
-bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
-```
+This file is the agent-facing entry point. See
+[`CLAUDE.md`](./CLAUDE.md) for the same beads-integration block plus
+the project-specific build/test/architecture pointers; both files are
+kept in sync by `bd init`'s generated section below. The
+non-interactive-shell guidance in the next section is unique to this
+file and is the only AGENTS.md-specific content.
 
 ## Non-Interactive Shell Commands
 
