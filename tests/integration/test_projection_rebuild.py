@@ -13,6 +13,7 @@ envelope so an operator can confirm the path exists.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -442,3 +443,78 @@ def test_realized_pnl_accumulates_across_intervals_with_lifetime_vwap(home):
         f"(got {realized!r}; expected {expected!r})"
     )
     assert status == "closed"
+
+
+# -- corrupt memory_recall_events JSON diagnostics (trade-trace-iip4) ---
+
+
+def test_rebuild_memory_node_stats_reports_skipped_corrupt_rows(home):
+    """Per trade-trace-iip4: `rebuild_memory_node_stats` previously
+    silently swallowed `memory_recall_events` rows whose
+    `node_ids_returned` failed to decode, making operators unable to
+    distinguish 'no recall events' from 'recall rows skipped'. The
+    rebuild now reports a `skipped_corrupt_rows` count in the
+    envelope's diagnostics so the operator can investigate.
+
+    Behavior chosen: count + warn (rebuild does NOT fail), because the
+    primary use-case is corruption recovery — failing the rebuild on
+    the first bad row would prevent the operator from extracting
+    whatever good state remains."""
+
+    # Seed two real memory_nodes so memory_node_stats FK constraints
+    # are satisfied when the rebuild walks the valid recall event.
+    node_a = _envelope(home, "memory.retain", {
+        "node_type": "observation", "body": "node a",
+        "idempotency_key": "iip4-node-a",
+    })["data"]["id"]
+    node_b = _envelope(home, "memory.retain", {
+        "node_type": "observation", "body": "node b",
+        "idempotency_key": "iip4-node-b",
+    })["data"]["id"]
+    valid_node_ids = json.dumps([node_a, node_b])
+
+    # Seed one valid and one corrupt memory_recall_events row by direct
+    # SQL: the public memory.recall path never writes a malformed JSON
+    # payload, but historical journal data can carry corruption.
+    db = open_database(db_path(home))
+    try:
+        with db.transaction():
+            db.connection.execute(
+                "INSERT INTO memory_recall_events("
+                "recall_id, query, strategies_used, node_ids_returned, "
+                "limit_k, created_at, actor_id) "
+                "VALUES (?, 'q1', 'bm25', ?, 5, ?, 'agent:default')",
+                ("rcl-iip4-valid", valid_node_ids, "2026-05-19T10:00:00Z"),
+            )
+            db.connection.execute(
+                "INSERT INTO memory_recall_events("
+                "recall_id, query, strategies_used, node_ids_returned, "
+                "limit_k, created_at, actor_id) "
+                "VALUES (?, 'q2', 'bm25', ?, 5, ?, 'agent:default')",
+                ("rcl-iip4-corrupt", "not valid json {",
+                 "2026-05-19T11:00:00Z"),
+            )
+    finally:
+        db.close()
+
+    env = _envelope(home, "journal.rebuild_projections", {"projection": "memory_node_stats"})
+    assert env["ok"] is True, env
+    # The handler returns a list of per-projection summaries under `results`.
+    summaries = env["data"]["results"]
+    summary = next(s for s in summaries if s["projection"] == "memory_node_stats")
+    assert summary["skipped_corrupt_rows"] == 1, (
+        f"rebuild must report the corrupt row count (got {summary!r})"
+    )
+    # The valid row's two node ids land in the projection.
+    assert summary["rebuilt_rows"] == 2
+
+
+def test_rebuild_memory_node_stats_reports_zero_skipped_when_clean(home):
+    """A clean DB has no corrupt rows; the diagnostics still surface the
+    counter explicitly (zero) so callers can branch on its presence."""
+
+    env = _envelope(home, "journal.rebuild_projections", {"projection": "memory_node_stats"})
+    assert env["ok"] is True
+    summaries = env["data"]["results"]
+    summary = next(s for s in summaries if s["projection"] == "memory_node_stats")
+    assert summary["skipped_corrupt_rows"] == 0

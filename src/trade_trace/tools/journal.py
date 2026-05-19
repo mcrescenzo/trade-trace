@@ -193,6 +193,7 @@ def _journal_rebuild_projections(args: dict[str, Any], ctx: ToolContext) -> dict
                     "projection": res.projection,
                     "dropped_rows": res.dropped_rows,
                     "rebuilt_rows": res.rebuilt_rows,
+                    "skipped_corrupt_rows": res.skipped_corrupt_rows,
                 })
             if projection in ("memory_node_stats", "all"):
                 res = rebuild_memory_node_stats(db.connection)
@@ -200,6 +201,7 @@ def _journal_rebuild_projections(args: dict[str, Any], ctx: ToolContext) -> dict
                     "projection": res.projection,
                     "dropped_rows": res.dropped_rows,
                     "rebuilt_rows": res.rebuilt_rows,
+                    "skipped_corrupt_rows": res.skipped_corrupt_rows,
                 })
     finally:
         db.close()

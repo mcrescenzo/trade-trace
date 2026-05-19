@@ -24,11 +24,19 @@ from trade_trace.tools.errors import ToolError
 @dataclass
 class RebuildResult:
     """Summary returned by `rebuild_projections`. Mirrors the success
-    envelope `journal.rebuild_projections` surfaces."""
+    envelope `journal.rebuild_projections` surfaces.
+
+    `skipped_corrupt_rows` (trade-trace-iip4) counts append-only source
+    rows the rebuild had to skip because their JSON payload would not
+    decode. Operators can branch on a non-zero value to investigate
+    journal corruption; zero means the rebuild walked every source row
+    successfully.
+    """
 
     projection: str
     dropped_rows: int
     rebuilt_rows: int
+    skipped_corrupt_rows: int = 0
 
 
 def rebuild_positions(conn: sqlite3.Connection) -> RebuildResult:
@@ -351,10 +359,16 @@ def rebuild_memory_node_stats(conn: sqlite3.Connection) -> RebuildResult:
         "ORDER BY id"
     )
     stats: dict[str, tuple[int, str]] = {}
+    skipped_corrupt = 0
     for node_ids_json, created_at in cur.fetchall():
         try:
             node_ids = _json.loads(node_ids_json) or []
         except _json.JSONDecodeError:
+            # Per trade-trace-iip4: don't fail the rebuild on a single
+            # corrupt event row (recovery is the whole point of this
+            # tool), but count the skip so the operator sees that the
+            # rebuilt projection underrepresents the source events.
+            skipped_corrupt += 1
             continue
         for node_id in node_ids:
             count, _last = stats.get(node_id, (0, ""))
@@ -372,5 +386,8 @@ def rebuild_memory_node_stats(conn: sqlite3.Connection) -> RebuildResult:
         rebuilt += 1
 
     return RebuildResult(
-        projection="memory_node_stats", dropped_rows=dropped, rebuilt_rows=rebuilt,
+        projection="memory_node_stats",
+        dropped_rows=dropped,
+        rebuilt_rows=rebuilt,
+        skipped_corrupt_rows=skipped_corrupt,
     )
