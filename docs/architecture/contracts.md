@@ -52,8 +52,12 @@ MCP tool names use `subject.verb` dot notation (`decision.add`,
 - Replace each `.` with a single space.
 - All other tokens are preserved.
 - `args` keys become long-flag form `--key`; nested `args.foo.bar` becomes
-  `--foo-bar` (kebab-cased). Arrays use repeated flags or a comma-separated
-  list; objects use `--<key>-json '<json>'`.
+  `--foo-bar` (kebab-cased). Arrays use repeated flags
+  (`--node-types observation --node-types reflection`) — the CLI accumulates
+  repeated occurrences into a list (trade-trace-pybt). Comma-separated values
+  stay as a single string and are NOT split; pass `--<key>-json '<json>'`
+  if you want explicit JSON shape (e.g., for object-valued fields or
+  arrays whose individual values contain commas).
 
 Examples:
 

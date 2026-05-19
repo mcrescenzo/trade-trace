@@ -65,11 +65,26 @@ def _parse_kv_args(unknown: list[str]) -> dict[str, Any]:
     - `--key-with-dashes` → `key_with_dashes`.
     - `--foo-json '<json>'` parses the JSON and assigns to `foo` (without the
       `_json` suffix; the suffix is the transport hint, not the domain key).
+    - Repeated `--key v1 --key v2 …` accumulates into `[v1, v2, …]`
+      per trade-trace-pybt; the same coercion (true/false/int/float)
+      runs on each value independently.
 
     Stray positional tokens (anything that isn't consumed as the value
     of a `--key`) raise `StrayPositionalArgsError` so the dispatcher
     can surface a typed envelope (bead trade-trace-r5k).
     """
+
+    def _coerce_scalar(text: str) -> Any:
+        if text.lower() in {"true", "false"}:
+            return text.lower() == "true"
+        try:
+            return int(text)
+        except ValueError:
+            pass
+        try:
+            return float(text)
+        except ValueError:
+            return text
 
     out: dict[str, Any] = {}
     stray: list[str] = []
@@ -85,33 +100,32 @@ def _parse_kv_args(unknown: list[str]) -> dict[str, Any]:
         domain_key = key[: -len("_json")] if is_json else key
         # peek
         if i + 1 < len(unknown) and not unknown[i + 1].startswith("--"):
-            value: Any = unknown[i + 1]
+            raw_value = unknown[i + 1]
             if is_json:
                 try:
-                    value = json.loads(value)
+                    value: Any = json.loads(raw_value)
                 except json.JSONDecodeError as exc:
                     # Per bead trade-trace-lum: surface a typed envelope
                     # in main() instead of a raw SystemExit so agent
                     # callers can parse the failure like any other.
                     raise MalformedJsonArgError(
-                        token[2:], value, str(exc),
+                        token[2:], raw_value, str(exc),
                     ) from exc
-            elif value.lower() in {"true", "false"}:
-                value = value.lower() == "true"
             else:
-                # try int then float; fall back to string
-                try:
-                    value = int(value)
-                except ValueError:
-                    try:
-                        value = float(value)
-                    except ValueError:
-                        pass
-            out[domain_key] = value
+                value = _coerce_scalar(raw_value)
             i += 2
         else:
-            out[domain_key] = True
+            value = True
             i += 1
+        # Accumulate repeated flags into a list (trade-trace-pybt).
+        if domain_key in out:
+            existing = out[domain_key]
+            if isinstance(existing, list):
+                existing.append(value)
+            else:
+                out[domain_key] = [existing, value]
+        else:
+            out[domain_key] = value
     if stray:
         raise StrayPositionalArgsError(stray)
     return out
