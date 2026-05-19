@@ -76,8 +76,6 @@ def test_no_source_file_matches_forbidden_pattern(kind, pattern):
     "report.opportunity",
     "report.risk",
     "report.r_multiple",
-    "report.compare",
-    "report.strategy_performance",
 ])
 def test_deferred_report_tools_not_registered(deferred_tool):
     """P1/P2 report names must NOT be in the shipped registry. The
@@ -213,7 +211,9 @@ SHIPPED_REPORTS = {
     "report.decision_velocity",
     "report.playbook_adherence",
     "report.coach",
+    "report.compare",
     "report.filter_schema",
+    "report.strategy_performance",
 }
 
 

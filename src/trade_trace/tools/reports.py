@@ -26,11 +26,13 @@ from trade_trace.reports import (
     report_calibration,
     report_calibration_integrity,
     report_coach,
+    report_compare,
     report_decision_velocity,
     report_mistakes,
     report_playbook_adherence,
     report_pnl,
     report_source_quality,
+    report_strategy_performance,
     report_strengths,
     report_unscored_forecasts,
     report_watchlist,
@@ -269,6 +271,70 @@ def _report_decision_velocity(args: dict[str, Any], ctx: ToolContext) -> dict[st
             ) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_compare(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.compare` — compute a base report per deterministic group."""
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_compare(
+                db.connection,
+                base_report=args.get("base_report", "calibration"),
+                group_by=args.get("group_by", "strategy_id"),
+                raw_filter=args.get("filter"),
+                min_sample=args.get("min_sample"),
+            )
+        except ValidationError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"ReportFilter validation failed: {exc.errors()}",
+                details={"field": "filter", "validation_errors": exc.errors()},
+            ) from exc
+        except (UnsupportedFilterError, ValueError) as exc:
+            if isinstance(exc, UnsupportedFilterError):
+                raise _unsupported_filter_to_tool_error(exc) from exc
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                str(exc),
+                details={"field": "base_report/group_by"},
+            ) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_strategy_performance(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.strategy_performance` — wrapper over `report.compare`.
+
+    trade-trace-4md decision: implemented as a convenience wrapper around
+    `report.compare(base_report='pnl', group_by='strategy_id')` rather than a
+    separate metric stack.
+    """
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_strategy_performance(
+                db.connection,
+                strategy_id=args.get("strategy_id"),
+                raw_filter=args.get("filter"),
+                min_sample=args.get("min_sample"),
+            )
+        except ValidationError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"ReportFilter validation failed: {exc.errors()}",
+                details={"field": "filter", "validation_errors": exc.errors()},
+            ) from exc
+        except (UnsupportedFilterError, ValueError) as exc:
+            if isinstance(exc, UnsupportedFilterError):
+                raise _unsupported_filter_to_tool_error(exc) from exc
+            raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
     finally:
         db.close()
     _propagate_report_meta(ctx, data)
@@ -516,6 +582,29 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "Reads the rebuildable positions "
             "projection (trade-trace-5zg)."
         ),
+    )
+    registry.register(
+        "report.compare",
+        _report_compare,
+        description=(
+            "Compare base report metrics across one allowlisted group_by. "
+            "Supported base_report values: calibration and pnl. Supported "
+            "group_by depends on base_report and is validated via fixed SQL "
+            "allowlists for injection safety. Per-group sample_warning is "
+            "emitted; summary.sample_warning is set when any group is low-N."
+        ),
+        example_minimal={"base_report": "calibration", "group_by": "strategy_id", "filter": {}},
+    )
+    registry.register(
+        "report.strategy_performance",
+        _report_strategy_performance,
+        description=(
+            "Convenience wrapper implemented as report.compare with "
+            "base_report='pnl' and group_by='strategy_id'. Optional "
+            "strategy_id narrows to a single strategy; omitted compares all "
+            "strategies including the __none__ no-strategy bucket."
+        ),
+        example_minimal={"strategy_id": "strat_example", "filter": {}},
     )
     registry.register(
         "report.watchlist",

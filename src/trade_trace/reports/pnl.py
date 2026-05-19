@@ -20,6 +20,23 @@ from trade_trace.reports._filter_support import (
 DEFAULT_PNL_MIN_SAMPLE = 5
 
 
+def _pnl_metrics_for_rows(rows: list[tuple]) -> dict[str, Any]:
+    """Shared P&L aggregation kernel for report.pnl and report.compare.
+
+    Rows must expose position fields in this order:
+    (id, instrument_id, kind, status, realized_pnl, unrealized_pnl, ...).
+    """
+    realized = sum(r[4] or 0.0 for r in rows)
+    unrealized = sum(r[5] or 0.0 for r in rows if r[5] is not None)
+    return {
+        "realized_pnl": round(realized, 6),
+        "unrealized_pnl": round(unrealized, 6),
+        "mark_to_market_pnl": round(realized + unrealized, 6),
+        "closed_count": sum(1 for r in rows if r[3] == "closed"),
+        "open_count": sum(1 for r in rows if r[3] == "open"),
+    }
+
+
 def report_pnl(
     conn: sqlite3.Connection,
     *,
@@ -61,18 +78,10 @@ def report_pnl(
 
     groups: list[dict[str, Any]] = []
     for instr_id, items in by_instrument.items():
-        ir = sum(i[4] or 0.0 for i in items)
-        iu = sum(i[5] or 0.0 for i in items if i[5] is not None)
         groups.append({
             "key": instr_id,
             "label": f"Positions on {instr_id}",
-            "metrics": {
-                "realized_pnl": round(ir, 6),
-                "unrealized_pnl": round(iu, 6),
-                "mark_to_market_pnl": round(ir + iu, 6),
-                "closed_count": sum(1 for i in items if i[3] == "closed"),
-                "open_count": sum(1 for i in items if i[3] == "open"),
-            },
+            "metrics": _pnl_metrics_for_rows(items),
             "filter": filter_view,
             "record_ids": {"positions": [i[0] for i in items]},
             "examples": [

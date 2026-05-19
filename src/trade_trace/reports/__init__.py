@@ -23,6 +23,7 @@ from trade_trace.reports.coach import (
     TradingAdvicePhraseError,
     report_coach,
 )
+from trade_trace.reports.compare import report_compare, report_strategy_performance
 from trade_trace.reports.decision_velocity import report_decision_velocity
 from trade_trace.reports.integrity import (
     MAX_SAMPLE_IDS,
@@ -61,11 +62,13 @@ __all__ = [
     "report_calibration",
     "report_calibration_integrity",
     "report_coach",
+    "report_compare",
     "report_decision_velocity",
     "report_mistakes",
     "report_pnl",
     "report_playbook_adherence",
     "report_source_quality",
+    "report_strategy_performance",
     "report_strengths",
     "report_unscored_forecasts",
     "report_watchlist",

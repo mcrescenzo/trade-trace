@@ -6,11 +6,11 @@ Status: clean planning draft. Date: 2026-05-18.
 report.calibration_integrity, report.source_quality, report.mistakes,
 report.strengths, report.pnl, report.watchlist,
 report.unscored_forecasts, report.decision_velocity,
-report.playbook_adherence, report.coach, report.filter_schema.
-Deferred (P1): report.compare, report.strategy_performance,
-report.risk, report.opportunity. review.bundle ships as a
-contract-only stub (UNSUPPORTED_CAPABILITY); the §5 spec is the
-binding contract for the P1 implementation.
+report.playbook_adherence, report.coach, report.filter_schema,
+report.compare, report.strategy_performance. Deferred (P1): report.risk,
+report.opportunity. review.bundle ships as a contract-only stub
+(UNSUPPORTED_CAPABILITY); the §5 spec is the binding contract for the P1
+implementation.
 
 Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
@@ -292,12 +292,22 @@ Inputs:
   `playbook_version_id`, `decision_type`, `venue_id`, `asset_class`,
   `liquidity_bucket`, `confidence_bucket`, `environment`.
 - `base_report`: the underlying report whose metrics to compute per
-  group. One of `calibration`, `mistakes`, `pnl`, `playbook_adherence`.
+  group. Current shipped implementation supports `calibration` and `pnl`.
+  Other planned kernels (`mistakes`, `playbook_adherence`) remain deferred.
 
 Output: a `ReportResult` whose `groups[]` is one entry per distinct
 value of `group_by`, each with the `base_report`'s metric set. Each
 group carries its own sub-filter for drill-down. Sample warnings are
 per group; the summary aggregates over all groups.
+
+### 4.7.1 `report.strategy_performance` (shipped wrapper)
+
+Decision for trade-trace-4md: this is implemented as a convenience
+wrapper over `report.compare(base_report='pnl', group_by='strategy_id')`,
+not as a separate metric stack. Optional `strategy_id` narrows to one
+strategy; omission compares all strategies and includes the `__none__`
+no-strategy bucket when positions cannot be traced to a strategy-linked
+decision.
 
 ### 4.8 `report.calibration_integrity` (MVP hardening)
 
