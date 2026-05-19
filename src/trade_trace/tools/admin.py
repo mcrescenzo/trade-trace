@@ -29,9 +29,35 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
+import stat
 from pathlib import Path
 from typing import Any
+
+
+def _tighten_file(path: Path) -> None:
+    """Best-effort `chmod 0600` on `path`. POSIX only; no-op on Windows
+    (bead trade-trace-ljl9 / DEBT-040)."""
+
+    if os.name != "posix":
+        return
+    try:
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    except (OSError, PermissionError):
+        pass
+
+
+def _tighten_dir(path: Path) -> None:
+    """Best-effort `chmod 0700` on a directory. POSIX only; no-op on
+    Windows."""
+
+    if os.name != "posix":
+        return
+    try:
+        path.chmod(stat.S_IRWXU)
+    except (OSError, PermissionError):
+        pass
 
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
@@ -143,6 +169,7 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             },
         }
     dest_path.mkdir(parents=True, exist_ok=True)
+    _tighten_dir(dest_path)
     # Copy DB; checkpoint WAL first by opening a connection in
     # read-only mode would be ideal but SQLite's backup API is what's
     # really needed. For MVP we issue PRAGMA wal_checkpoint to flush
@@ -154,6 +181,7 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         db.close()
     out_db = dest_path / src_db.name
     shutil.copy2(src_db, out_db)
+    _tighten_file(out_db)
     db_hash = hashlib.sha256(out_db.read_bytes()).hexdigest()
     files_manifest = [{"path": src_db.name, "sha256": db_hash,
                        "size": out_db.stat().st_size}]
@@ -165,7 +193,16 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             rel = src_file.relative_to(home)
             out_file = dest_path / rel
             out_file.parent.mkdir(parents=True, exist_ok=True)
+            # Tighten every parent directory under dest_path so a
+            # backup destination can't leak directory listings even
+            # when intermediate dirs (export/, export/jsonl/, …) are
+            # newly created by `mkdir(parents=True)`.
+            for parent in out_file.parents:
+                if parent == dest_path:
+                    break
+                _tighten_dir(parent)
             shutil.copy2(src_file, out_file)
+            _tighten_file(out_file)
             files_manifest.append({
                 "path": str(rel),
                 "sha256": hashlib.sha256(out_file.read_bytes()).hexdigest(),
@@ -180,6 +217,7 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     }
     manifest_path = dest_path / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2))
+    _tighten_file(manifest_path)
     return {
         "preview_only": False,
         "dest": str(dest_path),

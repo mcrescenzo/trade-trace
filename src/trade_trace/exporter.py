@@ -114,6 +114,8 @@ def write_event_atomic(
     The importer reads `tool` + `args` directly and ignores transport keys.
     """
 
+    import stat as _stat
+
     final = jsonl_path(home, event_type, event_id, created_at)
     tmp = final.parent / (final.name + ".tmp")
     args = {k: v for k, v in payload.items() if not k.startswith("_")}
@@ -127,18 +129,42 @@ def write_event_atomic(
         "_created_at": created_at,
         "_contract_version": contract_version,
     }
-    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
-        f.write(json.dumps(line, sort_keys=True) + "\n")
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, final)  # atomic on POSIX
-    # Best-effort 0600 on exported JSONL per operability.md §6 / bead 4qf.
-    # Each file may contain decision/thesis/source content; the perm bit
-    # is the same one applied to the SQLite DB so file-system actors can't
-    # widen access to one without the other.
+    # Open with O_CREAT|O_WRONLY|O_TRUNC and explicit mode=0600 so the
+    # tmp file is restrictive from the start (bead trade-trace-ljl9 /
+    # DEBT-040). On POSIX the umask is masked against the mode bits;
+    # umask 0 + mode 0o600 still produces 0o600. We tighten the parent
+    # directory after creation too so directory listings don't leak
+    # event names.
+    flags = os.O_CREAT | os.O_WRONLY | os.O_TRUNC
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    fd = os.open(str(tmp), flags, 0o600)
     try:
-        import stat
-        final.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+            f.write(json.dumps(line, sort_keys=True) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+    except BaseException:
+        # If anything raised between open and fdopen taking ownership
+        # the fd may still be open; under normal flow fdopen owns it
+        # and the close happens at end of `with`.
+        raise
+    os.replace(tmp, final)  # atomic on POSIX
+    # Re-pin 0600 on the final path after the rename — `os.replace`
+    # preserves the source bits on POSIX, but the explicit chmod
+    # tightens the contract on platforms that emulate replace by copy
+    # (some filesystems) and re-asserts the bit if a future change
+    # widens the tmp creation default.
+    try:
+        final.chmod(_stat.S_IRUSR | _stat.S_IWUSR)
+    except (OSError, NotImplementedError):  # pragma: no cover — Windows
+        pass
+    # Tighten the date-bucketed parent dirs (export/jsonl/YYYY/MM/DD)
+    # so `ls` cannot leak event filenames.
+    try:
+        for parent in (final.parent, final.parent.parent,
+                       final.parent.parent.parent):
+            parent.chmod(_stat.S_IRWXU)
     except (OSError, NotImplementedError):  # pragma: no cover — Windows
         pass
     return final
