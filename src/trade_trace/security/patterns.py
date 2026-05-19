@@ -187,6 +187,9 @@ def scan_text(text: str) -> list[SecretMatch]:
     return matches
 
 
+_REDACTION_TRUNCATION_MARKER = "[REDACTED-LOG-TRUNCATED-OVER-MAX_SCAN_INPUT_BYTES]"
+
+
 def redact_for_log(text: str) -> str:
     """Return `text` with every secret match replaced by the literal
     token `REDACTED-<pattern_kind>`. Used by the logging redactor so
@@ -195,13 +198,23 @@ def redact_for_log(text: str) -> str:
     Overlapping matches are resolved left-to-right; the leftmost match
     is redacted first, then the scan re-runs on the redacted string
     until no new matches surface (bounded by `len(text)` iterations).
+
+    Per bead trade-trace-8n98: when `text` is longer than
+    `MAX_SCAN_INPUT_BYTES`, the un-scanned tail is replaced with a
+    marker before redaction runs. The scanner caps input length as a
+    ReDoS/CPU defense (see `scan_text`), but for log redaction we MUST
+    fail closed — without the truncation, a secret in the tail would
+    pass through verbatim into a 'redacted' log.
     """
 
     if not isinstance(text, str) or not text:
         return text
-    out = text
+    if len(text) > MAX_SCAN_INPUT_BYTES:
+        out = text[:MAX_SCAN_INPUT_BYTES] + _REDACTION_TRUNCATION_MARKER
+    else:
+        out = text
     seen: set[tuple[int, str]] = set()
-    for _ in range(len(text) + 1):
+    for _ in range(len(out) + 1):
         matches = scan_text(out)
         if not matches:
             return out

@@ -546,3 +546,41 @@ def test_instrument_metadata_with_polymarket_condition_id_succeeds(home: Path):
         "idempotency_key": "aqpf-inst",
     }).model_dump(mode="json", exclude_none=True)
     assert env["ok"] is True, env
+
+
+# -- redact_for_log fails closed past MAX_SCAN_INPUT_BYTES (trade-trace-8n98) --
+
+
+def test_redact_for_log_truncates_overlong_input_to_prevent_tail_leak(monkeypatch):
+    """Per trade-trace-8n98: scan_text truncates over-cap input as a
+    CPU-bound defense for write-time validation, but redact_for_log is a
+    last-resort safety boundary for logs. The redacted output must NOT
+    contain original bytes past the cap; otherwise a secret in the tail
+    would leak verbatim into a 'redacted' log."""
+
+    from trade_trace.security import patterns
+
+    monkeypatch.setattr(patterns, "MAX_SCAN_INPUT_BYTES", 16)
+    register("tail_only_token", r"TAILSECRET")
+
+    body = "x" * patterns.MAX_SCAN_INPUT_BYTES + "TAILSECRET"
+    redacted = redact_for_log(body)
+    assert "TAILSECRET" not in redacted, (
+        "redact_for_log must not return tail bytes that the scanner did "
+        "not see; either redact or truncate the tail."
+    )
+
+
+def test_redact_for_log_preserves_scanned_prefix_redactions(monkeypatch):
+    """The hardening must not weaken in-prefix redaction. A secret in
+    the scanned prefix is still replaced with REDACTED-<kind>."""
+
+    from trade_trace.security import patterns
+
+    monkeypatch.setattr(patterns, "MAX_SCAN_INPUT_BYTES", 64)
+    register("head_token_8n98", r"HEADSECRET")
+
+    body = "HEADSECRET" + " " * 100
+    redacted = redact_for_log(body)
+    assert "REDACTED-head_token_8n98" in redacted
+    assert "HEADSECRET" not in redacted
