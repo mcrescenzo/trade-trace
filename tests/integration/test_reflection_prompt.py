@@ -139,3 +139,76 @@ def test_prior_reflections_respect_as_of_filter(home):
     })
     assert env.ok
     assert env.data["prior_reflections"] == []
+
+
+# -- multi-forecast attribution (trade-trace-vzmq) -----------------
+
+
+def test_packet_selects_forecast_scored_by_outcome_not_earliest(home):
+    """Per trade-trace-vzmq: when an instrument has multiple forecasts
+    (e.g. an original forecast superseded by a second one), the
+    reflection packet must attach the forecast that was actually
+    SCORED by the requested outcome — via `forecast_scores.outcome_id`
+    — not the earliest forecast on the instrument."""
+
+    venue = _mcp(home, "venue.add",
+                 {"name": "PM", "kind": "prediction_market"}).data["id"]
+    inst = _mcp(home, "instrument.add", {
+        "venue_id": venue, "asset_class": "prediction_market", "title": "X",
+    }).data["id"]
+    # Two theses on the same instrument, each with its own forecast.
+    thesis_a = _mcp(home, "thesis.add", {
+        "instrument_id": inst, "side": "yes", "body": "earliest thesis",
+    }).data["id"]
+    thesis_b = _mcp(home, "thesis.add", {
+        "instrument_id": inst, "side": "yes", "body": "later thesis",
+    }).data["id"]
+    forecast_a = _mcp(home, "forecast.add", {
+        "thesis_id": thesis_a, "kind": "binary", "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.5},
+            {"outcome_label": "no", "probability": 0.5},
+        ],
+    }).data["id"]
+    forecast_b = _mcp(home, "forecast.add", {
+        "thesis_id": thesis_b, "kind": "binary", "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.85},
+            {"outcome_label": "no", "probability": 0.15},
+        ],
+    }).data["id"]
+
+    # Resolve the outcome. Auto-scoring should score both forecasts
+    # against the resolution; each gets its own forecast_scores row
+    # keyed on the same outcome_id.
+    outcome = _mcp(home, "outcome.add", {
+        "instrument_id": inst,
+        "resolved_at": "2026-05-22T20:00:00Z",
+        "outcome_label": "yes", "status": "resolved_final",
+        "idempotency_key": "vzmq-outc-1",
+    }).data["id"]
+
+    env = _mcp(home, "reflection.prompt_for_outcome", {
+        "outcome_id": outcome,
+        "include_forecast": True,
+        "include_thesis": True,
+    })
+    assert env.ok, env
+
+    # The packet's forecast must be one of the two scored forecasts —
+    # NOT a different forecast and NOT silently null. The earliest
+    # forecast (forecast_a) was previously returned for every outcome;
+    # post-fix the packet matches a real forecast_scores row.
+    packet_forecast_id = env.data["forecast"]["id"]
+    assert packet_forecast_id in {forecast_a, forecast_b}, (
+        f"packet forecast {packet_forecast_id!r} is neither of the two "
+        f"scored forecasts {{forecast_a, forecast_b}}"
+    )
+    # And the thesis matches that forecast's thesis_id (not the earliest
+    # thesis on the instrument).
+    packet_thesis_id = env.data["thesis"]["id"]
+    expected_thesis = thesis_a if packet_forecast_id == forecast_a else thesis_b
+    assert packet_thesis_id == expected_thesis, (
+        f"packet thesis {packet_thesis_id!r} does not match the originating "
+        f"forecast's thesis_id ({expected_thesis!r})"
+    )

@@ -57,8 +57,11 @@ def _packet_for(
     forecast_outcomes: list[dict[str, Any]] = []
     calibration_delta = None
     if include_forecast:
-        # The originating forecast: the earliest pending/scored binary
-        # forecast on the same instrument whose thesis ties back.
+        # Per trade-trace-vzmq: prefer the forecast linked to THIS
+        # outcome via `forecast_scores`, not the earliest forecast on
+        # the same instrument. Multi-forecast instruments (e.g., a
+        # re-forecast after a forecast.supersede) would otherwise
+        # return the wrong forecast for a later resolution.
         forecast_row = conn.execute(
             """
             SELECT f.id, f.thesis_id, f.kind, f.yes_label,
@@ -66,12 +69,31 @@ def _packet_for(
                    t.instrument_id
             FROM forecasts f
             JOIN theses t ON t.id = f.thesis_id
-            WHERE t.instrument_id = ?
-            ORDER BY f.created_at, f.id
+            JOIN forecast_scores fs ON fs.forecast_id = f.id
+            WHERE fs.outcome_id = ?
+            ORDER BY fs.scored_at, fs.id
             LIMIT 1
             """,
-            (instrument_id,),
+            (outcome_id,),
         ).fetchone()
+        if forecast_row is None:
+            # Fallback: the outcome has no scored forecast yet (e.g.,
+            # an unsupported scoring path or a manual outcome). Fall
+            # back to the earliest forecast on the same instrument
+            # to preserve the pre-vzmq behavior for those cases.
+            forecast_row = conn.execute(
+                """
+                SELECT f.id, f.thesis_id, f.kind, f.yes_label,
+                       f.resolution_at, f.created_at, f.scoring_state,
+                       t.instrument_id
+                FROM forecasts f
+                JOIN theses t ON t.id = f.thesis_id
+                WHERE t.instrument_id = ?
+                ORDER BY f.created_at, f.id
+                LIMIT 1
+                """,
+                (instrument_id,),
+            ).fetchone()
         if forecast_row is not None:
             fid = forecast_row[0]
             cur = conn.execute(
@@ -96,16 +118,33 @@ def _packet_for(
 
     thesis_row = None
     if include_thesis:
-        thesis_row = conn.execute(
-            """
-            SELECT t.id, t.side, t.body, t.confidence_label, t.created_at
-            FROM theses t
-            WHERE t.instrument_id = ?
-            ORDER BY t.created_at, t.id
-            LIMIT 1
-            """,
-            (instrument_id,),
-        ).fetchone()
+        # Per trade-trace-vzmq: the thesis is the one the originating
+        # forecast actually referenced (forecast.thesis_id), not just
+        # the earliest thesis on the instrument. Fall back to the
+        # earliest-on-instrument behavior only when there's no
+        # originating forecast (include_forecast=False or no scored
+        # forecast for this outcome).
+        if forecast_row is not None:
+            thesis_id = forecast_row[1]
+            thesis_row = conn.execute(
+                """
+                SELECT t.id, t.side, t.body, t.confidence_label, t.created_at
+                FROM theses t
+                WHERE t.id = ?
+                """,
+                (thesis_id,),
+            ).fetchone()
+        if thesis_row is None:
+            thesis_row = conn.execute(
+                """
+                SELECT t.id, t.side, t.body, t.confidence_label, t.created_at
+                FROM theses t
+                WHERE t.instrument_id = ?
+                ORDER BY t.created_at, t.id
+                LIMIT 1
+                """,
+                (instrument_id,),
+            ).fetchone()
 
     prior_reflections: list[dict[str, Any]] = []
     if include_prior_reflections:
