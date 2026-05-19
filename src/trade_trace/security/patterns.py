@@ -77,6 +77,22 @@ def _initialize() -> None:
 _initialize()
 
 
+MAX_REGEX_SOURCE_LENGTH: int = 1000
+"""Per bead trade-trace-14iy / DEBT-041: cap the source length of a
+caller-registered regex so a pathological pattern can't be smuggled
+through the `register()` extension point. The cap is large enough for
+real secret-detection patterns (the built-ins are <100 chars each)
+but small enough to keep compile time bounded."""
+
+MAX_SCAN_INPUT_BYTES: int = 1_000_000
+"""Cap the input length `scan_text` and `redact_for_log` will scan.
+Beyond this size, only the first MAX_SCAN_INPUT_BYTES are scanned;
+this keeps the entire pattern set's combined CPU cost bounded even
+if an agent pastes a multi-megabyte blob into a thesis body. Inputs
+this long are out-of-policy elsewhere (blob caps in
+operability.md §8), but the scan layer doesn't trust that."""
+
+
 def register(name: str, regex: str | re.Pattern[str]) -> None:
     """Register a custom secret pattern. Non-breaking when adding new
     pattern names; calling `register()` with an existing name replaces
@@ -91,8 +107,10 @@ def register(name: str, regex: str | re.Pattern[str]) -> None:
             cheap.
 
     Raises:
-        SecretPatternError: when the name is invalid or the regex fails
-            to compile.
+        SecretPatternError: when the name is invalid, the regex fails
+            to compile, or the regex source exceeds
+            `MAX_REGEX_SOURCE_LENGTH` (a coarse ReDoS guard per bead
+            trade-trace-14iy).
     """
 
     if not isinstance(name, str) or not _NAME_RE.match(name):
@@ -100,8 +118,22 @@ def register(name: str, regex: str | re.Pattern[str]) -> None:
             f"pattern name must match {_NAME_RE.pattern!r}; got {name!r}"
         )
     if isinstance(regex, re.Pattern):
+        if len(regex.pattern) > MAX_REGEX_SOURCE_LENGTH:
+            raise SecretPatternError(
+                f"pattern {name!r} regex source exceeds "
+                f"MAX_REGEX_SOURCE_LENGTH ({MAX_REGEX_SOURCE_LENGTH}); "
+                "trim the pattern or split into multiple registrations "
+                "(bead trade-trace-14iy ReDoS guard)"
+            )
         _compiled[name] = regex
         return
+    if len(regex) > MAX_REGEX_SOURCE_LENGTH:
+        raise SecretPatternError(
+            f"pattern {name!r} regex source exceeds "
+            f"MAX_REGEX_SOURCE_LENGTH ({MAX_REGEX_SOURCE_LENGTH}); "
+            "trim the pattern or split into multiple registrations "
+            "(bead trade-trace-14iy ReDoS guard)"
+        )
     try:
         _compiled[name] = re.compile(regex)
     except re.error as exc:
@@ -128,10 +160,20 @@ def scan_text(text: str) -> list[SecretMatch]:
     `SecretMatch` carrying the pattern_kind, the literal match, byte
     offset, and length. Order: by `(match_offset, pattern_kind)` so
     callers get a deterministic walk; the same input yields the same
-    list across runs."""
+    list across runs.
+
+    Per bead trade-trace-14iy / DEBT-041: inputs longer than
+    `MAX_SCAN_INPUT_BYTES` are truncated to that prefix before
+    scanning so a pathological multi-megabyte blob can't cause the
+    pattern set to dominate CPU. The truncation is silent — the
+    write-time blob caps in operability.md §8 are the user-facing
+    bound; this is a defense-in-depth layer behind them.
+    """
 
     if not isinstance(text, str) or not text:
         return []
+    if len(text) > MAX_SCAN_INPUT_BYTES:
+        text = text[:MAX_SCAN_INPUT_BYTES]
     matches: list[SecretMatch] = []
     for name, pattern in _compiled.items():
         for m in pattern.finditer(text):

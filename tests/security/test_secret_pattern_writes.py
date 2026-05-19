@@ -11,6 +11,7 @@ which surfaces a *warning* on shipped events rather than blocking writes).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -336,6 +337,92 @@ def test_register_rejects_invalid_regex():
 
     with pytest.raises(SecretPatternError):
         register("bad_regex", r"unbalanced(")
+
+
+# -- bead trade-trace-14iy ReDoS guards ----------------------------
+
+
+def test_register_rejects_overlong_regex_source_per_redos_guard():
+    """Per bead trade-trace-14iy / DEBT-041: register() caps the
+    source length of a caller-supplied regex at MAX_REGEX_SOURCE_LENGTH
+    so a pathological pattern can't be smuggled through the
+    extension point."""
+
+    from trade_trace.security.patterns import (
+        MAX_REGEX_SOURCE_LENGTH,
+        SecretPatternError,
+    )
+
+    # One character over the cap, syntactically valid (a long
+    # character class). This would otherwise compile fine.
+    overlong = "[a-z]" + "z" * MAX_REGEX_SOURCE_LENGTH
+    assert len(overlong) > MAX_REGEX_SOURCE_LENGTH
+    with pytest.raises(SecretPatternError) as exc:
+        register("overlong", overlong)
+    msg = str(exc.value)
+    assert "MAX_REGEX_SOURCE_LENGTH" in msg
+    assert "trade-trace-14iy" in msg
+
+
+def test_register_rejects_overlong_compiled_regex_source_per_redos_guard():
+    """The same source-length cap applies when callers pass an already
+    compiled regex; compiled patterns still expose their original
+    `.pattern` source and are part of the runtime registration surface."""
+
+    from trade_trace.security.patterns import (
+        MAX_REGEX_SOURCE_LENGTH,
+        SecretPatternError,
+    )
+
+    overlong = re.compile("[a-z]" + "z" * MAX_REGEX_SOURCE_LENGTH)
+    assert len(overlong.pattern) > MAX_REGEX_SOURCE_LENGTH
+    with pytest.raises(SecretPatternError) as exc:
+        register("overlong_compiled", overlong)
+    msg = str(exc.value)
+    assert "MAX_REGEX_SOURCE_LENGTH" in msg
+    assert "trade-trace-14iy" in msg
+
+
+def test_register_accepts_normal_custom_regex_and_scan_text_matches():
+    """The ReDoS guard is scoped: normal custom secret patterns remain
+    supported and take effect in scan_text()."""
+
+    register("custom_scan_token", r"CUSTOMSCAN-[A-Z0-9]{8}")
+
+    matches = scan_text("prefix CUSTOMSCAN-ABCD1234 suffix")
+
+    assert [m.pattern_kind for m in matches] == ["custom_scan_token"]
+    assert matches[0].match == "CUSTOMSCAN-ABCD1234"
+
+
+def test_scan_text_truncates_pathological_input_per_redos_guard(monkeypatch):
+    """Per bead trade-trace-14iy / DEBT-041: scan_text caps input
+    length at MAX_SCAN_INPUT_BYTES so a multi-megabyte blob can't
+    dominate CPU. Secrets in the truncated tail go unscanned by
+    design — the write-time blob caps in operability.md §8 are the
+    user-facing bound; this is defense-in-depth."""
+
+    from trade_trace.security import patterns
+
+    monkeypatch.setattr(patterns, "MAX_SCAN_INPUT_BYTES", 16)
+    register("tail_only_token", r"TAILSECRET")
+
+    # Keep the test allocation tiny while exercising the same policy:
+    # the match starts just past the monkeypatched truncation boundary.
+    body = "x" * patterns.MAX_SCAN_INPUT_BYTES + "TAILSECRET"
+    assert len(body) > patterns.MAX_SCAN_INPUT_BYTES
+
+    matches = scan_text(body)
+    # The custom token in the truncated tail is not seen.
+    assert all(m.pattern_kind != "tail_only_token" for m in matches), (
+        "scan_text should have truncated before the secret in the tail"
+    )
+
+    # And the same token in the head IS still detected, confirming
+    # the cap doesn't disable the scanner entirely.
+    body_head = "TAILSECRET" + "y" * patterns.MAX_SCAN_INPUT_BYTES
+    head_matches = scan_text(body_head)
+    assert any(m.pattern_kind == "tail_only_token" for m in head_matches)
 
 
 # -- 4. false-positive guard (4 corpus tests) -------------------
