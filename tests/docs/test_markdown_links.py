@@ -112,28 +112,35 @@ def test_no_broken_relative_links_under_repo_root():
     )
 
 
-# -- canonical-source drift (trade-trace-ensw / SIMP-015) --------------
+# -- canonical-source drift (trade-trace-ensw + trade-trace-x7mr) ------
 
 
-def test_pyproject_version_matches_module_version():
-    """`pyproject.toml` `[project] version` and `src/trade_trace/version.py
-    __version__` must agree on every commit. The publish workflow's
-    `Verify tag matches package versions` step re-checks the same
-    invariant, but this test catches drift at PR time so we never push
-    a tag-mismatched build to PyPI."""
+def test_pyproject_declares_version_dynamically():
+    """`pyproject.toml` must use `dynamic = ["version"]` resolved from
+    `src/trade_trace/version.py.__version__` (trade-trace-x7mr). The
+    literal `version = "..."` line is gone; `version.py` is the single
+    source of truth. The publish workflow re-checks the resolved version
+    against the git tag."""
 
     import tomllib
 
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    pyproject_version = pyproject["project"]["version"]
+    assert "version" in pyproject["project"].get("dynamic", []), (
+        "pyproject.toml [project] must declare `version` as dynamic"
+    )
+    assert "version" not in pyproject["project"], (
+        "pyproject.toml [project] must not also pin a literal version "
+        "alongside the dynamic declaration"
+    )
+    dyn = pyproject["tool"]["setuptools"]["dynamic"]
+    assert dyn["version"] == {"attr": "trade_trace.version.__version__"}, (
+        "[tool.setuptools.dynamic] version must resolve from "
+        "trade_trace.version.__version__"
+    )
 
+    # And the module value is still parseable so the publish workflow's
+    # tag-vs-version check still has a single source to read from.
     module = (ROOT / "src" / "trade_trace" / "version.py").read_text(encoding="utf-8")
-    m = re.search(r'__version__\s*=\s*[\'"]([^\'"]+)[\'"]', module)
-    assert m is not None, "could not extract __version__ from version.py"
-    module_version = m.group(1)
-
-    assert pyproject_version == module_version, (
-        f"pyproject.toml version {pyproject_version!r} does not match "
-        f"src/trade_trace/version.py __version__ {module_version!r}; "
-        "see docs/RELEASE_CHECKLIST.md"
+    assert re.search(r'__version__\s*=\s*[\'"]([^\'"]+)[\'"]', module), (
+        "src/trade_trace/version.py must still expose __version__"
     )

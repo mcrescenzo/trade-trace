@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trade-trace"
-version = "0.0.1rc3"
+dynamic = ["version"]
 description = "Local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents."
 readme = "README.md"
 license = "MIT"
@@ -83,3 +83,6 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[tool.setuptools.dynamic]
+version = {attr = "trade_trace.version.__version__"}

@@ -6,7 +6,9 @@ name: CI
 # merge to main and only surface when someone cut a release.
 #
 # The publish workflow keeps its own internal test gate as a safety
-# net before packaging; this workflow is the earlier signal.
+# net before packaging; this workflow is the earlier signal. Both
+# delegate to the shared `_test.yml` reusable workflow per bead
+# trade-trace-x7mr so any matrix or gate change happens in one place.
 
 on:
   pull_request:
@@ -23,30 +25,4 @@ concurrency:
 
 jobs:
   test:
-    name: Test (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.11', '3.12', '3.13']
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-
-      - name: Install package with dev extras
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Ruff
-        run: ruff check src tests
-
-      - name: Mypy
-        run: mypy src
-
-      - name: Pytest
-        run: pytest
+    uses: ./.github/workflows/_test.yml
