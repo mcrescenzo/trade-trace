@@ -38,10 +38,12 @@ from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
+from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.storage import open_database, resolve_home
 from trade_trace.storage.paths import db_path
 from trade_trace.tools._helpers import now_iso, require
 from trade_trace.tools.errors import ToolError
+from trade_trace.tools.memory import _embeddings_provider, _float32_blob, _query_embedding
 
 
 def _tighten_file(path: Path) -> None:
@@ -645,14 +647,109 @@ def _model_warm_stub(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     )
 
 
-def _memory_reindex_stub(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    raise ToolError(
-        ErrorCode.UNSUPPORTED_CAPABILITY,
-        "memory.reindex requires the embeddings opt-in path — deferred "
-        "to bead trade-trace-a4p.",
-        details={"deferred_to_bead": "trade-trace-a4p",
-                 "phase": "MVP-contract-only"},
-    )
+def _memory_reindex_model(provider: str) -> tuple[str, int]:
+    if provider == "local":
+        return f"{BGE_SMALL_MODEL_ID}@{BGE_SMALL_REVISION}", 384
+    if provider == "api:openai":
+        return "text-embedding-3-small", 1536
+    return "none", 0
+
+
+def _memory_reindex_cost(provider: str, nodes: list[tuple[str, str]]) -> dict[str, Any]:
+    token_estimate = sum(max(1, len(body.split())) for _node_id, body in nodes)
+    if provider == "api:openai":
+        # Rough public-list-price estimate for text-embedding-3-small at
+        # $0.02 / 1M tokens. This is preview metadata only; no network call is
+        # made by memory.reindex.
+        return {
+            "currency": "USD",
+            "token_estimate": token_estimate,
+            "estimated_usd": round(token_estimate * 0.02 / 1_000_000, 8),
+            "basis": "rough estimate: text-embedding-3-small at $0.02 / 1M tokens",
+        }
+    return {
+        "currency": "USD",
+        "token_estimate": token_estimate,
+        "estimated_usd": 0.0,
+        "basis": "local/offline deterministic embedding path",
+    }
+
+
+def _memory_reindex(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """Re-embed every memory node for the currently configured provider.
+
+    Preview mode reports the node count and estimate only. Confirm mode writes
+    all embeddings in one UnitOfWork transaction; any exception rolls back both
+    new rows and deletion of superseded rows for the active provider.
+    """
+
+    home = resolve_home(args.get("home"))
+    path = db_path(home)
+    if not path.exists():
+        raise ToolError(
+            ErrorCode.STORAGE_ERROR,
+            "journal not initialized; run `tt journal init` first",
+            details={"home": str(home), "db_path": str(path)},
+        )
+
+    conn = sqlite3.connect(str(path), isolation_level=None)
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 5000")
+    try:
+        provider = _embeddings_provider(conn)
+        rows = conn.execute(
+            "SELECT id, COALESCE(body, '') FROM memory_nodes ORDER BY id"
+        ).fetchall()
+        nodes = [(str(row[0]), str(row[1])) for row in rows]
+        model_id, dim = _memory_reindex_model(provider)
+        plan = {
+            "provider": provider,
+            "model_id": model_id,
+            "dim": dim,
+            "node_count": len(nodes) if provider != "none" else 0,
+            "cost_estimate": _memory_reindex_cost(provider, nodes if provider != "none" else []),
+        }
+        if not _confirm_requested(args):
+            _set_preview_meta(ctx)
+            return {"preview_only": True, "would_reindex": plan}
+        if provider == "none":
+            return {"preview_only": False, "provider": provider, "model_id": model_id, "dim": dim, "reindexed_count": 0}
+        if provider == "api:openai":
+            from trade_trace.security.keyring import load_api_key
+
+            api_key = load_api_key(OPENAI_EMBEDDINGS_KEYRING_SERVICE)
+            if not api_key:
+                raise ToolError(
+                    ErrorCode.VALIDATION_ERROR,
+                    "api:openai memory.reindex requires an embeddings API key in the OS keyring",
+                    details={"provider": provider, "secret_storage": "os_keyring"},
+                )
+            del api_key
+        created_at = now_iso()
+        with UnitOfWork(conn) as uow:
+            for node_id, body in nodes:
+                embedding = _query_embedding(body, dim=dim, provider=provider, model_id=model_id)
+                uow.execute(
+                    "INSERT INTO memory_node_embeddings(node_id, provider, dim, model_id, embedding, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(node_id, provider, model_id) DO UPDATE SET "
+                    "dim = excluded.dim, embedding = excluded.embedding, created_at = excluded.created_at",
+                    (node_id, provider, dim, model_id, _float32_blob(embedding), created_at),
+                )
+            uow.execute(
+                "DELETE FROM memory_node_embeddings WHERE provider = ? AND model_id <> ?",
+                (provider, model_id),
+            )
+        return {
+            "preview_only": False,
+            "provider": provider,
+            "model_id": model_id,
+            "dim": dim,
+            "reindexed_count": len(nodes),
+            "deleted_prior_provider_rows": True,
+        }
+    finally:
+        conn.close()
 
 
 def register_admin_tools(registry: ToolRegistry) -> None:
@@ -729,12 +826,14 @@ def register_admin_tools(registry: ToolRegistry) -> None:
     )
     registry.register(
         "memory.reindex",
-        _memory_reindex_stub,
+        _memory_reindex,
         is_write=True,
         description=(
-            "[Deferred to trade-trace-a4p] Re-embed all nodes on "
-            "provider change inside a single transaction. Reports node "
-            "count + cost estimate before running. Currently surfaces "
-            "UNSUPPORTED_CAPABILITY."
+            "Re-embed all memory nodes for the active embeddings provider "
+            "inside a single transaction. Requires --confirm to write; "
+            "without it returns meta.preview_only=true with node count and "
+            "cost estimate. api:openai requires only keyring presence and "
+            "uses the deterministic local substrate; no OpenAI network call "
+            "is implemented here."
         ),
     )

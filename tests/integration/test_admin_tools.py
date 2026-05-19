@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -359,10 +360,132 @@ def test_download_rejects_bad_trusted_lock_path_before_urlopen(home, monkeypatch
     assert not (home / "escape.bin").exists()
 
 
+# -- memory.reindex ------------------------------------------------
+
+
+def _retain_memory(home: Path, key: str, body: str) -> str:
+    env = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": body,
+        "idempotency_key": key,
+    })
+    assert env.ok, env
+    return env.data["id"]
+
+
+def _embedding_rows(home: Path):
+    conn = sqlite3.connect(str(home / "trade-trace.sqlite"))
+    try:
+        return conn.execute(
+            "SELECT node_id, provider, model_id, dim, length(embedding) "
+            "FROM memory_node_embeddings ORDER BY node_id, provider, model_id"
+        ).fetchall()
+    finally:
+        conn.close()
+
+
+def test_memory_reindex_preview_no_write(home):
+    _retain_memory(home, "00000000-0000-4000-8000-reindex001", "alpha memory")
+    _retain_memory(home, "00000000-0000-4000-8000-reindex002", "beta memory")
+    _mcp(home, "journal.config_set", {"key": "embeddings.provider", "value": "none", "_confirm": True})
+    conn = sqlite3.connect(str(home / "trade-trace.sqlite"), isolation_level=None)
+    try:
+        conn.execute(
+            "INSERT INTO config(key, value, updated_at) VALUES ('embeddings.provider', 'local', 'now') "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+        before = _embedding_rows(home)
+    finally:
+        conn.close()
+
+    env = _mcp(home, "memory.reindex", {})
+
+    assert env.ok, env
+    assert env.meta.preview_only is True
+    assert env.data["preview_only"] is True
+    assert env.data["would_reindex"]["provider"] == "local"
+    assert env.data["would_reindex"]["node_count"] == 2
+    assert env.data["would_reindex"]["cost_estimate"]["estimated_usd"] == 0.0
+    assert _embedding_rows(home) == before
+
+
+def test_memory_reindex_confirm_round_trip_embedding_count_matches_memory_nodes(home):
+    node_ids = [
+        _retain_memory(home, "00000000-0000-4000-8000-reindex101", "gamma memory"),
+        _retain_memory(home, "00000000-0000-4000-8000-reindex102", "delta memory"),
+    ]
+    conn = sqlite3.connect(str(home / "trade-trace.sqlite"), isolation_level=None)
+    try:
+        conn.execute(
+            "INSERT INTO config(key, value, updated_at) VALUES ('embeddings.provider', 'local', 'now') "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+        for node_id in node_ids:
+            conn.execute(
+                "INSERT INTO memory_node_embeddings(node_id, provider, dim, model_id, embedding, created_at) "
+                "VALUES (?, 'local', 2, 'old-model', ?, 'old')",
+                (node_id, b"12345678"),
+            )
+    finally:
+        conn.close()
+
+    env = _mcp(home, "memory.reindex", {"_confirm": True})
+
+    assert env.ok, env
+    assert env.data["preview_only"] is False
+    assert env.data["reindexed_count"] == 2
+    rows = _embedding_rows(home)
+    assert len(rows) == 2
+    assert {row[0] for row in rows} == set(node_ids)
+    assert {row[1] for row in rows} == {"local"}
+    assert {row[2] for row in rows} == {env.data["model_id"]}
+    assert {row[3] for row in rows} == {384}
+    assert {row[4] for row in rows} == {384 * 4}
+
+
+def test_memory_reindex_confirm_failure_rolls_back_prior_provider_state(home, monkeypatch):
+    node_ids = [
+        _retain_memory(home, "00000000-0000-4000-8000-reindex201", "epsilon memory"),
+        _retain_memory(home, "00000000-0000-4000-8000-reindex202", "zeta memory"),
+    ]
+    conn = sqlite3.connect(str(home / "trade-trace.sqlite"), isolation_level=None)
+    try:
+        conn.execute(
+            "INSERT INTO config(key, value, updated_at) VALUES ('embeddings.provider', 'local', 'now') "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+        for node_id in node_ids:
+            conn.execute(
+                "INSERT INTO memory_node_embeddings(node_id, provider, dim, model_id, embedding, created_at) "
+                "VALUES (?, 'local', 2, 'old-model', ?, 'old')",
+                (node_id, f"old:{node_id}".encode()),
+            )
+        before = _embedding_rows(home)
+    finally:
+        conn.close()
+
+    from trade_trace.tools import admin
+
+    calls = 0
+
+    def _fail_second(query, *, dim, provider, model_id):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("injected embedding failure")
+        return [1.0] + [0.0] * (dim - 1)
+
+    monkeypatch.setattr(admin, "_query_embedding", _fail_second)
+    with pytest.raises(RuntimeError, match="injected embedding failure"):
+        _mcp(home, "memory.reindex", {"_confirm": True})
+
+    assert _embedding_rows(home) == before
+
+
 # -- deferred stubs -------------------------------------------
 
 
-@pytest.mark.parametrize("tool", ["model.warm", "memory.reindex"])
+@pytest.mark.parametrize("tool", ["model.warm"])
 def test_deferred_stub_returns_unsupported_with_bead_link(home, tool):
     env = _mcp(home, tool, {})
     assert env.ok is False
