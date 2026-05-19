@@ -165,9 +165,17 @@ def _memory_retain_in_uow(
     )
     if replay is not None:
         node_id = replay["id"]
+        # Per bead trade-trace-e62: when the caller omitted `valid_from`
+        # the original write stored `valid_from = created_at`. The
+        # retry's args still have `valid_from = None`; passing that into
+        # _emit_retained would produce a payload whose `valid_from`
+        # differs from the original and the EventWriter would raise
+        # IDEMPOTENCY_CONFLICT. Re-use the stored payload's
+        # `valid_from` so a pure retry replays cleanly.
+        replay_valid_from = replay.get("valid_from") if valid_from is None else valid_from
         _emit_retained(uow, ctx, node_id, args, body, title,
                        node_type, importance, confidence_base,
-                       decay_rate_per_day, valid_from, valid_to,
+                       decay_rate_per_day, replay_valid_from, valid_to,
                        meta_json, parent_node_id, idempotency_key)
         row = uow.conn.execute(
             "SELECT created_at FROM memory_nodes WHERE id = ?",

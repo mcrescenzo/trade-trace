@@ -248,6 +248,48 @@ def test_memory_reflect_deferred_edge_sugar_returns_unsupported(home):
         assert "P1" in env.error.details["deferred_to"]
 
 
+def test_memory_reflect_idempotent_retry_without_valid_from_replays(home):
+    """Per bead trade-trace-e62: a memory.reflect retry that omits
+    `valid_from` (same idempotency_key, otherwise identical args) used
+    to surface IDEMPOTENCY_CONFLICT because the first call stored
+    `valid_from = created_at` while the retry's payload had
+    `valid_from = None`. The replay path now reuses the original
+    payload's `valid_from` so a pure retry round-trips cleanly."""
+
+    seeds = _seed_decision(home)
+    args = {
+        "target": {"kind": "decision", "id": seeds["decision"]},
+        "insight": "retry-safe reflection",
+        "idempotency_key": "00000000-0000-4000-8000-e62retry0001",
+    }
+    env_a = _mcp(home, "memory.reflect", args)
+    assert env_a.ok, env_a
+    node_id = env_a.data["id"]
+
+    env_b = _mcp(home, "memory.reflect", args)
+    assert env_b.ok, env_b
+    assert env_b.data["id"] == node_id, (
+        "retry must replay the original node id, not raise "
+        "IDEMPOTENCY_CONFLICT"
+    )
+
+
+def test_memory_retain_idempotent_retry_without_valid_from_replays(home):
+    """Same contract on memory.retain directly — the bug lived in the
+    shared retain helper, not in reflect."""
+
+    args = {
+        "node_type": "observation",
+        "body": "retry-safe observation",
+        "idempotency_key": "00000000-0000-4000-8000-e62retain001",
+    }
+    env_a = _mcp(home, "memory.retain", args)
+    assert env_a.ok, env_a
+    env_b = _mcp(home, "memory.retain", args)
+    assert env_b.ok, env_b
+    assert env_b.data["id"] == env_a.data["id"]
+
+
 def test_memory_reflect_rejects_missing_target(home):
     env = _mcp(home, "memory.reflect", {
         "target_kind": "thesis", "target_id": "thes_nope",
