@@ -266,6 +266,66 @@ contract that makes the Logs page possible at all. trade-trace-3zvl
 landed in this work session; trade-trace-jtec remains open and is
 **not** a 1kkv child.
 
+### 13. Pagination contract — cursor-based
+
+Every Console list endpoint paginates with a cursor:
+
+```
+GET /<list>?cursor=<base64>&limit=<n>
+```
+
+`cursor` is opaque base64url-encoded JSON (`{"after": <value>}`).
+The caller never inspects it — they pass back whatever
+`next_cursor` the previous response returned. The response is:
+
+```json
+{
+  "rows": [...],
+  "next_cursor": "<base64 string>" | null,
+  "limit": <int, clamped to MAX_LIMIT>
+}
+```
+
+`limit` defaults to 50 and is clamped to `MAX_LIMIT = 500` on the
+backend. `next_cursor` is `null` when the page is the last one;
+otherwise the caller appends `cursor=<next_cursor>` to the next
+request.
+
+Rationale (vs. offset/limit):
+
+- Offset pagination scans every prior row on every page — the
+  final page of a 100k-event journal costs as much as the first.
+  Cursor pagination is a single index seek (`WHERE id > ?`).
+- The cursor is stable across requests as long as the order key
+  is monotone. The journal's primary `events.id` (autoincrement
+  INTEGER PRIMARY KEY) satisfies that by construction.
+
+Implementation: `trade_trace.console.pagination.paginate_query`.
+The function is sqlite3-only and formats one extra row past the
+limit to decide whether to emit a cursor. Multi-column order is
+intentionally unsupported in MVP; composite cursors land if a
+later Console page needs them.
+
+#### Performance baseline
+
+The Console's pagination layer ships with a representative-scale
+perf test (`tests/integration/test_console_perf_baseline.py`).
+The test:
+
+- Seeds a 100k-row events table via direct SQL (deterministic;
+  the existing `fixture.seed` only carries the M0-eval profile).
+- Runs the equivalent of "first journal page" — one
+  `paginate_query` against `events` with `ORDER BY id DESC` and
+  `LIMIT 50`.
+- Asserts wall-clock under **1 s** for the perf-fixture path
+  with a 5× headroom to keep CI non-flaky.
+
+The test runs opt-in via `TRADE_TRACE_RUN_PERF_TESTS=1`, matching
+the convention set by `tests/integration/test_fixture_seed.py`
+(trade-trace-29u0). CI flips the env var on a dedicated perf job
+so the assertion lands in PR signal without slowing every test
+run.
+
 ## Read-only threat model
 
 Threats considered in scope for the MVP:
