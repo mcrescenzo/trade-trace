@@ -31,6 +31,7 @@ from trade_trace.reports import (
     report_mistakes,
     report_playbook_adherence,
     report_pnl,
+    report_risk,
     report_source_quality,
     report_strategy_performance,
     report_strengths,
@@ -581,6 +582,20 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "open_mark_coverage (open positions with marks / open positions). "
             "Reads the rebuildable positions "
             "projection (trade-trace-5zg)."
+        ),
+    )
+    registry.register(
+        "report.risk",
+        _make_filter_only_report(report_risk),
+        description=(
+            "R-multiple aggregate over decisions that declared a risk "
+            "budget (risk-units.md / bead trade-trace-8z2). Reports mean/"
+            "median R, expectancy in R, win rate, payoff ratio, best/worst R, "
+            "histogram bins, and counts of win/loss/breakeven. Decisions "
+            "without declared_risk_amount are excluded from the aggregate and "
+            "counted in caveats so the agent can chase the gap. Pending "
+            "positions (declared risk but not closed) are surfaced separately "
+            "in metrics.n_pending_with_risk."
         ),
     )
     registry.register(

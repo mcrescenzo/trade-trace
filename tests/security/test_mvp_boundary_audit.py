@@ -74,7 +74,6 @@ def test_no_source_file_matches_forbidden_pattern(kind, pattern):
 
 @pytest.mark.parametrize("deferred_tool", [
     "report.opportunity",
-    "report.risk",
     "report.r_multiple",
 ])
 def test_deferred_report_tools_not_registered(deferred_tool):
@@ -117,10 +116,13 @@ def test_memory_tool_out_of_scope(tool):
 # -- 4. decision.add does not silently accept declared_risk_* args
 
 
-def test_decision_add_does_not_accept_declared_risk_args(tmp_path):
-    """decisions.declared_risk_amount / declared_risk_unit are nullable
-    stub columns that no write tool accepts in MVP (per separate bead
-    B7). decision.add silently drops the args."""
+def test_decision_add_persists_declared_risk_args_after_8z2(tmp_path):
+    """Per bead trade-trace-8z2: decision.add now plumbs the P1 risk
+    columns (declared_risk_amount, declared_risk_unit, expected_edge,
+    expected_edge_after_costs, cost_basis_estimate,
+    risk_reward_estimate) through to the row. The previous boundary
+    test asserted they were silently dropped; the boundary moved when
+    8z2 implemented the write surface."""
 
     from trade_trace.mcp_server import mcp_call
 
@@ -136,12 +138,11 @@ def test_decision_add_does_not_accept_declared_risk_args(tmp_path):
     env = mcp_call("decision.add", {
         "home": str(home), "type": "skip",
         "instrument_id": inst, "reason": "x",
-        "declared_risk_amount": 100.0,     # should be silently dropped
-        "declared_risk_unit": "USD",       # should be silently dropped
+        "declared_risk_amount": 100.0,
+        "declared_risk_unit": "USD",
         "idempotency_key": "00000000-0000-4000-8000-r0v-risk-01",
     })
     assert env.ok, env
-    # Now confirm the decision row does NOT carry those declared_risk values.
     from trade_trace.storage import open_database
     from trade_trace.storage.paths import db_path
     db = open_database(db_path(home), create_parent=False)
@@ -152,8 +153,8 @@ def test_decision_add_does_not_accept_declared_risk_args(tmp_path):
         ).fetchone()
     finally:
         db.close()
-    assert row[0] is None, "declared_risk_amount should be silently dropped"
-    assert row[1] is None, "declared_risk_unit should be silently dropped"
+    assert row[0] == 100.0
+    assert row[1] == "USD"
 
 
 # -- 5. credential-shaped column-name audit ----------------
@@ -206,6 +207,7 @@ SHIPPED_REPORTS = {
     "report.mistakes",
     "report.strengths",
     "report.pnl",
+    "report.risk",
     "report.watchlist",
     "report.unscored_forecasts",
     "report.decision_velocity",

@@ -34,6 +34,7 @@ from trade_trace.reports.playbook_adherence import (
     report_playbook_adherence,
 )
 from trade_trace.reports.pnl import report_pnl
+from trade_trace.reports.risk import DEFAULT_RISK_MIN_SAMPLE, report_risk
 from trade_trace.reports.source_quality import (
     STALE_SOURCE_THRESHOLD_DAYS,
     report_source_quality,
@@ -47,6 +48,7 @@ __all__ = [
     "DEFAULT_ADHERENCE_MIN_SAMPLE",
     "DEFAULT_BIN_POLICY",
     "DEFAULT_MIN_SAMPLE",
+    "DEFAULT_RISK_MIN_SAMPLE",
     "FORBIDDEN_PHRASES",
     "LIQUIDITY_BUCKET_THRESHOLDS",
     "LIQUIDITY_BUCKET_VALUES",
@@ -67,6 +69,7 @@ __all__ = [
     "report_mistakes",
     "report_pnl",
     "report_playbook_adherence",
+    "report_risk",
     "report_source_quality",
     "report_strategy_performance",
     "report_strengths",

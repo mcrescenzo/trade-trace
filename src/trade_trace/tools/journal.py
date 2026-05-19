@@ -287,39 +287,82 @@ def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 
 def _journal_rescan_scoring(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    """`journal.rescan_scoring` — P1 placeholder per scoring.md §4.3 / §7.
+    """`journal.rescan_scoring` — preview/confirm scorer upgrade rescan.
 
-    Surfaces the future upgrade path (re-scoring previously-unsupported
-    forecasts once a categorical/scalar scorer is registered) without
-    implementing the rescan itself. The error envelope carries an
-    accurate `affected_rows` so the agent can size the future migration
-    before P1 ships."""
+    The rescan is idempotent: it appends a score only when no score exists
+    yet for the forecast/head outcome pair. It never mutates events,
+    outcomes, forecast_outcomes, forecasts, or forecast_scores rows.
+    """
+
+    from trade_trace.tools.ledger import (
+        _current_resolved_final_outcome,
+        _emit_forecast_scored,
+        _score_one_forecast,
+    )
+    from trade_trace.events.unit_of_work import UnitOfWork
+    from trade_trace.tools._helpers import now_iso
+
+    mode = args.get("mode") or ("confirm" if args.get("confirm") is True else "preview")
+    if mode not in ("preview", "confirm"):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "mode must be 'preview' or 'confirm'", details={"field": "mode", "value": mode})
 
     home = resolve_home(args.get("home"))
     path = db_path(home)
-    affected_rows = 0
-    if path.exists():
-        db = open_database(path, create_parent=False)
-        try:
-            row = db.connection.execute(
-                "SELECT COUNT(*) FROM forecasts "
-                "WHERE scoring_support = 'unsupported' "
-                "AND scoring_state = 'pending'"
-            ).fetchone()
-            affected_rows = int(row[0]) if row else 0
-        finally:
-            db.close()
+    if not path.exists():
+        raise ToolError(ErrorCode.STORAGE_ERROR, "journal not initialized; run `tt journal init` first", details={"home": str(home), "db_path": str(path)})
 
-    raise ToolError(
-        ErrorCode.UNSUPPORTED_CAPABILITY,
-        "journal.rescan_scoring is deferred to P1 (categorical/scalar "
-        "scorers not in MVP)",
-        details={
-            "reason": "implementation_deferred_p1",
-            "affected_rows": affected_rows,
-            "schema_doc": "docs/architecture/scoring.md#4-status-fields",
-        },
-    )
+    db = open_database(path, create_parent=False)
+    try:
+        rows = db.connection.execute(
+            """
+            SELECT f.id, f.kind, f.scoring_support, f.yes_label, f.resolution_at,
+                   f.created_at, t.instrument_id
+            FROM forecasts f
+            JOIN theses t ON t.id = f.thesis_id
+            WHERE f.kind IN ('categorical','scalar')
+              AND f.scoring_state = 'pending'
+            ORDER BY f.created_at, f.id
+            """
+        ).fetchall()
+        candidates: list[dict[str, Any]] = []
+        for r in rows:
+            head = _current_resolved_final_outcome(db.connection, instrument_id=r[6])
+            already = False
+            if head is not None:
+                already = db.connection.execute(
+                    "SELECT 1 FROM forecast_scores WHERE forecast_id = ? AND outcome_id = ?",
+                    (r[0], head[0]),
+                ).fetchone() is not None
+            candidates.append({
+                "forecast_id": r[0], "kind": r[1], "prior_scoring_support": r[2],
+                "instrument_id": r[6], "head_outcome_id": head[0] if head else None,
+                "will_score": bool(head is not None and not already),
+                "already_scored_head": already,
+            })
+        if mode == "preview":
+            return {"mode": mode, "affected_rows": len(candidates), "would_score_rows": sum(1 for c in candidates if c["will_score"]), "candidates": candidates}
+
+        scored: list[dict[str, Any]] = []
+        with UnitOfWork(db.connection) as uow:
+            for r, c in zip(rows, candidates, strict=True):
+                if not c["will_score"]:
+                    continue
+                head = (c["head_outcome_id"],)
+                outcome = uow.conn.execute("SELECT id, outcome_label FROM outcomes WHERE id = ?", head).fetchone()
+                if outcome is None:
+                    continue
+                scored_at = now_iso()
+                score = _score_one_forecast(
+                    uow.conn,
+                    forecast_row=(r[0], r[1], "supported", r[3], r[4], r[5]),
+                    outcome_id=outcome[0], outcome_label=outcome[1],
+                    actor_id=ctx.actor_id, scored_at=scored_at,
+                )
+                _emit_forecast_scored(uow, score, actor_id=ctx.actor_id, ctx=ctx, scored_at=scored_at)
+                scored.append(score)
+        return {"mode": mode, "affected_rows": len(candidates), "scored_rows": len(scored), "scores": scored, "candidates": candidates}
+    finally:
+        db.close()
 
 
 def register_journal_tools(registry: ToolRegistry) -> None:

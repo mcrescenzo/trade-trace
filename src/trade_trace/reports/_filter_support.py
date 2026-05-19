@@ -73,6 +73,10 @@ SUPPORTED_FILTER_FIELDS: dict[str, frozenset[str]] = {
     # contract by composition. Direct callers may only pass the empty
     # filter shape today.
     "report.coach": frozenset(),
+    # report.risk has no filter leaves wired into its SQL today; only
+    # the empty filter is accepted so the agent sees a clean rejection
+    # instead of a silently broadened result.
+    "report.risk": frozenset(),
     # review.bundle scopes its decision selection through the same
     # actor/instrument/strategy spine as calibration, plus the
     # decision_at time window (the selection ordering uses

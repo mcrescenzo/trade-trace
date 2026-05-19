@@ -140,16 +140,17 @@ def test_unknown_enum_rejected():
         check_enum_extension("totally.unknown_enum", {"a", "b"})
 
 
-def test_failure_reason_enum_locked_to_three_values():
-    """Per scoring.md §4.4 the failure_reason enum is closed at three values.
-    A future migration that adds a fourth without a contract bump must be
-    caught."""
+def test_failure_reason_enum_locked_to_current_values():
+    """Per scoring.md §4.4 the failure_reason enum is closed; future
+    additions without a contract bump must be caught."""
 
     baseline = CLOSED_ENUMS["forecast_scores.failure_reason"]
     assert baseline == {
         "yes_label_ambiguous",
         "label_mismatch",
         "outcome_superseded_mid_score",
+        "scalar_value_invalid",
+        "unsupported_kind",
     }
     with pytest.raises(MigrationPolicyError):
         check_enum_extension(

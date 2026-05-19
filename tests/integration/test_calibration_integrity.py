@@ -143,10 +143,9 @@ def test_forecast_coverage_clean_with_decisions(home):
 # -- (2) unsupported_rate --------------------------------------------
 
 
-def test_unsupported_rate_fires_when_forecast_has_unsupported_kind(home):
-    """positive: a forecast with `kind='categorical'` is stamped
-    scoring_support='unsupported' by the M1 ledger (categorical/scalar
-    scoring is P1 — scoring.md §4.3); the diagnostic catches it."""
+def test_unsupported_rate_stays_zero_for_supported_categorical(home):
+    """categorical forecasts are now scoring-supported, so unsupported_rate
+    should not fire for them."""
 
     inst = _seed_instrument(home)
     thesis = _mcp(home, "thesis.add", {
@@ -161,9 +160,9 @@ def test_unsupported_rate_fires_when_forecast_has_unsupported_kind(home):
     }).data["id"]
     env = _mcp(home, "report.calibration_integrity", {})
     diag = env.data["diagnostics"]["unsupported_rate"]
-    assert diag["count"] == 1
-    assert fcst in diag["sample_ids"]["forecasts"]
-    assert diag["rate_pct"] == 100.0
+    assert diag["count"] == 0
+    assert fcst not in diag["sample_ids"]["forecasts"]
+    assert diag["rate_pct"] == 0.0
 
 
 def test_unsupported_rate_silent_on_clean_data(home):

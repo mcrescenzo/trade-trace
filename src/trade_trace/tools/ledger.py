@@ -527,6 +527,44 @@ def _validate_binary_forecast(outcomes: list[dict[str, Any]]) -> None:
         )
 
 
+def _validate_categorical_forecast(outcomes: list[dict[str, Any]]) -> None:
+    if len(outcomes) < 2:
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "categorical forecasts require at least two outcomes", details={"field": "outcomes", "found_count": len(outcomes)})
+    labels: list[str] = []
+    total = 0.0
+    for o in outcomes:
+        label = o.get("outcome_label") or o.get("label")
+        if label is None or str(label).strip() == "":
+            raise ToolError(ErrorCode.INVARIANT_VIOLATION, "every categorical outcome requires outcome_label", details={"field": "outcome_label"})
+        try:
+            prob = float(o["probability"])
+        except Exception as exc:
+            raise ToolError(ErrorCode.INVARIANT_VIOLATION, "every categorical outcome requires numeric probability", details={"field": "probability"}) from exc
+        if not (0.0 <= prob <= 1.0):
+            raise ToolError(ErrorCode.INVARIANT_VIOLATION, f"probability {prob} out of [0,1]", details={"field": "probability", "value": prob})
+        labels.append(str(label).strip().lower())
+        total += prob
+    if len(set(labels)) != len(labels):
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "categorical forecast outcomes must have distinct labels", details={"found_labels": labels})
+    if abs(total - 1.0) > _BINARY_TOLERANCE:
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, f"categorical probabilities must sum to 1.0 within {_BINARY_TOLERANCE}", details={"found_sum": total})
+
+
+def _validate_scalar_forecast(outcomes: list[dict[str, Any]]) -> None:
+    # Backcompat schema choice: normalized scalar point forecast is stored in
+    # the single forecast_outcomes.probability column (there is no wider REAL
+    # prediction column yet), so supported scalar scores are on [0,1].
+    if len(outcomes) != 1:
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "scalar forecasts require exactly one point-estimate outcome", details={"field": "outcomes", "found_count": len(outcomes)})
+    o = outcomes[0]
+    try:
+        point = float(o["probability"])
+    except Exception as exc:
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "scalar forecast requires numeric probability as normalized point estimate", details={"field": "probability"}) from exc
+    if not (0.0 <= point <= 1.0):
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, f"scalar point estimate {point} out of [0,1]", details={"field": "probability", "value": point})
+
+
 def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     thesis_id = require(args, "thesis_id")
     kind = args.get("kind", "binary")
@@ -539,7 +577,11 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         )
     if kind == "binary":
         _validate_binary_forecast(outcomes)
-    elif kind not in ("categorical", "scalar"):
+    elif kind == "categorical":
+        _validate_categorical_forecast(outcomes)
+    elif kind == "scalar":
+        _validate_scalar_forecast(outcomes)
+    else:
         raise ToolError(
             ErrorCode.VALIDATION_ERROR,
             f"unknown forecast kind {kind!r}",
@@ -548,7 +590,7 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     idempotency_key = args.get("idempotency_key")
     yes_label = args.get("yes_label")
     resolution_at = normalize_timestamp(args, "resolution_at")
-    scoring_support = "supported" if kind == "binary" else "unsupported"
+    scoring_support = "supported"
     # Scan the one long-form forecast free-text field per bead
     # trade-trace-7j1l; yes_label is short and enum-shaped (typically
     # "yes"/"true") so it's exempt by design.
@@ -705,7 +747,7 @@ def _emit_forecast_scored(
             "forecast_id": scored["forecast_id"],
             "score_id": scored["score_id"],
             "outcome_id": _lookup_outcome_id_from_score(uow.conn, scored["score_id"]),
-            "metric": "brier_binary",
+            "metric": scored.get("metric", "brier_binary"),
             "score": scored.get("score"),
             "scored_at": scored_at,
             "failure_reason": scored.get("failure_reason"),
@@ -755,6 +797,43 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     idempotency_key = args.get("idempotency_key")
     review_by = normalize_timestamp(args, "review_by")
     metadata_json = _store_metadata_json(args)
+    # Risk-unit P1 columns per bead trade-trace-8z2 / risk-units.md §3.2.
+    # Validate in the tool layer before SQLite triggers so callers receive a
+    # clean VALIDATION_ERROR envelope with field details instead of a raw
+    # constraint string. Migration 004 keeps the DB invariant as defense in
+    # depth for direct/imported writes.
+    def _optional_float(field: str) -> float | None:
+        value = args.get(field)
+        if value is None or value == "":
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError) as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"{field} must be numeric",
+                details={"field": field, "value": value},
+            ) from exc
+
+    declared_risk_amount = _optional_float("declared_risk_amount")
+    declared_risk_unit = args.get("declared_risk_unit")
+    expected_edge = _optional_float("expected_edge")
+    expected_edge_after_costs = _optional_float("expected_edge_after_costs")
+    cost_basis_estimate = _optional_float("cost_basis_estimate")
+    risk_reward_estimate = _optional_float("risk_reward_estimate")
+    if declared_risk_amount is not None and declared_risk_amount < 0:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "declared_risk_amount must be >= 0 (risk-units.md §3.5)",
+            details={"field": "declared_risk_amount"},
+        )
+    if (expected_edge is not None and expected_edge_after_costs is not None
+            and expected_edge_after_costs > expected_edge + 1e-9):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "expected_edge_after_costs must be <= expected_edge + 1e-9 (risk-units.md §3.5)",
+            details={"field": "expected_edge_after_costs"},
+        )
 
     def _payload(did: str) -> dict[str, Any]:
         return {
@@ -774,6 +853,12 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "review_by": review_by,
             "strategy_id": args.get("strategy_id"),
             "tags": tags,
+            "declared_risk_amount": declared_risk_amount,
+            "declared_risk_unit": declared_risk_unit,
+            "expected_edge": expected_edge,
+            "expected_edge_after_costs": expected_edge_after_costs,
+            "cost_basis_estimate": cost_basis_estimate,
+            "risk_reward_estimate": risk_reward_estimate,
         }
 
     db = open_db_for_args(args)
@@ -803,15 +888,22 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             uow.execute(
                 "INSERT INTO decisions(id, instrument_id, thesis_id, forecast_id, "
                 "snapshot_id, type, side, quantity, price, fees, slippage, reason, "
-                "playbook_version_id, review_by, strategy_id, agent_id, model_id, "
+                "playbook_version_id, review_by, strategy_id, "
+                "declared_risk_amount, declared_risk_unit, expected_edge, "
+                "expected_edge_after_costs, cost_basis_estimate, "
+                "risk_reward_estimate, agent_id, model_id, "
                 "environment, run_id, metadata_json, created_at, actor_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+                "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     decision_id, args.get("instrument_id"), args.get("thesis_id"),
                     args.get("forecast_id"), args.get("snapshot_id"), decision_type,
                     args.get("side"), args.get("quantity"), args.get("price"),
                     args.get("fees"), args.get("slippage"), args.get("reason"),
                     args.get("playbook_version_id"), review_by, args.get("strategy_id"),
+                    declared_risk_amount, declared_risk_unit, expected_edge,
+                    expected_edge_after_costs, cost_basis_estimate,
+                    risk_reward_estimate,
                     seg["agent_id"], seg["model_id"], seg["environment"], seg["run_id"],
                     metadata_json, created_at, ctx.actor_id,
                 ),
@@ -961,9 +1053,6 @@ def _autoscore_pending_forecasts(
     results = []
     for fc in forecasts:
         forecast_id = fc[0]
-        kind = fc[1]
-        if kind != "binary":
-            continue
         # Skip if THIS forecast already has a score against THIS outcome.
         existing = conn.execute(
             "SELECT 1 FROM forecast_scores WHERE forecast_id = ? AND outcome_id = ?",
@@ -1002,10 +1091,12 @@ def _score_one_forecast(
     forecast is brand new and definitionally unscored)."""
 
     forecast_id = forecast_row[0]
+    kind = forecast_row[1]
     yes_label = forecast_row[3]
     resolution_at = forecast_row[4]
     fcreated_at = forecast_row[5]
     resolved_label_norm = outcome_label.strip().lower()
+    metric = "brier_binary"
 
     outcomes_cur = conn.execute(
         "SELECT id, outcome_label, probability FROM forecast_outcomes WHERE forecast_id = ?",
@@ -1015,7 +1106,7 @@ def _score_one_forecast(
     labels = {r[1].strip().lower(): (r[0], r[2]) for r in rows}
 
     yes_norm = yes_label.strip().lower() if yes_label else None
-    if yes_norm is None:
+    if kind == "binary" and yes_norm is None:
         # Heuristic per scoring.md §3.2.
         if "yes" in labels:
             yes_norm = "yes"
@@ -1026,16 +1117,33 @@ def _score_one_forecast(
 
     failure_reason: str | None = None
     score: float | None = None
-    if len(rows) != 2:
+    if kind == "binary" and len(rows) != 2:
         failure_reason = "yes_label_ambiguous"
-    elif yes_norm is None or yes_norm not in labels:
+    elif kind == "binary" and (yes_norm is None or yes_norm not in labels):
         failure_reason = "yes_label_ambiguous"
-    elif resolved_label_norm not in labels:
+    elif kind in ("binary", "categorical") and resolved_label_norm not in labels:
         failure_reason = "label_mismatch"
-    else:
+    elif kind == "binary":
         p_yes = labels[yes_norm][1]
         y = 1.0 if resolved_label_norm == yes_norm else 0.0
         score = (p_yes - y) ** 2
+    elif kind == "categorical":
+        metric = "brier_multiclass"
+        score = sum((float(prob) - (1.0 if label == resolved_label_norm else 0.0)) ** 2
+                    for label, (_oid, prob) in labels.items())
+    elif kind == "scalar":
+        metric = "squared_error_scalar"
+        try:
+            outcome_row = conn.execute("SELECT outcome_value FROM outcomes WHERE id = ?", (outcome_id,)).fetchone()
+            raw_truth = outcome_row[0] if outcome_row and outcome_row[0] is not None else outcome_label
+            truth = float(raw_truth)
+            point = float(rows[0][2])
+        except Exception:
+            failure_reason = "scalar_value_invalid"
+        else:
+            score = (point - truth) ** 2
+    else:
+        failure_reason = "unsupported_kind"
 
     late_recorded, late_by_seconds = _late_recorded_calc(
         forecast_created_at=fcreated_at,
@@ -1057,7 +1165,7 @@ def _score_one_forecast(
         "scored_at, actor_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             score_id, forecast_id, outcome_id,
-            "brier_binary",
+            metric,
             score,
             scored_at,
             actor_id,
@@ -1070,6 +1178,7 @@ def _score_one_forecast(
         "score": score,
         "failure_reason": failure_reason,
         "late_recorded": late_recorded,
+        "metric": metric,
     }
 
 
@@ -1487,7 +1596,11 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         )
     if kind == "binary":
         _validate_binary_forecast(outcomes)
-    elif kind not in ("categorical", "scalar"):
+    elif kind == "categorical":
+        _validate_categorical_forecast(outcomes)
+    elif kind == "scalar":
+        _validate_scalar_forecast(outcomes)
+    else:
         raise ToolError(
             ErrorCode.VALIDATION_ERROR,
             f"unknown forecast kind {kind!r}",
@@ -1499,7 +1612,7 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
 
     yes_label = args.get("yes_label")
     resolution_at = normalize_timestamp(args, "resolution_at")
-    scoring_support = "supported" if kind == "binary" else "unsupported"
+    scoring_support = "supported"
     idempotency_key = args.get("idempotency_key")
     seg = common_metadata(args)
 

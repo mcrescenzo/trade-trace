@@ -59,7 +59,7 @@ CLOSED_ENUMS: dict[str, frozenset[str]] = {
     "forecasts.scoring_state": frozenset({"pending", "scored", "failed", "superseded"}),
     "forecasts.scoring_support": frozenset({"supported", "unsupported"}),
     "forecast_scores.failure_reason": frozenset(
-        {"yes_label_ambiguous", "label_mismatch", "outcome_superseded_mid_score"}
+        {"yes_label_ambiguous", "label_mismatch", "outcome_superseded_mid_score", "scalar_value_invalid", "unsupported_kind"}
     ),
     "signals.severity": frozenset({"info", "warn", "critical"}),
     "error_codes": frozenset(

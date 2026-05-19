@@ -495,9 +495,9 @@ def test_non_late_forecast_does_not_carry_late_flag(home):
 # -- unsupported forecasts stay pending ---------------------------------
 
 
-def test_unsupported_kind_stays_pending(home):
-    """`scoring_support='unsupported'` (e.g. categorical or scalar) never
-    auto-scores per scoring.md §4.3 invariant."""
+def test_categorical_kind_auto_scores(home):
+    """Categorical forecasts are scoring-supported and auto-score on a
+    resolved_final outcome."""
 
     instr_id, thesis_id = _setup_venue_instr_thesis(home)
     f = _envelope(home, "forecast.add", {
@@ -515,11 +515,10 @@ def test_unsupported_kind_stays_pending(home):
         "outcome_label": "a",
         "status": "resolved_final",
     })
-    # categorical → unsupported → autoscorer skips.
-    assert out["data"]["auto_scored_forecasts"] == []
+    assert len(out["data"]["auto_scored_forecasts"]) == 1
     db = open_database(db_path(home))
     try:
         state = derive_scoring_state(db.connection, f["data"]["id"])
     finally:
         db.close()
-    assert state == "pending"
+    assert state == "scored"

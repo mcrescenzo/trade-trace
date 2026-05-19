@@ -43,6 +43,8 @@ _REQUIRED_FIELDS = (
 )
 _OPTIONAL_FIELDS = (
     "fees", "slippage", "account_label", "strategy_id", "strategy_slug", "tags",
+    "declared_risk_amount", "declared_risk_unit", "expected_edge",
+    "expected_edge_after_costs", "cost_basis_estimate", "risk_reward_estimate",
 )
 _SUPPORTED_MAPPING_TARGETS = set(_REQUIRED_FIELDS) | set(_OPTIONAL_FIELDS) | {
     "instrument_id", "instrument_external_id",
@@ -283,6 +285,21 @@ def _row_to_decision_args(
         if isinstance(tags, str):
             tags = [t.strip() for t in tags.split(",") if t.strip()]
         args["tags"] = tags
+    for field in (
+        "declared_risk_amount", "expected_edge", "expected_edge_after_costs",
+        "cost_basis_estimate", "risk_reward_estimate",
+    ):
+        if mapped.get(field) is not None:
+            try:
+                args[field] = float(mapped[field])
+            except (TypeError, ValueError) as exc:
+                raise ToolError(
+                    ErrorCode.VALIDATION_ERROR,
+                    f"CSV row {row_no}: {field} must be numeric",
+                    details={"line": row_no, "file": source_file, "field": field},
+                ) from exc
+    if mapped.get("declared_risk_unit"):
+        args["declared_risk_unit"] = mapped["declared_risk_unit"]
     metadata: dict[str, Any] = {
         "import_run_id": run_id,
         "import_source": "csv_fills",
