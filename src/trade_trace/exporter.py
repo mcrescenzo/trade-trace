@@ -366,14 +366,26 @@ def drain_outbox(
     envelope; they decide whether to redact and resubmit (operability.md §7).
     """
 
+    from trade_trace.logging import get_logger
+
+    log = get_logger(__name__)
     result = DrainResult()
     if cleanup_orphans:
         result.orphans_cleaned = cleanup_orphan_tmp_files(home)
 
     pending = _read_outbox_pending(conn)
+    log.info(
+        "exporter starting drain",
+        extra={"subject": "outbox", "verb": "drain", "pending_count": len(pending)},
+    )
     for outbox_id, event_id in pending:
         event = _load_event(conn, event_id)
         if event is None:
+            log.warning(
+                "outbox row references missing event",
+                extra={"subject": "outbox", "verb": "drain",
+                       "record_id": str(outbox_id), "event_id": event_id},
+            )
             # FK should prevent this, but surface a defensive error_text
             # rather than crash the whole drain.
             conn.execute(
@@ -387,6 +399,12 @@ def drain_outbox(
         try:
             payload = json.loads(payload_json)
         except (json.JSONDecodeError, TypeError) as exc:
+            log.warning(
+                "outbox row payload failed to decode",
+                extra={"subject": "outbox", "verb": "drain",
+                       "record_id": str(outbox_id), "event_id": event_id,
+                       "error": str(exc)},
+            )
             # Corrupt payload would abort the whole drain otherwise; per
             # bead trade-trace-eo4 the row is marked failed and the loop
             # continues so a single bad event can't wedge the exporter.
@@ -470,6 +488,11 @@ def drain_outbox(
         result.exported_event_ids.append(event_id)
         result.exported_files.append(path)
 
+    log.info(
+        "exporter completed drain",
+        extra={"subject": "outbox", "verb": "drain",
+               "exported_count": len(result.exported_event_ids)},
+    )
     return result
 
 
