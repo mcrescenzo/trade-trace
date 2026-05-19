@@ -28,6 +28,7 @@ from trade_trace.events.unit_of_work import DRY_RUN_FLAG
 from trade_trace.tools.admin import register_admin_tools
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.fixture import register_fixture_tools
+from trade_trace.tools.csv_import import register_csv_import
 from trade_trace.tools.imports import register_import_stubs
 from trade_trace.tools.journal import register_journal_tools
 from trade_trace.tools.ledger import register_ledger_tools
@@ -59,6 +60,7 @@ def build_registry() -> ToolRegistry:
     register_strategy_tools(registry)
     register_review_bundle(registry)
     register_import_stubs(registry)
+    register_csv_import(registry)
     register_report_tools(registry)
     register_signal_tools(registry)
     registry.validate()
