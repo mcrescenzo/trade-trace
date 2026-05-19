@@ -12,10 +12,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
-from trade_trace.reports._filter_support import (
-    applied_filter_view,
-    enforce_supported_filter,
-)
+from trade_trace.reports._filter_support import process_filter
 
 _VALID_BUCKETS = ("day", "week")
 
@@ -37,10 +34,9 @@ def report_decision_velocity(
         raise ValueError(f"bucket must be one of {_VALID_BUCKETS}, got {bucket!r}")
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report="report.decision_velocity")
+    filter_view = process_filter(rf, report="report.decision_velocity")
     lo = rf.time_window.decision_at_gte
     hi = rf.time_window.decision_at_lt
-    filter_view = applied_filter_view(rf, report="report.decision_velocity")
 
     where_clauses: list[str] = []
     params: list[Any] = []

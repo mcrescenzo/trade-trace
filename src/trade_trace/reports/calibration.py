@@ -19,6 +19,12 @@ from trade_trace.reports._filter_support import (
     enforce_supported_filter,
 )
 
+REPORT_NAME = "report.calibration"
+"""Module-level report name (trade-trace-x0po / SIMP-007). Pinning the
+name once removes the drift risk of three separate string literals
+disagreeing on the report's identity."""
+
+
 DEFAULT_MIN_SAMPLE = 20
 """Per reports.md §3.2 / scoring.md §7.1: N=20 is the calibration floor."""
 
@@ -57,7 +63,7 @@ def report_calibration(
     """
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report="report.calibration")
+    enforce_supported_filter(rf, report=REPORT_NAME)
     rows = _load_scored_rows(conn, rf)
 
     # Late-recorded default exclusion (dogfood-protocol.md §2.2).
@@ -100,7 +106,7 @@ def report_calibration(
     summary = {
         "sample_size": sample_size,
         "sample_warning": sample_warning,
-        "filter": applied_filter_view(rf, report="report.calibration"),
+        "filter": applied_filter_view(rf, report=REPORT_NAME),
         "metrics": metrics,
         "caveats": caveats,
         "late_recorded_excluded": excluded_late,
@@ -110,7 +116,7 @@ def report_calibration(
             "key": "all",
             "label": "All scored binary forecasts in filter",
             "metrics": metrics,
-            "filter": applied_filter_view(rf, report="report.calibration"),
+            "filter": applied_filter_view(rf, report=REPORT_NAME),
             "record_ids": group_record_ids,
             "examples": _build_examples(conn, included_rows, max_examples=3),
             "sample_size": sample_size,

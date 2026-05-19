@@ -16,10 +16,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
-from trade_trace.reports._filter_support import (
-    applied_filter_view,
-    enforce_supported_filter,
-)
+from trade_trace.reports._filter_support import process_filter
 from trade_trace.tools._helpers import now_iso
 
 DEFAULT_STALE_THRESHOLD_DAYS = 14
@@ -33,8 +30,7 @@ def report_watchlist(
     stale_threshold_days: int = DEFAULT_STALE_THRESHOLD_DAYS,
 ) -> dict[str, Any]:
     rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report="report.watchlist")
-    filter_view = applied_filter_view(rf, report="report.watchlist")
+    filter_view = process_filter(rf, report="report.watchlist")
     # Per bead trade-trace-bew: capture one clock instant at entry so
     # the stale threshold, per-row age_days, and the response's
     # `as_of` field all read from the same clock. Previously each

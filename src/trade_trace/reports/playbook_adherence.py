@@ -16,10 +16,7 @@ import sqlite3
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
-from trade_trace.reports._filter_support import (
-    applied_filter_view,
-    enforce_supported_filter,
-)
+from trade_trace.reports._filter_support import process_filter
 
 DEFAULT_ADHERENCE_MIN_SAMPLE = 10
 """reports.md §3.2: min 10 decisions with adherence rows."""
@@ -49,8 +46,7 @@ def report_playbook_adherence(
     """
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report="report.playbook_adherence")
-    filter_dict = applied_filter_view(rf, report="report.playbook_adherence")
+    filter_dict = process_filter(rf, report="report.playbook_adherence")
 
     sql = (
         "SELECT dpr.id, dpr.decision_id, dpr.playbook_version_id, "

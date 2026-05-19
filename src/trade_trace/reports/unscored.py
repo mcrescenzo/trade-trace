@@ -12,10 +12,7 @@ import sqlite3
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
-from trade_trace.reports._filter_support import (
-    applied_filter_view,
-    enforce_supported_filter,
-)
+from trade_trace.reports._filter_support import process_filter
 from trade_trace.tools._helpers import now_iso
 
 
@@ -28,8 +25,7 @@ def report_unscored_forecasts(
     past their `resolution_at` without a resolved_final outcome."""
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report="report.unscored_forecasts")
-    filter_view = applied_filter_view(rf, report="report.unscored_forecasts")
+    filter_view = process_filter(rf, report="report.unscored_forecasts")
     now = now_iso()
     cur = conn.execute(
         """

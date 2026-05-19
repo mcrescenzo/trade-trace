@@ -27,10 +27,7 @@ import sqlite3
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
-from trade_trace.reports._filter_support import (
-    applied_filter_view,
-    enforce_supported_filter,
-)
+from trade_trace.reports._filter_support import process_filter
 from trade_trace.reports.integrity import report_calibration_integrity
 from trade_trace.reports.source_quality import report_source_quality
 from trade_trace.reports.tag_aggregates import report_mistakes, report_strengths
@@ -78,8 +75,7 @@ def report_coach(
     """Build the coach packet. Returns the `data` portion of the envelope."""
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report="report.coach")
-    filter_dict = applied_filter_view(rf, report="report.coach")
+    filter_dict = process_filter(rf, report="report.coach")
 
     mistakes = report_mistakes(conn, raw_filter=filter_dict)
     strengths = report_strengths(conn, raw_filter=filter_dict)

@@ -22,10 +22,7 @@ import sqlite3
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
-from trade_trace.reports._filter_support import (
-    applied_filter_view,
-    enforce_supported_filter,
-)
+from trade_trace.reports._filter_support import process_filter
 
 DEFAULT_TAG_MIN_SAMPLE = 10
 
@@ -66,8 +63,7 @@ def _tag_ranked_report(
     report: str,
 ) -> dict[str, Any]:
     rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report=report)
-    filter_view = applied_filter_view(rf, report=report)
+    filter_view = process_filter(rf, report=report)
 
     rows = conn.execute(
         """

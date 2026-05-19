@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
-from trade_trace.reports._filter_support import applied_filter_view, enforce_supported_filter
+from trade_trace.reports._filter_support import process_filter
 
 DEFAULT_OPPORTUNITY_MIN_SAMPLE = 20
 _COVERAGE_RANK = {"missing": 0, "sparse": 1, "partial": 2, "complete": 3}
@@ -184,8 +184,7 @@ def report_opportunity(
         raise ValueError("max_records must be between 1 and 1000")
     conn.row_factory = sqlite3.Row
     rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report="report.opportunity")
-    filter_view = applied_filter_view(rf, report="report.opportunity")
+    filter_view = process_filter(rf, report="report.opportunity")
 
     rows = conn.execute(
         """

@@ -7,7 +7,7 @@ from statistics import median
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
-from trade_trace.reports._filter_support import applied_filter_view, enforce_supported_filter
+from trade_trace.reports._filter_support import process_filter
 
 DEFAULT_RISK_MIN_SAMPLE = 10
 _R_BINS = [float("-inf"), -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0, float("inf")]
@@ -86,8 +86,7 @@ def report_risk(
     """
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report="report.risk")
-    filter_view = applied_filter_view(rf, report="report.risk")
+    filter_view = process_filter(rf, report="report.risk")
 
     rows = conn.execute(
         """

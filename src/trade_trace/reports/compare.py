@@ -25,6 +25,9 @@ from trade_trace.reports.calibration import (
     _resolve_p_yes_and_y,
     _ScoredRow,
 )
+from trade_trace.reports.calibration import (
+    REPORT_NAME as CALIBRATION_REPORT_NAME,
+)
 from trade_trace.reports.pnl import DEFAULT_PNL_MIN_SAMPLE, _pnl_metrics_for_rows
 
 CALIBRATION_GROUP_SQL: dict[str, str] = {
@@ -107,7 +110,7 @@ def _compare_calibration(conn: sqlite3.Connection, *, group_by: str, raw_filter:
     if group_by not in CALIBRATION_GROUP_SQL:
         raise ValueError(f"unsupported group_by for calibration compare: {group_by!r}")
     rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report="report.calibration")
+    enforce_supported_filter(rf, report=CALIBRATION_REPORT_NAME)
     rows_by_group: dict[str, list[_ScoredRow]] = defaultdict(list)
     labels: dict[str, str] = {}
     for key, label, row in _load_grouped_scored_rows(conn, rf, CALIBRATION_GROUP_SQL[group_by]):
@@ -144,7 +147,7 @@ def _compare_calibration(conn: sqlite3.Connection, *, group_by: str, raw_filter:
             "group_by": group_by,
             "sample_size": total,
             "sample_warning": "one_or_more_groups_below_min_sample" if any_warning else None,
-            "filter": applied_filter_view(rf, report="report.calibration"),
+            "filter": applied_filter_view(rf, report=CALIBRATION_REPORT_NAME),
             "metrics": {"group_count": len(groups), "min_sample": min_sample},
             "caveats": [],
         },

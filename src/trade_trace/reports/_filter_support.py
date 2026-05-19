@@ -170,9 +170,22 @@ def applied_filter_view(rf: ReportFilter, *, report: str) -> dict[str, Any]:
     return result
 
 
+def process_filter(rf: ReportFilter, *, report: str) -> dict[str, Any]:
+    """Combined enforce + applied_view helper per trade-trace-x0po
+    (SIMP-007). Reports previously called `enforce_supported_filter`
+    and `applied_filter_view` back-to-back with the same `report=...`
+    string. A typo in either call meant the report and the filter
+    declaration could drift silently; this helper takes the name once
+    and is the canonical entry point for report bodies."""
+
+    enforce_supported_filter(rf, report=report)
+    return applied_filter_view(rf, report=report)
+
+
 __all__ = [
     "SUPPORTED_FILTER_FIELDS",
     "UnsupportedFilterError",
     "applied_filter_view",
     "enforce_supported_filter",
+    "process_filter",
 ]
