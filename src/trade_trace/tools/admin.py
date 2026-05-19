@@ -444,17 +444,71 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             },
         }
 
+    # Validate every manifest path before touching the disk per bead
+    # trade-trace-l24k. A tampered manifest entry with `..` segments, an
+    # absolute path, or a Windows drive prefix must be rejected before
+    # any read/copy so a malicious backup cannot write or corrupt files
+    # outside `home` with the process's permissions. `_safe_model_relpath`
+    # already implements the rel-path check used by `model.import`; reuse
+    # it here, then constrain the resolved candidate to live under home.
+    home_resolved = home.resolve(strict=False)
+    src_resolved = src_path.resolve(strict=False)
+    validated: list[tuple[dict[str, Any], Path, Path]] = []
+    for entry in manifest["files"]:
+        try:
+            rel = _safe_model_relpath(entry["path"])
+        except ToolError as exc:
+            # Re-raise with a journal.restore-specific message but keep
+            # the structured details so callers can branch.
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"manifest path {entry['path']!r} is not a safe relative "
+                "path under TRADE_TRACE_HOME (no `..`, absolutes, or "
+                "Windows drives allowed) per trade-trace-l24k",
+                details={
+                    "field": "path",
+                    "manifest_path": entry["path"],
+                    "reason": "unsafe_manifest_path",
+                },
+            ) from exc
+        src_file = (src_path / rel).resolve(strict=False)
+        out_file = (home / rel).resolve(strict=False)
+        if src_resolved != src_file and src_resolved not in src_file.parents:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"manifest path {entry['path']!r} resolves outside the "
+                "backup source after symlink resolution",
+                details={
+                    "field": "path",
+                    "manifest_path": entry["path"],
+                    "src": str(src_resolved),
+                    "resolved": str(src_file),
+                },
+            )
+        if home_resolved != out_file and home_resolved not in out_file.parents:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"manifest path {entry['path']!r} resolves outside "
+                "TRADE_TRACE_HOME after symlink resolution",
+                details={
+                    "field": "path",
+                    "manifest_path": entry["path"],
+                    "home": str(home_resolved),
+                    "resolved": str(out_file),
+                },
+            )
+        validated.append((entry, src_file, out_file))
+
     # Verify hashes BEFORE copying anything so a corrupt source aborts
     # cleanly.
-    for entry in manifest["files"]:
-        candidate = src_path / entry["path"]
-        if not candidate.exists():
+    for entry, src_file, _ in validated:
+        if not src_file.exists():
             raise ToolError(
                 ErrorCode.STORAGE_ERROR,
                 f"manifest references missing file {entry['path']!r}",
-                details={"candidate": str(candidate)},
+                details={"candidate": str(src_file)},
             )
-        actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
+        actual = hashlib.sha256(src_file.read_bytes()).hexdigest()
         if actual != entry["sha256"]:
             raise ToolError(
                 ErrorCode.INVARIANT_VIOLATION,
@@ -465,9 +519,7 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
     home.mkdir(parents=True, exist_ok=True)
     restored: list[str] = []
-    for entry in manifest["files"]:
-        src_file = src_path / entry["path"]
-        out_file = home / entry["path"]
+    for entry, src_file, out_file in validated:
         out_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_file, out_file)
         restored.append(entry["path"])
