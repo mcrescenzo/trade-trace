@@ -11,7 +11,20 @@ import re
 from typing import Final
 
 from trade_trace.contracts.errors import ErrorCode
-from trade_trace.tools.errors import ToolError
+
+
+def _ToolError():
+    """Late-bound `ToolError` constructor to break the
+    `contracts.grammar → tools.errors → contracts.errors → contracts.__init__
+    → contracts.grammar` import cycle exposed by direct imports of
+    `trade_trace.tools.admin` (trade-trace-9oxn). Importing `tools.errors`
+    lazily inside the validator functions sidesteps the cycle without
+    moving `ToolError` (callers across the package import it from
+    `tools.errors`)."""
+
+    from trade_trace.tools.errors import ToolError as _TE
+
+    return _TE
 
 ACTOR_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^(agent|cli|import|system):[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
@@ -34,13 +47,13 @@ def validate_actor_id(value: str) -> str:
     failure with the structured details PRD §2 specifies."""
 
     if not isinstance(value, str):
-        raise ToolError(
+        raise _ToolError()(
             ErrorCode.VALIDATION_ERROR,
             "actor_id must be a string",
             details={"field": "actor_id", "expected_format": ACTOR_ID_HINT},
         )
     if not ACTOR_ID_PATTERN.match(value):
-        raise ToolError(
+        raise _ToolError()(
             ErrorCode.VALIDATION_ERROR,
             f"actor_id {value!r} does not match required grammar",
             details={
@@ -61,14 +74,14 @@ def validate_idempotency_key(value: str | None) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ToolError(
+        raise _ToolError()(
             ErrorCode.VALIDATION_ERROR,
             "idempotency_key must be a string when supplied",
             details={"field": "idempotency_key", "expected_format": IDEMPOTENCY_KEY_HINT},
         )
     trimmed = value.strip()
     if not IDEMPOTENCY_KEY_PATTERN.match(trimmed):
-        raise ToolError(
+        raise _ToolError()(
             ErrorCode.VALIDATION_ERROR,
             f"idempotency_key {value!r} does not match required grammar",
             details={
