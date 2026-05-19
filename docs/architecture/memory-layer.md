@@ -172,9 +172,9 @@ So the agent can triangulate (e.g., "BM25 surfaced this node, semantic didn't �
 
 ### 7.2 Opt-in strategy: SEMANTIC
 
-**Implementation status (M3, bead trade-trace-ubp split):** the SEMANTIC strategy and its enabling config surfaces (`tt journal config_set embeddings.provider local|openai|none`, `tt model import <path>`, `tt memory reindex --confirm`) are **deferred to bead trade-trace-a4p** (deferred until 2026-06-15). MVP ships BM25 + TEMPORAL + GRAPH only; `memory.recall` runs entirely on local SQLite (FTS5 BM25, in-memory recency, edges-table traversal) with zero network. `journal.status` reports `embeddings_provider = "none"` on every fresh init. The off-by-default contract is verified end-to-end in `tests/security/test_embeddings_off_by_default.py`.
+**Implementation status (agent-ready epic):** the SEMANTIC strategy and its enabling config surfaces (`tt journal config_set embeddings.provider local|openai|none`, `tt model import <path>`, `tt model warm`, `tt memory reindex --confirm`) now ship behind explicit opt-in. Fresh journals still default to BM25 + TEMPORAL + GRAPH only; `memory.recall` runs with zero network unless an embedding provider is configured. `journal.status` reports `embeddings_provider = "none"` on every fresh init. The off-by-default contract is verified end-to-end in `tests/security/test_no_network_default.py`.
 
-- **`SEMANTIC`** — vector similarity via `sqlite-vec`. **Off by default in MVP** (per PRD §2.4.1). The package ships with `sqlite-vec` and `sentence-transformers` as runtime dependencies, but no model weights are downloaded on `journal.init`. To enable (in a future build that lands bead a4p):
+- **`SEMANTIC`** — vector similarity via `sqlite-vec`. **Off by default in MVP** (per PRD §2.4.1). The embeddings extra ships `sqlite-vec`; no model weights are downloaded on `journal.init`. To enable:
   - `tt journal config_set embeddings.provider local` — authorizes one-time download of `BAAI/bge-small-en-v1.5` (~130MB) into `$TRADE_TRACE_HOME/models/`. Subsequent recall calls use it transparently.
   - `tt model import <path>` — air-gapped install path that uses a pre-staged model without any network call.
   - `tt journal config_set embeddings.provider openai` (or other API provider) — opt-in remote embedding; see §8.3.
@@ -228,15 +228,15 @@ Strategy context composes with `query` (full-text terms still apply within the s
 
 ## 8. Embeddings
 
-**Implementation status (M3):** §8.1 ships in MVP; §§8.2-8.5 (provider config tool, lazy download, API providers, reindex, disable) are **deferred to bead trade-trace-a4p** (deferred until 2026-06-15, split from bead ubp). MVP wheels do NOT yet bundle `sqlite-vec` / `sentence-transformers` — those install-time dependencies land with a4p. The off-by-default behavior described in §8.1 is the binding contract today: a fresh `journal.init` makes zero outbound network calls and the recall path returns valid results without vectors.
+**Implementation status (agent-ready epic):** §§8.1-8.5 now ship as opt-in embeddings support. The base wheel remains lightweight; install the embeddings extra for vector storage and keyring support. The off-by-default behavior described in §8.1 is still the binding contract: a fresh `journal.init` makes zero outbound network calls and the recall path returns valid results without vectors.
 
-### 8.1 MVP default: vectors off, deps bundled
+### 8.1 MVP default: vectors off, deps optional
 
-The base wheel includes `sqlite-vec` and `sentence-transformers` as runtime dependencies — they ship with the install (planned with bead a4p; M3 wheels are vector-dep-free pending that bead). **No model weights are downloaded on `journal.init`.** A fresh install runs fully offline; recall uses BM25 + temporal (+ graph if requested).
+The base wheel does not require vector dependencies. Install `trade-trace[embeddings]` (or `pip install -e '.[embeddings]'` from a checkout) to use `sqlite-vec` vector storage, local model import/warm, API-provider keyring storage, and `memory.reindex`. **No model weights are downloaded on `journal.init`.** A fresh install runs fully offline; recall uses BM25 + temporal (+ graph if requested).
 
 This is the load-bearing change from earlier drafts: VISION §safety promises "MVP makes no outbound network calls" and is air-gappable on first run, which a default-on lazy download breaks. Defaulting vectors off keeps that promise; opting in is one config line.
 
-Rationale for shipping deps but not weights: the deps are needed for any vector path (local or API); the weights are large and not everyone needs them. Shipping deps lets the opt-in path activate without `pip install` step two.
+Rationale for an optional extra: the vector path is useful but not required for the manual learning loop, and keeping the base install small preserves the local/offline default. The model weights are large and are never fetched without explicit operator opt-in.
 
 ### 8.2 Enabling local embeddings
 

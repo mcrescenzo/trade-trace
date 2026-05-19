@@ -26,7 +26,7 @@ addendum.
 | Journal SQLite database | `$TRADE_TRACE_HOME/trade-trace.sqlite` | Every decision, thesis, forecast, outcome, source. The primary historical record. |
 | JSONL export outbox | `$TRADE_TRACE_HOME/export/jsonl/<YYYY>/<MM>/<DD>/*.jsonl` | A redundant audit log: one file per committed event, replayable on a fresh DB (persistence.md §4). |
 | Embeddings model weights | `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/` (only after `embeddings.provider = local` or `tt model import --path ...`) | Local model artifacts verified against Trade Trace-pinned SHA-256/size lock data for an immutable HuggingFace revision. Source-provided manifests are not trusted. No agent input is sent over the network when `embeddings.provider = none` (the default). |
-| OS keyring entry (P1) | OS keyring | When a hosted embeddings provider is wired (P1), the API key lives in the OS keyring, never in tool args. |
+| OS keyring entry | OS keyring | When a hosted embeddings provider is configured, the API key lives in the OS keyring, never in tool args. |
 
 Notably *not* held: broker credentials, exchange API keys, wallet seed
 phrases, signing keys. The PRD §2.8 product boundary forbids them; the
@@ -39,7 +39,7 @@ credential ban (§5 below) verifies the field surface in code.
 | Local user (same UID) | Can read every file the journal owns. | Mitigation is file permissions (§4); a same-UID attacker can defeat them. The defense degrades gracefully — file perms are the floor, not the ceiling. |
 | Other-UID user on the same host | Can read files unless `0600` perms are enforced. | Mitigated. |
 | Package supply-chain | Malicious dependency could exfiltrate `$TRADE_TRACE_HOME` contents to a remote endpoint. | Partially mitigated: no outbound network at runtime by default (operability.md §10.1); embeddings download is opt-in. A compromised dependency could still execute code at install time — out of scope for MVP (the user reviewing `pip install` output is the gate). |
-| Model-host phishing (P1) | If a hosted embeddings provider is wired, the host can see whatever text Trade Trace sends it to embed. | Mitigated by the redaction layer (sources tagged `sensitive`/`redacted`) and the opt-in flag. |
+| Model-host phishing | If a hosted embeddings provider is configured, the host can see whatever memory text Trade Trace sends it to embed. Local model download/import sends no journal text. | Mitigated by explicit provider opt-in, warning at configuration time, OS-keyring API-key storage, default `embeddings.provider = none`, and the local-model path for users who do not want memory text sent to an API provider. |
 | Casual log leakage | Logs end up in a bug report, screen share, or chat paste. | Mitigated: log redactor (§5) strips secret-shaped substrings before write. |
 | Casual export leakage | An operator shares a JSONL file or a `review.bundle` output without sanitizing. | Mitigated: bundle redaction rules (reports.md §5.3); export-time secret-shape warnings (operability.md §7); `sensitive` sources unconditionally omitted from bundles. |
 
@@ -102,7 +102,7 @@ seed-phrase fields. The ban is verified mechanically in
   arguments (`api_key=...` on `venue.add` is dropped before the SQL
   binding).
 
-Embeddings API keys (when a hosted provider is enabled in P1) are the
+Embeddings API keys (when a hosted provider is enabled) are the
 sole documented exception. Per the operability spec, they live in the
 OS keyring; they never appear in tool args, schemas, or logs.
 

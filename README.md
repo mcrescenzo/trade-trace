@@ -44,7 +44,7 @@ For the full vision, see [`VISION.md`](./docs/VISION.md). For the working PRD, s
 
 ## Status
 
-**M0 / M1 / M2 / M3 / M4 shipped.** All four milestones cleared their
+**M0 / M1 / M2 / M3 / M4 + agent-ready shipped.** All MVP milestones cleared their
 implementation, test-QC, docs-QC, and gate beads. Package skeleton +
 storage + full manual write surface, event log + outbox + idempotency,
 deterministic reports + integrity / source-quality diagnostics +
@@ -54,19 +54,22 @@ strategies, playbook versioning + normalized adherence + override-outcome
 tracking, deterministic reflection-prompt packet, secret-pattern write
 guard + file-permission + no-telemetry audit, journal backup/restore
 with SHA-256 manifest, deterministic-replay clock injection + fixture
-seed. The P1+ work that remains (embeddings opt-in, review.bundle / import
-implementations, web/sync features) is explicitly scoped out of MVP and
-tracked under beads `trade-trace-a4p` and the P1 design docs.
+seed. The agent-ready epic adds stdio MCP, `tool.schema` discovery,
+auto-derived registry schemas, optional embeddings substrate/configuration
+(`sqlite-vec` extra, local model import, `api:openai` keyring flow,
+`memory.reindex`), and client setup docs. The P1+ work that remains
+(web/sync features, additional connectors, and broader analytics) is
+tracked in the P1 design docs.
 
 What works today:
 
 - `pip install -e .` then `tt journal init` creates `$TRADE_TRACE_HOME/trade-trace.sqlite` with WAL, 5s busy_timeout, 0600 permissions, and the current schema head.
-- The full manual ledger write surface: `venue.add`, `instrument.add`, `snapshot.add`, `thesis.add`, `forecast.add` (binary invariants enforced as `INVARIANT_VIOLATION`), `forecast.supersede`, `decision.add` (13-type required-field matrix enforced), `outcome.add` / `resolve.record` alias, `resolve.pending`, `source.add`, `source.attach_to_{thesis,decision,forecast}`. `source.attach_to_memory_node` returns `UNSUPPORTED_CAPABILITY` until M3.
+- The full manual ledger write surface: `venue.add`, `instrument.add`, `snapshot.add`, `thesis.add`, `forecast.add` (binary invariants enforced as `INVARIANT_VIOLATION`), `forecast.supersede`, `decision.add` (13-type required-field matrix enforced), `outcome.add` / `resolve.record` alias, `resolve.pending`, `source.add`, `source.attach_to_{thesis,decision,forecast,memory_node}`.
 - Decision → outcome → auto-scoring loop: an `outcome.add` with `status="resolved_final"` automatically scores every pending binary forecast against the resolved label using the single-probability Brier form per [`docs/architecture/scoring.md`](./docs/architecture/scoring.md) §3.
 - Idempotent retries: every retryable write requires `idempotency_key` (per PRD §2); pure replays return the original event row with `meta.idempotent_replay=true`; semantically-different payloads return `IDEMPOTENCY_CONFLICT` with a structural diff (no raw bodies leaked).
 - Append-only invariants enforced at the SQLite layer via BEFORE UPDATE/DELETE triggers on every M1 source/event table; the projection (`positions`) and the outbox state column are the only exceptions.
-- `import.validate` and `import.commit` registered as contract stubs (P1 implementation pending); their schemas + the `import_ready_writers` list are introspectable today.
-- `review.bundle` registered as a contract stub (P1 implementation pending); the input/output Pydantic schemas including `bundle_hash` are introspectable today.
+- `import.validate`, `import.commit`, and `import.csv_fills` are registered; JSONL validation/commit and CSV fill ingestion use the same envelope/error semantics as the rest of the registry.
+- `review.bundle` returns deterministic, redacted reviewer packets for bounded case sets.
 - CLI emits NDJSON for list tools (`tt resolve pending`) with one envelope per record plus a summary line per [`docs/architecture/contracts.md`](./docs/architecture/contracts.md) §1.2; exit code mapping: `VALIDATION_ERROR`→2, `INVARIANT_VIOLATION`→3, other errors→1.
 - A registration-time + startup CLI-name-collision check ensures two MCP tool names can never map to the same `tt` invocation; the runtime check emits a `STORAGE_ERROR` envelope rather than a Python traceback.
 - UTC timestamps validated at the boundary: naive timestamps rejected, non-UTC offsets converted, sub-millisecond digits truncated.
@@ -97,25 +100,26 @@ pip install -e .
 tt journal init
 ```
 
-The published package (`pip install trade-trace`) ships once the MVP M1–M4
-write surface lands. Requirements today: Python 3.11+, SQLite with FTS5
-(see `docs/architecture/persistence.md` §2.1 for the build-dependency
-policy).
+Requirements: Python 3.11+ and SQLite with FTS5 (see
+`docs/architecture/persistence.md` §2.1 for the build-dependency policy).
+The development install is `pip install -e .`; the package install is
+`pip install trade-trace` once published.
 
-The MVP base wheel is **single-dep**: only `pydantic>=2.7` (see
-`pyproject.toml`). Vector recall and the semantic strategy are deferred
-to P1+ per bead trade-trace-a4p; the `sqlite-vec` and
-`sentence-transformers` runtime deps will land as an opt-in extra
-(`pip install trade-trace[embeddings]`) when that bead ships. Earlier
-docs that promised "the base wheel will ship sqlite-vec and
-sentence-transformers" are now obsolete — see bead trade-trace-tka.
+The base wheel remains lightweight: only `pydantic>=2.7` is required at
+runtime (see `pyproject.toml`). Optional MCP support installs with
+`trade-trace[mcp]`; optional embedding support installs with
+`trade-trace[embeddings]` (or `pip install -e '.[mcp,embeddings]'` from a
+checkout). The embeddings extra provides `sqlite-vec` and OS keyring
+support for vector recall, local model import/warm, API-provider keys,
+and `memory.reindex`.
 
 **Vectors are off by default in MVP**: a fresh `journal.init` makes zero
 outbound network calls (verified by
 `tests/security/test_no_network_default.py`). MVP recall runs with FTS5
 + graph + temporal retrieval. The semantic strategy plus
-`tt journal config_set embeddings.provider local` and `tt model import <path>`
-ship behind bead trade-trace-a4p. See
+`tt journal config_set embeddings.provider local`, `tt model import <path>`,
+`tt journal config_set embeddings.provider api:openai`, and
+`tt memory reindex --confirm` ship as explicit opt-in surfaces. See
 [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md)
 §8.
 
@@ -204,15 +208,42 @@ tt journal config_set                # MVP-hardening: persisted config keys
 tt journal fixture_seed --target=mvp-eval  # Deterministic eval-harness dataset
 ```
 
-Still planned (P1+):
+Optional / limited surfaces:
 
 ```bash
-tt review bundle ...                 # P1 (contract is M1-locked; impl in P1)
-tt import validate / import commit   # P1 (contract is M1-locked; impl in P1)
-tt journal config_set embeddings.provider local  # P1: sqlite-vec + bge-small (bead trade-trace-a4p)
-tt model import / model warm         # P1: air-gap embedding model staging (bead a4p)
-tt memory reindex --confirm          # P1: re-embed on provider change (bead a4p)
+tt import validate / import commit   # JSONL validation/replay through core dispatch
+tt import csv_fills                  # local CSV fill ingestion
+tt review bundle ...                 # deterministic, redacted reviewer bundle
+tt journal config_set embeddings.provider local     # opt-in local semantic recall
+tt journal config_set embeddings.provider api:openai # opt-in API embeddings; key in OS keyring
+tt model import                      # air-gapped local model staging
+tt memory reindex --confirm          # re-embed after provider/model changes
+tt model warm                        # registered but currently returns UNSUPPORTED_CAPABILITY
 ```
+
+The complete shipped registry is discoverable with `tt tool schema` and is the
+source of truth for exact arguments. Current registered tools are:
+`decision.add`, `decision.record_adherence`, `forecast.add`,
+`forecast.supersede`, `import.commit`, `import.csv_fills`, `import.validate`,
+`instrument.add`, `journal.backup`, `journal.config_set`,
+`journal.fixture_seed`, `journal.init`, `journal.rebuild_projections`,
+`journal.repair`, `journal.rescan_scoring`, `journal.restore`,
+`journal.schema`, `journal.status`, `memory.link`, `memory.recall`,
+`memory.reflect`, `memory.reindex`, `memory.retain`, `model.import`,
+`model.warm`, `outcome.add`, `playbook.adherence`, `playbook.create`,
+`playbook.list`, `playbook.list_versions`, `playbook.propose_version`,
+`playbook.show`, `reflection.prompt_for_outcome`, `report.calibration`,
+`report.calibration_integrity`, `report.coach`, `report.compare`,
+`report.decision_velocity`, `report.filter_schema`, `report.mistakes`,
+`report.opportunity`, `report.playbook_adherence`, `report.pnl`,
+`report.risk`, `report.source_quality`, `report.strategy_performance`,
+`report.strengths`, `report.unscored_forecasts`, `report.watchlist`,
+`resolve.pending`, `resolve.record`, `review.bundle`, `signal.scan`,
+`snapshot.add`, `source.add`, `source.attach_to_decision`,
+`source.attach_to_forecast`, `source.attach_to_memory_node`,
+`source.attach_to_thesis`, `strategy.create`, `strategy.list`,
+`strategy.show`, `strategy.update`, `thesis.add`, `tool.schema`, and
+`venue.add`.
 
 ## License
 

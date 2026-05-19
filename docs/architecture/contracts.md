@@ -10,7 +10,8 @@ and `meta.dry_run` (bead 268), both backward-compatible.
 
 Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
-[memory-layer.md](memory-layer.md).
+[memory-layer.md](memory-layer.md), and the agent-facing
+[AGENT_GUIDE.md](../AGENT_GUIDE.md).
 
 ## 1. Purpose
 
@@ -29,8 +30,9 @@ predictable shapes for retries, parsing, and error recovery.
 
 ## 2. Parity Goals
 
-- **Schema-equal**: every tool's `data` payload is described by a single
-  Pydantic model used by both transports.
+- **Schema-equal**: every tool's input schema is exposed from the single
+  registry used by both transports. Registered examples are auto-derived
+  into JSON Schema when a tool does not supply an explicit schema.
 - **Error-equal**: every error returns the same `code`, the same
   `message` text (modulo locale; we ship one locale in MVP), and the
   same `details` keys.
