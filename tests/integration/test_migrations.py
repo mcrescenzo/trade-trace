@@ -174,3 +174,44 @@ def test_partial_migration_rolls_back(tmp_path: Path, monkeypatch):
         assert cur.fetchone() is None
     finally:
         db.close()
+
+
+def test_strategy_id_new_row_triggers_grandfather_preexisting_rows(tmp_path: Path):
+    """Migration 010 validates only new inserts: orphan strategy_id rows
+    that already existed after migration 009 are not retroactively rejected.
+    """
+
+    db = _open(tmp_path)
+    try:
+        apply_pending_migrations(db.connection, target_version=9)
+        db.connection.executescript(
+            """
+            INSERT INTO venues(id, name, kind, created_at, actor_id)
+                VALUES ('v_1', 'manual', 'manual', '2026-05-18T14:00:00Z', 'agent:default');
+            INSERT INTO instruments(id, venue_id, title, asset_class, created_at, actor_id)
+                VALUES ('i_1', 'v_1', 'Test', 'prediction_market', '2026-05-18T14:00:00Z', 'agent:default');
+            INSERT INTO decisions(id, instrument_id, type, strategy_id, created_at, actor_id)
+                VALUES ('d_old', 'i_1', 'skip', 'missing_strategy', '2026-05-18T14:00:00Z', 'agent:default');
+            INSERT INTO theses(id, instrument_id, side, body, strategy_id, created_at, actor_id)
+                VALUES ('t_old', 'i_1', 'yes', '...', 'missing_strategy', '2026-05-18T14:00:00Z', 'agent:default');
+            """
+        )
+
+        before, after = apply_pending_migrations(db.connection)
+        assert (before, after) == (9, len(MIGRATIONS))
+        assert db.connection.execute(
+            "SELECT strategy_id FROM decisions WHERE id = 'd_old'"
+        ).fetchone()[0] == "missing_strategy"
+        assert db.connection.execute(
+            "SELECT strategy_id FROM theses WHERE id = 't_old'"
+        ).fetchone()[0] == "missing_strategy"
+
+        with pytest.raises(sqlite3.IntegrityError) as exc:
+            db.connection.execute(
+                "INSERT INTO decisions(id, instrument_id, type, strategy_id, created_at, actor_id) "
+                "VALUES ('d_new', 'i_1', 'skip', 'missing_strategy', '2026-05-18T14:00:00Z', 'agent:default')"
+            )
+        assert "VALIDATION_ERROR" in str(exc.value)
+        assert "decisions.strategy_id" in str(exc.value)
+    finally:
+        db.close()
