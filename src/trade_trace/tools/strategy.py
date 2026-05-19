@@ -315,7 +315,51 @@ def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     details={"entity_kind": "strategy",
                              "strategy_id": strategy_id},
                 )
+
+            update_values = dict(updates)
             updated_at = now_iso()
+            candidate_result: dict[str, Any] = {
+                "id": strategy_id,
+                "name": row[0],
+                "slug": row[1],
+                "description": update_values.get("description", row[2]),
+                "hypothesis": update_values.get("hypothesis", row[3]),
+                "status": update_values.get("status", row[4]),
+                "created_at": row[5],
+                "updated_at": updated_at,
+            }
+            payload = {
+                **candidate_result,
+                "strategy_id": strategy_id,  # alias matching semantic_keys
+            }
+
+            replay = check_idempotency_replay(
+                uow, event_type="strategy.updated",
+                actor_id=ctx.actor_id, idempotency_key=idempotency_key,
+            )
+            if replay is not None:
+                emit_event(
+                    uow, event_type="strategy.updated",
+                    subject_kind="strategy", subject_id=strategy_id,
+                    payload=payload, actor_id=ctx.actor_id,
+                    idempotency_key=idempotency_key, ctx=ctx,
+                )
+                return {
+                    "id": replay["id"], "name": replay["name"],
+                    "slug": replay["slug"],
+                    "description": replay.get("description"),
+                    "hypothesis": replay.get("hypothesis"),
+                    "status": replay["status"],
+                    "created_at": replay["created_at"],
+                    "updated_at": replay["updated_at"],
+                }
+
+            emit_event(
+                uow, event_type="strategy.updated",
+                subject_kind="strategy", subject_id=strategy_id,
+                payload=payload, actor_id=ctx.actor_id,
+                idempotency_key=idempotency_key, ctx=ctx,
+            )
             set_clause = ", ".join(f"{col} = ?" for col, _ in updates)
             params: list[Any] = [val for _, val in updates]
             params.append(updated_at)
@@ -325,24 +369,12 @@ def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 "WHERE id = ?",
                 tuple(params),
             )
-            payload: dict[str, Any] = {
-                "id": strategy_id,
-                "strategy_id": strategy_id,   # alias matching semantic_keys
-                "status": dict(updates).get("status", row[4]),
-            }
-            for col, val in updates:
-                payload[col] = val
-            emit_event(
-                uow, event_type="strategy.updated",
-                subject_kind="strategy", subject_id=strategy_id,
-                payload=payload, actor_id=ctx.actor_id,
-                idempotency_key=idempotency_key, ctx=ctx,
+            updated_row = (
+                candidate_result["id"], candidate_result["name"],
+                candidate_result["slug"], candidate_result["description"],
+                candidate_result["hypothesis"], candidate_result["status"],
+                candidate_result["created_at"], candidate_result["updated_at"],
             )
-            updated_row = uow.conn.execute(
-                "SELECT id, name, slug, description, hypothesis, status, "
-                "created_at, updated_at FROM strategies WHERE id = ?",
-                (strategy_id,),
-            ).fetchone()
     finally:
         db.close()
     return {

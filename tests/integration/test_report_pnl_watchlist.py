@@ -77,9 +77,10 @@ def test_pnl_rolls_up_positions(home):
     env = _envelope(home, "report.pnl", {})
     summary = env["data"]["summary"]["metrics"]
     assert summary["closed_position_count"] == 1
-    # signed-qty convention: realized = (close - open) * qty_delta - fees
-    # = (0.60 - 0.40) * -100 - 0.5 = -20.5
-    assert summary["realized_pnl"] == pytest.approx(-20.5, rel=1e-3)
+    # signed-qty convention: positive cumulative qty is long exposure and
+    # close fills have the opposite sign. A profitable long close is positive:
+    # realized = (0.60 - 0.40) * abs(-100) - 0.5 = 19.5
+    assert summary["realized_pnl"] == pytest.approx(19.5, rel=1e-3)
 
 
 # -- report.watchlist ---------------------------------------------

@@ -13,11 +13,13 @@ Covers:
 from __future__ import annotations
 
 from pathlib import Path
+import sqlite3
 
 import pytest
 
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
+from trade_trace.storage.paths import db_path
 
 
 @pytest.fixture
@@ -151,6 +153,88 @@ def test_strategy_update_partial_fields(home):
     assert env.ok
     assert env.data["description"] == "new"
     assert env.data["slug"] == "update-target"
+
+
+def test_strategy_update_replays_original_result_after_intervening_update(home):
+    sid = _mcp(home, "strategy.create", {
+        "name": "Replay target", "slug": "replay-target",
+        "description": "old",
+        "idempotency_key": "00000000-0000-4000-8000-strat-rup-01",
+    }).data["id"]
+    first = _mcp(home, "strategy.update", {
+        "strategy_id": sid, "description": "first-change",
+        "idempotency_key": "00000000-0000-4000-8000-strat-rup-02",
+    })
+    assert first.ok, first
+
+    intervening = _mcp(home, "strategy.update", {
+        "strategy_id": sid, "description": "intervening-change",
+        "idempotency_key": "00000000-0000-4000-8000-strat-rup-03",
+    })
+    assert intervening.ok, intervening
+    assert intervening.data["description"] == "intervening-change"
+
+    replay = _mcp(home, "strategy.update", {
+        "strategy_id": sid, "description": "first-change",
+        "idempotency_key": "00000000-0000-4000-8000-strat-rup-02",
+    })
+
+    assert replay.ok, replay
+    assert replay.data == first.data
+    assert replay.meta.event_id == first.meta.event_id
+    assert replay.meta.idempotent_replay is True
+
+    db = sqlite3.connect(db_path(home))
+    try:
+        assert db.execute(
+            "SELECT description, updated_at FROM strategies WHERE id = ?",
+            (sid,),
+        ).fetchone() == (
+            intervening.data["description"], intervening.data["updated_at"]
+        )
+        assert db.execute(
+            "SELECT COUNT(*) FROM events WHERE event_type = 'strategy.updated'"
+        ).fetchone()[0] == 2
+    finally:
+        db.close()
+
+
+def test_strategy_update_idempotency_key_conflict_does_not_mutate(home):
+    sid = _mcp(home, "strategy.create", {
+        "name": "Conflict target", "slug": "conflict-target",
+        "description": "old",
+        "idempotency_key": "00000000-0000-4000-8000-strat-cnf-01",
+    }).data["id"]
+    first = _mcp(home, "strategy.update", {
+        "strategy_id": sid, "description": "first-change",
+        "idempotency_key": "00000000-0000-4000-8000-strat-cnf-02",
+    })
+    assert first.ok, first
+
+    conflict = _mcp(home, "strategy.update", {
+        "strategy_id": sid, "status": "archived",
+        "idempotency_key": "00000000-0000-4000-8000-strat-cnf-02",
+    })
+
+    assert conflict.ok is False
+    assert conflict.error.code.value == "IDEMPOTENCY_CONFLICT"
+    assert isinstance(conflict.error.details.get("original_event_id"), int)
+    assert conflict.error.details["diff_summary"]
+
+    db = sqlite3.connect(db_path(home))
+    try:
+        assert db.execute(
+            "SELECT description, status, updated_at FROM strategies WHERE id = ?",
+            (sid,),
+        ).fetchone() == (
+            first.data["description"], first.data["status"],
+            first.data["updated_at"],
+        )
+        assert db.execute(
+            "SELECT COUNT(*) FROM events WHERE event_type = 'strategy.updated'"
+        ).fetchone()[0] == 1
+    finally:
+        db.close()
 
 
 def test_strategy_update_rejects_name_or_slug_change(home):

@@ -38,7 +38,15 @@ def home(tmp_path):
     return h
 
 
-def _seed_minimal_position(home: Path) -> tuple[str, str]:
+def _seed_minimal_position(
+    home: Path,
+    *,
+    open_qty: float = 100,
+    open_price: float = 0.42,
+    close_qty: float = -100,
+    close_price: float = 0.62,
+    close_fees: float = 0.5,
+) -> tuple[str, str]:
     """Insert a venue + instrument and two position_events forming one
     open→close cycle. Returns `(position_id, instrument_id)`."""
 
@@ -59,15 +67,17 @@ def _seed_minimal_position(home: Path) -> tuple[str, str]:
             db.connection.execute(
                 "INSERT INTO position_events(id, position_id, instrument_id, "
                 "event_type, quantity_delta, price, fees, slippage, created_at, "
-                "actor_id) VALUES (?, ?, ?, 'open', 100, 0.42, 0.5, 0, ?, ?)",
+                "actor_id) VALUES (?, ?, ?, 'open', ?, ?, 0.5, 0, ?, ?)",
                 (new_id("pev"), position_id, instrument_id,
+                 open_qty, open_price,
                  "2026-05-18T14:00:00Z", "agent:default"),
             )
             db.connection.execute(
                 "INSERT INTO position_events(id, position_id, instrument_id, "
                 "event_type, quantity_delta, price, fees, slippage, created_at, "
-                "actor_id) VALUES (?, ?, ?, 'close', -100, 0.62, 0.5, 0, ?, ?)",
+                "actor_id) VALUES (?, ?, ?, 'close', ?, ?, ?, 0, ?, ?)",
                 (new_id("pev"), position_id, instrument_id,
+                 close_qty, close_price, close_fees,
                  "2026-05-18T16:00:00Z", "agent:default"),
             )
     finally:
@@ -124,10 +134,98 @@ def test_rebuild_idempotent_after_seeded_position(home):
     # Specifically the position closed (status=closed) since open + close netted to zero.
     position_row = snap_first[0]
     assert position_row[4] == "closed"  # status
-    # avg_entry_price was 0.42; close at 0.62 → realized = (0.62 - 0.42) * -100 - fees
-    # PRD signed-quantity: a short close has negative qty_delta; result is negative
-    # for a short. Pin the value:
-    assert position_row[8] == pytest.approx(-100 * (0.62 - 0.42) - 0.5, rel=1e-6)
+    # Signed-quantity convention: positive cumulative qty is long exposure;
+    # closing fills have the opposite sign. A profitable long close is positive.
+    assert position_row[8] == pytest.approx(100 * (0.62 - 0.42) - 0.5, rel=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("open_qty", "open_price", "close_qty", "close_price", "expected_pnl"),
+    [
+        (100, 0.40, -100, 0.50, 10.0),   # profitable long close
+        (100, 0.50, -100, 0.40, -10.0),  # losing long close
+        (-100, 0.50, 100, 0.40, 10.0),   # profitable short close
+        (-100, 0.40, 100, 0.50, -10.0),  # losing short close
+    ],
+)
+def test_rebuild_realized_pnl_signed_quantity_convention(
+    home, open_qty, open_price, close_qty, close_price, expected_pnl
+):
+    """Positive cumulative qty is long; negative cumulative qty is short.
+    Realized P&L is positive for profitable closes and negative for losing
+    closes, independent of the closing fill's signed quantity."""
+
+    _seed_minimal_position(
+        home,
+        open_qty=open_qty,
+        open_price=open_price,
+        close_qty=close_qty,
+        close_price=close_price,
+        close_fees=0.0,
+    )
+    _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+
+    position_row = _positions_snapshot(home)[0]
+    assert position_row[4] == "closed"
+    assert position_row[8] == pytest.approx(expected_pnl, rel=1e-6)
+
+
+def test_rebuild_rejects_over_close_reversal_fill(home):
+    """A close/reduce fill may not cross through zero exposure.
+
+    Reversals must be represented as an explicit close-to-zero followed by a
+    separate open/add event for the new side; otherwise realized P&L would be
+    computed on more units than existed in the pre-fill exposure.
+    """
+
+    _seed_minimal_position(
+        home,
+        open_qty=100,
+        open_price=0.40,
+        close_qty=-150,
+        close_price=0.60,
+        close_fees=0.0,
+    )
+
+    env = _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+
+    assert env["ok"] is False
+    assert env["error"]["code"] == "INVARIANT_VIOLATION"
+    assert "exceeds current exposure" in env["error"]["message"]
+    assert env["error"]["details"]["current_quantity"] == 100
+    assert env["error"]["details"]["quantity_delta"] == -150
+    # The rebuild transaction rolled back; no partial/stale projection row was written.
+    assert _positions_snapshot(home) == []
+
+
+@pytest.mark.parametrize(
+    ("open_qty", "close_qty"),
+    [
+        (100, 50),    # long exposure cannot be reduced by a positive close delta
+        (-100, -50),  # short exposure cannot be reduced by a negative close delta
+    ],
+)
+def test_rebuild_rejects_same_sign_exit_quantity_delta(home, open_qty, close_qty):
+    """Exit events must move current exposure toward zero, not add to it."""
+
+    _seed_minimal_position(
+        home,
+        open_qty=open_qty,
+        open_price=0.40,
+        close_qty=close_qty,
+        close_price=0.60,
+        close_fees=0.0,
+    )
+
+    env = _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+
+    assert env["ok"] is False
+    assert env["error"]["code"] == "INVARIANT_VIOLATION"
+    assert "does not reduce current exposure" in env["error"]["message"]
+    assert env["error"]["details"]["current_quantity"] == open_qty
+    assert env["error"]["details"]["quantity_delta"] == close_qty
+    # The rebuild transaction rolled back; no partial/stale projection row was written.
+    assert _positions_snapshot(home) == []
 
 
 # -- live-vs-rebuilt parity (positions) -----------------------------------

@@ -17,6 +17,9 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
+from trade_trace.contracts.errors import ErrorCode
+from trade_trace.tools.errors import ToolError
+
 
 @dataclass
 class RebuildResult:
@@ -51,9 +54,12 @@ def rebuild_positions(conn: sqlite3.Connection) -> RebuildResult:
          (or `long` as the safe default for direct event writes that
          omit a decision).
        - cumulative `quantity_delta` to derive open vs closed status and
-         the volume-weighted entry price for `avg_entry_price`.
-       - `realized_pnl`: sum of reducing/closing fills' (price -
-         avg_entry_price) * quantity_delta, signed by side.
+         the volume-weighted entry price for `avg_entry_price`. Signed
+         quantity convention: positive cumulative quantity is long exposure,
+         negative cumulative quantity is short exposure. Entries add exposure
+         in the position direction; closing fills have the opposite sign.
+       - `realized_pnl`: sum of reducing/closing fills, positive for
+         profitable closes and negative for losing closes after fees/slippage.
        - `opened_at` = timestamp of the first event.
        - `closed_at` = timestamp of the event that drove cumulative
          quantity to exactly zero. Re-opens (a fresh `open` after a
@@ -218,12 +224,55 @@ def _accumulate_position(
             abs_entry_qty += abs(qty_delta)
             if abs_entry_qty > 0:
                 avg_entry_price = weighted_entry_price_qty / abs_entry_qty
-        elif is_exit and price is not None and avg_entry_price is not None:
-            # Direction-agnostic realized PnL on closing fills: |qty| *
-            # (price - avg_entry_price) signed by the original side. For
-            # this MVP rebuild we assume `qty_delta` already encodes the
-            # signed direction (PRD signed-quantity convention).
-            realized_pnl += (price - avg_entry_price) * qty_delta
+        elif is_exit:
+            # Signed quantity convention: an exit/reducing fill must move
+            # cumulative exposure toward zero without crossing it. Reversals
+            # (e.g. +100 then close -150) require explicit split events;
+            # otherwise realized P&L would be overstated and avg_entry_price
+            # would remain tied to the stale pre-reversal side.
+            exit_qty = abs(qty_delta)
+            if not _approx_zero(qty_delta):
+                if (
+                    (qty > 0 and qty_delta > 0)
+                    or (qty < 0 and qty_delta < 0)
+                    or _approx_zero(qty)
+                ):
+                    raise ToolError(
+                        ErrorCode.INVARIANT_VIOLATION,
+                        "position exit quantity_delta does not reduce current exposure",
+                        details={
+                            "position_id": position_id,
+                            "event_id": row[11],
+                            "event_type": event_type,
+                            "current_quantity": qty,
+                            "quantity_delta": qty_delta,
+                        },
+                    )
+                if exit_qty > abs(qty) + 1e-9:
+                    raise ToolError(
+                        ErrorCode.INVARIANT_VIOLATION,
+                        "position exit quantity exceeds current exposure; split reversal fills into close plus open/add events",
+                        details={
+                            "position_id": position_id,
+                            "event_id": row[11],
+                            "event_type": event_type,
+                            "current_quantity": qty,
+                            "quantity_delta": qty_delta,
+                        },
+                    )
+
+        if is_exit and price is not None and avg_entry_price is not None:
+            # Signed quantity convention: positive cumulative `qty` is long
+            # exposure, negative cumulative `qty` is short exposure. Exit
+            # events carry the opposite sign from the exposure they reduce,
+            # so realized P&L must be signed from the pre-fill position side
+            # rather than from `qty_delta` directly:
+            #   long close  (+qty, -delta): (exit - entry) * |delta|
+            #   short close (-qty, +delta): (entry - exit) * |delta|
+            if qty > 0:
+                realized_pnl += (price - avg_entry_price) * exit_qty
+            elif qty < 0:
+                realized_pnl += (avg_entry_price - price) * exit_qty
             realized_pnl -= fees + slippage
 
         qty += qty_delta
