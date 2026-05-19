@@ -126,6 +126,90 @@ class Database:
             raise
 
 
+class ReadOnlyDatabaseError(RuntimeError):
+    """Raised by `open_database_readonly` when the requested DB
+    cannot be opened cleanly (trade-trace-1kkv.3). Carries a
+    machine-readable `reason` so the Console can render a
+    friendly empty-state instead of crashing."""
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+_MIN_REQUIRED_TABLES = ("events", "config")
+
+
+def open_database_readonly(path: Path) -> Database:
+    """Open `path` in OS-enforced read-only mode for the Console
+    data-access layer (trade-trace-1kkv.3). Uses
+    `sqlite3.connect("file:<path>?mode=ro", uri=True)` so attempted
+    writes raise `sqlite3.OperationalError` at the SQLite layer —
+    not via call-site discipline.
+
+    Never runs migrations. A DB that does not carry the M0 schema
+    (`events` + `config` tables) is reported as
+    `ReadOnlyDatabaseError(reason='unsupported_schema')` instead of
+    being silently upgraded.
+
+    Reasons surfaced via `ReadOnlyDatabaseError.reason`:
+
+    - `missing`: file does not exist at `path`.
+    - `unsupported_schema`: file exists but does not carry the
+      M0 baseline tables.
+    """
+
+    path = Path(path)
+    if not path.exists():
+        raise ReadOnlyDatabaseError(
+            f"journal database not found at {path}",
+            reason="missing",
+        )
+
+    # `mode=ro` plus the URI flag is the SQLite-enforced read-only
+    # contract — the OS file descriptor opens read-only and the
+    # SQLite layer rejects writes with "attempt to write a readonly
+    # database". `check_same_thread=False` matches the writable
+    # `open_database` helper so a FastAPI worker pool can share a
+    # handle without re-opening per request.
+    uri = f"file:{path}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True, isolation_level=None, check_same_thread=False)
+
+    # Belt-and-suspenders: pin `query_only` so any tool inspecting
+    # pragmas (Console pool-factory tests; oncall greps) can verify
+    # the intent without parsing the URI flags. URI ro mode is the
+    # actual guard.
+    conn.execute("PRAGMA query_only = 1")
+
+    # Verify the baseline schema. Missing required tables means the
+    # caller pointed at a wrong file or a pre-M0 database; either
+    # way the Console must render an empty state, not migrate.
+    try:
+        present = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type = 'table' AND name IN (?, ?)",
+                _MIN_REQUIRED_TABLES,
+            )
+        }
+    except sqlite3.DatabaseError as exc:
+        conn.close()
+        raise ReadOnlyDatabaseError(
+            f"journal database at {path} is not a SQLite file: {exc}",
+            reason="unsupported_schema",
+        ) from exc
+    missing = set(_MIN_REQUIRED_TABLES) - present
+    if missing:
+        conn.close()
+        raise ReadOnlyDatabaseError(
+            f"journal database at {path} is missing required tables: "
+            f"{sorted(missing)}",
+            reason="unsupported_schema",
+        )
+    return Database(path=path, connection=conn)
+
+
 def open_database(path: Path, *, create_parent: bool = True) -> Database:
     """Open (or create) a SQLite database at `path` with the project's
     defaults: WAL mode, busy_timeout=5s, foreign_keys=ON, user-only
