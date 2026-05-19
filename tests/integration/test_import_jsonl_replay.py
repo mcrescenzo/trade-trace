@@ -271,3 +271,44 @@ def test_import_validate_reports_cascaded_skipped(tmp_path: Path):
     data = env["data"]
     assert data["cascaded_skipped"] == 1
     assert data["validated"] == 1  # the venue
+
+
+# -- bucket-D diagnostic event skip (trade-trace-apgt) ----------------
+
+
+def test_import_skips_bucket_d_diagnostic_events_with_separate_counter(tmp_path: Path):
+    """Per trade-trace-apgt: bucket-D diagnostic events
+    (`signal.emitted`, `memory_node.invalidated`) skip with a
+    `diagnostic_skipped` counter — distinct from `cascaded_skipped` so
+    operators can distinguish 'cascaded parent regenerates this' from
+    'regenerate on demand via signal.scan / re-run invalidation'."""
+
+    home = tmp_path / "home"
+    _init(home)
+
+    jsonl = tmp_path / "diagnostic.jsonl"
+    _write_jsonl(jsonl, [
+        _venue_line(),
+        {
+            "tool": "signal.emitted",
+            "args": {"id": "sig_ignored", "kind": "sample_size_warning"},
+            "idempotency_key": "signal-emitted-1",
+        },
+        {
+            "tool": "memory_node.invalidated",
+            "args": {"id": "mem_ignored", "reason": "stale"},
+            "idempotency_key": "node-invalidated-1",
+        },
+    ])
+
+    env = _call("import.commit", {
+        "home": str(home), "path": str(jsonl),
+        "transaction_mode": "single",
+        "idempotency_key": "apgt-commit",
+    })
+    assert env["ok"] is True, env
+    data = env["data"]
+    assert data["diagnostic_skipped"] == 2, data
+    assert data["cascaded_skipped"] == 0, data
+    assert data["committed_count"] == 1
+    assert _count(home, "signals") == 0

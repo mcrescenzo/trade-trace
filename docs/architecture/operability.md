@@ -440,6 +440,34 @@ The exporter writes lock-free per-file. On `ENOSPC`:
   to a future export-tool bead) invocations resume from the failed row once
   disk pressure clears.
 
+### 9.6 Restore reproduces journal state, not transient diagnostics (trade-trace-apgt)
+
+A JSONL export of an exporter's run contains both:
+
+- **Replayable lines** (`venue.created`, `instrument.created`,
+  `decision.created`, …) that the importer re-issues through
+  `dispatch()`. Idempotency-keyed replay produces byte-identical
+  rows in a fresh journal.
+- **Cascaded lines** (`edge.created`, `forecast.scored`,
+  `playbook_rule.followed`, …) that the importer skips with a
+  `cascaded_skipped` counter; the parent tool's replay regenerates
+  them.
+- **Diagnostic lines** (`signal.emitted`, `memory_node.invalidated`)
+  that the importer skips with a `diagnostic_skipped` counter.
+
+The diagnostic-skip policy means a restored journal will NOT
+preserve the original `signals` rows or `memory_node.invalidated`
+records. Regenerate them on demand:
+
+- `tt signal scan` (or the `report.coach` pass that triggers it)
+  re-emits the signal set the operator cares about.
+- `memory_node.invalidated` is event-only today; replay restores the
+  underlying `memory_nodes` row but the "this was invalidated at T"
+  annotation has to be re-applied if needed.
+
+See `docs/architecture/jsonl-replay-taxonomy.md` for the per-event
+classification.
+
 ## 10. Crash Recovery
 
 ### 10.1 WAL recovery
