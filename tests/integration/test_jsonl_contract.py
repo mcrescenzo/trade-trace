@@ -33,21 +33,20 @@ def test_import_commit_registered():
     assert "import.commit" in default_registry().names()
 
 
-def test_import_validate_returns_unsupported_capability():
+def test_import_validate_reports_missing_path():
     env = mcp_call("import.validate", {"path": "/tmp/x.jsonl"}).model_dump(
         mode="json", exclude_none=True
     )
     assert env["ok"] is False
-    assert env["error"]["code"] == "UNSUPPORTED_CAPABILITY"
-    assert env["error"]["details"]["reason"] == "implementation_deferred_p1"
+    assert env["error"]["code"] == "NOT_FOUND"
 
 
-def test_import_commit_returns_unsupported_capability():
+def test_import_commit_reports_missing_path():
     env = mcp_call("import.commit", {"path": "/tmp/x.jsonl"}).model_dump(
         mode="json", exclude_none=True
     )
     assert env["ok"] is False
-    assert env["error"]["code"] == "UNSUPPORTED_CAPABILITY"
+    assert env["error"]["code"] == "NOT_FOUND"
 
 
 def test_jsonl_line_schema_documents_shape():
@@ -68,15 +67,10 @@ def test_import_commit_output_schema():
         assert field in schema["properties"]
 
 
-def test_import_validate_lists_import_ready_writers():
-    """The error envelope lists every write tool the importer can replay
-    without bespoke glue, so the agent can verify the surface is complete
-    even before P1 ships."""
+def test_import_ready_writers_registered():
+    """The importer replays write tools through the shared core registry."""
 
-    env = mcp_call("import.validate", {"path": "/tmp/x.jsonl"}).model_dump(
-        mode="json", exclude_none=True
-    )
-    writers = set(env["error"]["details"]["import_ready_writers"])
+    writers = set(default_registry().names())
     expected = {
         "venue.add", "instrument.add", "snapshot.add",
         "thesis.add", "forecast.add", "forecast.supersede",
@@ -136,4 +130,4 @@ def test_cli_import_commit_parity():
         ])
     cli = json.loads(buf.getvalue().strip().splitlines()[-1])
     assert rc == 1
-    assert mcp["error"]["code"] == cli["error"]["code"] == "UNSUPPORTED_CAPABILITY"
+    assert mcp["error"]["code"] == cli["error"]["code"] == "NOT_FOUND"

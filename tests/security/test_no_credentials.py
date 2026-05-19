@@ -252,11 +252,11 @@ def test_no_tool_exposes_credential_arg_in_handler_signature():
 
 
 def test_import_ready_writers_excludes_credential_handlers():
-    """The import contract's import_ready_writers list must not include any
-    tool that handles credentials."""
+    """Import replay uses the shared registry and must not expose credential-shaped tools."""
 
-    env = mcp_call("import.validate", {"path": "/tmp/x.jsonl"}).model_dump(mode="json")
-    writers = set(env["error"]["details"]["import_ready_writers"])
+    from trade_trace.core import default_registry
+
+    writers = {name for name in default_registry().names() if name not in {"import.validate", "import.commit"}}
     for tool in writers:
         for forbidden in CREDENTIAL_KEYS:
             assert forbidden not in tool, f"import tool {tool!r} resembles {forbidden!r}"

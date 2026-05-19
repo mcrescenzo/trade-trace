@@ -1,14 +1,14 @@
 # Imports: Local JSONL and CSV
 
-Status: clean planning draft. Date: 2026-05-18.
+Status: implementation-era semantics. Date: 2026-05-19.
 
-**Implementation status (M0-M4 MVP):** contract-only. import.validate
-and import.commit are registered tool stubs returning
-UNSUPPORTED_CAPABILITY; the schemas (`import_ready_writers` list +
-JSONL line shape per §2.1) are introspectable. The shipped JSONL
-*export* path (outbox drain) is the replay-input format, so an
-external runner can already re-dispatch a backed-up journal through
-the existing write tools. P1 ships the actual import command path.
+**Implementation status:** `import.validate` and `import.commit` are real
+JSONL replay tools. Validation parses files or directories, checks line
+shape, import-ready tool names, ID strategy, forward references, and the
+underlying tool schemas by replaying into an isolated staged home. Commit
+replays through the same core dispatcher used by MCP/CLI. The shipped JSONL
+export path (outbox drain) is the replay-input format; underscore-prefixed
+export transport metadata is ignored on input.
 
 Companion docs: [PRD.md](../../PRD.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md), [operability.md](operability.md).
@@ -21,11 +21,9 @@ calls. This doc nails down the file format, dry-run semantics,
 idempotency behavior, error reporting, and the boundary that keeps
 imports from becoming a broker-sync surface.
 
-The core MVP commitment is the **import-ready write schema**: every
-core write tool from PRD §4.0 is callable by the importer with the same
-validation, idempotency, and event emission. The MVP **implementation**
-of `import.validate` / `import.commit` is P1 — the contract ships in
-M1 so the write schemas are designed import-ready from the start.
+The implementation now includes the JSONL importer described here:
+every import-ready write tool from PRD §4.0 is callable by the importer
+with the same validation, idempotency, and event emission as MCP/CLI.
 
 ## 2. JSONL Format
 
@@ -39,12 +37,15 @@ Each line is a single JSON object:
 
 Required fields:
 
-- `tool`: the canonical MCP tool name, identical to what the agent
-  would call (`venue.add`, `instrument.add`, `snapshot.add`,
-  `thesis.add`, `forecast.add`, `forecast.supersede`, `decision.add`,
-  `outcome.add` / `resolve.record`, `memory.retain`, `memory.reflect`,
-  `memory.link`, `source.add`, `source.attach_to_*`, `playbook.create`,
-  `playbook.propose_version`, `strategy.create`, `strategy.update`).
+- `tool`: the canonical MCP tool name for an import-ready writer. Current
+  allowlist: `venue.add`, `instrument.add`, `snapshot.add`, `thesis.add`,
+  `forecast.add`, `forecast.supersede`, `decision.add`, `outcome.add`,
+  `resolve.record`, `source.add`, `source.attach_to_thesis`,
+  `source.attach_to_decision`, `source.attach_to_forecast`,
+  `playbook.create`, `playbook.propose_version`, `strategy.create`,
+  `strategy.update`. Recursive import tools, read/report/admin/journal
+  tools, and other non-allowlisted tools are rejected with
+  `VALIDATION_ERROR`.
 - `args`: the tool's args object, identical to the in-process call.
 
 `args.actor_id` is required. `args.idempotency_key` is required unless
@@ -119,10 +120,12 @@ mixing and emits `VALIDATION_ERROR` at validate time.
   max_errors?)`** — write path.
   - `halt_on_error` (default `true`): stop at first error; partial
     progress (committed rows so far) is reported.
-  - `transaction_mode` (default `single`): `single` wraps the whole
-    file in one SQLite transaction; `per_row` opens one transaction
-    per row. Use `per_row` for very large files where the single-tx
-    write-amplification is prohibitive.
+  - `transaction_mode` (default `single`): `single` stages the import in a
+    temporary copy of the Trade Trace SQLite database and atomically replaces
+    the real DB files only after every row succeeds; on validation or runtime
+    row failure, the staged home is discarded and the real DB is left
+    unchanged. `per_row` dispatches each row directly to the target home,
+    allowing partial progress according to `halt_on_error`.
 
   Returns the same envelope as `validate` plus `committed_event_ids`
   and `committed_count`. Re-running the same file is safe: rows whose
