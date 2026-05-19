@@ -116,11 +116,11 @@ def report_coach(
         for g in strengths["groups"][:3]
         if g["metrics"]["scored_forecast_count"] > 0
     ]
-    unscored_summary = {
+    unscored_summary: dict[str, Any] = {
         "count": unscored["summary"]["metrics"]["unscored_count"],
         "forecast_ids": unscored["groups"][0]["record_ids"]["forecasts"][:5],
     } if unscored["groups"] else {"count": 0, "forecast_ids": []}
-    stale_summary = {
+    stale_summary: dict[str, Any] = {
         "count": stale_watches["summary"]["metrics"]["watch_count"],
         "stale_threshold_days": stale_threshold_days,
         "decision_ids": [

@@ -112,7 +112,7 @@ def report_playbook_adherence(
     for row in rows:
         summary_counts[row[4]] += 1
 
-    summary = {
+    summary: dict[str, Any] = {
         "sample_size": len(rows),
         "sample_warning": None,
         "filter": filter_dict,

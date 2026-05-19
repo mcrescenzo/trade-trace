@@ -63,7 +63,7 @@ def report_unscored_forecasts(
         for r in rows[:3]
     ]
 
-    summary = {
+    summary: dict[str, Any] = {
         "sample_size": len(rows),
         "sample_warning": None,  # no threshold for this report
         "filter": rf.model_dump(),

@@ -90,16 +90,15 @@ class UnitOfWork:
         self.conn.execute("BEGIN")
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> bool:
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
         if exc_type is not None:
             self._rollback()
-            return False  # re-raise
+            return  # re-raise
         try:
             self._commit()
         except Exception:
             self._rollback()
             raise
-        return False
 
 
 @contextmanager

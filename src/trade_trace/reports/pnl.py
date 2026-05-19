@@ -71,7 +71,7 @@ def report_pnl(
             "truncated": False,
         })
 
-    summary = {
+    summary: dict[str, Any] = {
         "sample_size": len(rows),
         "sample_warning": sample_warning,
         "filter": rf.model_dump(),

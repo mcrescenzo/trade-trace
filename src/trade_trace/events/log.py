@@ -282,6 +282,7 @@ class EventWriter:
             ),
         )
         event_id = cur.lastrowid
+        assert event_id is not None  # sqlite3 always populates lastrowid after INSERT
 
         # Outbox row (if JSONL export is enabled).
         if self._outbox_jsonl_enabled():

@@ -60,7 +60,7 @@ def report_watchlist(
         for r in rows
     ]
 
-    summary = {
+    summary: dict[str, Any] = {
         "sample_size": len(rows),
         "sample_warning": None,
         "filter": rf.model_dump(),

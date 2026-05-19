@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
+
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.storage import (
@@ -113,7 +115,7 @@ def _journal_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
     from trade_trace import models
 
-    targets = {
+    targets: dict[str, type[BaseModel]] = {
         "Decision": models.Decision,
         "Forecast": models.Forecast,
         "ForecastOutcome": models.ForecastOutcome,
