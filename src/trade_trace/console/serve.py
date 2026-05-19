@@ -69,6 +69,7 @@ def _build_app(home_path: str) -> Any:
     fastapi, _ = deps
 
     from trade_trace.console import endpoints
+    from trade_trace.console.security import apply_security_headers
     from trade_trace.storage.database import (
         ReadOnlyDatabaseError,
         open_database_readonly,
@@ -81,6 +82,12 @@ def _build_app(home_path: str) -> Any:
         docs_url=None,
         redoc_url=None,
     )
+
+    @app.middleware("http")
+    async def _security_headers(request: Any, call_next: Any) -> Any:
+        response = await call_next(request)
+        apply_security_headers(response.headers)
+        return response
 
     def _open() -> Any:
         path = _db_path(resolve_home(home_path))

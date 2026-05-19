@@ -341,10 +341,25 @@ Threats considered in scope for the MVP:
 | Browser preference write hits the DB.            | tz + poll cadence persist in `localStorage` only (§9, §10).           |
 | Operational log contains secret-shaped data.     | Redaction adapter shared with the exporter (`logging.md` §Redaction). |
 
-Threats deferred to later beads:
+Network isolation (shipped per trade-trace-1kkv.13):
 
-- Network isolation (CSP, referrer policy, fetch from non-loopback
-  hosts) — owned by trade-trace-1kkv.13.
+- The Console process MUST NOT establish a non-loopback socket
+  connection during normal operation. The test suite installs an
+  `OutboundConnectionAttempted` guard
+  (`tests/security/test_console_security_headers.py`) that fails
+  any test where the Console reaches outside `127.0.0.0/8`,
+  `::1`, or `localhost`.
+- Every HTTP response carries the security header set defined in
+  `trade_trace.console.security.SECURITY_HEADERS`: CSP (no
+  `unsafe-inline`, no `unsafe-eval`, `'self'` only),
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: no-referrer`,
+  `Permissions-Policy: camera=()...`, and `Cache-Control: no-store`.
+- Templates referencing external resources fail the
+  `external_resources_in_template` smoke test, so a future page
+  change can't accidentally rely on a CDN.
+
+Threats deferred to later beads:
 - Pagination perf baseline on a 100k-event journal — owned by
   trade-trace-1kkv.14.
 - Browser-side test scaffolding and golden screenshots — owned by
