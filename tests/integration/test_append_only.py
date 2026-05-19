@@ -1,8 +1,8 @@
 """Append-only invariants per persistence.md §8.
 
-The M1 migration installs BEFORE UPDATE / BEFORE DELETE triggers on every
-append-only table that raise sqlite3.IntegrityError with an explicit
-"append-only invariant" message.
+Migrations install BEFORE UPDATE / BEFORE DELETE triggers on append-only
+tables that raise sqlite3.IntegrityError with an explicit "append-only
+invariant" message.
 
 Correction path for any append-only row is a `supersedes` edge from the new
 row to the old, per PRD §3.1.

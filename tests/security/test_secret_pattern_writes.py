@@ -1,8 +1,8 @@
 """Write-time secret-shape detection per bead trade-trace-sy1.
 
-Four registered patterns × three guarded free-text fields = 12 negative
-test slots. Plus log-redaction, extensibility-hook, and false-positive
-corpus tests.
+Registered secret patterns are checked across guarded write-time free-text
+fields. Plus log-redaction, extensibility-hook, and false-positive corpus
+tests.
 
 The write-time guard runs before any DB write so a secret never ends up
 in a row at all (cf. the export-time scan in `tests/security/test_redacted_exports.py`,
