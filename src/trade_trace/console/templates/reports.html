@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Reports · Trade Trace Console{% endblock %}
+{% block content %}
+<section class="tt-reports">
+  <h1>Reports</h1>
+  <p class="tt-muted">Page content lands in a follow-up bead under the 1kkv epic.</p>
+  <form data-filter-form>
+    <label>Search <input type="text" name="q"></label>
+    <button type="submit">Apply</button>
+  </form>
+  <div id="tt-reports-list" hx-trigger="tt:refresh from:body">
+    {% block list %}{% endblock %}
+  </div>
+</section>
+{% endblock %}

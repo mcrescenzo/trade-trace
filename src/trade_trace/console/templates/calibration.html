@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Calibration · Trade Trace Console{% endblock %}
+{% block content %}
+<section class="tt-calibration">
+  <h1>Calibration</h1>
+  <p class="tt-muted">Page content lands in a follow-up bead under the 1kkv epic.</p>
+  <form data-filter-form>
+    <label>Search <input type="text" name="q"></label>
+    <button type="submit">Apply</button>
+  </form>
+  <div id="tt-calibration-list" hx-trigger="tt:refresh from:body">
+    {% block list %}{% endblock %}
+  </div>
+</section>
+{% endblock %}

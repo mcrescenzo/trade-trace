@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Overview · Trade Trace Console{% endblock %}
+{% block content %}
+<section class="tt-overview">
+  <h1>Overview</h1>
+  <p class="tt-context">DB path <code>{{ db_path }}</code>. Schema version {{ schema_version }}.</p>
+  <dl class="tt-row-counts">
+    {% for table, count in row_counts.items() %}
+      <div>
+        <dt>{{ table }}</dt>
+        <dd>{{ count }}</dd>
+      </div>
+    {% endfor %}
+  </dl>
+  <p class="tt-deny-set">
+    Lazy-write handlers blocked from the Console:
+    {% for name in lazy_write_handlers_blocked %}<code>{{ name }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+  </p>
+</section>
+{% endblock %}

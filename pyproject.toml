@@ -84,6 +84,13 @@ Changelog = "https://github.com/mcrescenzo/trade-trace/releases"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# Console ships HTML templates, CSS, and vendored JS as
+# package-data so the wheel includes them. Operators install
+# `trade-trace[console]` to get the runtime; the assets are
+# present in every wheel either way (trade-trace-1kkv.2/.5).
+"trade_trace.console" = ["templates/*.html", "static/**/*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

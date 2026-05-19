@@ -1,0 +1,68 @@
+{# Trade Trace Console base template (trade-trace-1kkv.5).
+
+This shell renders the navigation, global filter bar, manual
+refresh button, staleness indicator, and timezone toggle on
+every page. The CSS/JS/htmx assets are vendored under
+`/static/` — no external CDN per the §13 / network-isolation
+contract (trade-trace-1kkv.13).
+#}
+<!doctype html>
+<html lang="en" data-tz="utc">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Trade Trace Console{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/console.css">
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <script src="/static/js/htmx.min.js" defer></script>
+    <script src="/static/js/console.js" defer></script>
+  </head>
+  <body>
+    <header class="tt-header" role="banner">
+      <div class="tt-brand">
+        <a href="/" class="tt-brand-link">Trade Trace Console</a>
+        <span class="tt-mode-badge" title="The Console is read-only. It does not execute trades.">read-only</span>
+      </div>
+      <nav class="tt-nav" aria-label="Primary">
+        <ul>
+          <li><a href="/" hx-get="/" hx-target="#tt-main">Overview</a></li>
+          <li><a href="/journal" hx-get="/journal" hx-target="#tt-main">Journal</a></li>
+          <li><a href="/decisions" hx-get="/decisions" hx-target="#tt-main">Decisions</a></li>
+          <li><a href="/reports" hx-get="/reports" hx-target="#tt-main">Reports</a></li>
+          <li><a href="/calibration" hx-get="/calibration" hx-target="#tt-main">Calibration</a></li>
+          <li><a href="/strategies" hx-get="/strategies" hx-target="#tt-main">Strategies</a></li>
+          <li><a href="/playbooks" hx-get="/playbooks" hx-target="#tt-main">Playbooks</a></li>
+          <li><a href="/integrity" hx-get="/integrity" hx-target="#tt-main">Evidence &amp; Integrity</a></li>
+          <li><a href="/raw" hx-get="/raw" hx-target="#tt-main">Raw JSON</a></li>
+        </ul>
+      </nav>
+    </header>
+    <section class="tt-filter-bar" role="region" aria-label="Filter and refresh">
+      <span class="tt-staleness" data-staleness>
+        Data as of <time data-ts="{{ generated_at }}">{{ generated_at }}</time> UTC
+      </span>
+      <button type="button" data-refresh aria-label="Refresh data (R)">Refresh</button>
+      <label class="tt-poll-control">
+        Auto-refresh
+        <select data-poll-interval>
+          <option value="0">Off</option>
+          <option value="10">10s</option>
+          <option value="30">30s</option>
+          <option value="60">60s</option>
+        </select>
+      </label>
+      <fieldset class="tt-tz-toggle" aria-label="Time zone display">
+        <legend>Time zone</legend>
+        <label><input type="radio" name="tt-tz" value="utc" checked> UTC</label>
+        <label><input type="radio" name="tt-tz" value="local"> Local</label>
+      </fieldset>
+    </section>
+    <main id="tt-main" class="tt-main" role="main" tabindex="-1">
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="tt-footer" role="contentinfo">
+      Trade Trace does not execute trades or call broker APIs.
+      Logs page deferred — see <code>trade-trace-jtec</code>.
+    </footer>
+  </body>
+</html>

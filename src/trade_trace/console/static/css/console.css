@@ -1,0 +1,155 @@
+/* Trade Trace Console — calm, monospace-leaning, observability
+   palette. No external font loads (CSP disallows them anyway). */
+
+:root {
+  --tt-bg: #fafaf9;
+  --tt-fg: #1f1f1f;
+  --tt-muted: #6b7280;
+  --tt-accent: #2d6a4f;
+  --tt-warn: #b45309;
+  --tt-border: #e5e7eb;
+  --tt-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  color: var(--tt-fg);
+  background: var(--tt-bg);
+}
+
+code, pre, .tt-mono { font-family: var(--tt-mono); }
+
+.tt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .75rem 1rem;
+  background: white;
+  border-bottom: 1px solid var(--tt-border);
+}
+
+.tt-brand-link {
+  font-weight: 600;
+  color: var(--tt-fg);
+  text-decoration: none;
+  margin-right: .75rem;
+}
+
+.tt-mode-badge {
+  display: inline-block;
+  padding: .1rem .4rem;
+  border-radius: 4px;
+  background: var(--tt-accent);
+  color: white;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.tt-nav ul {
+  list-style: none;
+  display: flex;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+}
+
+.tt-nav a {
+  color: var(--tt-fg);
+  text-decoration: none;
+  padding: .25rem .35rem;
+  border-bottom: 2px solid transparent;
+}
+
+.tt-nav a:hover, .tt-nav a:focus {
+  border-bottom-color: var(--tt-accent);
+  outline: 0;
+}
+
+.tt-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .5rem 1rem;
+  background: white;
+  border-bottom: 1px solid var(--tt-border);
+}
+
+.tt-staleness {
+  color: var(--tt-muted);
+  font-family: var(--tt-mono);
+}
+
+.tt-filter-bar button,
+.tt-filter-bar select {
+  background: white;
+  border: 1px solid var(--tt-border);
+  border-radius: 4px;
+  padding: .25rem .5rem;
+  font: inherit;
+}
+
+.tt-tz-toggle {
+  border: 1px solid var(--tt-border);
+  border-radius: 4px;
+  padding: 0 .5rem;
+}
+
+.tt-tz-toggle legend {
+  font-size: 11px;
+  color: var(--tt-muted);
+}
+
+.tt-main {
+  padding: 1rem;
+}
+
+.tt-main:focus {
+  outline: 2px solid var(--tt-accent);
+  outline-offset: 2px;
+}
+
+.tt-footer {
+  padding: .5rem 1rem;
+  border-top: 1px solid var(--tt-border);
+  color: var(--tt-muted);
+  font-size: 12px;
+}
+
+.tt-warn {
+  background: #fff7ed;
+  border: 1px solid var(--tt-warn);
+  color: var(--tt-warn);
+  padding: .35rem .55rem;
+  border-radius: 4px;
+}
+
+.tt-overview .tt-row-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: .5rem;
+  margin: 1rem 0;
+}
+
+.tt-overview .tt-row-counts > div {
+  border: 1px solid var(--tt-border);
+  border-radius: 4px;
+  padding: .5rem;
+  background: white;
+}
+
+.tt-overview .tt-row-counts dt {
+  font-family: var(--tt-mono);
+  color: var(--tt-muted);
+  font-size: 12px;
+}
+
+.tt-overview .tt-row-counts dd {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
