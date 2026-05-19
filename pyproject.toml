@@ -61,6 +61,14 @@ console = [
     "uvicorn[standard]>=0.30",
     "jinja2>=3.1",
 ]
+# Console browser-test harness (trade-trace-1kkv.15). Operators
+# run `pip install 'trade-trace[console-test]' && playwright
+# install chromium` once; subsequent `pytest tests/console_browser/`
+# runs the headless smoke suite.
+console-test = [
+    "playwright>=1.45",
+    "pytest-playwright>=0.5",
+]
 dev = [
     "pytest>=8",
     "ruff>=0.5",

@@ -240,7 +240,7 @@ journal DB. This is a strict invariant of the read-only contract.
 - Polling state persists in `localStorage` under
   `trade-trace-console.poll`. As with tz, no server-side write.
 
-### 11. Browser-test framework — Playwright
+### 11. Browser-test framework — Playwright (shipped)
 
 The browser-test-scaffolding bead (trade-trace-1kkv.15) is
 recommended to adopt **Playwright** (Python bindings) under a
@@ -253,9 +253,36 @@ new `[console-test]` extra. Rationale:
 - Selenium and Cypress were considered. Selenium needs an
   external driver per browser; Cypress is JS-only.
 
-The browser-test plan, default browsers (`chromium`), and the
-test layout (`tests/console/`) are owned by trade-trace-1kkv.15
-— this bead only names the framework.
+The browser-test plan, default browser (`chromium`), and the
+test layout (`tests/console_browser/`) ship in
+trade-trace-1kkv.15. Operators run:
+
+```
+pip install 'trade-trace[console]' 'trade-trace[console-test]'
+playwright install chromium
+pytest tests/console_browser/
+```
+
+The harness fixtures live in `tests/console_browser/conftest.py`:
+
+- `seeded_home` — session-scoped journal home seeded via
+  `journal.fixture_seed --target=mvp-eval`.
+- `console_url` — boots `tt console serve` on an ephemeral
+  port, yields the base URL, terminates on session teardown.
+- `browser_context` / `page` — headless Chromium with
+  `timezone_id=UTC` and `reduced_motion=reduce` so smoke tests
+  don't flake on locale or animations.
+
+Adding a smoke test for a new page:
+
+1. Add the page route to the navigation expectations if
+   missing.
+2. Write a test function that takes `page` and `console_url`,
+   navigates to `console_url + "/<route>"`, and asserts on
+   the rendered DOM with `page.locator(...).is_visible()`.
+3. Run `pytest tests/console_browser/`. The harness skips if
+   the `[console-test]` extra isn't installed, so it never
+   breaks a default `pytest` run.
 
 ### 12. Logs page — deferred out of MVP
 
