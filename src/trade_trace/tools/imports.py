@@ -108,7 +108,6 @@ _CASCADED_EVENT_TOOLS = {
     # the alias avoids "tool is not import-ready" rejections on a
     # round-trip restore.
     "outcome.recorded",
-    "memory_node.retained",
     "venue.created",
     "instrument.created",
     "snapshot.added",
@@ -118,10 +117,6 @@ _CASCADED_EVENT_TOOLS = {
     "decision.created",
     "forecast.created",
     "forecast.superseded",
-    "playbook.created",
-    "playbook.proposed_version",
-    "strategy.created",
-    "strategy.updated",
 }
 
 
@@ -163,11 +158,26 @@ _IMPORT_READY_WRITERS = {
     "source.attach_to_thesis",
     "source.attach_to_decision",
     "source.attach_to_forecast",
+    "source.attach_to_memory_node",
     "playbook.create",
     "playbook.propose_version",
     "strategy.create",
     "strategy.update",
+    "memory.retain",
+    "memory.reflect",
+    "memory.link",
 }
+
+
+def _resolve_import_tool(tool: str) -> str:
+    """Translate a JSONL `tool` field through the event-type → tool
+    alias map (trade-trace-ths0). Legacy exports may carry the
+    event-type alias (e.g., `memory_node.retained`); the importer
+    redirects to the canonical write tool (`memory.retain`)."""
+
+    from trade_trace.exporter import _STATIC_EVENT_TOOL_MAP
+
+    return _STATIC_EVENT_TOOL_MAP.get(tool, tool)
 _DB_SUFFIXES = ("", "-wal", "-shm")
 
 
@@ -277,7 +287,19 @@ def _dispatch_row(row: ParsedRow, home: str | None, actor_id: str):
     row_args = dict(row.args)
     if home is not None:
         row_args.setdefault("home", home)
-    return dispatch(row.tool, row_args, actor_id=actor_id).model_dump(mode="json", exclude_none=True)
+    # Translate event-type aliases (trade-trace-ths0). The JSONL `tool`
+    # field may be the event_type for legacy exports; dispatch
+    # canonicalizes via the same map the exporter uses.
+    resolved_tool = _resolve_import_tool(row.tool)
+    # The exporter does not currently preserve the original
+    # idempotency_key in the JSONL line, and journal replay is the
+    # documented at-least-once import path — opt the dispatch-level
+    # idempotency_key enforcement out for rows that don't carry their
+    # own key (cpz2 + ths0). Rows that *do* carry a key replay
+    # normally so the original semantic-key match still wins.
+    if "idempotency_key" not in row_args:
+        row_args.setdefault("_allow_no_idempotency", True)
+    return dispatch(resolved_tool, row_args, actor_id=actor_id).model_dump(mode="json", exclude_none=True)
 
 
 def _id_strategy_errors(rows: list[ParsedRow], max_errors: int) -> tuple[str, list[dict[str, Any]]]:
@@ -323,14 +345,27 @@ def _forward_reference_errors(rows: list[ParsedRow], max_errors: int) -> list[di
 def _tool_errors(rows: list[ParsedRow], max_errors: int) -> list[dict[str, Any]]:
     errors: list[dict[str, Any]] = []
     for row in rows:
+        # Translate event-type aliases to their write tool names first
+        # (trade-trace-ths0). A legacy journal export with
+        # tool="memory_node.retained" is the same row as
+        # tool="memory.retain"; treat it as the latter for the
+        # import-ready check.
+        resolved = _resolve_import_tool(row.tool)
+        if resolved in _IMPORT_READY_WRITERS:
+            continue
         if row.tool in _CASCADED_EVENT_TOOLS or row.tool in _DIAGNOSTIC_EVENT_TOOLS:
             # Bucket-B cascaded events and bucket-D diagnostics are
             # skipped silently with separate counters; the parent tool's
             # replay (bucket B) or signal.scan / equivalent (bucket D)
             # regenerates them.
             continue
-        if row.tool not in _IMPORT_READY_WRITERS:
-            _add_error(errors, max_errors, _error(row, ErrorCode.VALIDATION_ERROR, "tool is not import-ready", {"tool": row.tool, "import_ready_writers": sorted(_IMPORT_READY_WRITERS)}))
+        # Anything we didn't already short-circuit above is not import-ready.
+        _add_error(
+            errors, max_errors,
+            _error(row, ErrorCode.VALIDATION_ERROR, "tool is not import-ready",
+                   {"tool": row.tool, "resolved_tool": resolved,
+                    "import_ready_writers": sorted(_IMPORT_READY_WRITERS)}),
+        )
     return errors
 
 

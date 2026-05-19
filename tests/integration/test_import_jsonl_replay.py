@@ -312,3 +312,118 @@ def test_import_skips_bucket_d_diagnostic_events_with_separate_counter(tmp_path:
     assert data["cascaded_skipped"] == 0, data
     assert data["committed_count"] == 1
     assert _count(home, "signals") == 0
+
+
+# -- bucket-A M3/M4 dispatch (trade-trace-ths0) -----------------------
+
+
+def test_import_dispatches_m3_m4_event_aliases(tmp_path: Path):
+    """Per trade-trace-ths0: event-type aliases for the M3 memory +
+    strategy + M4 playbook writes (memory_node.retained,
+    strategy.created/updated, playbook.created/proposed_version) used
+    to skip silently under the bucket-B umbrella. The importer now
+    dispatches them through their write tools so a journal export
+    round-trips faithfully."""
+
+    home = tmp_path / "home"
+    _init(home)
+
+    jsonl = tmp_path / "m3m4.jsonl"
+    # The exporter places `idempotency_key` inside `args` (the rest of
+    # the line is transport metadata under `_*` keys), so the import
+    # rows mirror that shape — the dispatch-level idempotency_key
+    # enforcement (cpz2) reads it from args.
+    _write_jsonl(jsonl, [
+        # memory_node.retained → memory.retain
+        {
+            "tool": "memory_node.retained",
+            "args": {
+                "node_type": "observation",
+                "body": "M3 alias round-trip",
+                "idempotency_key": "ths0-memnode",
+            },
+        },
+        # strategy.created → strategy.create
+        {
+            "tool": "strategy.created",
+            "args": {
+                "name": "ths0-strategy",
+                "slug": "ths0-strategy",
+                "description": "round-trip strategy",
+                "idempotency_key": "ths0-strategy",
+            },
+        },
+    ])
+
+    env = _call("import.commit", {
+        "home": str(home),
+        "path": str(jsonl),
+        "transaction_mode": "single",
+        "idempotency_key": "ths0-commit",
+    })
+    assert env["ok"] is True, env
+    data = env["data"]
+    # Both writes committed, neither was skipped as cascaded.
+    assert data["committed_count"] == 2, data
+    assert data["cascaded_skipped"] == 0, data
+    # And the corresponding rows now exist in the home.
+    assert _count(home, "memory_nodes") == 1
+    assert _count(home, "strategies") == 1
+
+
+def test_journal_export_replays_m3_m4_writes_into_fresh_home(tmp_path: Path):
+    """End-to-end acceptance for trade-trace-ths0. Write into one home
+    using the real M3/M4 write tools, drain the export queue to JSONL,
+    re-import into a fresh home, and assert the projection state
+    matches row-for-row."""
+
+    source = tmp_path / "src"
+    _init(source)
+    # JSONL outbox export is opt-in via config. Admin writes are
+    # confirm-gated (operability.md §2z7) so we pass _confirm.
+    cfg = _call("journal.config_set", {"home": str(source), "key": "outbox.jsonl_enabled", "value": "true", "_confirm": True, "idempotency_key": "ths0-cfg"})
+    assert cfg["ok"] is True, cfg
+
+    # The two cleanest bucket-A creators round-trip today. A separate
+    # bead covers expanding the round-trip to strategy.update +
+    # playbook.* — those need the exporter to stop emitting immutable
+    # fields like `name`/`slug` into the JSONL payload, which is an
+    # exporter contract change outside ths0's scope.
+    _call("memory.retain", {"home": str(source), "node_type": "observation", "body": "ths0 round-trip memory", "idempotency_key": "ths0-rt-mem"})
+    strat = _call("strategy.create", {"home": str(source), "name": "ths0-rt", "slug": "ths0-rt", "description": "round-trip strategy", "idempotency_key": "ths0-rt-strat"})
+    assert strat["ok"], strat
+
+    # The exporter is currently a library function (not yet an MCP tool —
+    # see trade-trace-c1r / -3zvl); call it directly to drain the outbox
+    # into JSONL files.
+    from trade_trace.exporter import drain_outbox, iter_jsonl_files
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path as _db_path
+
+    db = open_database(_db_path(source))
+    try:
+        drain = drain_outbox(db.connection, source)
+        db.connection.commit()
+    finally:
+        db.close()
+    assert len(drain.exported_files) >= 2, drain
+    export_files = iter_jsonl_files(source)
+    assert export_files, "exporter wrote no JSONL files"
+    export_dir = export_files[0].parent
+
+    target = tmp_path / "dst"
+    _init(target)
+
+    env = _call("import.commit", {"home": str(target), "path": str(export_dir), "transaction_mode": "single", "idempotency_key": "ths0-rt-commit"})
+    assert env["ok"] is True, env
+    # The importer should have committed all 3 rows; if zero, something
+    # (e.g. dispatch-level idempotency_key enforcement) is rejecting
+    # them silently before they reach the projection.
+    import json as _json
+    assert env["data"]["committed_count"] >= 2, _json.dumps(env, indent=2, default=str)
+
+    for table in ("memory_nodes", "strategies"):
+        assert _count(target, table) == _count(source, table), (
+            f"{table} row count diverged source={_count(source, table)} "
+            f"target={_count(target, table)}"
+        )
