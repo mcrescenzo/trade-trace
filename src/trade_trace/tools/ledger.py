@@ -1454,52 +1454,145 @@ def _resolve_pending(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 # -- forecast.supersede ------------------------------------------------------
 
 def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    """Append a new forecast row and emit a supersedes edge new → prior.
-    Per scoring.md §4.2, the prior forecast's scoring_state should reflect
-    'superseded' — but the append-only trigger forbids UPDATE; readers
-    derive the head via the supersedes edge."""
+    """Append a new forecast row and emit a supersedes edge new → prior,
+    all in one UnitOfWork (bead trade-trace-re4 / data-integrity fix).
+
+    Previously the handler called `_forecast_add` in one transaction and
+    then opened a second UnitOfWork for the supersedes edge + events. A
+    failure between the two transactions left an orphan replacement
+    forecast without the lineage edge, corrupting the forecast chain.
+
+    The supersede path now inlines the forecast row insert, the
+    forecast_outcomes inserts, the `forecast.created` event, the
+    supersedes edge insert, and the `edge.created` + `forecast.superseded`
+    events. A failure at any point rolls every row back together.
+
+    Auto-scoring (the `late_recorded` head-outcome auto-score from
+    `_forecast_add`) is intentionally NOT replicated here — superseding
+    a forecast against an already-resolved instrument is rare and the
+    score row, if missing, can be repaired by `journal.rescan_scoring`.
+    The atomicity contract from this bead is about the supersedes edge
+    pairing with the new forecast row, not about the auto-score side
+    effect.
+    """
 
     prior_id = require(args, "prior_forecast_id")
-    db = open_db_for_args(args)
-    try:
-        prior = db.connection.execute(
-            "SELECT thesis_id FROM forecasts WHERE id = ?", (prior_id,)
-        ).fetchone()
-        if prior is None:
-            raise ToolError(
-                ErrorCode.NOT_FOUND,
-                f"forecast {prior_id!r} not found",
-                details={
-                    "entity_kind": "forecast",
-                    "prior_forecast_id": prior_id,
-                },
-            )
-    finally:
-        db.close()
-    # Re-dispatch as forecast.add with thesis_id from prior, then write the
-    # supersedes edge + forecast.superseded event in a second transaction.
-    new_args = {**args, "thesis_id": prior[0], "id": None}
-    new_args.pop("prior_forecast_id", None)
-    result = _forecast_add(new_args, ctx)
-    new_id_ = result["id"]
+    kind = args.get("kind", "binary")
+    outcomes = require(args, "outcomes")
+    if not isinstance(outcomes, list):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "forecast.outcomes must be a list",
+            details={"field": "outcomes"},
+        )
+    if kind == "binary":
+        _validate_binary_forecast(outcomes)
+    elif kind not in ("categorical", "scalar"):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"unknown forecast kind {kind!r}",
+            details={"field": "kind", "value": kind},
+        )
+    reject_if_contains_secrets(
+        args.get("resolution_rule_text"), field="resolution_rule_text",
+    )
+
+    yes_label = args.get("yes_label")
+    resolution_at = normalize_timestamp(args, "resolution_at")
+    scoring_support = "supported" if kind == "binary" else "unsupported"
+    idempotency_key = args.get("idempotency_key")
+    seg = common_metadata(args)
+
     db = open_db_for_args(args)
     try:
         with UnitOfWork(db.connection) as uow:
-            edge_id = new_id("edg")
+            prior_row = uow.execute(
+                "SELECT thesis_id FROM forecasts WHERE id = ?", (prior_id,),
+            ).fetchone()
+            if prior_row is None:
+                raise ToolError(
+                    ErrorCode.NOT_FOUND,
+                    f"forecast {prior_id!r} not found",
+                    details={
+                        "entity_kind": "forecast",
+                        "prior_forecast_id": prior_id,
+                    },
+                )
+            thesis_id = prior_row[0]
+
+            new_forecast_id = args.get("id") or new_id("fc")
             created_at = now_iso()
+
+            metadata_json = _maybe_inject_late_flag(args, late_recorded=False)
+
             uow.execute(
-                "INSERT INTO edges(id, source_kind, source_id, target_kind, target_id, "
-                "edge_type, created_at, actor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO forecasts(id, thesis_id, kind, resolution_at, "
+                "yes_label, resolution_rule_text, scoring_support, "
+                "scoring_state, valid_from, valid_to, agent_id, model_id, "
+                "environment, run_id, metadata_json, created_at, actor_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    edge_id, "forecast", new_id_, "forecast", prior_id,
-                    "supersedes", created_at, ctx.actor_id,
+                    new_forecast_id, thesis_id, kind, resolution_at, yes_label,
+                    args.get("resolution_rule_text"), scoring_support,
+                    normalize_timestamp(args, "valid_from") or created_at,
+                    normalize_timestamp(args, "valid_to"),
+                    seg["agent_id"], seg["model_id"], seg["environment"],
+                    seg["run_id"], metadata_json, created_at, ctx.actor_id,
+                ),
+            )
+            for o in outcomes:
+                label = o.get("outcome_label") or o.get("label")
+                uow.execute(
+                    "INSERT INTO forecast_outcomes(id, forecast_id, "
+                    "outcome_label, probability, lower_bound, upper_bound) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        new_id("fo"), new_forecast_id, str(label),
+                        float(o["probability"]),
+                        o.get("lower_bound"), o.get("upper_bound"),
+                    ),
+                )
+            forecast_payload = {
+                "id": new_forecast_id,
+                "thesis_id": thesis_id,
+                "kind": kind,
+                "resolution_at": resolution_at,
+                "yes_label": yes_label,
+                "resolution_rule_text": args.get("resolution_rule_text"),
+                "outcomes": [
+                    {
+                        "outcome_label": str(o.get("outcome_label") or o.get("label")),
+                        "probability": float(o["probability"]),
+                        "lower_bound": o.get("lower_bound"),
+                        "upper_bound": o.get("upper_bound"),
+                    }
+                    for o in outcomes
+                ],
+            }
+            emit_event(
+                uow, event_type="forecast.created",
+                subject_kind="forecast", subject_id=new_forecast_id,
+                payload=forecast_payload,
+                actor_id=ctx.actor_id, idempotency_key=idempotency_key,
+                ctx=ctx,
+            )
+
+            edge_id = new_id("edg")
+            uow.execute(
+                "INSERT INTO edges(id, source_kind, source_id, target_kind, "
+                "target_id, edge_type, created_at, actor_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    edge_id, "forecast", new_forecast_id, "forecast",
+                    prior_id, "supersedes", created_at, ctx.actor_id,
                 ),
             )
             emit_event(
                 uow, event_type="edge.created",
                 subject_kind="edge", subject_id=edge_id,
                 payload={
-                    "id": edge_id, "source_kind": "forecast", "source_id": new_id_,
+                    "id": edge_id, "source_kind": "forecast",
+                    "source_id": new_forecast_id,
                     "target_kind": "forecast", "target_id": prior_id,
                     "edge_type": "supersedes",
                 },
@@ -1507,13 +1600,22 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
             )
             emit_event(
                 uow, event_type="forecast.superseded",
-                subject_kind="forecast", subject_id=new_id_,
-                payload={"prior_forecast_id": prior_id, "new_forecast_id": new_id_},
+                subject_kind="forecast", subject_id=new_forecast_id,
+                payload={"prior_forecast_id": prior_id,
+                         "new_forecast_id": new_forecast_id},
                 actor_id=ctx.actor_id, idempotency_key=None, ctx=ctx,
             )
     finally:
         db.close()
-    return {**result, "supersedes_prior_forecast_id": prior_id}
+
+    return {
+        "id": new_forecast_id,
+        "thesis_id": thesis_id,
+        "kind": kind,
+        "scoring_state": "pending",
+        "created_at": created_at,
+        "supersedes_prior_forecast_id": prior_id,
+    }
 
 
 # -- registration ------------------------------------------------------------

@@ -417,6 +417,97 @@ def test_forecast_supersede_writes_edge(home):
     assert sup["data"]["supersedes_prior_forecast_id"] == first["data"]["id"]
 
 
+def test_forecast_supersede_atomic_when_edge_insert_fails(home):
+    """Per bead trade-trace-re4: if the supersedes-edge insert fails
+    (here forced by pre-inserting the chosen edge id), the replacement
+    forecast row must NOT survive the transaction. Before this bead the
+    replacement forecast committed in one UoW and the edge committed
+    in a separate UoW, so a crash between them left an orphan
+    replacement without lineage."""
+
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+
+    _, thesis_id = _setup_thesis(home)
+    first = _envelope(home, "forecast.add", {
+        "thesis_id": thesis_id,
+        "kind": "binary",
+        "outcomes": [
+            {"outcome_label": "YES", "probability": 0.5},
+            {"outcome_label": "NO", "probability": 0.5},
+        ],
+    })
+    prior_id = first["data"]["id"]
+
+    # Pre-insert an edge that will collide with the supersede handler's
+    # second edge.created if both attempted to use the same id. Easier
+    # alternative: monkey-patch new_id("edg") to a duplicate value, but
+    # the simpler approach is to insert an edge row with a fixed id and
+    # then patch the helper.
+    duplicate_edge_id = "edg_force_collision_re4"
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        db.connection.execute(
+            "INSERT INTO edges(id, source_kind, source_id, target_kind, "
+            "target_id, edge_type, created_at, actor_id) "
+            "VALUES (?, 'forecast', ?, 'forecast', ?, 'supersedes', "
+            "'2026-05-19T00:00:00Z', 'agent:default')",
+            (duplicate_edge_id, prior_id, prior_id),
+        )
+        db.connection.commit()
+    finally:
+        db.close()
+
+    import trade_trace.tools.ledger as ledger_mod
+
+    original_new_id = ledger_mod.new_id
+
+    def _new_id(prefix: str) -> str:
+        if prefix == "edg":
+            return duplicate_edge_id
+        return original_new_id(prefix)
+
+    pre_forecast_count = _count_table(home, "forecasts")
+
+    try:
+        ledger_mod.new_id = _new_id
+        env = _envelope(home, "forecast.supersede", {
+            "prior_forecast_id": prior_id,
+            "kind": "binary",
+            "yes_label": "YES",
+            "outcomes": [
+                {"outcome_label": "YES", "probability": 0.7},
+                {"outcome_label": "NO", "probability": 0.3},
+            ],
+        })
+    finally:
+        ledger_mod.new_id = original_new_id
+
+    assert env["ok"] is False, (
+        "forecast.supersede must surface a typed error when the "
+        "supersedes edge cannot be inserted; got success envelope"
+    )
+
+    # Atomicity: the replacement forecast row did NOT commit.
+    post_forecast_count = _count_table(home, "forecasts")
+    assert post_forecast_count == pre_forecast_count, (
+        f"replacement forecast row leaked despite edge failure: "
+        f"pre={pre_forecast_count} post={post_forecast_count}"
+    )
+
+
+def _count_table(home, table: str) -> int:
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        return db.connection.execute(
+            f"SELECT COUNT(*) FROM {table}"
+        ).fetchone()[0]
+    finally:
+        db.close()
+
+
 # -- end-to-end manual flow ----------------------------------------------
 
 
