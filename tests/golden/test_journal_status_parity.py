@@ -13,6 +13,7 @@ import json
 from contextlib import redirect_stdout
 from typing import Any
 
+from trade_trace import __version__ as _PACKAGE_VERSION
 from trade_trace.cli import main as cli_main
 from trade_trace.core import build_registry
 from trade_trace.mcp_server import mcp_call
@@ -67,7 +68,7 @@ def test_journal_status_parity():
     # Data payloads MUST deep-equal
     assert mcp_env["data"] == cli_env["data"]
     # The data payload itself must report M0 expectations
-    assert cli_env["data"]["package_version"] == "0.0.1"
+    assert cli_env["data"]["package_version"] == _PACKAGE_VERSION
     assert cli_env["data"]["contract_version"] == "1.0"
     assert cli_env["data"]["schema_version"] == 0
     assert cli_env["data"]["embeddings_provider"] == "none"
