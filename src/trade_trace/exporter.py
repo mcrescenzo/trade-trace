@@ -191,6 +191,7 @@ def cleanup_orphan_tmp_files(home: Path, *, older_than_seconds: float = 3600) ->
 # all share one registry. SECRET_PATTERNS is kept as a backwards-compatible
 # alias for callers that imported from `trade_trace.exporter`.
 from trade_trace.security import scan_text as _scan_text  # noqa: E402
+from trade_trace.security.patterns import _compiled as SECRET_PATTERNS  # noqa: E402, F401
 
 
 def scan_for_secrets(text: str) -> list[dict[str, str]]:
