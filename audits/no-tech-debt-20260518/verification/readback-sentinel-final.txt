@@ -1,0 +1,7 @@
+
+Found 1 issues:
+
+trade-trace-kez5 [● P2] [task] open
+  Final verification: no-tech-debt backlog 2026-05-18
+  Labels: [debt-run:20260518-no-tech-debt final-gate repo-no-tech-debt tech-debt]
+

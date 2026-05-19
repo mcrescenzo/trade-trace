@@ -1,0 +1,88 @@
+{
+  "count": 10,
+  "method": "mechanical",
+  "pairs": [
+    {
+      "issue_a_id": "trade-trace-8md",
+      "issue_a_title": "Run exhaustive bughunt lane synthesis before final verification",
+      "issue_b_id": "trade-trace-w9r",
+      "issue_b_title": "Final verification: exhaustive repo bughunt 2026-05-19",
+      "method": "mechanical",
+      "similarity": 0.46583751277532615
+    },
+    {
+      "issue_a_id": "trade-trace-6k8",
+      "issue_a_title": "Implement import.validate/import.commit JSONL replay path",
+      "issue_b_id": "trade-trace-5qr",
+      "issue_b_title": "Implement CSV fills import adapter on top of JSONL import",
+      "method": "mechanical",
+      "similarity": 0.4323719890410857
+    },
+    {
+      "issue_a_id": "trade-trace-z6s",
+      "issue_a_title": "Embeddings opt-in: API provider path + OS keyring (bead a4p-split-3)",
+      "issue_b_id": "trade-trace-izh",
+      "issue_b_title": "Embeddings opt-in: sqlite-vec wiring + memory_node_embeddings storage",
+      "method": "mechanical",
+      "similarity": 0.4028600608635698
+    },
+    {
+      "issue_a_id": "trade-trace-l4o",
+      "issue_a_title": "Final synthesis: P1 core roadmap readiness and sequencing gate",
+      "issue_b_id": "trade-trace-dkm",
+      "issue_b_title": "EPIC: P1 core roadmap — imports, review bundles, analytics, scoring, transports",
+      "method": "mechanical",
+      "similarity": 0.39892152299494793
+    },
+    {
+      "issue_a_id": "trade-trace-6z5",
+      "issue_a_title": "Implement path-dependent report.opportunity",
+      "issue_b_id": "trade-trace-8z2",
+      "issue_b_title": "Implement risk-unit write surface and report.risk",
+      "method": "mechanical",
+      "similarity": 0.3850091820020841
+    },
+    {
+      "issue_a_id": "trade-trace-z6s",
+      "issue_a_title": "Embeddings opt-in: API provider path + OS keyring (bead a4p-split-3)",
+      "issue_b_id": "trade-trace-89x",
+      "issue_b_title": "Embeddings opt-in: bge-small lazy download + tt model import air-gap path",
+      "method": "mechanical",
+      "similarity": 0.3829611205616933
+    },
+    {
+      "issue_a_id": "trade-trace-6vd",
+      "issue_a_title": "Final verification: exhaustive deadcode hunt 2026-05-18",
+      "issue_b_id": "trade-trace-w9r",
+      "issue_b_title": "Final verification: exhaustive repo bughunt 2026-05-19",
+      "method": "mechanical",
+      "similarity": 0.37800608484444786
+    },
+    {
+      "issue_a_id": "trade-trace-6vd",
+      "issue_a_title": "Final verification: exhaustive deadcode hunt 2026-05-18",
+      "issue_b_id": "trade-trace-2d3",
+      "issue_b_title": "EPIC: exhaustive repo bughunt 2026-05-19",
+      "method": "mechanical",
+      "similarity": 0.3598830682457483
+    },
+    {
+      "issue_a_id": "trade-trace-heo",
+      "issue_a_title": "Embeddings opt-in: tt memory reindex --confirm (bead a4p-split-4)",
+      "issue_b_id": "trade-trace-89x",
+      "issue_b_title": "Embeddings opt-in: bge-small lazy download + tt model import air-gap path",
+      "method": "mechanical",
+      "similarity": 0.35319992361832625
+    },
+    {
+      "issue_a_id": "trade-trace-w9r",
+      "issue_a_title": "Final verification: exhaustive repo bughunt 2026-05-19",
+      "issue_b_id": "trade-trace-2d3",
+      "issue_b_title": "EPIC: exhaustive repo bughunt 2026-05-19",
+      "method": "mechanical",
+      "similarity": 0.3525096668052261
+    }
+  ],
+  "schema_version": 1,
+  "threshold": 0.35
+}

@@ -1,0 +1,2 @@
+◐ trade-trace-5lx [● P2] [epic] @Michael Crescenzo [dead-code deadcode-hunt deadcode:exhaustive-20260518 epic] - EPIC: exhaustive deadcode hunt 2026-05-18
+◐ trade-trace-off [● P2] [task] @Michael Crescenzo - Cut pre-release v0.0.1rc0 to validate publish workflow (blocked by: trade-trace-1kr, trade-trace-7e2, trade-trace-gy1)

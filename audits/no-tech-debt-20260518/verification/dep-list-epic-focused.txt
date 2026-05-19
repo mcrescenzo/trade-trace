@@ -1,0 +1,39 @@
+  trade-trace-05c: Fix broken relative links across README, PRD, and architecture docs [P2] (open) via relates-to
+  trade-trace-0ib: Add schema/meta consistency checks for migration recovery [P3] (open) via relates-to
+  trade-trace-14iy: Guard or scope runtime secret regex registration against ReDoS [P3] (open) via relates-to
+  trade-trace-1up: Make memory.reflect node + about-edge write truly atomic [P1] (open) via relates-to
+  trade-trace-29u0: Move fixture_seed wall-clock performance assertion out of default functional suite [P3] (open) via relates-to
+  trade-trace-2ifs: Expand no-network default tests beyond journal.init/status/schema [P2] (open) via relates-to
+  trade-trace-30u: Choose strict or extensible semantics for ToolContext.meta_hints unknown keys [P2] (open) via relates-to
+  trade-trace-4rp: Remove nested full-suite pytest subprocess from default dogfood verification test [P2] (open) via relates-to
+  trade-trace-67sg: Clarify and harden export secret-warning and shareable-export boundary [P3] (open) via relates-to
+  trade-trace-7j1l: Decide and cover secret scanning for all persisted free-text and metadata surfaces [P2] (open) via relates-to
+  trade-trace-9gs: Clarify low-level report output metric semantics for playbook adherence and P&L coverage [P3] (open) via relates-to
+  trade-trace-9zy: Scope AGENTS/CLAUDE session-close rules for read-only and no-push workflows [P2] (open) via relates-to
+  trade-trace-aec: Add replay-safe idempotency to strategy.update [P1] (open) via relates-to
+  trade-trace-amc: Validate polymorphic edge endpoints and audit orphan edges [P2] (open) via relates-to
+  trade-trace-aq0: Fix stale hard-coded package version assertions in smoke/golden tests [P1] (open) via relates-to
+  trade-trace-bew: Capture one as_of clock instant inside report.watchlist [P3] (open) via relates-to
+  trade-trace-c2h: Replace signal.scan JSON LIKE dedupe with structured related-ref matching [P3] (open) via relates-to
+  trade-trace-d4k: Define and enforce supported ReportFilter semantics per report [P1] (open) via relates-to
+  trade-trace-d7a: Unify report.coach raw/wrapped group extraction for mistakes and strengths [P3] (open) via relates-to
+  trade-trace-dff: Make scoring “property” tests exercise production behavior or rename them [P3] (open) via relates-to
+  trade-trace-dhm: Harden events table with SQLite append-only triggers [P1] (open) via relates-to
+  trade-trace-drt: Define signed quantity convention and fix projection realized P&L sign coverage [P1] (open) via relates-to
+  trade-trace-eo4: Handle malformed event payload JSON per outbox row during export drain [P2] (open) via relates-to
+  trade-trace-go2: Run quality gates before release tags, not only inside PyPI publish workflow [P2] (open) via relates-to
+  trade-trace-iyt: Preserve true source_quality diagnostic counts before sample truncation [P2] (open) via relates-to
+  trade-trace-kez5: Final verification: no-tech-debt backlog 2026-05-18 [P2] (open) via relates-to
+  trade-trace-ljl9: Extend file-permission tests to directories, temp files, WAL/SHM, and backups [P2] (open) via relates-to
+  trade-trace-m0h: Reconcile memory.reflect docs/API shape with implementation [P2] (open) via relates-to
+  trade-trace-pqp2: Pin future MCP stdio security boundary before transport implementation [P2] (open) via relates-to
+  trade-trace-qc7: Sanitize event_type before using it in JSONL export filenames [P3] (open) via relates-to
+  trade-trace-qfxw: Cover explicit metadata_json credential injection in no-credentials policy [P1] (open) via relates-to
+  trade-trace-qis: Make FTS5 dependency explicit or gracefully optional for memory migrations [P2] (open) via relates-to
+  trade-trace-r5k: Reject stray positional CLI tokens after valid command resolution [P2] (open) via relates-to
+  trade-trace-tka: Reconcile README/PRD vector dependency claims with pyproject and deferred embeddings posture [P2] (open) via relates-to
+  trade-trace-wmz: Add storage-level timestamp invariant coverage or explicit delegation policy [P2] (open) via relates-to
+  trade-trace-xpj: Repair stale SECRET_PATTERNS import in redacted export security test [P1] (open) via relates-to
+  trade-trace-z4q: Enforce or explicitly grandfather strategy_id references after strategies table exists [P2] (open) via relates-to
+  trade-trace-zgz: Propagate calibration record-id truncation to top-level/meta truncated flag [P2] (open) via relates-to
+

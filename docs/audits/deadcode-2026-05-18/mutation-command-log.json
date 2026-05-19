@@ -1,0 +1,290 @@
+[
+  {
+    "candidate": "CRT-001",
+    "cmd": [
+      "bd",
+      "create",
+      "Decide disposition for unused process-global clock accessors",
+      "--type",
+      "task",
+      "--priority",
+      "P3",
+      "--labels",
+      "dead-code,deadcode-hunt,deadcode:exhaustive-20260518,domain:core-runtime,needs-owner-confirmation,public-api,cleanup-candidate",
+      "--body-file",
+      "docs/audits/deadcode-2026-05-18/bead-bodies/CRT-001.md",
+      "--acceptance",
+      "See description acceptance criteria and candidate provenance.",
+      "--json"
+    ],
+    "returncode": 0,
+    "stdout": "{\n  \"acceptance_criteria\": \"See description acceptance criteria and candidate provenance.\",\n  \"created_at\": \"2026-05-19T03:20:10.34621108Z\",\n  \"created_by\": \"Michael Crescenzo\",\n  \"description\": \"Context:\\nDomain: core-runtime\\nAffected surface: trade_trace.clock.default_clock,set_default_clock,_DEFAULT_CLOCK\\nCandidate: CRT-001 from exhaustive deadcode hunt epic trade-trace-5lx.\\n\\nDead-code claim:\\nDecide disposition for unused process-global clock accessors\\n\\nEvidence:\\n- Paths: src/trade_trace/clock.py\\n- src/trade_trace/clock.py:49-60 defines _DEFAULT_CLOCK/default_clock/set_default_clock. Repo search finds only definitions; runtime deterministic clock path uses trade_trace.tools._helpers.CLOCK_OVERRIDE. FixedClock/SystemClock are test-used and not candidates.\\n- Evidence artifacts: docs/audits/deadcode-2026-05-18/candidate-matrix.json, lane-packets.md, advisor-review.md.\\n\\nReference search scope:\\ntracked src, tests, docs, README, pyproject, excluding generated audit artifacts for final judgement\\n\\nReference search commands / output summary:\\nsearch_files default_clock|set_default_clock; search_files trade_trace.clock/from trade_trace.clock/import trade_trace.clock\\n\\nEntrypoint / public / dynamic checks:\\n- Dynamic-loading caveats: Public importable package module; external users may import these symbols; docs mention injectable clock concept.\\n- Public/API surface: Importable public module; not top-level __all__, but still package surface.\\n- Generated/reflection risk: none identified\\n\\nWhy it may be falsely alive:\\nMay be reserved public/test utility API or intended future canonical clock abstraction.\\n\\nImpact / risk of keeping:\\nParallel clock-injection concepts create maintenance/API confusion.\\n\\nRecommended action:\\ninvestigate\\n\\nSafe-removal validation:\\nAfter owner decision: python3 -m pytest tests/test_timestamps.py tests/integration/test_reproducibility_replay.py; repo search shows no default_clock/set_default_clock references.\\n\\nDuplicate check:\\nCompared against open Beads snapshot and duplicate scan captured in docs/audits/deadcode-2026-05-18/pre-mutation-snapshot.txt. Duplicate/related notes: duplicate_of=None; related_to=[]. This bead is materialized because coordinator disposition is needs-owner-confirmation and advisor review approved this class of materialization.\\n\\nAcceptance criteria:\\n- Owner disposition recorded: keep/document, wire runtime to it, or remove.\\n- If removed, references/docs/tests updated and timestamp/reproducibility tests pass.\\n\\nProvenance:\\nDiscovered by repo-deadcode-hunt candidate CRT-001 in domain core-runtime. Labels expected: dead-code, deadcode-hunt, deadcode:exhaustive-20260518, domain:core-runtime, needs-owner-confirmation, public-api.\\n\",\n  \"id\": \"trade-trace-xeq\",\n  \"issue_type\": \"task\",\n  \"owner\": \"michaelcrescenzo@gmail.com\",\n  \"priority\": 3,\n  \"schema_version\": 1,\n  \"status\": \"open\",\n  \"title\": \"Decide disposition for unused process-global clock accessors\",\n  \"updated_at\": \"2026-05-19T03:20:10.34621108Z\"\n}\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "CRT-001",
+    "cmd": [
+      "bd",
+      "dep",
+      "relate",
+      "trade-trace-5lx",
+      "trade-trace-xeq"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Linked trade-trace-5lx \u2194 trade-trace-xeq\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "CRT-001",
+    "cmd": [
+      "bd",
+      "dep",
+      "add",
+      "trade-trace-6vd",
+      "trade-trace-xeq"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Added dependency: trade-trace-6vd (Final verification: exhaustive deadcode hunt 2026-05-18) depends on trade-trace-xeq (Decide disposition for unused process-global clock accessors) (blocks)\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "CRT-002",
+    "cmd": [
+      "bd",
+      "create",
+      "Decide disposition for unused events.write_event wrapper",
+      "--type",
+      "task",
+      "--priority",
+      "P3",
+      "--labels",
+      "dead-code,deadcode-hunt,deadcode:exhaustive-20260518,domain:core-runtime,needs-owner-confirmation,public-api,cleanup-candidate",
+      "--body-file",
+      "docs/audits/deadcode-2026-05-18/bead-bodies/CRT-002.md",
+      "--acceptance",
+      "See description acceptance criteria and candidate provenance.",
+      "--json"
+    ],
+    "returncode": 0,
+    "stdout": "{\n  \"acceptance_criteria\": \"See description acceptance criteria and candidate provenance.\",\n  \"created_at\": \"2026-05-19T03:20:11.318598323Z\",\n  \"created_by\": \"Michael Crescenzo\",\n  \"description\": \"Context:\\nDomain: core-runtime\\nAffected surface: trade_trace.events.log.write_event / trade_trace.events.write_event\\nCandidate: CRT-002 from exhaustive deadcode hunt epic trade-trace-5lx.\\n\\nDead-code claim:\\nDecide disposition for unused events.write_event wrapper\\n\\nEvidence:\\n- Paths: src/trade_trace/events/log.py, src/trade_trace/events/__init__.py\\n- src/trade_trace/events/log.py:311-332 defines write_event wrapper; events/__init__.py re-exports it. Repo search for write_event( finds only definition; active write paths use EventWriter/UnitOfWork.\\n- Evidence artifacts: docs/audits/deadcode-2026-05-18/candidate-matrix.json, lane-packets.md, advisor-review.md.\\n\\nReference search scope:\\ntracked src/tests/docs/README/pyproject, excluding generated audit artifacts for final judgement\\n\\nReference search commands / output summary:\\nsearch_files write_event\\\\(\\n\\nEntrypoint / public / dynamic checks:\\n- Dynamic-loading caveats: Exported via __all__; external direct callers cannot be ruled out.\\n- Public/API surface: Public package re-export trade_trace.events.write_event.\\n- Generated/reflection risk: none identified\\n\\nWhy it may be falsely alive:\\nMay be intentional compatibility convenience wrapper.\\n\\nImpact / risk of keeping:\\nDuplicate write entrypoint can confuse transaction/idempotency path.\\n\\nRecommended action:\\ndeprecate\\n\\nSafe-removal validation:\\nIf removed/deprecated: search for write_event refs; python3 -m pytest tests/integration/test_idempotency.py tests/integration/test_transactions.py tests/integration/test_append_only.py.\\n\\nDuplicate check:\\nCompared against open Beads snapshot and duplicate scan captured in docs/audits/deadcode-2026-05-18/pre-mutation-snapshot.txt. Duplicate/related notes: duplicate_of=None; related_to=[]. This bead is materialized because coordinator disposition is needs-owner-confirmation and advisor review approved this class of materialization.\\n\\nAcceptance criteria:\\n- Owner disposition recorded.\\n- If removed, __all__/re-export updated and event write/idempotency tests pass.\\n\\nProvenance:\\nDiscovered by repo-deadcode-hunt candidate CRT-002 in domain core-runtime. Labels expected: dead-code, deadcode-hunt, deadcode:exhaustive-20260518, domain:core-runtime, needs-owner-confirmation, public-api.\\n\",\n  \"id\": \"trade-trace-mky\",\n  \"issue_type\": \"task\",\n  \"owner\": \"michaelcrescenzo@gmail.com\",\n  \"priority\": 3,\n  \"schema_version\": 1,\n  \"status\": \"open\",\n  \"title\": \"Decide disposition for unused events.write_event wrapper\",\n  \"updated_at\": \"2026-05-19T03:20:11.318598323Z\"\n}\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "CRT-002",
+    "cmd": [
+      "bd",
+      "dep",
+      "relate",
+      "trade-trace-5lx",
+      "trade-trace-mky"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Linked trade-trace-5lx \u2194 trade-trace-mky\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "CRT-002",
+    "cmd": [
+      "bd",
+      "dep",
+      "add",
+      "trade-trace-6vd",
+      "trade-trace-mky"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Added dependency: trade-trace-6vd (Final verification: exhaustive deadcode hunt 2026-05-18) depends on trade-trace-mky (Decide disposition for unused events.write_event wrapper) (blocks)\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "TST-001",
+    "cmd": [
+      "bd",
+      "create",
+      "Remove unused _all_columns helper from credential security tests",
+      "--type",
+      "task",
+      "--priority",
+      "P4",
+      "--labels",
+      "dead-code,deadcode-hunt,deadcode:exhaustive-20260518,domain:tests,cleanup-candidate",
+      "--body-file",
+      "docs/audits/deadcode-2026-05-18/bead-bodies/TST-001.md",
+      "--acceptance",
+      "See description acceptance criteria and candidate provenance.",
+      "--json"
+    ],
+    "returncode": 0,
+    "stdout": "{\n  \"acceptance_criteria\": \"See description acceptance criteria and candidate provenance.\",\n  \"created_at\": \"2026-05-19T03:20:12.113307407Z\",\n  \"created_by\": \"Michael Crescenzo\",\n  \"description\": \"Context:\\nDomain: tests-fixtures\\nAffected surface: tests.security.test_no_credentials._all_columns\\nCandidate: TST-001 from exhaustive deadcode hunt epic trade-trace-5lx.\\n\\nDead-code claim:\\nRemove unused _all_columns helper from credential security tests\\n\\nEvidence:\\n- Paths: tests/security/test_no_credentials.py\\n- tests/security/test_no_credentials.py:55-61 defines _all_columns; same file uses inline PRAGMA scan at lines 67-80; search finds only definition plus generated audit artifacts.\\n- Evidence artifacts: docs/audits/deadcode-2026-05-18/candidate-matrix.json, lane-packets.md, advisor-review.md.\\n\\nReference search scope:\\ntracked repo content; generated audit artifacts ignored in final judgement\\n\\nReference search commands / output summary:\\nsearch_files _all_columns\\n\\nEntrypoint / public / dynamic checks:\\n- Dynamic-loading caveats: Private helper not a pytest fixture; name not used by parametrization/monkeypatch.\\n- Public/API surface: test-private helper only\\n- Generated/reflection risk: none\\n\\nWhy it may be falsely alive:\\nCould be intentionally kept for future refactor, but no evidence.\\n\\nImpact / risk of keeping:\\nSmall test-maintenance clutter; false helper suggests reuse that does not exist.\\n\\nRecommended action:\\nremove\\n\\nSafe-removal validation:\\npython3 -m pytest tests/security/test_no_credentials.py\\n\\nDuplicate check:\\nCompared against open Beads snapshot and duplicate scan captured in docs/audits/deadcode-2026-05-18/pre-mutation-snapshot.txt. Duplicate/related notes: duplicate_of=None; related_to=[]. This bead is materialized because coordinator disposition is confirmed and advisor review approved this class of materialization.\\n\\nAcceptance criteria:\\n- Remove _all_columns or use it meaningfully.\\n- Credential security tests pass.\\n- No references remain.\\n\\nProvenance:\\nDiscovered by repo-deadcode-hunt candidate TST-001 in domain tests-fixtures. Labels expected: dead-code, deadcode-hunt, deadcode:exhaustive-20260518, domain:tests, cleanup-candidate.\\n\",\n  \"id\": \"trade-trace-bmf\",\n  \"issue_type\": \"task\",\n  \"owner\": \"michaelcrescenzo@gmail.com\",\n  \"priority\": 4,\n  \"schema_version\": 1,\n  \"status\": \"open\",\n  \"title\": \"Remove unused _all_columns helper from credential security tests\",\n  \"updated_at\": \"2026-05-19T03:20:12.113307407Z\"\n}\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "TST-001",
+    "cmd": [
+      "bd",
+      "dep",
+      "relate",
+      "trade-trace-5lx",
+      "trade-trace-bmf"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Linked trade-trace-5lx \u2194 trade-trace-bmf\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "TST-001",
+    "cmd": [
+      "bd",
+      "dep",
+      "add",
+      "trade-trace-6vd",
+      "trade-trace-bmf"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Added dependency: trade-trace-6vd (Final verification: exhaustive deadcode hunt 2026-05-18) depends on trade-trace-bmf (Remove unused _all_columns helper from credential security tests) (blocks)\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "DOC-001",
+    "cmd": [
+      "bd",
+      "create",
+      "Fix broken local markdown links after docs path moves",
+      "--type",
+      "bug",
+      "--priority",
+      "P2",
+      "--labels",
+      "dead-code,deadcode-hunt,deadcode:exhaustive-20260518,domain:docs,bug,docs-truth,risk:stale-contract",
+      "--body-file",
+      "docs/audits/deadcode-2026-05-18/bead-bodies/DOC-001.md",
+      "--acceptance",
+      "See description acceptance criteria and candidate provenance.",
+      "--json"
+    ],
+    "returncode": 0,
+    "stdout": "{\n  \"acceptance_criteria\": \"See description acceptance criteria and candidate provenance.\",\n  \"created_at\": \"2026-05-19T03:20:12.835760269Z\",\n  \"created_by\": \"Michael Crescenzo\",\n  \"description\": \"Context:\\nDomain: packaging-ci-docs\\nAffected surface: local markdown links\\nCandidate: DOC-001 from exhaustive deadcode hunt epic trade-trace-5lx.\\n\\nDead-code claim:\\nFix broken local markdown links after docs path moves\\n\\nEvidence:\\n- Paths: README.md, docs/PRD.md, docs/architecture/*.md\\n- markdown-link-check.json found missing local targets: README links ./VISION.md/./PRD.md though actual files are docs/VISION.md/docs/PRD.md; docs/PRD.md links ./docs/architecture/... resolving to docs/docs/...; docs/architecture links ../../PRD.md/../../VISION.md resolving to repo root.\\n- Evidence artifacts: docs/audits/deadcode-2026-05-18/candidate-matrix.json, lane-packets.md, advisor-review.md.\\n\\nReference search scope:\\ntracked README.md and docs/**/*.md\\n\\nReference search commands / output summary:\\npython3 markdown local-link checker saved to markdown-link-check.json\\n\\nEntrypoint / public / dynamic checks:\\n- Dynamic-loading caveats: docs-only; no runtime dynamic caveat\\n- Public/API surface: public docs contract\\n- Generated/reflection risk: none\\n\\nWhy it may be falsely alive:\\nIf rendered by a docs host with nonstandard path rewriting, local checker may overstate; raw GitHub/local markdown links are broken.\\n\\nImpact / risk of keeping:\\nMisleads users/agents and breaks navigation through product contract docs.\\n\\nRecommended action:\\nremove\\n\\nSafe-removal validation:\\nrerun markdown local-link checker and verify missing_count for edited links drops to zero or only intentional anchors remain.\\n\\nDuplicate check:\\nCompared against open Beads snapshot and duplicate scan captured in docs/audits/deadcode-2026-05-18/pre-mutation-snapshot.txt. Duplicate/related notes: duplicate_of=None; related_to=[]. This bead is materialized because coordinator disposition is confirmed and advisor review approved this class of materialization.\\n\\nAcceptance criteria:\\n- README and docs local links resolve from their file locations.\\n- Link checker artifact updated or equivalent verification passes.\\n\\nProvenance:\\nDiscovered by repo-deadcode-hunt candidate DOC-001 in domain packaging-ci-docs. Labels expected: dead-code, deadcode-hunt, deadcode:exhaustive-20260518, domain:docs, bug, docs-truth, risk:stale-contract.\\n\\n## Steps to Reproduce\\n1. Inspect the cited files/artifacts above.\\n2. Re-run the validation/readback command(s): rerun markdown local-link checker and verify missing_count for edited links drops to zero or only intentional anchors remain.\\n3. Observe the stale/missing docs/tool/package contract described in the evidence section.\\n\\n## Acceptance Criteria\\n- README and docs local links resolve from their file locations.\\n- Link checker artifact updated or equivalent verification passes.\\n\",\n  \"id\": \"trade-trace-cey\",\n  \"issue_type\": \"bug\",\n  \"owner\": \"michaelcrescenzo@gmail.com\",\n  \"priority\": 2,\n  \"schema_version\": 1,\n  \"status\": \"open\",\n  \"title\": \"Fix broken local markdown links after docs path moves\",\n  \"updated_at\": \"2026-05-19T03:20:12.835760269Z\"\n}\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "DOC-001",
+    "cmd": [
+      "bd",
+      "dep",
+      "relate",
+      "trade-trace-5lx",
+      "trade-trace-cey"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Linked trade-trace-5lx \u2194 trade-trace-cey\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "DOC-001",
+    "cmd": [
+      "bd",
+      "dep",
+      "add",
+      "trade-trace-6vd",
+      "trade-trace-cey"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Added dependency: trade-trace-6vd (Final verification: exhaustive deadcode hunt 2026-05-18) depends on trade-trace-cey (Fix broken local markdown links after docs path moves) (blocks)\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "DOC-002A",
+    "cmd": [
+      "bd",
+      "create",
+      "Reconcile package/dependency docs with current pyproject embeddings posture",
+      "--type",
+      "bug",
+      "--priority",
+      "P2",
+      "--labels",
+      "dead-code,deadcode-hunt,deadcode:exhaustive-20260518,domain:docs,bug,docs-truth,risk:stale-contract",
+      "--body-file",
+      "docs/audits/deadcode-2026-05-18/bead-bodies/DOC-002A.md",
+      "--acceptance",
+      "See description acceptance criteria and candidate provenance.",
+      "--json"
+    ],
+    "returncode": 0,
+    "stdout": "{\n  \"acceptance_criteria\": \"See description acceptance criteria and candidate provenance.\",\n  \"created_at\": \"2026-05-19T03:20:13.595892233Z\",\n  \"created_by\": \"Michael Crescenzo\",\n  \"description\": \"Context:\\nDomain: packaging-ci-docs\\nAffected surface: sqlite-vec/sentence-transformers package docs\\nCandidate: DOC-002A from exhaustive deadcode hunt epic trade-trace-5lx.\\n\\nDead-code claim:\\nReconcile package/dependency docs with current pyproject embeddings posture\\n\\nEvidence:\\n- Paths: README.md, docs/PRD.md, docs/architecture/memory-layer.md, docs/architecture/persistence.md, docs/architecture/operability.md, docs/architecture/dogfood-protocol.md, pyproject.toml\\n- pyproject.toml runtime dependencies contain only pydantic; README.md lines 80-83 and docs/PRD.md lines 112-113 say base wheel ships sqlite-vec/sentence-transformers once M3 lands while README status says M3 shipped. docs/architecture/memory-layer.md lines 231-235 says those deps land later with a4p.\\n- Evidence artifacts: docs/audits/deadcode-2026-05-18/candidate-matrix.json, lane-packets.md, advisor-review.md.\\n\\nReference search scope:\\ntracked docs/README/pyproject/source registry\\n\\nReference search commands / output summary:\\nread_file pyproject.toml; search docs for sqlite-vec|sentence-transformers; compare README/PRD/memory-layer lines\\n\\nEntrypoint / public / dynamic checks:\\n- Dynamic-loading caveats: Some surfaces may be intended P1 future features; docs need current-vs-planned wording, not necessarily removal.\\n- Public/API surface: public docs/API contract and CLI command examples\\n- Generated/reflection risk: none\\n\\nWhy it may be falsely alive:\\nDocs may intentionally describe target architecture; but several sections are phrased as current shipped commands/dependencies.\\n\\nImpact / risk of keeping:\\nAgents/users copy wrong commands, expect unavailable deps/tools, or fail dogfood protocol steps.\\n\\nRecommended action:\\ndocument\\n\\nSafe-removal validation:\\nREADME.md and docs/PRD.md package dependency statements match pyproject.toml and memory-layer a4p posture; optional install/readme check confirms no untrue base-wheel vector dependency claim.\\n\\nDuplicate check:\\nCompared against open Beads snapshot and duplicate scan captured in docs/audits/deadcode-2026-05-18/pre-mutation-snapshot.txt. Duplicate/related notes: duplicate_of=None; related_to=['trade-trace-89x', 'trade-trace-izh', 'trade-trace-heo', 'trade-trace-z6s']. This bead is materialized because coordinator disposition is confirmed and advisor review approved this class of materialization.\\n\\nAcceptance criteria:\\n- README.md and docs/PRD.md no longer claim base wheel currently ships sqlite-vec/sentence-transformers unless pyproject is changed to match.\\n- Embedding dependency posture agrees with docs/architecture/memory-layer.md and open a4p/P1 beads.\\n- Validation cites pyproject dependency readback.\\n\\nProvenance:\\nDiscovered by repo-deadcode-hunt candidate DOC-002A in domain packaging-ci-docs. Labels expected: dead-code, deadcode-hunt, deadcode:exhaustive-20260518, domain:docs, bug, docs-truth, risk:stale-contract.\\n\\n## Steps to Reproduce\\n1. Inspect the cited files/artifacts above.\\n2. Re-run the validation/readback command(s): README.md and docs/PRD.md package dependency statements match pyproject.toml and memory-layer a4p posture; optional install/readme check confirms no untrue base-wheel vector dependency claim.\\n3. Observe the stale/missing docs/tool/package contract described in the evidence section.\\n\\n## Acceptance Criteria\\n- README.md and docs/PRD.md no longer claim base wheel currently ships sqlite-vec/sentence-transformers unless pyproject is changed to match.\\n- Embedding dependency posture agrees with docs/architecture/memory-layer.md and open a4p/P1 beads.\\n- Validation cites pyproject dependency readback.\\n\",\n  \"id\": \"trade-trace-rzb\",\n  \"issue_type\": \"bug\",\n  \"owner\": \"michaelcrescenzo@gmail.com\",\n  \"priority\": 2,\n  \"schema_version\": 1,\n  \"status\": \"open\",\n  \"title\": \"Reconcile package/dependency docs with current pyproject embeddings posture\",\n  \"updated_at\": \"2026-05-19T03:20:13.595892233Z\"\n}\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "DOC-002A",
+    "cmd": [
+      "bd",
+      "dep",
+      "relate",
+      "trade-trace-5lx",
+      "trade-trace-rzb"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Linked trade-trace-5lx \u2194 trade-trace-rzb\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "DOC-002A",
+    "cmd": [
+      "bd",
+      "dep",
+      "add",
+      "trade-trace-6vd",
+      "trade-trace-rzb"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Added dependency: trade-trace-6vd (Final verification: exhaustive deadcode hunt 2026-05-18) depends on trade-trace-rzb (Reconcile package/dependency docs with current pyproject embeddings posture) (blocks)\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "DOC-002B",
+    "cmd": [
+      "bd",
+      "create",
+      "Reconcile docs that advertise unregistered CLI/tool command surfaces",
+      "--type",
+      "bug",
+      "--priority",
+      "P2",
+      "--labels",
+      "dead-code,deadcode-hunt,deadcode:exhaustive-20260518,domain:docs,bug,docs-truth,risk:stale-contract",
+      "--body-file",
+      "docs/audits/deadcode-2026-05-18/bead-bodies/DOC-002B.md",
+      "--acceptance",
+      "See description acceptance criteria and candidate provenance.",
+      "--json"
+    ],
+    "returncode": 0,
+    "stdout": "{\n  \"acceptance_criteria\": \"See description acceptance criteria and candidate provenance.\",\n  \"created_at\": \"2026-05-19T03:20:14.367478199Z\",\n  \"created_by\": \"Michael Crescenzo\",\n  \"description\": \"Context:\\nDomain: packaging-ci-docs\\nAffected surface: config.set/export.drain/forecast.show/decision.show/edges.list/top-level backup/restore\\nCandidate: DOC-002B from exhaustive deadcode hunt epic trade-trace-5lx.\\n\\nDead-code claim:\\nReconcile docs that advertise unregistered CLI/tool command surfaces\\n\\nEvidence:\\n- Paths: README.md, docs/PRD.md, docs/architecture/memory-layer.md, docs/architecture/persistence.md, docs/architecture/operability.md, docs/architecture/dogfood-protocol.md, pyproject.toml\\n- registered-tools.txt from default_registry contains 61 current tools and lacks config.set, export.drain, forecast.show, decision.show, edges.list, and top-level backup/restore. README/docs mention tt config set, export.drain/config.toml, tt backup/tt restore, and forecast.show/decision.show/edges.list as current/protocol surfaces.\\n- Evidence artifacts: docs/audits/deadcode-2026-05-18/candidate-matrix.json, lane-packets.md, advisor-review.md.\\n\\nReference search scope:\\ntracked docs/README/pyproject/source registry\\n\\nReference search commands / output summary:\\nregistered-tools.txt via PYTHONPATH=src python3 default_registry; search_files export.drain|tt backup|tt restore|forecast.show|decision.show|edges.list|tt config set\\n\\nEntrypoint / public / dynamic checks:\\n- Dynamic-loading caveats: Some surfaces may be intended P1 future features; docs need current-vs-planned wording, not necessarily removal.\\n- Public/API surface: public docs/API contract and CLI command examples\\n- Generated/reflection risk: none\\n\\nWhy it may be falsely alive:\\nDocs may intentionally describe target architecture; but several sections are phrased as current shipped commands/dependencies.\\n\\nImpact / risk of keeping:\\nAgents/users copy wrong commands, expect unavailable deps/tools, or fail dogfood protocol steps.\\n\\nRecommended action:\\ndocument\\n\\nSafe-removal validation:\\nregistered-tools.txt/default_registry output confirms every docs command is either registered, explicitly marked planned/deferred, or rewritten as direct DB/pseudocode; docs no longer instruct unavailable current commands.\\n\\nDuplicate check:\\nCompared against open Beads snapshot and duplicate scan captured in docs/audits/deadcode-2026-05-18/pre-mutation-snapshot.txt. Duplicate/related notes: duplicate_of=None; related_to=['trade-trace-46p', 'trade-trace-74b', 'trade-trace-re2', 'trade-trace-dkm', 'trade-trace-iuv', 'trade-trace-yai']. This bead is materialized because coordinator disposition is confirmed and advisor review approved this class of materialization.\\n\\nAcceptance criteria:\\n- README and architecture docs no longer present unregistered current commands as shipped.\\n- Backup/restore docs use registered journal.backup/journal.restore command names or clearly name future aliases.\\n- Dogfood protocol unregistered read tools are replaced with existing surfaces or marked pseudocode/direct-DB assertions.\\n- Registry readback is used to verify cited command surfaces.\\n\\nProvenance:\\nDiscovered by repo-deadcode-hunt candidate DOC-002B in domain packaging-ci-docs. Labels expected: dead-code, deadcode-hunt, deadcode:exhaustive-20260518, domain:docs, bug, docs-truth, risk:stale-contract.\\n\\n## Steps to Reproduce\\n1. Inspect the cited files/artifacts above.\\n2. Re-run the validation/readback command(s): registered-tools.txt/default_registry output confirms every docs command is either registered, explicitly marked planned/deferred, or rewritten as direct DB/pseudocode; docs no longer instruct unavailable current commands.\\n3. Observe the stale/missing docs/tool/package contract described in the evidence section.\\n\\n## Acceptance Criteria\\n- README and architecture docs no longer present unregistered current commands as shipped.\\n- Backup/restore docs use registered journal.backup/journal.restore command names or clearly name future aliases.\\n- Dogfood protocol unregistered read tools are replaced with existing surfaces or marked pseudocode/direct-DB assertions.\\n- Registry readback is used to verify cited command surfaces.\\n\",\n  \"id\": \"trade-trace-ahz\",\n  \"issue_type\": \"bug\",\n  \"owner\": \"michaelcrescenzo@gmail.com\",\n  \"priority\": 2,\n  \"schema_version\": 1,\n  \"status\": \"open\",\n  \"title\": \"Reconcile docs that advertise unregistered CLI/tool command surfaces\",\n  \"updated_at\": \"2026-05-19T03:20:14.367478199Z\"\n}\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "DOC-002B",
+    "cmd": [
+      "bd",
+      "dep",
+      "relate",
+      "trade-trace-5lx",
+      "trade-trace-ahz"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Linked trade-trace-5lx \u2194 trade-trace-ahz\n",
+    "stderr": ""
+  },
+  {
+    "candidate": "DOC-002B",
+    "cmd": [
+      "bd",
+      "dep",
+      "add",
+      "trade-trace-6vd",
+      "trade-trace-ahz"
+    ],
+    "returncode": 0,
+    "stdout": "\u2713 Added dependency: trade-trace-6vd (Final verification: exhaustive deadcode hunt 2026-05-18) depends on trade-trace-ahz (Reconcile docs that advertise unregistered CLI/tool command surfaces) (blocks)\n",
+    "stderr": ""
+  }
+]

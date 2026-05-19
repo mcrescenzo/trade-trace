@@ -1,0 +1,32 @@
+{
+  "branch_status": "## main...origin/main\n?? audits/",
+  "classification_counts": {
+    "config": 7,
+    "deploy-service": 1,
+    "docs-contract": 14,
+    "migration-schema": 5,
+    "packaging": 2,
+    "source": 54,
+    "test": 75
+  },
+  "commit": "a33e676ec9d22d6ec268686424521a3d2586f9dd",
+  "lane_counts": {
+    "beads-and-repo-metadata": 4,
+    "build-package-ci-release": 4,
+    "cli-mcp-contracts-tooling": 11,
+    "contracts-and-transport-tests": 10,
+    "core-models-foundation": 8,
+    "docs-contract-truth": 16,
+    "domain-tools-ledger-memory-playbook": 14,
+    "reports-projections-export": 14,
+    "security-and-test-harness": 10,
+    "security-boundaries": 2,
+    "storage-persistence-events-schema": 10,
+    "test-harness-and-fixtures": 55
+  },
+  "ledger": "/home/hermes/code/trade-trace/audits/no-tech-debt-20260518/coverage-ledger.jsonl",
+  "note": "Lossless per-file ledger is coverage-ledger.jsonl. Initial inspection_depth values are conservative and updated/supplemented by lane reports.",
+  "repo": "/home/hermes/code/trade-trace",
+  "run": "no-tech-debt-20260518",
+  "tracked_total": 158
+}

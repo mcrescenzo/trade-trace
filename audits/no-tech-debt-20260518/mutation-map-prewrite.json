@@ -1,0 +1,955 @@
+{
+  "run": "no-tech-debt-20260518",
+  "pre_write_advisor": "ask_advisor ok; see advisor-gate-packet.md and final report",
+  "planned_epic": "pending",
+  "planned_final_gate": "pending",
+  "counts": {
+    "accepted": 37,
+    "merged": 4,
+    "deferred": 1,
+    "rejected": 1
+  },
+  "items": [
+    {
+      "candidate_id": "DEBT-001",
+      "title": "Fix stale hard-coded package version assertions in smoke/golden tests",
+      "type": "bug",
+      "priority": "P1",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:build-package-ci-release",
+        "track:bug",
+        "risk:high"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic",
+        "trade-trace-2d3"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Fix stale hard-coded package version assertions in smoke/golden tests",
+        "Paydown boundary followed: Centralize version expectation from package/project metadata or update contract intentionally; avoid duplicated literal release versions.",
+        "Validation evidence: python3 -m pytest -q tests/test_smoke.py tests/golden/test_journal_status_parity.py; python3 -m pytest -q",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-001 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-0.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-002",
+      "title": "Repair stale SECRET_PATTERNS import in redacted export security test",
+      "type": "bug",
+      "priority": "P1",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:security-boundaries",
+        "track:bug",
+        "risk:high"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic",
+        "trade-trace-2d3"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Repair stale SECRET_PATTERNS import in redacted export security test",
+        "Paydown boundary followed: Update test/import boundary to current security.patterns/exporter API or re-export intentionally; ensure redacted export tests collect.",
+        "Validation evidence: python3 -m pytest -q tests/security/test_redacted_exports.py; python3 -m pytest -q",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-002 and artifact refs audits/no-tech-debt-20260518/verification/validation-current.txt."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-003",
+      "title": "Run quality gates before release tags, not only inside PyPI publish workflow",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:build-package-ci-release",
+        "track:maintenance",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Run quality gates before release tags, not only inside PyPI publish workflow",
+        "Paydown boundary followed: Add PR/main CI or reusable test workflow; keep PyPI publish tag-gated.",
+        "Validation evidence: GitHub Actions workflow inspection; ruff check src tests; mypy src; python3 -m pytest -q",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-003 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-0.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-004",
+      "title": "Fix broken relative links across README, PRD, and architecture docs",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:docs-contract-truth",
+        "track:maintenance",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Fix broken relative links across README, PRD, and architecture docs",
+        "Paydown boundary followed: Correct relative links and add a lightweight markdown link check.",
+        "Validation evidence: python3 <markdown link checker> over README.md docs/**/*.md",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-004 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-1.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-005",
+      "title": "Scope AGENTS/CLAUDE session-close rules for read-only and no-push workflows",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:docs-contract-truth",
+        "track:maintenance",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Scope AGENTS/CLAUDE session-close rules for read-only and no-push workflows",
+        "Paydown boundary followed: Amend agent docs to preserve mandatory push for authorized mutating work while explicitly exempting read-only/no-push/delegated audit lanes.",
+        "Validation evidence: Manual readback of AGENTS.md and CLAUDE.md; simulate mutating vs read-only workflow interpretation",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-005 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-1.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-006",
+      "title": "Reconcile README/PRD vector dependency claims with pyproject and deferred embeddings posture",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:docs-contract-truth",
+        "track:maintenance",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Reconcile README/PRD vector dependency claims with pyproject and deferred embeddings posture",
+        "Paydown boundary followed: Align docs and packaging dependency declarations; link to existing embeddings beads where implementation remains deferred.",
+        "Validation evidence: Inspect pyproject dependencies and registry tool descriptions; readback README/PRD",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-006 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-1.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-007",
+      "title": "Reject stray positional CLI tokens after valid command resolution",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:cli-mcp-contracts-tooling",
+        "track:maintenance",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Reject stray positional CLI tokens after valid command resolution",
+        "Paydown boundary followed: Reject leftover positional args with typed VALIDATION_ERROR JSON envelope while preserving --key parsing.",
+        "Validation evidence: Targeted CLI contract test for unexpected positional token returns exit 2 JSON error",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-007 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-2.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-008",
+      "title": "Choose strict or extensible semantics for ToolContext.meta_hints unknown keys",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:cli-mcp-contracts-tooling",
+        "track:design",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Choose strict or extensible semantics for ToolContext.meta_hints unknown keys",
+        "Paydown boundary followed: Pick strict rejection or extensible propagation and test fake custom meta_hints plus standard hints.",
+        "Validation evidence: Unit/contract test for fake handler setting custom meta_hints plus standard hints",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-008 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-2.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-011",
+      "title": "Harden events table with SQLite append-only triggers",
+      "type": "task",
+      "priority": "P1",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:storage-persistence-events-schema",
+        "track:design",
+        "risk:high"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Harden events table with SQLite append-only triggers",
+        "Paydown boundary followed: Add migration for events BEFORE UPDATE/DELETE triggers while keeping outbox mutable; test both.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_append_only.py tests/integration/test_jsonl_replay_readiness.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-011 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-3.md.",
+        "Compatibility/backfill/security blast radius is explicitly evaluated before implementation; if uncertain, stop at design/investigation output."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-012",
+      "title": "Enforce or explicitly grandfather strategy_id references after strategies table exists",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:storage-persistence-events-schema",
+        "track:design",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Enforce or explicitly grandfather strategy_id references after strategies table exists",
+        "Paydown boundary followed: Decide strict FK, new-row triggers, or documented soft validation/orphan audit; test invalid/null/valid strategy_id.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_schema.py tests/integration/test_strategy_tools.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-012 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-3.md.",
+        "Compatibility/backfill/security blast radius is explicitly evaluated before implementation; if uncertain, stop at design/investigation output."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-013",
+      "title": "Make FTS5 dependency explicit or gracefully optional for memory migrations",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:storage-persistence-events-schema",
+        "track:investigation",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Make FTS5 dependency explicit or gracefully optional for memory migrations",
+        "Paydown boundary followed: Choose required vs optional policy; fail early with clear error or provide degraded no-FTS behavior.",
+        "Validation evidence: Migration test simulating FTS5 creation failure",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-013 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-3.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-014",
+      "title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:storage-persistence-events-schema",
+        "track:design",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Add storage-level timestamp invariant coverage or explicit delegation policy",
+        "Paydown boundary followed: Choose DB CHECK/triggers or explicit API-only invariant plus schema-audit tests for critical timestamp columns.",
+        "Validation evidence: python3 -m pytest -q tests/test_timestamps.py tests/integration/test_schema.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-014 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-3.md.",
+        "Compatibility/backfill/security blast radius is explicitly evaluated before implementation; if uncertain, stop at design/investigation output."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-015",
+      "title": "Add schema/meta consistency checks for migration recovery",
+      "type": "task",
+      "priority": "P3",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:storage-persistence-events-schema",
+        "track:investigation",
+        "risk:low"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Add schema/meta consistency checks for migration recovery",
+        "Paydown boundary followed: Add schema audit before migration or defensively detect schema/meta mismatch with clear guidance.",
+        "Validation evidence: Add migration recovery tests with stale meta and partially existing objects",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-015 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-3.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-016",
+      "title": "Validate polymorphic edge endpoints and audit orphan edges",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:storage-persistence-events-schema",
+        "track:design",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Validate polymorphic edge endpoints and audit orphan edges",
+        "Paydown boundary followed: Add write-tool endpoint validation and/or orphan-edge audit; consider DB triggers for core endpoint kinds.",
+        "Validation evidence: Tests for valid/invalid edge endpoints and orphan-edge audit query",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-016 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-3.md.",
+        "Compatibility/backfill/security blast radius is explicitly evaluated before implementation; if uncertain, stop at design/investigation output."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-017",
+      "title": "Make memory.reflect node + about-edge write truly atomic",
+      "type": "bug",
+      "priority": "P1",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:domain-tools-ledger-memory-playbook",
+        "track:bug",
+        "risk:high"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic",
+        "trade-trace-2d3"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Make memory.reflect node + about-edge write truly atomic",
+        "Paydown boundary followed: Refactor reflect to insert node/event/edge/event in one transaction; add forced-failure rollback test.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_memory_layer.py tests/integration/test_memory_link.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-017 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-4.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-018",
+      "title": "Reconcile memory.reflect docs/API shape with implementation",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:domain-tools-ledger-memory-playbook",
+        "track:maintenance",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Reconcile memory.reflect docs/API shape with implementation",
+        "Paydown boundary followed: Either implement compatibility aliases/edge sugar or update docs/examples; add tests replaying README/PRD examples.",
+        "Validation evidence: Contract tests for README/PRD memory.reflect examples through dispatch",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-018 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-4.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-019",
+      "title": "Add replay-safe idempotency to strategy.update",
+      "type": "bug",
+      "priority": "P1",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:domain-tools-ledger-memory-playbook",
+        "track:bug",
+        "risk:high"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic",
+        "trade-trace-2d3"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Add replay-safe idempotency to strategy.update",
+        "Paydown boundary followed: Check replay before mutation and return original row; add repeat-key regression.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_strategy_tools.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-019 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-4.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-020",
+      "title": "Replace signal.scan JSON LIKE dedupe with structured related-ref matching",
+      "type": "task",
+      "priority": "P3",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:domain-tools-ledger-memory-playbook",
+        "track:maintenance",
+        "risk:low"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Replace signal.scan JSON LIKE dedupe with structured related-ref matching",
+        "Paydown boundary followed: Use json_each/json_extract or bounded Python JSON comparison; test whitespace/reordered related_refs_json.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_signal_scan.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-020 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-4.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-021",
+      "title": "Define and enforce supported ReportFilter semantics per report",
+      "type": "task",
+      "priority": "P1",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:reports-projections-export",
+        "track:design",
+        "risk:high"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Define and enforce supported ReportFilter semantics per report",
+        "Paydown boundary followed: Add shared compiler or explicit supported-filter declarations/rejections; tests seed disjoint actors/instruments/strategies/time windows.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_report_filter.py tests/security/test_report_sql_filters.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-021 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-5.md.",
+        "Compatibility/backfill/security blast radius is explicitly evaluated before implementation; if uncertain, stop at design/investigation output."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-022",
+      "title": "Define signed quantity convention and fix projection realized P&L sign coverage",
+      "type": "bug",
+      "priority": "P1",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:reports-projections-export",
+        "track:bug",
+        "risk:high"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic",
+        "trade-trace-2d3"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Define signed quantity convention and fix projection realized P&L sign coverage",
+        "Paydown boundary followed: Define signed convention and add rebuild tests for profitable/losing long and short closes.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_report_pnl_watchlist.py tests/integration/test_projection_rebuild.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-022 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-5.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-023",
+      "title": "Preserve true source_quality diagnostic counts before sample truncation",
+      "type": "bug",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:reports-projections-export",
+        "track:bug",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic",
+        "trade-trace-2d3"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Preserve true source_quality diagnostic counts before sample truncation",
+        "Paydown boundary followed: Return total_count separately from capped sample_ids; add >MAX_SAMPLE_IDS test.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_source_quality.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-023 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-5.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-024",
+      "title": "Propagate calibration record-id truncation to top-level/meta truncated flag",
+      "type": "bug",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:reports-projections-export",
+        "track:bug",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic",
+        "trade-trace-2d3"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Propagate calibration record-id truncation to top-level/meta truncated flag",
+        "Paydown boundary followed: Set top-level truncated when any group truncates; add >1000 scored rows contract test.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_report_calibration.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-024 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-5.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-025",
+      "title": "Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+      "type": "task",
+      "priority": "P3",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:reports-projections-export",
+        "track:maintenance",
+        "risk:low"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+        "Paydown boundary followed: Introduce helper for groups(report) or remove wrapped support consistently; test both shapes if retained.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_report_coach.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-025 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-5.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-026",
+      "title": "Capture one as_of clock instant inside report.watchlist",
+      "type": "task",
+      "priority": "P3",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:reports-projections-export",
+        "track:maintenance",
+        "risk:low"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Capture one as_of clock instant inside report.watchlist",
+        "Paydown boundary followed: Capture one UTC instant at entry and pass through age/stale/as_of; add exact-threshold test.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_report_pnl_watchlist.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-026 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-5.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-027",
+      "title": "Handle malformed event payload JSON per outbox row during export drain",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:reports-projections-export",
+        "track:maintenance",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Handle malformed event payload JSON per outbox row during export drain",
+        "Paydown boundary followed: Catch JSONDecodeError/non-dict per row; mark failed/increment attempt_count/error_text and continue.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_outbox_export.py tests/integration/test_jsonl_contract.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-027 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-5.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-028",
+      "title": "Sanitize event_type before using it in JSONL export filenames",
+      "type": "task",
+      "priority": "P3",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:reports-projections-export",
+        "track:maintenance",
+        "risk:low"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Sanitize event_type before using it in JSONL export filenames",
+        "Paydown boundary followed: Allow/escape filename-safe event_type characters and test slash-containing event type.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_outbox_export.py tests/security/test_redacted_exports.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-028 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-5.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-029",
+      "title": "Clarify low-level report output metric semantics for playbook adherence and P&L coverage",
+      "type": "task",
+      "priority": "P3",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:reports-projections-export",
+        "track:maintenance",
+        "risk:low"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Clarify low-level report output metric semantics for playbook adherence and P&L coverage",
+        "Paydown boundary followed: Change summary.sample_size to distinct decisions or rename field; add one-decision/multiple-rule test.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_playbook_layer.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-029 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-5.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-031",
+      "title": "Remove nested full-suite pytest subprocess from default dogfood verification test",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:test-harness-and-fixtures",
+        "track:maintenance",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Remove nested full-suite pytest subprocess from default dogfood verification test",
+        "Paydown boundary followed: Move nested suite run to explicit marker/manual verification or replace with bounded dogfood contract assertions; fix stale comment.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_final_dogfood_verification.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-031 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-6.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-033",
+      "title": "Make scoring \u201cproperty\u201d tests exercise production behavior or rename them",
+      "type": "task",
+      "priority": "P3",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:test-harness-and-fixtures",
+        "track:maintenance",
+        "risk:low"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Make scoring \u201cproperty\u201d tests exercise production behavior or rename them",
+        "Paydown boundary followed: Either rename as reference/example tests or route properties through production scoring/report outputs; add Hypothesis only if intentionally adopted.",
+        "Validation evidence: python3 -m pytest -q tests/property tests/integration/test_scoring_lifecycle.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-033 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-6.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-034",
+      "title": "Move fixture_seed wall-clock performance assertion out of default functional suite",
+      "type": "task",
+      "priority": "P3",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:test-harness-and-fixtures",
+        "track:maintenance",
+        "risk:low"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Move fixture_seed wall-clock performance assertion out of default functional suite",
+        "Paydown boundary followed: Move to perf marker/job or make default test assert deterministic outcomes only.",
+        "Validation evidence: python3 -m pytest -q tests/integration/test_fixture_seed.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-034 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-6.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-035",
+      "title": "Decide and cover secret scanning for all persisted free-text and metadata surfaces",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:security-boundaries",
+        "track:design",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Decide and cover secret scanning for all persisted free-text and metadata surfaces",
+        "Paydown boundary followed: Define field/metadata policy; either scan broader surfaces or document allowed local-sensitive metadata; add tests.",
+        "Validation evidence: python3 -m pytest -q tests/security/test_secret_pattern_writes.py tests/security/test_no_credentials.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-035 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-7.md.",
+        "Compatibility/backfill/security blast radius is explicitly evaluated before implementation; if uncertain, stop at design/investigation output."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-036",
+      "title": "Cover explicit metadata_json credential injection in no-credentials policy",
+      "type": "bug",
+      "priority": "P1",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:security-boundaries",
+        "track:bug",
+        "risk:high"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic",
+        "trade-trace-2d3"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Cover explicit metadata_json credential injection in no-credentials policy",
+        "Paydown boundary followed: Decide reject/sanitize/document metadata_json credentials; add nested/string metadata_json tests.",
+        "Validation evidence: python3 -m pytest -q tests/security/test_no_credentials.py tests/security/test_secret_pattern_writes.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-036 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-7.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-037",
+      "title": "Clarify and harden export secret-warning and shareable-export boundary",
+      "type": "task",
+      "priority": "P3",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:security-boundaries",
+        "track:maintenance",
+        "risk:low"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Clarify and harden export secret-warning and shareable-export boundary",
+        "Paydown boundary followed: Add relative export path, pattern counts, offsets/JSON pointer paths or redacted snippets; assert raw values absent.",
+        "Validation evidence: python3 -m pytest -q tests/security/test_redacted_exports.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-037 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-7.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-038",
+      "title": "Expand no-network default tests beyond journal.init/status/schema",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:security-boundaries",
+        "track:maintenance",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Expand no-network default tests beyond journal.init/status/schema",
+        "Paydown boundary followed: Add registry-wide representative no-network smoke and static dependency audit for network libs/subprocess paths.",
+        "Validation evidence: python3 -m pytest -q tests/security/test_no_network_default.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-038 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-7.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-039",
+      "title": "Pin future MCP stdio security boundary before transport implementation",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:security-boundaries",
+        "track:design",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Pin future MCP stdio security boundary before transport implementation",
+        "Paydown boundary followed: Before implementing stdio server, add contract tests/design for stdio-only, default_registry-only exposure, no dynamic import/exec, no secret transport hints.",
+        "Validation evidence: Tests added before/with serve_stdio implementation; verify no TCP listener by default",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-039 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-7.md.",
+        "Compatibility/backfill/security blast radius is explicitly evaluated before implementation; if uncertain, stop at design/investigation output."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-040",
+      "title": "Extend file-permission tests to directories, temp files, WAL/SHM, and backups",
+      "type": "task",
+      "priority": "P2",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:security-boundaries",
+        "track:maintenance",
+        "risk:medium"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Extend file-permission tests to directories, temp files, WAL/SHM, and backups",
+        "Paydown boundary followed: Create restrictive files from start where possible; test permissive umask for tmp/final dirs/WAL/SHM/backups and document directory leakage stance.",
+        "Validation evidence: python3 -m pytest -q tests/security/test_file_permissions.py",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-040 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-7.md."
+      ]
+    },
+    {
+      "candidate_id": "DEBT-041",
+      "title": "Guard or scope runtime secret regex registration against ReDoS",
+      "type": "task",
+      "priority": "P3",
+      "labels": [
+        "tech-debt",
+        "repo-no-tech-debt",
+        "debt-run:20260518-no-tech-debt",
+        "domain:security-boundaries",
+        "track:investigation",
+        "risk:low"
+      ],
+      "relations": [
+        "pending-no-tech-debt-epic"
+      ],
+      "blocks_final_gate": true,
+      "acceptance_criteria": [
+        "Debt claim is addressed specifically: Guard or scope runtime secret regex registration against ReDoS",
+        "Paydown boundary followed: Decide trusted/test-only scope or add max source length/safe regex engine/scan caps; add static rejection or timeout tests.",
+        "Validation evidence: Unit tests for rejected pathological/custom regex policy",
+        "No unrelated cleanup/refactor/product expansion; public API/security/migration behavior stays within documented boundary or is covered by an explicit design decision.",
+        "Bead/update cites repo-no-tech-debt candidate DEBT-041 and artifact refs audits/no-tech-debt-20260518/lane-reports/lane-7.md.",
+        "Compatibility/backfill/security blast radius is explicitly evaluated before implementation; if uncertain, stop at design/investigation output."
+      ]
+    }
+  ]
+}

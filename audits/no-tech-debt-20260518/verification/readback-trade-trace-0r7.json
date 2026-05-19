@@ -1,0 +1,148 @@
+[
+  {
+    "id": "trade-trace-0r7",
+    "title": "Test QC: agent-ready surface (parity, smoke, schema audit, embeddings)",
+    "description": "Verify the agent-ready epic with ≥2 tests per capability area. Same pattern as the prior milestone Test QC beads (d0w, 5n4, 722).\n\nCapability areas + acceptance:\n- stdio MCP handshake: ≥2 tests covering initialize + capability negotiation.\n- tools/list schema audit: ≥2 tests — every tool has a non-null inputSchema; the schema validates against the JSON Schema 2020-12 meta-schema.\n- tools/call round-trip parity vs mcp_call: ≥2 tests covering a representative read tool + representative write tool with dry-run.\n- Embeddings off-by-default invariant (regression-proof against sqlite-vec wiring): ≥2 tests — fresh init never loads the extension, journal.status reports provider='none'.\n- Semantic recall returns provenance: ≥2 tests — with provider switched, memory.recall items carry the semantic strategy in strategy_provenance and the API key/path never appears in any returned field.\n- Model import air-gap: ≥1 test — tt model import succeeds with socket.socket patched to raise.\n- Keyring isolation: ≥1 test — provider switch round-trip with no plaintext key in DB / config / outbox JSONL.\n\nClose reason must cite the exact test names per capability.",
+    "acceptance_criteria": "≥6 capability areas with ≥2 named tests each (≥12 total). Per-capability test names cited in close reason. False-green guard: any uncovered capability triggers a blocking fix bead before this QC closes.",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "task",
+    "created_at": "2026-05-19T02:41:07Z",
+    "created_by": "hermes",
+    "updated_at": "2026-05-19T02:41:07Z",
+    "dependencies": [
+      {
+        "id": "trade-trace-0m6",
+        "title": "Client config walkthroughs: Claude Code + Cursor/Windsurf/Cline + Claude Desktop",
+        "description": "Three short copy-paste-ready setup docs so users can register the trade-trace MCP server in their host of choice. Each doc lives at the repo root so the install path is one click from README.\n\nCritical files:\n- docs/CLAUDE_DESKTOP.md (new) — claude_desktop_config.json snippet with command + args for trade-trace-mcp. Note env var setup (TRADE_TRACE_HOME).\n- docs/CLAUDE_CODE.md (new) — 'claude mcp add trade-trace -- trade-trace-mcp' walkthrough; per-project vs global scope.\n- docs/IDE_MCP_SETUP.md (new) — Cursor / Windsurf / Cline pattern; generic stdio config snippet.\n- README.md — link the three from the install section.",
+        "acceptance_criteria": "Each of the three docs carries a working config snippet a user can copy-paste verbatim. Smoke-verified by the bead author on at least one of the three clients (notes captured in close reason; preferably Claude Code since that's the most likely dogfood host).",
+        "status": "open",
+        "priority": 2,
+        "issue_type": "task",
+        "created_at": "2026-05-19T02:40:15Z",
+        "created_by": "hermes",
+        "updated_at": "2026-05-19T02:40:15Z",
+        "dependency_type": "blocks"
+      },
+      {
+        "id": "trade-trace-3u1",
+        "title": "docs/AGENT_GUIDE.md: how to drive the journal loop from an LLM agent",
+        "description": "A narrative walkthrough that an external MCP agent (or its human operator) reads on first connect. Covers the journal loop end-to-end + the contract patterns that matter.\n\nCritical files:\n- docs/AGENT_GUIDE.md (new) — top-level guide, linked from README.\n- README.md:99-104 — replace the 'Quickstart for an agent (MCP, planned)' section with a link.\n\nReuses:\n- Tool descriptions already authored at registration sites (read; do not duplicate).\n- docs/architecture/contracts.md — link for envelope shape.\n- PRD.md §10 — the dogfood criteria are the validation surface.\n\nStructure (≤800 lines total):\n- §1 'Connect' — one-paragraph install + supported clients.\n- §2 'The journal loop' — 6+ tool calls in order (instrument.add → thesis.add → forecast.add → decision.add → outcome.add → memory.recall → memory.reflect → playbook.propose_version).\n- §3 'Patterns' — idempotency keys, _dry_run, _confirm, error code taxonomy with one example per code.\n- §4 'Common pitfalls' — late_recorded forecasts, status enum gotchas, sample_warning meaning.\n- §5 'Drilldown' — tool.schema for self-discovery.",
+        "acceptance_criteria": "docs/AGENT_GUIDE.md exists with all 5 sections. Every tool referenced is a real registered tool (verified by grepping the registry). README link replaces the prior 'planned' note. ≤800 lines.",
+        "status": "open",
+        "priority": 2,
+        "issue_type": "task",
+        "created_at": "2026-05-19T02:39:56Z",
+        "created_by": "hermes",
+        "updated_at": "2026-05-19T02:39:56Z",
+        "dependency_type": "blocks"
+      },
+      {
+        "id": "trade-trace-46p",
+        "title": "stdio MCP server: wire mcp SDK into serve_stdio + entry point",
+        "description": "Replace the NotImplementedError stub in src/trade_trace/mcp_server.py::serve_stdio() with a real bridge to the mcp Python SDK so external MCP hosts can connect via stdio JSON-RPC.\n\nCritical files:\n- src/trade_trace/mcp_server.py:40-66 — replace serve_stdio() stub.\n- pyproject.toml — add console_script entry trade-trace-mcp = trade_trace.mcp_server:serve_stdio_main. The mcp\u003e=1.0 optional dep is already declared.\n- src/trade_trace/cli.py — optional: add 'tt mcp serve' subcommand wrapping serve_stdio().\n\nReuses:\n- src/trade_trace/core.py::dispatch — transport-agnostic.\n- src/trade_trace/contracts/tool_registry.py::ToolRegistry — walk by_name for list_tools().\n- src/trade_trace/mcp_server.py::mcp_call — the stdio server is a thin wrapper around it.\n- src/trade_trace/contracts/envelope.py::dump_envelope — serializes the envelope into the tools/call result frame.\n\nActor identity: server resolves actor_id from MCP_ACTOR_ID env var, defaulting to 'mcp:default' (matches the in-process shim's pattern).\n\nOpen question to resolve during impl: confirm the mcp SDK 1.x exposes mcp.server.Server vs FastMCP (look up the SDK docs before writing the bridge).",
+        "acceptance_criteria": "trade-trace-mcp entry point starts an stdio server; sending JSON-RPC initialize + tools/list returns every registered tool with a non-null inputSchema. tools/call for a representative read tool returns the same data payload as mcp_call. Actor_id resolution from MCP_ACTOR_ID env var documented. ≥3 named tests in tests/integration/test_mcp_stdio_server.py covering: initialize handshake, list_tools shape, round-trip call vs shim.",
+        "status": "open",
+        "priority": 1,
+        "issue_type": "feature",
+        "created_at": "2026-05-19T02:39:37Z",
+        "created_by": "hermes",
+        "updated_at": "2026-05-19T02:39:37Z",
+        "dependency_type": "blocks"
+      },
+      {
+        "id": "trade-trace-59l",
+        "title": "CI smoke test: stdio server subprocess + tools/list + tools/call round-trip",
+        "description": "A fast integration test that spawns the real stdio MCP server as a subprocess, sends a few JSON-RPC frames over stdin, and confirms the protocol works end-to-end. Catches regressions that the in-process mcp_call shim cannot.\n\nCritical files:\n- tests/integration/test_mcp_stdio_server.py (new) — subprocess spawn (sys.executable + entry point or python -m trade_trace.mcp_server), send JSON-RPC frames over stdin, parse frames from stdout, assert protocol-level invariants.\n\nCoverage matrix:\n- Process boots without error.\n- JSON-RPC initialize round-trips (server returns serverInfo + capabilities).\n- tools/list returns ≥30 entries; each entry has name + description + inputSchema (validate the schema is a dict with type='object').\n- tools/call round-trip for a representative READ tool (report.filter_schema) — result data equals mcp_call('report.filter_schema', {}).data.\n- tools/call round-trip for a representative WRITE tool in dry-run mode (venue.add with _dry_run=true) — confirms no persisted row.",
+        "acceptance_criteria": "≥4 named tests run as part of pytest -q with the [mcp] extra installed. Runtime \u003c10s (subprocess cold-start is the dominant cost). Skipped (not failed) when the mcp SDK is missing — the [mcp] extra is optional.",
+        "status": "open",
+        "priority": 2,
+        "issue_type": "task",
+        "created_at": "2026-05-19T02:40:18Z",
+        "created_by": "hermes",
+        "updated_at": "2026-05-19T02:40:18Z",
+        "dependency_type": "blocks"
+      },
+      {
+        "id": "trade-trace-74b",
+        "title": "Auto-derive inputSchema from example_minimal; populate ToolRegistration.json_schema",
+        "description": "Today ToolRegistration.json_schema is declared on the dataclass but never populated by any register() call (audit confirmed in plan-mode Phase 1). Without it, the stdio MCP server's tools/list cannot emit proper inputSchema per tool, and external agents can't render args.\n\nCritical files:\n- src/trade_trace/contracts/json_schema_derive.py (new) — pure function derive_schema(example: dict) -\u003e dict that walks a payload, infers types per key (str→string, int→integer, float→number, bool→boolean, list→array (items recurse), dict→object (properties recurse)), and returns a valid JSON Schema dict with type=object and required-keys list.\n- src/trade_trace/contracts/tool_registry.py::ToolRegistry.register (lines 121-148) — after the existing CLI-collision check, if json_schema is None and example_minimal is non-null, derive_schema(example_minimal) and store. Explicit json_schema= kwarg wins over the derived one.\n- src/trade_trace/tools/journal.py::_tool_schema (lines 213-284) — already echoes reg.json_schema; no code change needed.\n\nReuses:\n- src/trade_trace/tools/_examples.py::WRITE_TOOL_EXAMPLES — the source of example_minimal payloads (7 core write tools today).\n- src/trade_trace/contracts/report_filter.py::ReportFilter.model_json_schema — for tools that accept a 'filter' arg, the schema points at the canonical ReportFilter schema instead of deriving.\n\nIdempotency keys + dry-run flags + confirm: derive_schema must NOT include the underscore-prefixed transport keys (_dry_run, _confirm, _allow_no_idempotency) as required fields, but should document them in the schema's description.",
+        "acceptance_criteria": "After build_registry() every tool with example_minimal has a non-null reg.json_schema. The tool.schema envelope's json_schema field is a valid JSON Schema dict (validate against the JSON Schema 2020-12 meta-schema or equivalent). Explicit json_schema= overrides derivation. ≥6 named tests: per-primitive derivation (str/int/float/bool); nested-object handling; list of objects; tools without example_minimal leave json_schema=null; explicit override wins; ReportFilter-typed filter args land the canonical schema.",
+        "status": "open",
+        "priority": 2,
+        "issue_type": "feature",
+        "created_at": "2026-05-19T02:39:49Z",
+        "created_by": "hermes",
+        "updated_at": "2026-05-19T02:39:49Z",
+        "dependency_type": "blocks"
+      },
+      {
+        "id": "trade-trace-89x",
+        "title": "Embeddings opt-in: bge-small lazy download + tt model import air-gap path",
+        "description": "Second of four a4p-split beads. Replaces the model.import UNSUPPORTED_CAPABILITY stub with the real path.\n\nCritical files:\n- src/trade_trace/tools/admin.py::_model_import_stub (UNSUPPORTED_CAPABILITY) — replace with the real path. Copies a pre-staged BAAI/bge-small-en-v1.5 directory from a caller-supplied --path into $TRADE_TRACE_HOME/models/bge-small-en-v1.5/.\n- src/trade_trace/tools/admin.py::_journal_config_set — when key='embeddings.provider' and value='local', trigger a one-shot lazy download to the same path if the model files are missing.\n- src/trade_trace/security/security.md — confirm the download URL (HuggingFace) is consistent with the threat model. Document the network-flag boundary.\n\nReuses:\n- security.md §3 'Model-host phishing' row already covers the threat surface; this bead executes the documented behavior.\n\nNetwork policy: download path is GATED on embeddings.provider != 'none' AND missing model files. Air-gap installs use tt model import \u003cpath\u003e with zero outbound calls (verified by patching socket.socket in the test).",
+        "acceptance_criteria": "tt config set embeddings.provider local triggers a one-shot download to $TRADE_TRACE_HOME/models/. tt model import \u003cpath\u003e copies a pre-staged model without any network call. Model file SHA-256 verified against a known-good hash. ≥3 named tests: lazy-download triggers on first recall after provider switch; air-gap import succeeds with sockets patched to raise; SHA-256 mismatch surfaces INVARIANT_VIOLATION.",
+        "status": "open",
+        "priority": 2,
+        "issue_type": "feature",
+        "created_at": "2026-05-19T02:40:36Z",
+        "created_by": "hermes",
+        "updated_at": "2026-05-19T02:40:36Z",
+        "dependency_type": "blocks"
+      },
+      {
+        "id": "trade-trace-heo",
+        "title": "Embeddings opt-in: tt memory reindex --confirm (bead a4p-split-4)",
+        "description": "Fourth of four a4p-split beads. Replaces the memory.reindex UNSUPPORTED_CAPABILITY stub with the real re-embed-all path.\n\nCritical files:\n- src/trade_trace/tools/admin.py::_memory_reindex_stub — replace with the real path. Reads all memory_nodes, re-embeds each body, writes new embeddings to memory_node_embeddings, deletes the prior provider's rows. All in one transaction.\n\nWorkflow:\n1. Without --confirm: compute count of memory_nodes to re-embed + estimated cost (free for local; rough $ estimate for api:openai). Returns meta.preview_only=true.\n2. With --confirm: open UnitOfWork, embed each body via the active provider, INSERT new rows, DELETE old rows (different model_id), COMMIT.\n\nReuses:\n- src/trade_trace/events/unit_of_work.py::UnitOfWork — single-transaction atomicity.\n- The --confirm gate pattern from journal.backup/restore/repair (bead 2z7).",
+        "acceptance_criteria": "--confirm required; without it returns meta.preview_only=true with node count + cost estimate. With --confirm: re-embeds in one transaction; failure mid-flight rolls back to the prior provider's state. ≥2 named tests: preview no-write; --confirm round-trip leaves a deterministic embedding count matching memory_nodes.",
+        "status": "open",
+        "priority": 2,
+        "issue_type": "feature",
+        "created_at": "2026-05-19T02:40:58Z",
+        "created_by": "hermes",
+        "updated_at": "2026-05-19T02:40:58Z",
+        "dependency_type": "blocks"
+      },
+      {
+        "id": "trade-trace-izh",
+        "title": "Embeddings opt-in: sqlite-vec wiring + memory_node_embeddings storage",
+        "description": "First of four beads that together replace the trade-trace-a4p deferred bundle. Wires sqlite-vec into the storage layer so the SEMANTIC retrieval strategy in memory.recall has a backing index.\n\nCritical files:\n- pyproject.toml — add sqlite-vec (pin specific 0.1.x minor) to a new [embeddings] extra (or extend [mcp]).\n- src/trade_trace/storage/database.py — load the sqlite-vec extension on connection open ONLY when the embeddings.provider config row is not 'none'. Lazy import so the optional dep stays optional.\n- src/trade_trace/storage/migrations.py — migration 009 adds memory_node_embeddings table (node_id FK + embedding BLOB + provider + dim + model_id + created_at). Use a vec0 virtual table or row table with vec blob depending on sqlite-vec API choice (resolve during impl).\n- src/trade_trace/tools/memory.py::_memory_recall — add a 'semantic' strategy: when provider != none and the node has an embedding row, compute cosine similarity vs the query embedding, return ranked list.\n\nReuses:\n- The recall ranking pipeline (BM25, temporal, graph) is already extension-point shaped; semantic slots in as a 4th strategy with RRF combine.\n- src/trade_trace/tools/memory.py::K_RRF and IMPORTANCE_BOOST_SLOPE constants apply unchanged.",
+        "acceptance_criteria": "sqlite-vec extension loads only when embeddings.provider != 'none'; with provider=none the extension is never loaded (verified by patching the loader and asserting it is not called). Migration 009 is idempotent. ≥3 named tests: load/no-load per config; vec insert + similarity query round-trip; semantic strategy appears in memory.recall.data.strategies_used when enabled.",
+        "status": "open",
+        "priority": 2,
+        "issue_type": "feature",
+        "created_at": "2026-05-19T02:40:28Z",
+        "created_by": "hermes",
+        "updated_at": "2026-05-19T02:40:28Z",
+        "dependency_type": "blocks"
+      },
+      {
+        "id": "trade-trace-z6s",
+        "title": "Embeddings opt-in: API provider path + OS keyring (bead a4p-split-3)",
+        "description": "Third of four a4p-split beads. Wires the embeddings.provider=api:openai path + OS keyring storage so an API key never lives in DB / plaintext config / logs.\n\nCritical files:\n- src/trade_trace/tools/admin.py::_journal_config_set — extend the embeddings.provider closed-enum validation to accept 'api:openai'; on first set, prompt for an API key and store via the keyring wrapper.\n- src/trade_trace/security/keyring.py (new) — thin wrapper around the keyring library; lazy import so the dep is optional. Functions: store_api_key(service, value), load_api_key(service), delete_api_key(service).\n- pyproject.toml — add keyring to the [embeddings] extra.\n- src/trade_trace/tools/memory.py::_memory_recall — when provider starts with 'api:', resolve the API key from keyring at call time (NOT cached in memory beyond the call).\n\nReuses:\n- security.md threat model row 'Model-host phishing' — covered.\n- src/trade_trace/security/patterns.py — secret-pattern guard already prevents leakage of the API key shape into thesis.body / source.excerpt / decision.reason.",
+        "acceptance_criteria": "tt config set embeddings.provider api:openai prompts for the API key and stores it in the OS keyring (never written to DB or plaintext config). ≥2 named tests: keyring round-trip (store, load, delete); grep audit on $TRADE_TRACE_HOME finds zero plaintext occurrences of a known-secret-shaped API key after a full provider-switch flow.",
+        "status": "open",
+        "priority": 2,
+        "issue_type": "feature",
+        "created_at": "2026-05-19T02:40:52Z",
+        "created_by": "hermes",
+        "updated_at": "2026-05-19T02:40:52Z",
+        "dependency_type": "blocks"
+      }
+    ],
+    "dependents": [
+      {
+        "id": "trade-trace-dhs",
+        "title": "QC Gate: agent-ready",
+        "description": "Final gate review for the agent-ready epic. Same structure as the prior milestone gates (xzt for M2, e3p for M3, v8i for M4).\n\nReview requirements:\n- stdio MCP server works end-to-end (cite the smoke test name + a successful tools/call round-trip).\n- inputSchema discoverability: every tool has a non-null inputSchema reachable via tools/list (cite the schema-audit test).\n- Agent guide complete: AGENT_GUIDE.md + 3 client config docs all link from README; each has a working snippet.\n- Embeddings opt-in functional end-to-end: provider switch → lazy download → semantic recall → reindex round-trip — cite the test name per phase.\n- Dogfood tracker open + receiving notes.\n\nGate disposition rule: any material finding requires either upstream bead reopen OR a single blocking fix bead created before this gate closes. The gate never closes by inheriting prose from upstream beads — every requirement needs direct evidence (test name, command output, or file:line).",
+        "acceptance_criteria": "All upstream agent-ready beads closed with cited evidence (test names, command output, or file:line). No material finding remains in prose. Full repo suite passes.",
+        "status": "open",
+        "priority": 1,
+        "issue_type": "task",
+        "created_at": "2026-05-19T02:41:23Z",
+        "created_by": "hermes",
+        "updated_at": "2026-05-19T02:41:23Z",
+        "dependency_type": "blocks"
+      }
+    ]
+  }
+]

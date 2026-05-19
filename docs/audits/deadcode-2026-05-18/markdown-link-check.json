@@ -1,0 +1,699 @@
+{
+  "checked_files": [
+    "README.md",
+    "docs/PRD.md",
+    "docs/VISION.md",
+    "docs/architecture/contracts.md",
+    "docs/architecture/dogfood-protocol.md",
+    "docs/architecture/imports.md",
+    "docs/architecture/memory-layer.md",
+    "docs/architecture/operability.md",
+    "docs/architecture/opportunity-analysis.md",
+    "docs/architecture/persistence.md",
+    "docs/architecture/reports.md",
+    "docs/architecture/risk-units.md",
+    "docs/architecture/scoring.md",
+    "docs/architecture/security.md"
+  ],
+  "missing_count": 113,
+  "missing": [
+    {
+      "file": "README.md",
+      "line": 23,
+      "url": "./VISION.md",
+      "resolved": "VISION.md"
+    },
+    {
+      "file": "README.md",
+      "line": 23,
+      "url": "./PRD.md",
+      "resolved": "PRD.md"
+    },
+    {
+      "file": "README.md",
+      "line": 58,
+      "url": "./VISION.md",
+      "resolved": "VISION.md"
+    },
+    {
+      "file": "README.md",
+      "line": 59,
+      "url": "./PRD.md",
+      "resolved": "PRD.md"
+    },
+    {
+      "file": "README.md",
+      "line": 93,
+      "url": "./PRD.md",
+      "resolved": "PRD.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 5,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 5,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 5,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 5,
+      "url": "./docs/architecture/contracts.md",
+      "resolved": "docs/docs/architecture/contracts.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 5,
+      "url": "./docs/architecture/operability.md",
+      "resolved": "docs/docs/architecture/operability.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 5,
+      "url": "./docs/architecture/reports.md",
+      "resolved": "docs/docs/architecture/reports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 5,
+      "url": "./docs/architecture/imports.md",
+      "resolved": "docs/docs/architecture/imports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 5,
+      "url": "./docs/architecture/risk-units.md",
+      "resolved": "docs/docs/architecture/risk-units.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 5,
+      "url": "./docs/architecture/opportunity-analysis.md",
+      "resolved": "docs/docs/architecture/opportunity-analysis.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 5,
+      "url": "./docs/architecture/dogfood-protocol.md",
+      "resolved": "docs/docs/architecture/dogfood-protocol.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 19,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 26,
+      "url": "./docs/architecture/imports.md",
+      "resolved": "docs/docs/architecture/imports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 26,
+      "url": "./docs/architecture/risk-units.md",
+      "resolved": "docs/docs/architecture/risk-units.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 26,
+      "url": "./docs/architecture/opportunity-analysis.md",
+      "resolved": "docs/docs/architecture/opportunity-analysis.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 28,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 34,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 38,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 47,
+      "url": "./docs/architecture/contracts.md",
+      "resolved": "docs/docs/architecture/contracts.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 64,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 70,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 103,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 113,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 136,
+      "url": "./docs/architecture/operability.md",
+      "resolved": "docs/docs/architecture/operability.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 138,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 168,
+      "url": "./docs/architecture/operability.md",
+      "resolved": "docs/docs/architecture/operability.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 180,
+      "url": "./docs/architecture/operability.md",
+      "resolved": "docs/docs/architecture/operability.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 182,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 184,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 249,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 262,
+      "url": "./docs/architecture/reports.md",
+      "resolved": "docs/docs/architecture/reports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 291,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 302,
+      "url": "./docs/architecture/operability.md",
+      "resolved": "docs/docs/architecture/operability.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 304,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 305,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 311,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 312,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 320,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 320,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 328,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 333,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 341,
+      "url": "./docs/architecture/contracts.md",
+      "resolved": "docs/docs/architecture/contracts.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 341,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 348,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 350,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 355,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 361,
+      "url": "./docs/architecture/reports.md",
+      "resolved": "docs/docs/architecture/reports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 365,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 373,
+      "url": "./docs/architecture/reports.md",
+      "resolved": "docs/docs/architecture/reports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 374,
+      "url": "./docs/architecture/reports.md",
+      "resolved": "docs/docs/architecture/reports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 387,
+      "url": "./docs/architecture/risk-units.md",
+      "resolved": "docs/docs/architecture/risk-units.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 387,
+      "url": "./docs/architecture/opportunity-analysis.md",
+      "resolved": "docs/docs/architecture/opportunity-analysis.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 389,
+      "url": "./docs/architecture/reports.md",
+      "resolved": "docs/docs/architecture/reports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 403,
+      "url": "./docs/architecture/reports.md",
+      "resolved": "docs/docs/architecture/reports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 404,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 435,
+      "url": "./docs/architecture/imports.md",
+      "resolved": "docs/docs/architecture/imports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 437,
+      "url": "./docs/architecture/imports.md",
+      "resolved": "docs/docs/architecture/imports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 441,
+      "url": "./docs/architecture/operability.md",
+      "resolved": "docs/docs/architecture/operability.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 444,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 445,
+      "url": "./docs/architecture/operability.md",
+      "resolved": "docs/docs/architecture/operability.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 446,
+      "url": "./docs/architecture/operability.md",
+      "resolved": "docs/docs/architecture/operability.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 454,
+      "url": "./docs/architecture/contracts.md",
+      "resolved": "docs/docs/architecture/contracts.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 479,
+      "url": "./docs/architecture/contracts.md",
+      "resolved": "docs/docs/architecture/contracts.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 479,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 485,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 486,
+      "url": "./docs/architecture/reports.md",
+      "resolved": "docs/docs/architecture/reports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 488,
+      "url": "./docs/architecture/reports.md",
+      "resolved": "docs/docs/architecture/reports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 499,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 509,
+      "url": "./docs/architecture/imports.md",
+      "resolved": "docs/docs/architecture/imports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 510,
+      "url": "./docs/architecture/imports.md",
+      "resolved": "docs/docs/architecture/imports.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 511,
+      "url": "./docs/architecture/risk-units.md",
+      "resolved": "docs/docs/architecture/risk-units.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 512,
+      "url": "./docs/architecture/opportunity-analysis.md",
+      "resolved": "docs/docs/architecture/opportunity-analysis.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 534,
+      "url": "./docs/architecture/contracts.md",
+      "resolved": "docs/docs/architecture/contracts.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 537,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 538,
+      "url": "./docs/architecture/scoring.md",
+      "resolved": "docs/docs/architecture/scoring.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 566,
+      "url": "./docs/architecture/dogfood-protocol.md",
+      "resolved": "docs/docs/architecture/dogfood-protocol.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 581,
+      "url": "./docs/architecture/dogfood-protocol.md",
+      "resolved": "docs/docs/architecture/dogfood-protocol.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 583,
+      "url": "./docs/architecture/persistence.md",
+      "resolved": "docs/docs/architecture/persistence.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 591,
+      "url": "./docs/architecture/memory-layer.md",
+      "resolved": "docs/docs/architecture/memory-layer.md"
+    },
+    {
+      "file": "docs/PRD.md",
+      "line": 591,
+      "url": "./docs/architecture/operability.md",
+      "resolved": "docs/docs/architecture/operability.md"
+    },
+    {
+      "file": "docs/architecture/contracts.md",
+      "line": 11,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/contracts.md",
+      "line": 11,
+      "url": "../../VISION.md",
+      "resolved": "docs/architecture/../../VISION.md"
+    },
+    {
+      "file": "docs/architecture/contracts.md",
+      "line": 200,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/dogfood-protocol.md",
+      "line": 5,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/dogfood-protocol.md",
+      "line": 5,
+      "url": "../../VISION.md",
+      "resolved": "docs/architecture/../../VISION.md"
+    },
+    {
+      "file": "docs/architecture/dogfood-protocol.md",
+      "line": 12,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/dogfood-protocol.md",
+      "line": 31,
+      "url": "../../VISION.md",
+      "resolved": "docs/architecture/../../VISION.md"
+    },
+    {
+      "file": "docs/architecture/dogfood-protocol.md",
+      "line": 106,
+      "url": "../../VISION.md",
+      "resolved": "docs/architecture/../../VISION.md"
+    },
+    {
+      "file": "docs/architecture/dogfood-protocol.md",
+      "line": 204,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/dogfood-protocol.md",
+      "line": 209,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/imports.md",
+      "line": 13,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/memory-layer.md",
+      "line": 5,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/operability.md",
+      "line": 14,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/operability.md",
+      "line": 14,
+      "url": "../../VISION.md",
+      "resolved": "docs/architecture/../../VISION.md"
+    },
+    {
+      "file": "docs/architecture/opportunity-analysis.md",
+      "line": 5,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/persistence.md",
+      "line": 10,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/persistence.md",
+      "line": 10,
+      "url": "../../VISION.md",
+      "resolved": "docs/architecture/../../VISION.md"
+    },
+    {
+      "file": "docs/architecture/reports.md",
+      "line": 15,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/reports.md",
+      "line": 15,
+      "url": "../../VISION.md",
+      "resolved": "docs/architecture/../../VISION.md"
+    },
+    {
+      "file": "docs/architecture/risk-units.md",
+      "line": 5,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/scoring.md",
+      "line": 13,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/scoring.md",
+      "line": 13,
+      "url": "../../VISION.md",
+      "resolved": "docs/architecture/../../VISION.md"
+    },
+    {
+      "file": "docs/architecture/scoring.md",
+      "line": 84,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/scoring.md",
+      "line": 96,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/scoring.md",
+      "line": 141,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/scoring.md",
+      "line": 200,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/scoring.md",
+      "line": 216,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/scoring.md",
+      "line": 305,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    },
+    {
+      "file": "docs/architecture/scoring.md",
+      "line": 314,
+      "url": "../../PRD.md",
+      "resolved": "docs/architecture/../../PRD.md"
+    }
+  ]
+}

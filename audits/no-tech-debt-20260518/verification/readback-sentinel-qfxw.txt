@@ -1,0 +1,7 @@
+
+Found 1 issues:
+
+trade-trace-qfxw [● P1] [bug] open
+  Cover explicit metadata_json credential injection in no-credentials policy
+  Labels: [debt-run:20260518-no-tech-debt domain:security-boundaries repo-no-tech-debt risk:high tech-debt track:bug]
+
