@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import time
 from pathlib import Path
 
@@ -140,9 +141,24 @@ def test_fixture_seed_is_byte_deterministic(tmp_path):
 # -- 3. runtime cap ---------------------------------------
 
 
+@pytest.mark.skipif(
+    not os.environ.get("TRADE_TRACE_RUN_PERF_TESTS"),
+    reason=(
+        "Wall-clock perf assertion skipped by default per bead "
+        "trade-trace-29u0; set TRADE_TRACE_RUN_PERF_TESTS=1 to opt in "
+        "for a perf-only run."
+    ),
+)
 def test_fixture_seed_completes_in_under_five_seconds(home):
     """Bead acceptance: cold-start seed completes in <5s on commodity
-    hardware. Generous bound — actual runtime is ~50ms in practice."""
+    hardware. Generous bound — actual runtime is ~50ms in practice.
+
+    Off by default per bead trade-trace-29u0 / DEBT-034: a wall-clock
+    assertion in the default functional suite mixes performance with
+    correctness and can produce false failures under constrained
+    CI / coverage / virtualized runs. The opt-in env flag lets a
+    dedicated perf job run this without contaminating normal pytest.
+    """
 
     start = time.monotonic()
     env = mcp_call("journal.fixture_seed", {
