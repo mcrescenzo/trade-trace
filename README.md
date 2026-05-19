@@ -37,6 +37,9 @@ Requirements: Python 3.11+ and SQLite with FTS5 (see
 §2.1 for the build-dependency policy). MCP support is bundled by default.
 Optional vector recall installs with `trade-trace[embeddings]`
 (adds `sqlite-vec` and OS keyring support for local or API embeddings).
+The optional read-only **Console** dashboard installs with
+`trade-trace[console]` (FastAPI + Uvicorn + Jinja2); see
+[`docs/CONSOLE.md`](./docs/CONSOLE.md).
 
 For development:
 
@@ -107,7 +110,12 @@ the auto-derived input schema; the registry is the source of truth.
 
 - Not a trade executor. No order signing, wallet handling, broker
   credentials, seed phrases, or trade routing.
-- Not a human dashboard. There is no product web UI.
+- Not a remote service or broker dashboard. The optional
+  `trade-trace[console]` extra ships a **local, read-only** review
+  dashboard at `http://127.0.0.1:8765` — it does not execute trades,
+  call broker APIs, or fetch market data; it reads the journal SQLite
+  file via a SQLite URI `mode=ro` handle. See
+  [`docs/CONSOLE.md`](./docs/CONSOLE.md).
 - Not a generic agent memory framework. The schema is trading-shaped.
 - Not a backtesting engine, tax accountant, social platform, or source
   of financial advice.
@@ -149,6 +157,9 @@ how to report vulnerabilities via GitHub Security Advisories.
   [`docs/CLAUDE_DESKTOP.md`](./docs/CLAUDE_DESKTOP.md),
   [`docs/IDE_MCP_SETUP.md`](./docs/IDE_MCP_SETUP.md)
   — client setup recipes.
+- [`docs/CONSOLE.md`](./docs/CONSOLE.md)
+  — install/launch/page-map for the optional read-only Console
+  dashboard (`trade-trace[console]`).
 - [`docs/VISION.md`](./docs/VISION.md) — north star.
 - [`docs/PRD.md`](./docs/PRD.md) — working PRD and MVP scope.
 - [`docs/architecture/contracts.md`](./docs/architecture/contracts.md)
