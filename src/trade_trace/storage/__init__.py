@@ -1,6 +1,7 @@
 """SQLite bootstrap, migrations, and journal init."""
 
 from trade_trace.storage.database import Database, open_database
+from trade_trace.storage.edge_audit import count_orphan_edge_endpoints, find_orphan_edges
 from trade_trace.storage.migrations import MIGRATIONS, apply_pending_migrations, current_version
 from trade_trace.storage.paths import default_home, resolve_home
 from trade_trace.storage.policy import (
@@ -24,8 +25,10 @@ __all__ = [
     "check_column_change",
     "check_enum_extension",
     "check_no_reverse_migration",
+    "count_orphan_edge_endpoints",
     "current_version",
     "default_home",
+    "find_orphan_edges",
     "open_database",
     "resolve_home",
 ]
