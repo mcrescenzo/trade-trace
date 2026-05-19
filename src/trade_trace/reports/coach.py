@@ -89,38 +89,8 @@ def report_coach(
         stale_threshold_days=stale_threshold_days,
     )
 
-    top_mistakes = [
-        {
-            "tag": g["key"],
-            "decision_count": g["metrics"]["decision_count"],
-            "scored_forecast_count": g["metrics"]["scored_forecast_count"],
-            "mean_brier": g["metrics"]["mean_brier"],
-            "decision_ids": g["record_ids"]["decisions"][:5],
-        }
-        for g in mistakes["data"]["groups"][:3]
-        if g["metrics"]["scored_forecast_count"] > 0
-    ] if "data" in mistakes else [
-        {
-            "tag": g["key"],
-            "decision_count": g["metrics"]["decision_count"],
-            "scored_forecast_count": g["metrics"]["scored_forecast_count"],
-            "mean_brier": g["metrics"]["mean_brier"],
-            "decision_ids": g["record_ids"]["decisions"][:5],
-        }
-        for g in mistakes["groups"][:3]
-        if g["metrics"]["scored_forecast_count"] > 0
-    ]
-    top_strengths = [
-        {
-            "tag": g["key"],
-            "decision_count": g["metrics"]["decision_count"],
-            "scored_forecast_count": g["metrics"]["scored_forecast_count"],
-            "mean_brier": g["metrics"]["mean_brier"],
-            "decision_ids": g["record_ids"]["decisions"][:5],
-        }
-        for g in strengths["groups"][:3]
-        if g["metrics"]["scored_forecast_count"] > 0
-    ]
+    top_mistakes = _top_tag_summary(mistakes)
+    top_strengths = _top_tag_summary(strengths)
     unscored_summary: dict[str, Any] = {
         "count": unscored["summary"]["metrics"]["unscored_count"],
         "forecast_ids": unscored["groups"][0]["record_ids"]["forecasts"][:5],
@@ -235,6 +205,42 @@ def report_coach(
     }
     _assert_no_trade_advice(packet)
     return packet
+
+
+def _report_groups(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """Unwrap a sub-report's `groups` regardless of whether it arrived
+    as the raw data dict (`{"groups": [...]}`) or wrapped inside a
+    success envelope (`{"data": {"groups": [...]}}`).
+
+    Per bead trade-trace-d7a / DEBT-025: the coach previously
+    handled the wrapped branch only for `mistakes` and the raw
+    branch only for `strengths`; both helpers exist because the
+    sub-report function may be invoked directly (raw) or routed
+    through the dispatcher (wrapped). This helper unifies both
+    paths so a future envelope tweak can't produce a KeyError.
+    """
+
+    if "data" in report and isinstance(report["data"], dict):
+        return list(report["data"].get("groups") or [])
+    return list(report.get("groups") or [])
+
+
+def _top_tag_summary(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """Coach helper: top-3 tag groups from a report.mistakes /
+    report.strengths sub-report. Filters out empty-sample groups so a
+    zero-Brier division never reaches the formatter."""
+
+    return [
+        {
+            "tag": g["key"],
+            "decision_count": g["metrics"]["decision_count"],
+            "scored_forecast_count": g["metrics"]["scored_forecast_count"],
+            "mean_brier": g["metrics"]["mean_brier"],
+            "decision_ids": g["record_ids"]["decisions"][:5],
+        }
+        for g in _report_groups(report)[:3]
+        if g["metrics"]["scored_forecast_count"] > 0
+    ]
 
 
 def _override_outcomes_panel(conn: sqlite3.Connection) -> dict[str, Any]:
