@@ -21,7 +21,6 @@ from __future__ import annotations
 import errno
 import socket
 import sys
-from datetime import UTC
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
@@ -57,32 +56,45 @@ def _import_server_deps() -> tuple[Any, Any] | None:
 
 
 def _build_app(home_path: str) -> Any:
-    """Construct the FastAPI app. Kept thin so the
-    backend-endpoints bead (.4) builds on a known import shape.
-    The MVP app exposes the `/status` self-check; everything else
-    lands in .4."""
+    """Construct the FastAPI app. Endpoint logic lives in
+    `trade_trace.console.endpoints` (pure functions over a
+    read-only SQLite connection); this function maps HTTP routes
+    to those functions and wraps each in the read-only handle
+    lifecycle. The Console MVP exposes the read endpoints listed
+    in the .4 bead acceptance; the lazy-write deny set from §7 is
+    enforced by the endpoints module never calling those handlers."""
 
     deps = _import_server_deps()
     assert deps is not None, "_build_app must not be called without deps"
     fastapi, _ = deps
 
+    from trade_trace.console import endpoints
+    from trade_trace.storage.database import (
+        ReadOnlyDatabaseError,
+        open_database_readonly,
+    )
+    from trade_trace.storage.paths import db_path as _db_path
+
     app = fastapi.FastAPI(
         title="Trade Trace Console",
-        version="0",  # bumped when .4 ships endpoint contracts
-        docs_url=None,  # no OpenAPI exposure in MVP
+        version="1",
+        docs_url=None,
         redoc_url=None,
     )
 
+    def _open() -> Any:
+        path = _db_path(resolve_home(home_path))
+        return path, open_database_readonly(path)
+
+    def _page_to_dict(page: Any) -> dict[str, Any]:
+        return {
+            "rows": page.rows,
+            "next_cursor": page.next_cursor,
+            "limit": page.limit,
+        }
+
     @app.get("/status")
     def status() -> dict[str, Any]:
-        from datetime import datetime
-
-        from trade_trace.storage.database import (
-            ReadOnlyDatabaseError,
-            open_database_readonly,
-        )
-        from trade_trace.storage.paths import db_path as _db_path
-
         path = _db_path(resolve_home(home_path))
         try:
             db = open_database_readonly(path)
@@ -95,30 +107,40 @@ def _build_app(home_path: str) -> Any:
                 "logs_deferred": True,
             }
         try:
-            schema_version = db.connection.execute(
-                "SELECT MAX(version) FROM schema_meta",
-            ).fetchone()[0]
-            last_event_ts = db.connection.execute(
-                "SELECT MAX(created_at) FROM events",
-            ).fetchone()[0]
-            row_counts = {
-                table: db.connection.execute(
-                    f"SELECT COUNT(*) FROM {table}",
-                ).fetchone()[0]
-                for table in ("events", "decisions", "memory_nodes", "strategies", "playbooks")
-            }
+            return endpoints.status(db.connection, db_path=path)
         finally:
             db.close()
-        return {
-            "db_path": str(path),
-            "read_only": True,
-            "schema_version": schema_version,
-            "last_event_at": last_event_ts,
-            "row_counts": row_counts,
-            "lazy_write_handlers_blocked": ["signal.scan", "report.coach"],
-            "logs_deferred": True,
-            "now": datetime.now(UTC).isoformat(),
-        }
+
+    def _bind_list(route: str, fn: Any) -> None:
+        @app.get(route)
+        def _handler(cursor: str | None = None, limit: int = 50) -> dict[str, Any]:
+            _, db = _open()
+            try:
+                return _page_to_dict(fn(db.connection, cursor=cursor, limit=limit))
+            finally:
+                db.close()
+
+        _handler.__name__ = fn.__name__
+
+    _bind_list("/events", endpoints.journal_events)
+    _bind_list("/decisions", endpoints.decisions_list)
+    _bind_list("/memory_nodes", endpoints.memory_nodes_list)
+    _bind_list("/strategies", endpoints.strategies_list)
+    _bind_list("/playbooks", endpoints.playbooks_list)
+    _bind_list("/instruments", endpoints.instruments_list)
+    _bind_list("/forecasts", endpoints.forecasts_list)
+    _bind_list("/outcomes", endpoints.outcomes_list)
+
+    @app.get("/events/{event_id}")
+    def event_detail(event_id: int) -> dict[str, Any]:
+        _, db = _open()
+        try:
+            event = endpoints.event_detail(db.connection, event_id=event_id)
+        finally:
+            db.close()
+        if event is None:
+            raise fastapi.HTTPException(status_code=404, detail=f"event {event_id} not found")
+        return event
 
     return app
 
