@@ -1749,10 +1749,48 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                          "new_forecast_id": new_forecast_id},
                 actor_id=ctx.actor_id, idempotency_key=None, ctx=ctx,
             )
+
+            # Late auto-score per trade-trace-ld6l: if a `resolved_final`
+            # outcome already exists for this instrument, score the
+            # replacement forecast against it inline. This matches the
+            # `forecast.add` late-trigger path (scoring.md §6 trigger
+            # #2); without it, the replacement forecast stayed
+            # permanently `scoring_state="pending"` and reports omitted
+            # it from calibration. The auto-score row carries
+            # `late_recorded=true` because the outcome predates the
+            # supersede.
+            auto_scored: dict[str, Any] | None = None
+            instrument_id_row = uow.execute(
+                "SELECT instrument_id FROM theses WHERE id = ?",
+                (thesis_id,),
+            ).fetchone()
+            instrument_id = instrument_id_row[0] if instrument_id_row else None
+            if instrument_id is not None and scoring_support == "supported":
+                head_outcome = _current_resolved_final_outcome(
+                    uow.conn, instrument_id=instrument_id,
+                )
+                if head_outcome is not None:
+                    head_id, head_label, _head_created = head_outcome
+                    forecast_row = (
+                        new_forecast_id, kind, scoring_support, yes_label,
+                        resolution_at, created_at,
+                    )
+                    auto_scored = _score_one_forecast(
+                        uow.conn,
+                        forecast_row=forecast_row,
+                        outcome_id=head_id,
+                        outcome_label=head_label,
+                        actor_id=ctx.actor_id,
+                        scored_at=created_at,
+                    )
+                    _emit_forecast_scored(
+                        uow, auto_scored, actor_id=ctx.actor_id, ctx=ctx,
+                        scored_at=created_at,
+                    )
     finally:
         db.close()
 
-    return {
+    result: dict[str, Any] = {
         "id": new_forecast_id,
         "thesis_id": thesis_id,
         "kind": kind,
@@ -1760,6 +1798,9 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         "created_at": created_at,
         "supersedes_prior_forecast_id": prior_id,
     }
+    if auto_scored is not None:
+        result["auto_scored"] = auto_scored
+    return result
 
 
 # -- registration ------------------------------------------------------------

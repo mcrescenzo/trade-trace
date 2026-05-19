@@ -712,3 +712,51 @@ def test_forecast_supersede_replay_returns_original_replacement(home):
         "replay appended new event rows "
         f"(was {events_before}, now {events_after})"
     )
+
+
+def test_forecast_supersede_auto_scores_against_existing_resolved_final(home):
+    """Per trade-trace-ld6l: a `forecast.supersede` issued AFTER a
+    resolved_final outcome already landed must run the late-score path
+    so the replacement forecast surfaces in calibration reports
+    instead of staying pending forever."""
+
+    inst_id, thesis_id = _setup_thesis(home)
+    first = _envelope(home, "forecast.add", {
+        "thesis_id": thesis_id,
+        "kind": "binary",
+        "outcomes": [
+            {"outcome_label": "YES", "probability": 0.5},
+            {"outcome_label": "NO", "probability": 0.5},
+        ],
+    })
+
+    # Resolve the outcome on the original forecast first.
+    _envelope(home, "outcome.add", {
+        "instrument_id": inst_id,
+        "resolved_at": "2026-06-30T00:00:00Z",
+        "outcome_label": "YES",
+        "status": "resolved_final",
+    })
+
+    # Now supersede the (already-scored) forecast. The new forecast
+    # should auto-score against the existing outcome with
+    # late_recorded=true.
+    sup = _envelope(home, "forecast.supersede", {
+        "prior_forecast_id": first["data"]["id"],
+        "kind": "binary",
+        "yes_label": "YES",
+        "outcomes": [
+            {"outcome_label": "YES", "probability": 0.8},
+            {"outcome_label": "NO", "probability": 0.2},
+        ],
+    })
+    assert sup["ok"] is True, sup
+    assert "auto_scored" in sup["data"], (
+        f"expected auto_scored in supersede result; got {sup['data']}"
+    )
+    score = sup["data"]["auto_scored"]
+    # The score is computed against the YES probability; Brier
+    # |1 - 0.8|^2 = 0.04.
+    assert score["score"] == pytest.approx(0.04, abs=1e-6), score
+    # Late-recorded flag is set (the outcome predates this forecast).
+    assert score.get("late_recorded") is True, score
