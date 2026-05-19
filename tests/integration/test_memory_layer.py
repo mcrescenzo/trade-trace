@@ -145,6 +145,60 @@ def test_memory_reflect_rejects_missing_target(home):
     assert env.error.details["entity_kind"] == "thesis"
 
 
+def test_memory_reflect_rolls_back_node_when_about_edge_insert_fails(home):
+    """A late edge failure must not leave the reflection node committed."""
+
+    seeds = _seed_thesis(home)
+    seed_env = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "Existing source for duplicate edge id setup.",
+        "idempotency_key": "00000000-0000-4000-8000-rollbackseed1",
+    })
+    assert seed_env.ok, seed_env
+    existing_node = seed_env.data["id"]
+    duplicate_edge_id = "edg_forced_reflect_rollback"
+    failing_body = "Reflection body should roll back with duplicate edge id."
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        db.connection.execute(
+            "INSERT INTO edges(id, source_kind, source_id, target_kind, "
+            "target_id, edge_type, metadata_json, created_at, actor_id) "
+            "VALUES (?, 'memory_node', ?, 'thesis', ?, 'about', '{}', "
+            "'2026-01-01T00:00:00Z', 'agent:default')",
+            (duplicate_edge_id, existing_node, seeds["thesis"]),
+        )
+        db.connection.commit()
+    finally:
+        db.close()
+
+    env = _mcp(home, "memory.reflect", {
+        "target_kind": "thesis", "target_id": seeds["thesis"],
+        "body": failing_body,
+        "edge_id": duplicate_edge_id,
+        "idempotency_key": "00000000-0000-4000-8000-rollback0001",
+    })
+    assert env.ok is False
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        reflected_rows = db.connection.execute(
+            "SELECT COUNT(*) FROM memory_nodes "
+            "WHERE node_type = 'reflection' AND body = ?",
+            (failing_body,),
+        ).fetchone()[0]
+        retained_events = db.connection.execute(
+            "SELECT COUNT(*) FROM events "
+            "WHERE event_type = 'memory_node.retained' "
+            "AND idempotency_key = ?",
+            ("00000000-0000-4000-8000-rollback0001",),
+        ).fetchone()[0]
+    finally:
+        db.close()
+    assert reflected_rows == 0
+    assert retained_events == 0
+
+
 def test_reflection_orphan_invariant_holds_after_writes(home):
     """Runnable assertion from bead e86: no reflection lacks an about-edge."""
 

@@ -27,11 +27,21 @@ from trade_trace.storage.paths import db_path
 
 CREDENTIAL_KEYS = [
     "api_key",
+    "access_token",
+    "refresh_token",
+    "auth_token",
+    "bearer_token",
     "secret_key",
+    "client_secret",
+    "password",
+    "passphrase",
     "wallet_seed",
     "wallet_seed_phrase",
+    "seed_phrase",
     "mnemonic",
     "private_key",
+    "signing_key",
+    "signing_secret",
     "broker_token",
     "trading_password",
     "session_token",
@@ -119,6 +129,46 @@ def test_venue_add_silently_drops_credential_args(home: Path):
         db.close()
     for k in CREDENTIAL_KEYS:
         assert k not in meta, f"venue.metadata_json leaked credential key {k!r}"
+
+
+@pytest.mark.parametrize("credential_key", ["api_key", "client_secret", "access_token", "password"])
+def test_metadata_json_rejects_nested_credential_key(home: Path, credential_key: str):
+    env = mcp_call("venue.add", {
+        "home": str(home),
+        "name": "PM",
+        "kind": "prediction_market",
+        "metadata_json": {"safe": {credential_key: "leaky-value"}},
+    }, actor_id="agent:default").model_dump(mode="json")
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "metadata_json"
+    assert env["error"]["details"]["credential_key"] == credential_key
+
+
+def test_metadata_json_rejects_raw_json_credential_key(home: Path):
+    env = mcp_call("venue.add", {
+        "home": str(home),
+        "name": "PM",
+        "kind": "prediction_market",
+        "metadata_json": json.dumps({"safe": [{"broker_token": "leaky-value", "access_token": "leaky-value"}]}),
+    }, actor_id="agent:default").model_dump(mode="json")
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "metadata_json"
+    assert env["error"]["details"]["credential_key"] in {"broker_token", "access_token"}
+
+
+def test_metadata_json_rejects_invalid_raw_json_string(home: Path):
+    env = mcp_call("venue.add", {
+        "home": str(home),
+        "name": "PM",
+        "kind": "prediction_market",
+        "metadata_json": '{"client_secret": "leaky-value"',
+    }, actor_id="agent:default").model_dump(mode="json")
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "metadata_json"
+    assert env["error"]["details"]["reason"] == "invalid_json"
 
 
 def test_instrument_add_silently_drops_credential_args(home: Path):

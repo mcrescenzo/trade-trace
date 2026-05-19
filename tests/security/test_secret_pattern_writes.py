@@ -127,6 +127,30 @@ def test_decision_reason_rejects_secret(home, pattern_kind, secret):
     assert env.error.details["pattern_kind"] == pattern_kind
 
 
+def test_metadata_json_rejects_nested_secret_value(home):
+    env = _mcp(home, "venue.add", {
+        "name": "PM",
+        "kind": "prediction_market",
+        "metadata_json": {"notes": {"token": SECRET_FIXTURES["api_key"]}},
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "metadata_json"
+    assert env.error.details["pattern_kind"] == "api_key"
+
+
+def test_metadata_json_rejects_raw_json_secret_value(home):
+    env = _mcp(home, "venue.add", {
+        "name": "PM",
+        "kind": "prediction_market",
+        "metadata_json": '{"notes": ["leaked xoxb-1234567890-ABCDEF"]}',
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "metadata_json"
+    assert env.error.details["pattern_kind"] == "slack_token"
+
+
 # -- 2. log-output redaction ---------------------------------------
 
 

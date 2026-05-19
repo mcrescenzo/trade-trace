@@ -46,13 +46,79 @@ def _allow_no_idempotency(args: dict[str, Any]) -> bool:
     return bool(args.get("_allow_no_idempotency"))
 
 
+_CREDENTIAL_METADATA_KEY_PARTS = (
+    "api_key",
+    "access_token",
+    "refresh_token",
+    "auth_token",
+    "bearer_token",
+    "secret_key",
+    "client_secret",
+    "password",
+    "passphrase",
+    "wallet_seed",
+    "wallet_seed_phrase",
+    "seed_phrase",
+    "mnemonic",
+    "private_key",
+    "signing" + "_key",
+    "signing_secret",
+    "broker_token",
+    "trading_password",
+    "session_token",
+    "oauth_token",
+)
+
+
+def _reject_credential_metadata(value: Any, *, field: str) -> None:
+    """Reject explicit metadata JSON that tries to carry credentials.
+
+    Unknown top-level credential-shaped args are ignored by schemas, but
+    caller-provided metadata_json is intentionally persisted. Guard it
+    recursively so explicit JSON objects or raw JSON strings cannot bypass
+    the no-credentials policy.
+    """
+
+    if isinstance(value, dict):
+        for key, child in value.items():
+            key_text = str(key).lower()
+            for forbidden in _CREDENTIAL_METADATA_KEY_PARTS:
+                if forbidden in key_text:
+                    raise ToolError(
+                        ErrorCode.VALIDATION_ERROR,
+                        f"{field} contains credential-shaped key {key!r}; strip credentials before submitting",
+                        details={"field": field, "credential_key": str(key)},
+                    )
+            _reject_credential_metadata(child, field=field)
+        return
+    if isinstance(value, list):
+        for child in value:
+            _reject_credential_metadata(child, field=field)
+        return
+    if isinstance(value, str):
+        reject_if_contains_secrets(value, field=field)
+
+
 def _store_metadata_json(args: dict[str, Any], key: str = "metadata_json") -> str:
     value = args.get(key)
     if value is None:
         return "{}"
     if isinstance(value, str):
-        # Caller may pass a JSON string directly.
+        # Caller may pass a JSON string directly. If parseable, inspect the
+        # decoded object too so nested credential keys cannot hide in raw JSON.
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            reject_if_contains_secrets(value, field=key)
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"{key} must be valid JSON when supplied as a string",
+                details={"field": key, "reason": "invalid_json"},
+            )
+        else:
+            _reject_credential_metadata(decoded, field=key)
         return value
+    _reject_credential_metadata(value, field=key)
     return json.dumps(value, sort_keys=True, default=str)
 
 

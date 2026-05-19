@@ -107,6 +107,24 @@ def _memory_retain(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """
 
     node_type = require(args, "node_type")
+    db = open_db_for_args(args)
+    try:
+        with UnitOfWork(db.connection) as uow:
+            return _memory_retain_in_uow(args, ctx, uow, node_type=node_type)
+    finally:
+        db.close()
+
+
+def _memory_retain_in_uow(
+    args: dict[str, Any],
+    ctx: ToolContext,
+    uow: UnitOfWork,
+    *,
+    node_type: str | None = None,
+) -> dict[str, Any]:
+    """Create a memory_node row using an existing transaction."""
+
+    node_type = node_type or require(args, "node_type")
     if node_type not in NODE_TYPES:
         raise ToolError(
             ErrorCode.VALIDATION_ERROR,
@@ -141,50 +159,45 @@ def _memory_retain(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     idempotency_key = args.get("idempotency_key")
     seg = common_metadata(args)
 
-    db = open_db_for_args(args)
-    try:
-        with UnitOfWork(db.connection) as uow:
-            replay = check_idempotency_replay(
-                uow, event_type="memory_node.retained",
-                actor_id=ctx.actor_id, idempotency_key=idempotency_key,
-            )
-            if replay is not None:
-                node_id = replay["id"]
-                _emit_retained(uow, ctx, node_id, args, body, title,
-                               node_type, importance, confidence_base,
-                               decay_rate_per_day, valid_from, valid_to,
-                               meta_json, parent_node_id, idempotency_key)
-                row = uow.conn.execute(
-                    "SELECT created_at FROM memory_nodes WHERE id = ?",
-                    (node_id,),
-                ).fetchone()
-                return _retain_result(node_id, node_type, body, importance,
-                                      confidence_base, row[0])
+    replay = check_idempotency_replay(
+        uow, event_type="memory_node.retained",
+        actor_id=ctx.actor_id, idempotency_key=idempotency_key,
+    )
+    if replay is not None:
+        node_id = replay["id"]
+        _emit_retained(uow, ctx, node_id, args, body, title,
+                       node_type, importance, confidence_base,
+                       decay_rate_per_day, valid_from, valid_to,
+                       meta_json, parent_node_id, idempotency_key)
+        row = uow.conn.execute(
+            "SELECT created_at FROM memory_nodes WHERE id = ?",
+            (node_id,),
+        ).fetchone()
+        return _retain_result(node_id, node_type, body, importance,
+                              confidence_base, row[0])
 
-            node_id = args.get("id") or new_id("mem")
-            created_at = now_iso()
-            effective_valid_from = valid_from or created_at
-            uow.execute(
-                "INSERT INTO memory_nodes(id, node_type, version, "
-                "parent_node_id, title, body, meta_json, confidence_base, "
-                "decay_rate_per_day, importance, valid_from, valid_to, "
-                "invalidated_at, invalidated_by, agent_id, model_id, "
-                "environment, run_id, created_at, actor_id) VALUES "
-                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)",
-                (
-                    node_id, node_type, args.get("version", 1), parent_node_id,
-                    title, body, meta_json, confidence_base, decay_rate_per_day,
-                    importance, effective_valid_from, valid_to,
-                    seg["agent_id"], seg["model_id"], seg["environment"],
-                    seg["run_id"], created_at, ctx.actor_id,
-                ),
-            )
-            _emit_retained(uow, ctx, node_id, args, body, title, node_type,
-                           importance, confidence_base, decay_rate_per_day,
-                           effective_valid_from, valid_to, meta_json,
-                           parent_node_id, idempotency_key)
-    finally:
-        db.close()
+    node_id = args.get("id") or new_id("mem")
+    created_at = now_iso()
+    effective_valid_from = valid_from or created_at
+    uow.execute(
+        "INSERT INTO memory_nodes(id, node_type, version, "
+        "parent_node_id, title, body, meta_json, confidence_base, "
+        "decay_rate_per_day, importance, valid_from, valid_to, "
+        "invalidated_at, invalidated_by, agent_id, model_id, "
+        "environment, run_id, created_at, actor_id) VALUES "
+        "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)",
+        (
+            node_id, node_type, args.get("version", 1), parent_node_id,
+            title, body, meta_json, confidence_base, decay_rate_per_day,
+            importance, effective_valid_from, valid_to,
+            seg["agent_id"], seg["model_id"], seg["environment"],
+            seg["run_id"], created_at, ctx.actor_id,
+        ),
+    )
+    _emit_retained(uow, ctx, node_id, args, body, title, node_type,
+                   importance, confidence_base, decay_rate_per_day,
+                   effective_valid_from, valid_to, meta_json,
+                   parent_node_id, idempotency_key)
     return _retain_result(node_id, node_type, body, importance,
                           confidence_base, created_at)
 
@@ -250,17 +263,19 @@ def _memory_reflect(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     )
 
     # Force node_type=reflection on this path; the body / importance /
-    # bi-temporal args pass through to memory.retain.
+    # bi-temporal args pass through to memory.retain's shared transactional
+    # implementation. The node row, node event, about-edge row, and edge
+    # event below are all committed or rolled back together.
     retain_args = {**args, "node_type": "reflection"}
     retain_args.pop("target_kind", None)
     retain_args.pop("target_id", None)
-    result = _memory_retain(retain_args, ctx)
-    node_id = result["id"]
 
-    # Write the about edge in the same logical operation.
     db = open_db_for_args(args)
     try:
         with UnitOfWork(db.connection) as uow:
+            result = _memory_retain_in_uow(retain_args, ctx, uow, node_type="reflection")
+            node_id = result["id"]
+
             # Allow the caller to pin the edge id (used by the fixture
             # seed for byte-identical replay); otherwise generate one.
             edge_id = args.get("edge_id") or new_id("edg")
