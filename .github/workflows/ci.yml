@@ -1,0 +1,52 @@
+name: CI
+
+# Run quality gates on every PR + main push per bead trade-trace-go2 /
+# DEBT-003. Before this workflow existed, ruff/mypy/pytest only ran
+# inside the tag-gated PyPI publish workflow, so regressions could
+# merge to main and only surface when someone cut a release.
+#
+# The publish workflow keeps its own internal test gate as a safety
+# net before packaging; this workflow is the earlier signal.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package with dev extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff
+        run: ruff check src tests
+
+      - name: Mypy
+        run: mypy src
+
+      - name: Pytest
+        run: pytest
