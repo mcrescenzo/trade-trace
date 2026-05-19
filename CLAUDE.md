@@ -24,9 +24,17 @@ bd close <id>         # Complete work
 
 ## Session Completion
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+**Scope (bead trade-trace-9zy / DEBT-005)**: this protocol applies to
+**mutating, authorized work sessions** — sessions that intentionally
+modify code, tests, docs, or Beads state. Sessions that are explicitly
+read-only or no-push are exempt as documented under "When NOT to push"
+below. The default for a Claude session that produces commits is to
+follow the full mandatory workflow.
 
-**MANDATORY WORKFLOW:**
+**When ending a mutating work session**, you MUST complete ALL steps
+below. Work is NOT complete until `git push` succeeds.
+
+**MANDATORY WORKFLOW (mutating sessions only):**
 
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
@@ -42,11 +50,39 @@ bd close <id>         # Complete work
 6. **Verify** - All changes committed AND pushed
 7. **Hand off** - Provide context for next session
 
-**CRITICAL RULES:**
+**CRITICAL RULES (mutating sessions only):**
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
+
+**When NOT to push (exempt session lanes):**
+
+The mandatory workflow does NOT apply to these explicitly read-only
+or no-push lanes:
+
+- **Read-only audit / investigation sessions** where the user
+  explicitly instructed "do not modify anything", "audit only",
+  "read-only review", "investigate but do not push", or similar. In
+  these lanes, file issues only if the user asked for them; never
+  open Beads with `bd update --claim` or `bd close`; never commit
+  or push.
+- **Delegated/coordinator subagent runs** where the parent agent
+  retains commit/push authority. The subagent reports findings and
+  does NOT push, even if it commits locally — the parent decides
+  what lands on `main`.
+- **Sessions where the user typed an explicit "don't push" / "no
+  push" / "stop before push" directive**. The user's instructions
+  override the mandatory rule.
+- **Failed pre-flight gates**: if tests, linters, or `bd doctor`
+  surface a pre-existing failure unrelated to the session's work,
+  STOP and ask before pushing the unrelated state forward.
+
+In all exempt cases the session ends with a written handoff
+(committed locally if appropriate) describing what was found, what
+was changed (if anything), and the explicit reason the push step
+was skipped. Do not silently skip the push step in a mutating
+session — that's a workflow violation, not an exemption.
 <!-- END BEADS INTEGRATION -->
 
 

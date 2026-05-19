@@ -58,9 +58,16 @@ bd close <id>         # Complete work
 
 ## Session Completion
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+**Scope (bead trade-trace-9zy / DEBT-005)**: this protocol applies to
+**mutating, authorized work sessions**. Sessions that are explicitly
+read-only or no-push are exempt as documented under "When NOT to push"
+below. Any session that produces commits defaults to the full
+mandatory workflow.
 
-**MANDATORY WORKFLOW:**
+**When ending a mutating work session**, you MUST complete ALL steps
+below. Work is NOT complete until `git push` succeeds.
+
+**MANDATORY WORKFLOW (mutating sessions only):**
 
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
@@ -76,9 +83,29 @@ bd close <id>         # Complete work
 6. **Verify** - All changes committed AND pushed
 7. **Hand off** - Provide context for next session
 
-**CRITICAL RULES:**
+**CRITICAL RULES (mutating sessions only):**
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
+
+**When NOT to push (exempt session lanes):**
+
+The mandatory workflow does NOT apply to:
+
+- Read-only audit / investigation sessions where the user
+  explicitly instructed "do not modify anything", "audit only",
+  "read-only review", or similar. Don't open Beads with
+  `bd update --claim` or `bd close`; don't commit; don't push.
+- Delegated subagent runs where a parent agent retains commit/push
+  authority. The subagent reports findings; the parent decides
+  what lands on `main`.
+- Sessions with an explicit user "don't push" directive.
+- Pre-existing pre-flight failures unrelated to the session's
+  work: stop and ask before pushing unrelated state forward.
+
+In every exempt case end the session with a written handoff
+describing what was found, what was changed (if anything), and why
+the push step was skipped. Do not silently skip the push step in a
+mutating session — that's a workflow violation, not an exemption.
 <!-- END BEADS INTEGRATION -->
