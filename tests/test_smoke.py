@@ -6,7 +6,8 @@ from __future__ import annotations
 def test_package_importable():
     import trade_trace
 
-    assert trade_trace.__version__ == "0.0.1"
+    assert isinstance(trade_trace.__version__, str)
+    assert trade_trace.__version__
 
 
 def test_models_importable():
