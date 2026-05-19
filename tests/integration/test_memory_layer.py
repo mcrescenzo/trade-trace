@@ -650,3 +650,51 @@ def test_memory_retain_makes_no_outbound_calls(home):
     finally:
         socket.socket = saved_socket
     assert env.ok
+
+
+# -- memory.retain meta_json shape validation (trade-trace-arcx) ----
+
+
+def test_memory_retain_rejects_non_object_meta_json(home):
+    """Per trade-trace-arcx: `memory.retain` must reject non-object
+    `meta_json` (list, string, number, bool) with VALIDATION_ERROR at
+    the direct retain boundary. Previously the handler `json.dumps`d
+    whatever was passed, so a list or scalar would persist and confuse
+    downstream consumers that assume object-shaped metadata."""
+
+    for bad in ([1, 2, 3], "not an object", 42, True):
+        env = _mcp(home, "memory.retain", {
+            "node_type": "observation",
+            "body": "test body",
+            "meta_json": bad,
+            "idempotency_key": f"arcx-{type(bad).__name__}",
+        })
+        assert env.ok is False, (
+            f"meta_json={bad!r} ({type(bad).__name__}) should be rejected"
+        )
+        assert env.error.code.value == "VALIDATION_ERROR"
+        assert env.error.details.get("field") == "meta_json"
+
+
+def test_memory_retain_accepts_object_meta_json(home):
+    """A normal object `meta_json` continues to write successfully and
+    round-trips into the row."""
+
+    env = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "with meta",
+        "meta_json": {"tags": ["foo"], "confidence_note": "high"},
+        "idempotency_key": "arcx-object",
+    })
+    assert env.ok, env
+
+
+def test_memory_retain_treats_omitted_meta_json_as_empty_object(home):
+    """No `meta_json` arg → stored as `{}` (the existing default)."""
+
+    env = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "no meta",
+        "idempotency_key": "arcx-default",
+    })
+    assert env.ok, env

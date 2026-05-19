@@ -154,7 +154,30 @@ def _memory_retain_in_uow(
     decay_rate_per_day = args.get("decay_rate_per_day")
     valid_from = normalize_timestamp(args, "valid_from")
     valid_to = normalize_timestamp(args, "valid_to")
-    meta_json = json.dumps(args.get("meta_json") or {}, sort_keys=True)
+    # Validate meta_json shape at the direct retain boundary per
+    # trade-trace-arcx. Adjacent normalization (memory.reflect ergonomics)
+    # already enforces this, but the raw retain path used to `json.dumps`
+    # whatever was passed, so a list/scalar would persist and confuse
+    # downstream consumers that assume object-shaped metadata.
+    meta_input = args.get("meta_json")
+    if isinstance(meta_input, str):
+        try:
+            meta_input = json.loads(meta_input)
+        except json.JSONDecodeError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "meta_json must be valid JSON when supplied as a string",
+                details={"field": "meta_json", "reason": "invalid_json"},
+            ) from exc
+    if meta_input is None:
+        meta_input = {}
+    if not isinstance(meta_input, dict):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "meta_json must decode to an object",
+            details={"field": "meta_json", "value_type": type(meta_input).__name__},
+        )
+    meta_json = json.dumps(meta_input, sort_keys=True)
     title = args.get("title")
     parent_node_id = args.get("parent_node_id")
     idempotency_key = args.get("idempotency_key")
