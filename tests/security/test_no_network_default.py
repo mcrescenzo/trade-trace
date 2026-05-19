@@ -9,36 +9,12 @@ caught.
 
 from __future__ import annotations
 
-import socket
 from pathlib import Path
-
-import pytest
 
 from trade_trace.mcp_server import mcp_call
 
 
-@pytest.fixture
-def no_network(monkeypatch):
-    """Replace socket primitives so any outbound attempt raises immediately."""
-
-    def _refuse_connect(self, addr):  # noqa: ARG001
-        raise AssertionError(
-            f"outbound TCP connect to {addr!r} during operation that "
-            "MVP guarantees as air-gapped (PRD §2.4.1)."
-        )
-
-    def _refuse_getaddrinfo(*args, **kwargs):  # noqa: ARG001
-        raise AssertionError(
-            f"outbound DNS getaddrinfo({args[0]!r}) during operation that "
-            "MVP guarantees as air-gapped (PRD §2.4.1)."
-        )
-
-    monkeypatch.setattr(socket.socket, "connect", _refuse_connect, raising=True)
-    monkeypatch.setattr(socket, "getaddrinfo", _refuse_getaddrinfo, raising=True)
-    return monkeypatch
-
-
-def test_journal_init_no_network(no_network, tmp_path: Path):
+def test_journal_init_no_network(no_outbound_connect_or_dns, tmp_path: Path):
     """`journal.init` on a fresh home must not open a socket."""
 
     env = mcp_call("journal.init", {"home": str(tmp_path / "home")})
@@ -47,7 +23,7 @@ def test_journal_init_no_network(no_network, tmp_path: Path):
     assert body["data"]["outbound_network_active"] is False
 
 
-def test_journal_status_no_network(no_network, tmp_path: Path):
+def test_journal_status_no_network(no_outbound_connect_or_dns, tmp_path: Path):
     """`journal.status` against an uninitialized home must not open a socket."""
 
     env = mcp_call("journal.status", {"home": str(tmp_path / "home")})
@@ -56,7 +32,7 @@ def test_journal_status_no_network(no_network, tmp_path: Path):
     assert body["data"]["outbound_network_active"] is False
 
 
-def test_journal_schema_no_network(no_network):
+def test_journal_schema_no_network(no_outbound_connect_or_dns):
     """`journal.schema` is in-process Pydantic; no network ever."""
 
     env = mcp_call("journal.schema", {})
@@ -64,7 +40,7 @@ def test_journal_schema_no_network(no_network):
     assert body["ok"] is True
 
 
-def test_init_then_status_then_reinit_no_network(no_network, tmp_path: Path):
+def test_init_then_status_then_reinit_no_network(no_outbound_connect_or_dns, tmp_path: Path):
     """A representative idempotent loop must not open a socket."""
 
     home = str(tmp_path / "home")
@@ -215,7 +191,7 @@ def _absorb_seed(tool: str, env, seed: dict[str, str]) -> dict[str, str]:
 
 
 def test_no_outbound_network_across_representative_tool_registry(
-    no_network, tmp_path: Path,
+    no_outbound_connect_or_dns, tmp_path: Path,
 ):
     """Run a representative slice of the registry under the no-network
     fixture. Any tool that opens a socket fails the test immediately
@@ -243,7 +219,7 @@ def test_no_outbound_network_across_representative_tool_registry(
         seed = _absorb_seed(tool, env, seed)
 
 
-def test_export_drain_runs_under_no_network(no_network, tmp_path: Path):
+def test_export_drain_runs_under_no_network(no_outbound_connect_or_dns, tmp_path: Path):
     """Export drain is the highest-risk tool because the docs originally
     mentioned remote sync as a future hook. Confirm the on-disk JSONL
     drain path never touches the network."""
