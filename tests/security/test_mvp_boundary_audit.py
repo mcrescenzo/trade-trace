@@ -172,23 +172,18 @@ def test_no_credential_columns_in_schema(tmp_path):
 
     home = tmp_path / "home"
     mcp_call("journal.init", {"home": str(home)})
+    from tests.security._schema_audit import iter_table_columns
+
     db = open_database(db_path(home), create_parent=False)
     credential_re = re.compile(
         r"wallet|broker|seed|signing|private_key|api_key", re.IGNORECASE,
     )
     try:
-        tables = [r[0] for r in db.connection.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' "
-            "AND name NOT LIKE 'sqlite_%'"
-        ).fetchall()]
-        offending: list[tuple[str, str]] = []
-        for table in tables:
-            for col_row in db.connection.execute(
-                f"PRAGMA table_info({table})"
-            ).fetchall():
-                col_name = col_row[1]
-                if credential_re.search(col_name):
-                    offending.append((table, col_name))
+        offending: list[tuple[str, str]] = [
+            (table, col)
+            for table, col in iter_table_columns(db.connection)
+            if credential_re.search(col)
+        ]
     finally:
         db.close()
     assert offending == [], (

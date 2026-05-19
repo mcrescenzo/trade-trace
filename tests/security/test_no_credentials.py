@@ -47,25 +47,17 @@ def home(tmp_path: Path) -> Path:
 def test_no_table_column_resembles_credential(home: Path):
     """No M1 table has a column whose name suggests credentials."""
 
+    from tests.security._schema_audit import iter_table_columns
+
     db = open_database(db_path(home), create_parent=False)
     try:
-        tables = [
-            r[0] for r in db.connection.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            )
-        ]
-        all_columns = []
-        for t in tables:
-            cur = db.connection.execute(f"PRAGMA table_info({t})")
-            for r in cur.fetchall():
-                all_columns.append((t, r[1]))
+        for table, col in iter_table_columns(db.connection):
+            for forbidden in CREDENTIAL_KEYS:
+                assert forbidden not in col.lower(), (
+                    f"table {table}.{col} resembles credential field {forbidden!r}"
+                )
     finally:
         db.close()
-    for table, col in all_columns:
-        for forbidden in CREDENTIAL_KEYS:
-            assert forbidden not in col.lower(), (
-                f"table {table}.{col} resembles credential field {forbidden!r}"
-            )
 
 
 def test_no_tool_description_mentions_credentials():
