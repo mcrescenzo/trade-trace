@@ -250,14 +250,28 @@ from trade_trace.security import scan_text as _scan_text  # noqa: E402
 from trade_trace.security.patterns import _compiled as SECRET_PATTERNS  # noqa: E402, F401
 
 
-def scan_for_secrets(text: str) -> list[dict[str, str]]:
-    """Return a list of `{pattern, match}` for every secret-shaped substring
-    in `text`. Used by `drain_outbox` to emit a per-event warning; never
-    blocks the export (operability.md §7 calls this a "did you mean to ship
-    these out?" check, not a gate).
+def scan_for_secrets(text: str) -> list[dict[str, Any]]:
+    """Return a list of `{pattern, match, match_offset, match_length}` for
+    every secret-shaped substring in `text`. Used by `drain_outbox` to
+    emit a per-event warning; never blocks the export
+    (operability.md §7 calls this a "did you mean to ship these out?"
+    check, not a gate).
+
+    `match_offset` is the byte offset into `text` where the match
+    begins; `match_length` is the match's byte length. Together they
+    let an operator jump directly to the exact bytes per bead
+    trade-trace-67sg.
     """
 
-    return [{"pattern": m.pattern_kind, "match": m.match} for m in _scan_text(text)]
+    return [
+        {
+            "pattern": m.pattern_kind,
+            "match": m.match,
+            "match_offset": m.match_offset,
+            "match_length": m.length,
+        }
+        for m in _scan_text(text)
+    ]
 
 
 # -- outbox drain -----------------------------------------------------------
@@ -396,11 +410,37 @@ def drain_outbox(
         line_text = path.read_text(encoding="utf-8")
         secrets_found = scan_for_secrets(line_text)
         if secrets_found:
+            # Per bead trade-trace-67sg / DEBT-037: enrich the
+            # secret-warning entry with operator-actionable detail so
+            # the warning can be remediated without re-running an
+            # ad-hoc scan. We surface:
+            #
+            # - `relative_path` for `ls`/`grep`-style navigation
+            # - per-pattern `counts` so a single api_key match doesn't
+            #   look the same as 50 of them
+            # - `match_offsets` (byte offsets into the JSONL line) so
+            #   the operator can jump to the exact bytes
+            #
+            # The raw match strings are intentionally NOT surfaced —
+            # the warning is "did you mean to ship these out?",
+            # NOT "here are the secrets we found again, in your logs".
+            from collections import Counter
+
+            pattern_counts = Counter(m["pattern"] for m in secrets_found)
+            try:
+                relative_path = str(path.relative_to(home))
+            except ValueError:  # pragma: no cover - defensive
+                relative_path = str(path)
             result.secret_warnings.append(
                 {
                     "event_id": event_id,
                     "event_type": event_type,
-                    "patterns": sorted({m["pattern"] for m in secrets_found}),
+                    "patterns": sorted(pattern_counts.keys()),
+                    "counts": dict(pattern_counts),
+                    "match_offsets": [m["match_offset"] for m in secrets_found
+                                      if "match_offset" in m],
+                    "relative_path": relative_path,
+                    "export_kind": "full_local_raw",
                 }
             )
 

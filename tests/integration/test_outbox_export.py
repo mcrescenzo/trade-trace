@@ -322,6 +322,62 @@ def test_drain_marks_row_failed_when_payload_json_is_not_an_object(tmp_path: Pat
         db.close()
 
 
+def test_secret_warning_carries_actionable_metadata(tmp_path: Path):
+    """Per bead trade-trace-67sg / DEBT-037: secret_warnings entries now
+    include relative path, per-pattern counts, match offsets, and an
+    export_kind discriminator so the operator can locate and
+    remediate the affected event without re-running an ad-hoc scan.
+    Raw secret VALUES are still NOT surfaced — the warning is "did
+    you mean to ship these out?", not "here are the secrets again
+    in the logs"."""
+
+    home, db, _writer = _journal(tmp_path)
+    try:
+        # Insert an event directly whose payload_json contains a
+        # secret-shaped api_key. The EventWriter's write-time guard
+        # rejects this on normal write paths, but a direct INSERT
+        # simulates an upstream bug or backup-restore that bypassed
+        # the guard — exactly the case this warning catches.
+        secret = "sk-ABCDEFGHIJKLMNOP12345678"
+        db.connection.execute(
+            "INSERT INTO events(event_type, subject_kind, subject_id, "
+            "payload_json, actor_id, created_at) "
+            "VALUES (?, 'decision', 'd_secret', ?, 'agent:default', ?)",
+            (
+                "decision.created",
+                f'{{"instrument_id":"i_1","type":"skip","reason":"{secret}"}}',
+                "2026-05-19T12:00:00Z",
+            ),
+        )
+        event_id = db.connection.execute(
+            "SELECT last_insert_rowid()"
+        ).fetchone()[0]
+        db.connection.execute(
+            "INSERT INTO outbox(event_id, export_kind, state) "
+            "VALUES (?, 'jsonl', 'pending')",
+            (event_id,),
+        )
+        result = drain_outbox(db.connection, home)
+    finally:
+        db.close()
+
+    assert len(result.secret_warnings) == 1
+    warning = result.secret_warnings[0]
+    assert warning["event_id"] == event_id
+    assert warning["event_type"] == "decision.created"
+    assert "api_key" in warning["patterns"]
+    assert warning["counts"]["api_key"] >= 1
+    # offsets surfaced so the operator can jump to the bytes
+    assert isinstance(warning["match_offsets"], list)
+    assert warning["match_offsets"], "match_offsets must list at least one offset"
+    # relative path stays inside the journal home so logs are usable
+    assert warning["relative_path"].startswith("export/jsonl/")
+    assert warning["export_kind"] == "full_local_raw"
+    # The raw secret value is NOT in the warning — this is the
+    # security boundary the bead pins.
+    assert secret not in str(warning)
+
+
 def test_jsonl_path_sanitizes_unsafe_event_type_characters(tmp_path: Path):
     """Per bead trade-trace-qc7 / DEBT-028: `event_type` may grow new
     values over time; any character outside the safe set must be
