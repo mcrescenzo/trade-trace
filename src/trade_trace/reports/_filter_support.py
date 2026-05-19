@@ -77,6 +77,10 @@ SUPPORTED_FILTER_FIELDS: dict[str, frozenset[str]] = {
     # the empty filter is accepted so the agent sees a clean rejection
     # instead of a silently broadened result.
     "report.risk": frozenset(),
+    # report.opportunity currently reconstructs paths globally and rejects
+    # non-empty filters until filter predicates are wired into the decision /
+    # snapshot path query.
+    "report.opportunity": frozenset(),
     # review.bundle scopes its decision selection through the same
     # actor/instrument/strategy spine as calibration, plus the
     # decision_at time window (the selection ordering uses

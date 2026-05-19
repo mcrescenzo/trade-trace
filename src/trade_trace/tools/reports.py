@@ -29,6 +29,7 @@ from trade_trace.reports import (
     report_compare,
     report_decision_velocity,
     report_mistakes,
+    report_opportunity,
     report_playbook_adherence,
     report_pnl,
     report_risk,
@@ -342,6 +343,35 @@ def _report_strategy_performance(args: dict[str, Any], ctx: ToolContext) -> dict
     return data
 
 
+def _report_opportunity(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.opportunity` — path-dependent decision/outcome diagnostics."""
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_opportunity(
+                db.connection,
+                raw_filter=args.get("filter"),
+                minimum_coverage=args.get("minimum_coverage", "sparse"),
+                max_records=args.get("max_records", 100),
+                include_labels=args.get("include_labels", True),
+                min_sample=args.get("min_sample", 20),
+            )
+        except ValidationError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"ReportFilter validation failed: {exc.errors()}",
+                details={"field": "filter", "validation_errors": exc.errors()},
+            ) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
+        except ValueError as exc:
+            raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
 def _make_filter_only_report(fn):
     """Wrap a report function whose only optional arg is `filter` into a tool
     handler that validates and dispatches it."""
@@ -597,6 +627,19 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "positions (declared risk but not closed) are surfaced separately "
             "in metrics.n_pending_with_risk."
         ),
+    )
+    registry.register(
+        "report.opportunity",
+        _report_opportunity,
+        description=(
+            "Path-dependent opportunity diagnostics over supplied snapshots: "
+            "reconstructs post-decision paths, emits max favorable/adverse "
+            "moves, exit-efficiency, data_coverage, sparse/missing snapshot "
+            "caveats, and documented labels such as missed_positive_edge, "
+            "good_skip, right_thesis_wrong_timing, bad_process_good_outcome, "
+            "and good_process_bad_outcome. No external price fetching."
+        ),
+        example_minimal={"filter": {}, "minimum_coverage": "sparse", "max_records": 100},
     )
     registry.register(
         "report.compare",

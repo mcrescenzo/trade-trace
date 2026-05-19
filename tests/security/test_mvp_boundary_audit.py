@@ -73,7 +73,6 @@ def test_no_source_file_matches_forbidden_pattern(kind, pattern):
 
 
 @pytest.mark.parametrize("deferred_tool", [
-    "report.opportunity",
     "report.r_multiple",
 ])
 def test_deferred_report_tools_not_registered(deferred_tool):
@@ -208,6 +207,7 @@ SHIPPED_REPORTS = {
     "report.strengths",
     "report.pnl",
     "report.risk",
+    "report.opportunity",
     "report.watchlist",
     "report.unscored_forecasts",
     "report.decision_velocity",

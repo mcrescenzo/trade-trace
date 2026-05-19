@@ -33,6 +33,10 @@ from trade_trace.reports.playbook_adherence import (
     DEFAULT_ADHERENCE_MIN_SAMPLE,
     report_playbook_adherence,
 )
+from trade_trace.reports.opportunity import (
+    DEFAULT_OPPORTUNITY_MIN_SAMPLE,
+    report_opportunity,
+)
 from trade_trace.reports.pnl import report_pnl
 from trade_trace.reports.risk import DEFAULT_RISK_MIN_SAMPLE, report_risk
 from trade_trace.reports.source_quality import (
@@ -48,6 +52,7 @@ __all__ = [
     "DEFAULT_ADHERENCE_MIN_SAMPLE",
     "DEFAULT_BIN_POLICY",
     "DEFAULT_MIN_SAMPLE",
+    "DEFAULT_OPPORTUNITY_MIN_SAMPLE",
     "DEFAULT_RISK_MIN_SAMPLE",
     "FORBIDDEN_PHRASES",
     "LIQUIDITY_BUCKET_THRESHOLDS",
@@ -67,6 +72,7 @@ __all__ = [
     "report_compare",
     "report_decision_velocity",
     "report_mistakes",
+    "report_opportunity",
     "report_pnl",
     "report_playbook_adherence",
     "report_risk",
