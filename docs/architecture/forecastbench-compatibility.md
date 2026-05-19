@@ -1,5 +1,7 @@
 # ForecastBench compatibility investigation
 
+> Status: **design — not implemented**. ForecastBench compatibility is P1+ work; nothing in the live registry exports the ForecastBench shape today.
+
 Status: deferred; investigation artifact only.
 Access date: 2026-05-19.
 Bead: trade-trace-pty.

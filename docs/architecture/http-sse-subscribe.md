@@ -1,5 +1,7 @@
 # HTTP/SSE Event-Log Subscribe Design
 
+> Status: **design — not implemented**. The MVP transport is stdio MCP + the CLI; HTTP/SSE is listed in PRD §P1+ work and has no implementation in the live registry.
+
 Status: proposed design artifact for bead `trade-trace-alr`; design-only, not implemented.
 Date: 2026-05-19.
 

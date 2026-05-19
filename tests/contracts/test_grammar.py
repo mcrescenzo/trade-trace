@@ -6,13 +6,13 @@ import json
 
 import pytest
 
+from trade_trace import core as _core_module
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.grammar import (
     validate_actor_id,
     validate_idempotency_key,
 )
 from trade_trace.core import dispatch
-from trade_trace import core as _core_module
 from trade_trace.tools.errors import ToolError
 
 # -- actor_id positive cases ----------------------------------------------

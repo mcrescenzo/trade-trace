@@ -1,5 +1,7 @@
 # MVP Dogfood and Provenance Protocol
 
+> Status: **shipped**. The MVP loop-usefulness protocol agents follow today; pinned by tests under `tests/integration/test_final_dogfood_verification.py`.
+
 Status: clean planning draft. Date: 2026-05-18.
 
 Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),

@@ -1,6 +1,6 @@
 # Position id reopen semantics
 
-> Status: **decision document** for bead `trade-trace-7h2u`. Codifies
+> Status: **decision document for trade-trace-7h2u**. Codifies
 > the existing implementation in `src/trade_trace/projections.py` so a
 > future contributor (or AI agent) can replay/rebuild projections
 > without inventing domain policy.

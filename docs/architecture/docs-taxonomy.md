@@ -1,6 +1,6 @@
 # Docs taxonomy: shipped vs. designed (SIMP-014)
 
-> Status: **findings + recommendation** for bead `trade-trace-qa2g`.
+> Status: **decision document for trade-trace-qa2g** (findings + recommendation).
 > No doc moves or markdown rewrites in this document — the
 > implementation lands as a follow-up bead.
 

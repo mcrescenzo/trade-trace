@@ -1,5 +1,7 @@
 # Memory Layer — Architecture Note
 
+> Status: **shipped**. The M3 memory graph (retain/reflect/link/recall + bi-temporal validity + RRF) is live. Semantic embeddings remain opt-in per §8.
+
 **Date:** 2026-05-18
 **Status:** Refined draft v3 (supersedes v2; PRD §3.2/§4.1 alignment now committed)
 **Parent:** [`../../PRD.md`](../PRD.md) §5 & §4.2

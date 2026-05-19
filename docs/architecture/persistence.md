@@ -1,5 +1,7 @@
 # Persistence: Events, Outbox, and Idempotency
 
+> Status: **shipped**. Events / outbox / idempotency contracts as implemented today.
+
 Status: clean planning draft. Date: 2026-05-18.
 
 **Implementation status (M0-M4 MVP):** every contract here ships — events

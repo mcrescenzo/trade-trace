@@ -1,5 +1,7 @@
 # Operability: Time, Concurrency, Migrations, Logging, Limits
 
+> Status: **shipped**. Describes the operational contracts the live tools follow (timestamps, multi-process, migrations, JSONL on-disk format).
+
 Status: clean planning draft. Date: 2026-05-18.
 
 **Implementation status (M0-M4 MVP):** shipped: UTC ISO 8601

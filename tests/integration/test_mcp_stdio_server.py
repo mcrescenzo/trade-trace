@@ -8,8 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 # mcp is a base runtime dependency now (trade-trace-o8j5); no longer
 # guarded as an optional skip.
 from trade_trace.mcp_server import mcp_call, mcp_tool_specs  # noqa: E402

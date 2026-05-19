@@ -1,6 +1,6 @@
 # Exporter secret-scanning adapter investigation (SIMP-016B)
 
-> Status: **findings + plan** for bead `trade-trace-ypbp`. No code or
+> Status: **decision document for trade-trace-ypbp** (findings + plan). No code or
 > test changes in this document; the implementation work is filed as
 > a follow-up bead before close.
 

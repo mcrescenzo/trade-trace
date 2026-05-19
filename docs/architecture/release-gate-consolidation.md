@@ -1,6 +1,6 @@
 # Release quality-gate consolidation (SIMP-013)
 
-> Status: **findings + plan** for bead `trade-trace-42vr`. No code or
+> Status: **decision document for trade-trace-42vr** (findings + plan). No code or
 > workflow changes in this document. Implementation lands as a
 > follow-up bead.
 

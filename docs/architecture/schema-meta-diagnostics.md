@@ -1,6 +1,6 @@
 # Schema/meta diagnostics for non-table migrations
 
-> Status: **investigation + recommendation** for bead `trade-trace-3elt`.
+> Status: **decision document for trade-trace-3elt** (investigation + recommendation).
 > No code or test changes in this document. The recommended fix is filed
 > as a follow-up bead before close.
 
