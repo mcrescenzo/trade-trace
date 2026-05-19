@@ -15,10 +15,10 @@ import uuid
 from typing import Any
 
 from trade_trace.contracts.envelope import (
-    ErrorBody,
     ErrorEnvelope,
     Meta,
     SuccessEnvelope,
+    error_envelope,
 )
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.grammar import validate_actor_id
@@ -121,25 +121,20 @@ def dispatch(
     try:
         validate_actor_id(actor_id)
     except ToolError as exc:
-        return ErrorEnvelope(
-            error=ErrorBody(code=exc.code, message=exc.message, details=exc.details),
-            meta=meta,
-        )
+        return error_envelope(meta, exc.code, exc.message, exc.details)
 
     try:
         registration = reg.get(tool_name)
     except KeyError:
-        return ErrorEnvelope(
-            error=ErrorBody(
-                code=ErrorCode.NOT_FOUND,
-                message=f"unknown tool {tool_name!r}",
-                details={
-                    "entity_kind": "tool",
-                    "tool": tool_name,
-                    "known_tools": reg.names(),
-                },
-            ),
-            meta=meta,
+        return error_envelope(
+            meta,
+            ErrorCode.NOT_FOUND,
+            f"unknown tool {tool_name!r}",
+            {
+                "entity_kind": "tool",
+                "tool": tool_name,
+                "known_tools": reg.names(),
+            },
         )
 
     ctx = ToolContext(tool=tool_name, actor_id=actor_id, request_id=rid, raw_args=args)
@@ -159,23 +154,21 @@ def dispatch(
         and not allow_no_idempotency
         and not args.get("idempotency_key")
     ):
-        return ErrorEnvelope(
-            error=ErrorBody(
-                code=ErrorCode.VALIDATION_ERROR,
-                message=(
-                    f"{tool_name!r} is a retryable write and requires "
-                    "`idempotency_key`; pass `_allow_no_idempotency: true` "
-                    "(CLI: `--allow-no-idempotency`) to opt into at-least-once "
-                    "semantics for batch importers/admin paths."
-                ),
-                details={
-                    "field": "idempotency_key",
-                    "tool": tool_name,
-                    "opt_out_cli": "--allow-no-idempotency",
-                    "opt_out_mcp": "_allow_no_idempotency",
-                },
+        return error_envelope(
+            meta,
+            ErrorCode.VALIDATION_ERROR,
+            (
+                f"{tool_name!r} is a retryable write and requires "
+                "`idempotency_key`; pass `_allow_no_idempotency: true` "
+                "(CLI: `--allow-no-idempotency`) to opt into at-least-once "
+                "semantics for batch importers/admin paths."
             ),
-            meta=meta,
+            {
+                "field": "idempotency_key",
+                "tool": tool_name,
+                "opt_out_cli": "--allow-no-idempotency",
+                "opt_out_mcp": "_allow_no_idempotency",
+            },
         )
 
     # Dry-run plumbing per trade-trace-268. The flag is request-scoped so
@@ -213,25 +206,20 @@ def dispatch(
             data = registration.handler(args, ctx)
         except ToolError as exc:
             _apply_hints()
-            return ErrorEnvelope(
-                error=ErrorBody(code=exc.code, message=exc.message, details=exc.details),
-                meta=meta,
-            )
+            return error_envelope(meta, exc.code, exc.message, exc.details)
         except IdempotencyConflictError as exc:
             _apply_hints()
-            return ErrorEnvelope(
-                error=ErrorBody(
-                    code=ErrorCode.IDEMPOTENCY_CONFLICT,
-                    message=str(exc),
-                    details={
-                        "event_type": exc.event_type,
-                        "actor_id": exc.actor_id,
-                        "idempotency_key": exc.idempotency_key,
-                        "original_event_id": exc.original_event_id,
-                        "diff_summary": exc.diff_summary,
-                    },
-                ),
-                meta=meta,
+            return error_envelope(
+                meta,
+                ErrorCode.IDEMPOTENCY_CONFLICT,
+                str(exc),
+                {
+                    "event_type": exc.event_type,
+                    "actor_id": exc.actor_id,
+                    "idempotency_key": exc.idempotency_key,
+                    "original_event_id": exc.original_event_id,
+                    "diff_summary": exc.diff_summary,
+                },
             )
         except sqlite3.IntegrityError as exc:
             # SQLite CHECK / FK / UNIQUE / append-only-trigger violations all
@@ -248,19 +236,14 @@ def dispatch(
             else:
                 code = ErrorCode.STORAGE_ERROR
             _apply_hints()
-            return ErrorEnvelope(
-                error=ErrorBody(code=code, message=msg, details={"sqlite_error": msg}),
-                meta=meta,
-            )
+            return error_envelope(meta, code, msg, {"sqlite_error": msg})
         except sqlite3.Error as exc:
             _apply_hints()
-            return ErrorEnvelope(
-                error=ErrorBody(
-                    code=ErrorCode.STORAGE_ERROR,
-                    message=str(exc),
-                    details={"sqlite_error": str(exc)},
-                ),
-                meta=meta,
+            return error_envelope(
+                meta,
+                ErrorCode.STORAGE_ERROR,
+                str(exc),
+                {"sqlite_error": str(exc)},
             )
 
         if not isinstance(data, dict):
@@ -268,13 +251,11 @@ def dispatch(
             # violation so the bug surfaces immediately rather than producing
             # a malformed envelope.
             _apply_hints()
-            return ErrorEnvelope(
-                error=ErrorBody(
-                    code=ErrorCode.INVARIANT_VIOLATION,
-                    message=f"tool {tool_name!r} returned non-dict result",
-                    details={"result_type": type(data).__name__},
-                ),
-                meta=meta,
+            return error_envelope(
+                meta,
+                ErrorCode.INVARIANT_VIOLATION,
+                f"tool {tool_name!r} returned non-dict result",
+                {"result_type": type(data).__name__},
             )
 
         _apply_hints()

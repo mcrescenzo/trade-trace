@@ -16,14 +16,12 @@ import argparse
 import getpass
 import json
 import sys
-import uuid
 from typing import Any
 
 from trade_trace.contracts.envelope import (
-    ErrorBody,
-    ErrorEnvelope,
     Meta,
     dump_envelope,
+    error_envelope,
 )
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import CLINameCollisionError, ToolRegistry
@@ -137,6 +135,37 @@ def _invocation_from_args(
     return ".".join(longest), tokens[len(longest):]
 
 
+def _emit_cli_error(
+    *,
+    tool: str,
+    actor_id: str,
+    request_id: str | None,
+    code: ErrorCode,
+    message: str,
+    details: dict[str, Any],
+) -> int:
+    """Build the typed error envelope a CLI-side validation failure emits,
+    print it to stdout in canonical sorted-keys JSON, and return the exit
+    code mapped from `code`. Centralizes the previously-duplicated startup,
+    JSON-arg, and stray-positional error paths per bead trade-trace-hd2r
+    (SIMP-001)."""
+
+    import uuid as _uuid
+    meta = Meta(
+        tool=tool,
+        actor_id=actor_id,
+        request_id=request_id or _uuid.uuid4().hex,
+    )
+    env = error_envelope(meta, code, message, details)
+    print(json.dumps(env.model_dump(mode="json", exclude_none=True), sort_keys=True))
+    if code == ErrorCode.VALIDATION_ERROR:
+        return 2
+    if code == ErrorCode.INVARIANT_VIOLATION:
+        return 3
+    return 1
+
+
+
 def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None) -> int:
     """`tt` entrypoint. Returns the process exit code."""
 
@@ -192,24 +221,18 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
         if registry is None:
             registry = default_registry()
     except CLINameCollisionError as exc:
-        err_envelope = ErrorEnvelope(
-            error=ErrorBody(
-                code=ErrorCode.STORAGE_ERROR,
-                message=str(exc),
-                details={
-                    "reason": "cli_name_collision",
-                    "conflict_kind": exc.conflict_kind,
-                    "colliding": exc.suggested_renames,
-                },
-            ),
-            meta=Meta(
-                tool="<startup>",
-                actor_id=args.actor_id,
-                request_id=args.request_id or uuid.uuid4().hex,
-            ),
+        return _emit_cli_error(
+            tool="<startup>",
+            actor_id=args.actor_id,
+            request_id=args.request_id,
+            code=ErrorCode.STORAGE_ERROR,
+            message=str(exc),
+            details={
+                "reason": "cli_name_collision",
+                "conflict_kind": exc.conflict_kind,
+                "colliding": exc.suggested_renames,
+            },
         )
-        print(json.dumps(err_envelope.model_dump(mode="json", exclude_none=True), sort_keys=True))
-        return 1
 
     if not positional:
         parser.print_help(sys.stderr)
@@ -219,53 +242,35 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
     try:
         tool_args = _parse_kv_args(remaining)
     except MalformedJsonArgError as exc:
-        err_envelope = ErrorEnvelope(
-            error=ErrorBody(
-                code=ErrorCode.VALIDATION_ERROR,
-                message=str(exc),
-                details={
-                    "field": exc.flag,
-                    "reason": "invalid_json",
-                    "decode_error": exc.decode_error,
-                    "tool": tool_name,
-                },
-            ),
-            meta=Meta(
-                tool=tool_name,
-                actor_id=args.actor_id,
-                request_id=args.request_id or uuid.uuid4().hex,
-            ),
+        return _emit_cli_error(
+            tool=tool_name,
+            actor_id=args.actor_id,
+            request_id=args.request_id,
+            code=ErrorCode.VALIDATION_ERROR,
+            message=str(exc),
+            details={
+                "field": exc.flag,
+                "reason": "invalid_json",
+                "decode_error": exc.decode_error,
+                "tool": tool_name,
+            },
         )
-        print(json.dumps(
-            err_envelope.model_dump(mode="json", exclude_none=True),
-            sort_keys=True,
-        ))
-        return 2
     except StrayPositionalArgsError as exc:
         # Per bead trade-trace-r5k / DEBT-007: surface a typed envelope
         # (exit 2) instead of silently dropping stray positional tokens.
         # CLI parity with MCP requires the JSON-envelope shape.
-        err_envelope = ErrorEnvelope(
-            error=ErrorBody(
-                code=ErrorCode.VALIDATION_ERROR,
-                message=str(exc),
-                details={
-                    "field": "argv",
-                    "stray_positional_args": exc.stray,
-                    "tool": tool_name,
-                },
-            ),
-            meta=Meta(
-                tool=tool_name,
-                actor_id=args.actor_id,
-                request_id=args.request_id or uuid.uuid4().hex,
-            ),
+        return _emit_cli_error(
+            tool=tool_name,
+            actor_id=args.actor_id,
+            request_id=args.request_id,
+            code=ErrorCode.VALIDATION_ERROR,
+            message=str(exc),
+            details={
+                "field": "argv",
+                "stray_positional_args": exc.stray,
+                "tool": tool_name,
+            },
         )
-        print(json.dumps(
-            err_envelope.model_dump(mode="json", exclude_none=True),
-            sort_keys=True,
-        ))
-        return 2
     if args.allow_no_idempotency:
         # MCP-side convention is the underscore-prefixed key; the CLI sets
         # the same key so the dispatcher path is identical between transports.

@@ -76,6 +76,26 @@ class ErrorEnvelope(BaseModel):
     meta: Meta
 
 
+def error_envelope(
+    meta: Meta,
+    code: ErrorCode,
+    message: str,
+    details: dict[str, Any] | None = None,
+) -> ErrorEnvelope:
+    """Construct an :class:`ErrorEnvelope` from the three fields callers
+    actually vary (`code`, `message`, `details`) plus the per-call
+    :class:`Meta`. Centralizes the repeated three-level construction
+    `ErrorEnvelope(error=ErrorBody(...), meta=...)` per bead
+    trade-trace-hd2r (SIMP-001); behavior is identical to building the
+    objects by hand.
+    """
+
+    return ErrorEnvelope(
+        error=ErrorBody(code=code, message=message, details=details or {}),
+        meta=meta,
+    )
+
+
 def dump_envelope(env: SuccessEnvelope | ErrorEnvelope) -> dict[str, Any]:
     """Serialize an envelope to a JSON-ready dict.
 

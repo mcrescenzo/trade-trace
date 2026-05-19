@@ -20,14 +20,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-# Dummy secret prefixes built from non-contiguous parts so the
-# source file itself cannot be flagged by public secret scanners
-# (trade-trace-awxq).
-_SK = "s" + "k" + "-"
-_XOXB = "xo" + "xb" + "-"
-_ZX = "0" + "x"
-_EYJ = "ey" + "J"
-
 from trade_trace.events import EventWriter
 from trade_trace.exporter import (
     SECRET_PATTERNS,
@@ -36,6 +28,14 @@ from trade_trace.exporter import (
 )
 from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
+
+# Dummy secret prefixes built from non-contiguous parts so the
+# source file itself cannot be flagged by public secret scanners
+# (trade-trace-awxq).
+_SK = "s" + "k" + "-"
+_XOXB = "xo" + "xb" + "-"
+_ZX = "0" + "x"
+_EYJ = "ey" + "J"
 
 
 def _journal(tmp_path: Path):
