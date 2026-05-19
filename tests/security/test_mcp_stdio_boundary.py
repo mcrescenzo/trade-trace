@@ -25,29 +25,7 @@ from trade_trace.mcp_server import (
     serve_stdio,
     stdio_actor_id,
 )
-
-PROJECT_CREDENTIAL_KEYS = {
-    "api_key",
-    "access_token",
-    "refresh_token",
-    "auth_token",
-    "bearer_token",
-    "secret_key",
-    "client_secret",
-    "password",
-    "passphrase",
-    "wallet_seed",
-    "wallet_seed_phrase",
-    "seed_phrase",
-    "mnemonic",
-    "private_key",
-    "signing_key",
-    "signing_secret",
-    "broker_token",
-    "trading_password",
-    "session_token",
-    "oauth_token",
-}
+from trade_trace.security.credential_keys import PROJECT_CREDENTIAL_KEYS  # noqa: E402
 
 
 def _noop_handler(args: dict[str, Any], ctx: Any) -> dict[str, Any]:  # noqa: ARG001

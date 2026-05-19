@@ -21,33 +21,9 @@ from trade_trace.core import default_registry, dispatch
 DEFAULT_MCP_ACTOR_ID = "agent:mcp-default"
 
 
-SECRET_TRANSPORT_HINT_KEYS = {
-    "api_key",
-    "access_key",
-    "access_token",
-    "auth_token",
-    "bearer_token",
-    "broker_token",
-    "client_secret",
-    "credential",
-    "credentials",
-    "mnemonic",
-    "oauth_token",
-    "password",
-    "passphrase",
-    "private_key",
-    "refresh_token",
-    "secret",
-    "secret_key",
-    "seed_phrase",
-    "session_token",
-    "signing" + "_key",
-    "signing_secret",
-    "token",
-    "trading_password",
-    "wallet_seed",
-    "wallet_seed_phrase",
-}
+from trade_trace.security.credential_keys import (  # noqa: E402
+    SECRET_TRANSPORT_HINT_KEYS,
+)
 
 
 def stdio_actor_id(env: Mapping[str, str] | None = None) -> str:

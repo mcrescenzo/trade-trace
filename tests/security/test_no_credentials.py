@@ -22,31 +22,13 @@ import pytest
 
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
+from trade_trace.security.credential_keys import PROJECT_CREDENTIAL_KEYS  # noqa: E402
 from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
 
-CREDENTIAL_KEYS = [
-    "api_key",
-    "access_token",
-    "refresh_token",
-    "auth_token",
-    "bearer_token",
-    "secret_key",
-    "client_secret",
-    "password",
-    "passphrase",
-    "wallet_seed",
-    "wallet_seed_phrase",
-    "seed_phrase",
-    "mnemonic",
-    "private_key",
-    "signing_key",
-    "signing_secret",
-    "broker_token",
-    "trading_password",
-    "session_token",
-    "oauth_token",
-]
+# Audit iterates this list (test_no_credentials.py predates the shared
+# vocabulary; alias kept so the audit prose still scans naturally).
+CREDENTIAL_KEYS = sorted(PROJECT_CREDENTIAL_KEYS)
 
 CREDENTIAL_VALUE_PATTERNS = [
     re.compile(r"sk-[A-Za-z0-9]{16,}"),
