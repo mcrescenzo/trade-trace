@@ -1,9 +1,0 @@
-$ bd dep list trade-trace-gm28
-rc=0
-
-STDOUT:
-
-trade-trace-gm28 has no dependencies
-
-STDERR:
-

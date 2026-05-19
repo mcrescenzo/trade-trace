@@ -1,7 +1,0 @@
-
-Found 1 issues:
-
-trade-trace-aq0 [● P1] [bug] open
-  Fix stale hard-coded package version assertions in smoke/golden tests
-  Labels: [debt-run:20260518-no-tech-debt domain:build-package-ci-release repo-no-tech-debt risk:high tech-debt track:bug]
-

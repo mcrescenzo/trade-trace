@@ -1,8 +1,20 @@
 
-# Beads / Dolt files (added by bd init)
+# Beads / Dolt files. Per trade-trace-piav the public release
+# repo MUST NOT track .beads/ contents — neither config nor
+# metadata nor README. Internal collaborators use bd locally;
+# the Dolt sync handles project state outside the repo.
+.beads/
 .dolt/
 *.db
 .beads-credential-key
+
+# Audit run artifacts. Per trade-trace-piav, generated audit
+# exports (mutation logs, coverage ledgers, readback dumps,
+# candidate matrices) are internal review artifacts that must
+# never enter the public repo; they carry personal email/name
+# metadata and local absolute paths by construction.
+audits/
+docs/audits/
 
 # Python package artifacts
 __pycache__/
