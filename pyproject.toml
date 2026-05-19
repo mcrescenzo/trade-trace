@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trade-trace"
-version = "0.0.1rc1"
+version = "0.0.1rc2"
 description = "Local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents."
 readme = "README.md"
 license = { text = "MIT" }
