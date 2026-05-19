@@ -203,6 +203,15 @@ def _instrument_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     venue_id = require(args, "venue_id")
     asset_class = require(args, "asset_class")
     title = require(args, "title")
+    # Scan long-form instrument free-text per bead trade-trace-7j1l.
+    # Narrow enum / id fields (asset_class, currency_or_collateral,
+    # external_id, symbol) are exempt: they pass through to controlled
+    # vocabularies and rejecting common identifiers would break ledger
+    # flow. resolution_criteria_text is the one true free-text field.
+    reject_if_contains_secrets(title, field="title")
+    reject_if_contains_secrets(
+        args.get("resolution_criteria_text"), field="resolution_criteria_text",
+    )
     idempotency_key = args.get("idempotency_key")
     expiration = normalize_timestamp(args, "expiration_or_resolution_at")
     metadata_json = _store_metadata_json(args)
@@ -361,6 +370,12 @@ def _thesis_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     side = require(args, "side")
     body = require(args, "body")
     reject_if_contains_secrets(body, field="body")
+    # Long-form thesis free-text fields per bead trade-trace-7j1l;
+    # narrow enum-shaped columns (side, confidence_label, …) are
+    # exempt by design (see docs/architecture/security.md §6.5).
+    for field in ("falsification_criteria", "exit_triggers", "risk_notes",
+                  "invalidation_condition", "risk_unit_label"):
+        reject_if_contains_secrets(args.get(field), field=field)
     parent = args.get("parent_thesis_id")
     version = args.get("version", 1)
     idempotency_key = args.get("idempotency_key")
@@ -534,6 +549,12 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     yes_label = args.get("yes_label")
     resolution_at = normalize_timestamp(args, "resolution_at")
     scoring_support = "supported" if kind == "binary" else "unsupported"
+    # Scan the one long-form forecast free-text field per bead
+    # trade-trace-7j1l; yes_label is short and enum-shaped (typically
+    # "yes"/"true") so it's exempt by design.
+    reject_if_contains_secrets(
+        args.get("resolution_rule_text"), field="resolution_rule_text",
+    )
     seg = common_metadata(args)
 
     def _forecast_payload(fid: str) -> dict[str, Any]:

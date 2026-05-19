@@ -69,12 +69,11 @@ MVP ships four registered patterns:
 
 Three layers consume the registry:
 
-1. **Write-time guard**: `thesis.body`, `source.excerpt`,
-   `source.extracted_text`, and `decision.reason` are scanned before
-   the row is inserted. A match raises `VALIDATION_ERROR` with
-   `details.pattern_kind` and `details.match_offset` so the agent can
-   strip the leaked bytes and retry. The secret never reaches the
-   journal in the first place.
+1. **Write-time guard**: every long-form free-text field is scanned
+   before the row is inserted (full list in §6.5 below). A match
+   raises `VALIDATION_ERROR` with `details.pattern_kind` and
+   `details.match_offset` so the agent can strip the leaked bytes and
+   retry. The secret never reaches the journal in the first place.
 2. **Log redactor**: every log line passes through
    `trade_trace.security.redact_for_log()` before write. Matches are
    replaced by `REDACTED-<pattern_kind>`.
@@ -106,6 +105,51 @@ seed-phrase fields. The ban is verified mechanically in
 Embeddings API keys (when a hosted provider is enabled in P1) are the
 sole documented exception. Per the operability spec, they live in the
 OS keyring; they never appear in tool args, schemas, or logs.
+
+### 6.5 Free-text scan policy (bead trade-trace-7j1l)
+
+Every persisted column whose contents are *long-form free text*
+(notes, descriptions, reasons, pasted prose) is scanned by
+`reject_if_contains_secrets` before the row is written. Narrow
+identifier / enum / label columns are exempt because (a) their
+contents come from controlled vocabularies and (b) rejecting common
+identifiers would break ledger flow.
+
+Scanned write-time:
+
+| Tool                            | Field                                     |
+|---------------------------------|-------------------------------------------|
+| `thesis.add`                    | `body`, `falsification_criteria`, `exit_triggers`, `risk_notes`, `invalidation_condition`, `risk_unit_label` |
+| `decision.add`                  | `reason`                                  |
+| `decision.record_adherence`     | `reason`                                  |
+| `instrument.add`                | `title`, `resolution_criteria_text`       |
+| `forecast.add`                  | `resolution_rule_text`                    |
+| `source.add`                    | `title`, `note`, `excerpt`, `extracted_text`, `summary` |
+| `strategy.create` / `strategy.update` | `description`, `hypothesis`         |
+| `playbook.create`               | `description`                             |
+| `playbook.propose_version`      | `description`                             |
+| `memory.retain` / `memory.reflect` | `body`, `title`                        |
+| Every write tool                | `metadata_json` (recursively, including raw JSON strings) |
+
+Exempt by design (documented, not scanned):
+
+- Enum / vocabulary columns: `kind`, `side`, `status`, `stance`,
+  `confidence_label`, `scoring_state`, `outcome_label`,
+  `asset_class`, `node_type`, `playbook_status`, etc.
+- Short identifier / label columns: `slug`, `name`, `tag`,
+  `symbol`, `currency_or_collateral`, `external_id`,
+  `yes_label`, `ref`, `uri`, `media_type`, `source_author`,
+  `publisher`, `content_hash`, `hash_algorithm`,
+  `license_or_terms_note`, `actor_id`, `agent_id`, `model_id`,
+  `environment`, `run_id`, `request_id`, `review_by`.
+- Reference / FK columns and timestamps: any `*_id`, `*_at`,
+  `version`, `parent_*_id`, `provenance_reflection_node_id`.
+
+Adding a new persisted free-text column to a migration requires:
+1. Either calling `reject_if_contains_secrets` from the tool that
+   writes it, **or** explicitly listing the column above as exempt.
+2. A corresponding test in
+   `tests/security/test_secret_pattern_writes.py`.
 
 ## 7. No Background Network, No Telemetry, No Auto-Update
 

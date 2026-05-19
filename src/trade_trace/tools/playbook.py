@@ -42,6 +42,7 @@ from trade_trace.tools._helpers import (
     new_id,
     now_iso,
     open_db_for_args,
+    reject_if_contains_secrets,
     require,
 )
 from trade_trace.tools.errors import ToolError
@@ -55,6 +56,9 @@ ADHERENCE_STATUSES = ("considered", "followed", "overridden", "not_applicable")
 def _playbook_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     name = require(args, "name")
     description = args.get("description")
+    # Per bead trade-trace-7j1l: scan the long-form playbook description
+    # field. `name` is a short identifier and exempt.
+    reject_if_contains_secrets(description, field="description")
     status = args.get("status")
     metadata_json = json.dumps(args.get("metadata_json") or {}, sort_keys=True)
     idempotency_key = args.get("idempotency_key")
@@ -259,6 +263,9 @@ def _playbook_propose_version(
     playbook_id = require(args, "playbook_id")
     reflection_node_id = require(args, "provenance_reflection_node_id")
     description = args.get("description")
+    # Per bead trade-trace-7j1l: scan version description (long-form
+    # free-text). The reflection_node_id is a reference, not free text.
+    reject_if_contains_secrets(description, field="description")
     metadata_json = json.dumps(args.get("metadata_json") or {}, sort_keys=True)
     idempotency_key = args.get("idempotency_key")
 
@@ -388,6 +395,9 @@ def _decision_record_adherence(
     rule_node_id = require(args, "rule_node_id")
     status = require(args, "status")
     reason = args.get("reason")
+    # Per bead trade-trace-7j1l: adherence `reason` is long-form free
+    # text (the override justification); scan it for credentials.
+    reject_if_contains_secrets(reason, field="reason")
     idempotency_key = args.get("idempotency_key")
 
     if status not in ADHERENCE_STATUSES:

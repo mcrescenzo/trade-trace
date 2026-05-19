@@ -26,6 +26,7 @@ from trade_trace.tools._helpers import (
     new_id,
     now_iso,
     open_db_for_args,
+    reject_if_contains_secrets,
     require,
 )
 from trade_trace.tools.errors import ToolError
@@ -64,6 +65,11 @@ def _strategy_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     slug = _normalize_slug(require(args, "slug"))
     description = args.get("description")
     hypothesis = args.get("hypothesis")
+    # Scan long-form strategy free-text per bead trade-trace-7j1l.
+    # name and slug are short identifiers and exempt; description and
+    # hypothesis can hold pasted notes that might carry credentials.
+    reject_if_contains_secrets(description, field="description")
+    reject_if_contains_secrets(hypothesis, field="hypothesis")
     status = args.get("status", "active")
     if status not in _STATUS_VALUES:
         raise ToolError(
@@ -264,8 +270,10 @@ def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     strategy_id = require(args, "strategy_id")
     updates: list[tuple[str, Any]] = []
     if "description" in args:
+        reject_if_contains_secrets(args["description"], field="description")
         updates.append(("description", args["description"]))
     if "hypothesis" in args:
+        reject_if_contains_secrets(args["hypothesis"], field="hypothesis")
         updates.append(("hypothesis", args["hypothesis"]))
     if "status" in args:
         status = args["status"]

@@ -128,6 +128,126 @@ def test_decision_reason_rejects_secret(home, pattern_kind, secret):
     assert env.error.details["pattern_kind"] == pattern_kind
 
 
+# -- per bead trade-trace-7j1l: extended free-text surfaces ---------
+#
+# Until this bead landed, the secret-pattern guard only covered
+# thesis.body / decision.reason / source.{title,note,excerpt,
+# extracted_text,summary} / memory_node.{body,title}. The audit lane
+# 7 SEC-01 found several other long-form free-text columns that bypass
+# the scan. The policy now scans every long-form free-text field
+# below; narrow enum / id / label columns are documented exempt in
+# docs/architecture/security.md §6.5.
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["falsification_criteria", "exit_triggers", "risk_notes",
+     "invalidation_condition", "risk_unit_label"],
+)
+@pytest.mark.parametrize("pattern_kind,secret", list(SECRET_FIXTURES.items()))
+def test_thesis_long_form_fields_reject_secrets(
+    home, field, pattern_kind, secret,
+):
+    """Each long-form thesis free-text field rejects secret-shaped
+    content per bead trade-trace-7j1l."""
+
+    _venue, inst = _seed_instrument(home)
+    env = _mcp(home, "thesis.add", {
+        "instrument_id": inst, "side": "yes",
+        "body": "ordinary body — no secret here",
+        field: f"contains {secret} in pasted notes",
+    })
+    assert env.ok is False, f"expected rejection on {field}/{pattern_kind}"
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == field
+    assert env.error.details["pattern_kind"] == pattern_kind
+
+
+def test_instrument_resolution_criteria_text_rejects_secret(home):
+    """instrument.resolution_criteria_text is long-form free text per
+    bead trade-trace-7j1l."""
+
+    venue = _mcp(home, "venue.add",
+                 {"name": "PM", "kind": "prediction_market"}).data["id"]
+    secret = SECRET_FIXTURES["api_key"]
+    env = _mcp(home, "instrument.add", {
+        "venue_id": venue, "asset_class": "prediction_market",
+        "title": "X",
+        "resolution_criteria_text": f"Settles when {secret} payload arrives",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "resolution_criteria_text"
+
+
+def test_forecast_resolution_rule_text_rejects_secret(home):
+    """forecast.resolution_rule_text is long-form free text per bead
+    trade-trace-7j1l."""
+
+    _venue, inst = _seed_instrument(home)
+    thesis = _mcp(home, "thesis.add", {
+        "instrument_id": inst, "side": "yes", "body": "...",
+    }).data["id"]
+    secret = SECRET_FIXTURES["slack_token"]
+    env = _mcp(home, "forecast.add", {
+        "thesis_id": thesis, "kind": "binary", "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.5},
+            {"outcome_label": "no", "probability": 0.5},
+        ],
+        "resolution_rule_text": f"Trigger on {secret} payload",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "resolution_rule_text"
+
+
+@pytest.mark.parametrize("field", ["description", "hypothesis"])
+def test_strategy_long_form_fields_reject_secrets(home, field):
+    """strategy.description and strategy.hypothesis are long-form free
+    text per bead trade-trace-7j1l."""
+
+    secret = SECRET_FIXTURES["api_key"]
+    env = _mcp(home, "strategy.create", {
+        "slug": "strat", "name": "Strat",
+        field: f"includes {secret}",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == field
+
+
+def test_strategy_update_description_rejects_secret(home):
+    """strategy.update applies the same scan when description changes."""
+
+    created = _mcp(home, "strategy.create", {
+        "slug": "strat", "name": "Strat",
+    })
+    assert created.ok, created
+    secret = SECRET_FIXTURES["jwt"]
+    env = _mcp(home, "strategy.update", {
+        "strategy_id": created.data["id"],
+        "description": f"refined with {secret}",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "description"
+
+
+def test_playbook_description_rejects_secret(home):
+    """playbook.create.description is long-form free text per bead
+    trade-trace-7j1l."""
+
+    secret = SECRET_FIXTURES["api_key"]
+    env = _mcp(home, "playbook.create", {
+        "name": "PB",
+        "description": f"playbook spec: {secret}",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "description"
+
+
 def test_metadata_json_rejects_nested_secret_value(home):
     env = _mcp(home, "venue.add", {
         "name": "PM",
