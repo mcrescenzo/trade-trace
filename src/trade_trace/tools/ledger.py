@@ -1177,8 +1177,11 @@ def derive_scoring_state(conn, forecast_id: str) -> str:
 
 def _source_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     kind = require(args, "kind")
+    reject_if_contains_secrets(args.get("title"), field="title")
+    reject_if_contains_secrets(args.get("note"), field="note")
     reject_if_contains_secrets(args.get("excerpt"), field="excerpt")
     reject_if_contains_secrets(args.get("extracted_text"), field="extracted_text")
+    reject_if_contains_secrets(args.get("summary"), field="summary")
     idempotency_key = args.get("idempotency_key")
     stance = args.get("stance", "neutral")
     storage_kind = args.get("storage_kind", "inline_text")

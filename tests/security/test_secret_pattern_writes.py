@@ -96,18 +96,19 @@ def test_thesis_body_rejects_secret(home, pattern_kind, secret):
     assert body[offset : offset + length] == secret
 
 
+@pytest.mark.parametrize("field", ["title", "note", "excerpt", "extracted_text", "summary"])
 @pytest.mark.parametrize("pattern_kind,secret", list(SECRET_FIXTURES.items()))
-def test_source_excerpt_rejects_secret(home, pattern_kind, secret):
-    """source.excerpt containing a secret-shape → VALIDATION_ERROR."""
+def test_source_free_text_rejects_secret(home, field, pattern_kind, secret):
+    """source free-text containing a secret-shape → VALIDATION_ERROR."""
 
     env = _mcp(home, "source.add", {
         "kind": "note", "stance": "neutral",
-        "excerpt": f"Pasted from clipboard: {secret}",
+        field: f"Pasted from clipboard: {secret}",
         "idempotency_key": f"00000000-0000-4000-8000-{pattern_kind:>012}"[:36],
     })
     assert env.ok is False, f"expected rejection on {pattern_kind}"
     assert env.error.code.value == "VALIDATION_ERROR"
-    assert env.error.details["field"] == "excerpt"
+    assert env.error.details["field"] == field
     assert env.error.details["pattern_kind"] == pattern_kind
 
 

@@ -148,8 +148,9 @@ def reject_if_contains_secrets(value: Any, *, field: str) -> None:
     strings.
 
     Used to guard user-supplied free-text fields (thesis.body,
-    source.excerpt, decision.reason) at write time so the journal
-    never holds an unredacted secret in the first place.
+    source title/note/excerpt/extracted_text/summary, decision.reason)
+    at write time so the journal never holds an unredacted secret in
+    the first place.
     """
 
     if not isinstance(value, str) or not value:
