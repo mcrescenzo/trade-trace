@@ -4,27 +4,11 @@ Trade Trace runs as a local MCP stdio server. IDE clients should launch `trade-t
 
 ## Prerequisites
 
-Install Trade Trace with the optional MCP dependency in the Python environment your IDE can reach:
-
-```bash
-pip install -e .
-command -v trade-trace-mcp
-```
-
-Choose a local data directory and initialize the journal once:
-
-```bash
-export TRADE_TRACE_HOME="$HOME/.trade-trace"
-tt journal init
-```
-
-Optional actor identity for MCP tool calls:
-
-```bash
-export MCP_ACTOR_ID="agent:ide"
-```
-
-If `MCP_ACTOR_ID` is not set, Trade Trace uses `agent:mcp-default`.
+See [`AI_AGENT_MCP_GETTING_STARTED.md`](./AI_AGENT_MCP_GETTING_STARTED.md)
+for the canonical install + `TRADE_TRACE_HOME` + `tt journal init` +
+`MCP_ACTOR_ID` setup. For Cursor / Windsurf / Cline, set
+`MCP_ACTOR_ID="agent:ide"` (or any other `agent:*` identifier you
+prefer).
 
 ## Generic stdio MCP config
 

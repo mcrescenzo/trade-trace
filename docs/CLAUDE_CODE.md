@@ -4,29 +4,11 @@ Trade Trace runs as a local MCP stdio server. It does not expose an HTTP port an
 
 ## Prerequisites
 
-From the Trade Trace checkout or package environment, install the optional MCP extra and confirm the console script is on your PATH:
-
-```bash
-pip install -e .
-trade-trace-mcp
-```
-
-`trade-trace-mcp` is a stdio server, so the second command will wait for MCP JSON-RPC input. Press `Ctrl-C` after confirming the command starts without an import error.
-
-Choose a local data directory and initialize the journal once:
-
-```bash
-export TRADE_TRACE_HOME="$HOME/.trade-trace"
-tt journal init
-```
-
-Optional actor identity for tool calls:
-
-```bash
-export MCP_ACTOR_ID="agent:claude-code"
-```
-
-If `MCP_ACTOR_ID` is not set, Trade Trace uses `agent:mcp-default`.
+See [`AI_AGENT_MCP_GETTING_STARTED.md`](./AI_AGENT_MCP_GETTING_STARTED.md)
+for the canonical install + `TRADE_TRACE_HOME` + `tt journal init` +
+`MCP_ACTOR_ID` setup. For Claude Code, set
+`MCP_ACTOR_ID="agent:claude-code"` (the recommended client-specific
+default).
 
 ## Per-project setup
 
