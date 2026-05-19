@@ -13,7 +13,6 @@ from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
 
-
 DEFAULT_PNL_MIN_SAMPLE = 5
 
 

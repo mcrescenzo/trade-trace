@@ -9,7 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.version import CONTRACT_VERSION
 
-
 REPORT_STANDARD_META_KEYS: Final[tuple[str, ...]] = (
     "bin_policy",
     "cli_human_hint",

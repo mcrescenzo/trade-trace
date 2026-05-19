@@ -7,8 +7,6 @@ import os
 import time
 from pathlib import Path
 
-import pytest
-
 from trade_trace.exporter import (
     FINAL_SUFFIX,
     RESERVED_TRANSPORT_KEYS,

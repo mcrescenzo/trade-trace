@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     """The closed enum of MVP error codes.
 
     Adding a new value is a contract change requiring a minor version bump

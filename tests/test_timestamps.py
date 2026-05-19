@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
@@ -53,7 +53,7 @@ def test_fixed_clock_requires_aware_datetime():
 
 
 def test_fixed_clock_advance():
-    clock = FixedClock(datetime(2026, 5, 18, 14, 0, 0, tzinfo=timezone.utc))
+    clock = FixedClock(datetime(2026, 5, 18, 14, 0, 0, tzinfo=UTC))
     initial = clock.now()
     clock.advance(seconds=60)
     assert (clock.now() - initial).total_seconds() == 60

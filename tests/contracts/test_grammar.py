@@ -14,7 +14,6 @@ from trade_trace.contracts.grammar import (
 from trade_trace.core import dispatch
 from trade_trace.tools.errors import ToolError
 
-
 # -- actor_id positive cases ----------------------------------------------
 
 

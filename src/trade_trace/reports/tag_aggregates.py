@@ -23,7 +23,6 @@ from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
 
-
 DEFAULT_TAG_MIN_SAMPLE = 10
 
 

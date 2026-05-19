@@ -13,7 +13,7 @@ Rules (locked):
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 class TimestampValidationError(ValueError):
@@ -47,7 +47,7 @@ def to_utc_iso8601(value: str | datetime, *, field: str = "<value>") -> str:
         )
 
     # Normalize to UTC and truncate to millisecond precision.
-    dt_utc = dt.astimezone(timezone.utc)
+    dt_utc = dt.astimezone(UTC)
     micros = dt_utc.microsecond
     millis = micros // 1000  # truncate, do not round (locked per operability.md §2.1)
     dt_truncated = dt_utc.replace(microsecond=millis * 1000)

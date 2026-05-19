@@ -12,8 +12,6 @@ dogfood gate. The bead acceptance also requires:
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 import subprocess
 import sys
@@ -299,20 +297,6 @@ def test_l13_ambiguous_resolution_case_handled(fixture_home):
             """
             SELECT COUNT(*) FROM outcomes
             WHERE status IN ('ambiguous', 'disputed', 'resolved_provisional')
-            """
-        ).fetchone()[0]
-        # The non-final outcome rows must not have triggered an
-        # autoscore.
-        pending_forecasts_after_nonfinal = db.connection.execute(
-            """
-            SELECT COUNT(*) FROM forecasts f
-            JOIN theses t ON t.id = f.thesis_id
-            WHERE EXISTS (
-                SELECT 1 FROM outcomes o
-                WHERE o.instrument_id = t.instrument_id
-                  AND o.status IN ('ambiguous','disputed','resolved_provisional')
-            )
-            AND f.scoring_state = 'pending'
             """
         ).fetchone()[0]
     finally:

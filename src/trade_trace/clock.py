@@ -12,7 +12,7 @@ core dispatcher; this module supplies the underlying source.)
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 
 
@@ -26,7 +26,7 @@ class SystemClock:
     """Wall-clock UTC source. The default for production callers."""
 
     def now(self) -> datetime:
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
 
 class FixedClock:
@@ -35,7 +35,7 @@ class FixedClock:
     def __init__(self, fixed: datetime) -> None:
         if fixed.tzinfo is None or fixed.tzinfo.utcoffset(fixed) is None:
             raise ValueError("FixedClock requires a tz-aware UTC datetime")
-        self._fixed = fixed.astimezone(timezone.utc)
+        self._fixed = fixed.astimezone(UTC)
 
     def now(self) -> datetime:
         return self._fixed

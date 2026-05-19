@@ -12,8 +12,6 @@ values and produce the expected behavior:
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from trade_trace.tools.memory import (
@@ -22,7 +20,6 @@ from trade_trace.tools.memory import (
     SUPERSESSION_DISCOUNT,
     _rrf_combine,
 )
-
 
 # -- 1. pinned constant values ------------------------------------
 

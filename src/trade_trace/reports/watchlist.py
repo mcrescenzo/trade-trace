@@ -12,12 +12,11 @@ periodic check-in events or per-watch SLA fields.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.tools._helpers import now_iso
-
 
 DEFAULT_STALE_THRESHOLD_DAYS = 14
 
@@ -38,7 +37,7 @@ def report_watchlist(
 
     threshold_ts = None
     if stale:
-        threshold_ts = datetime.now(timezone.utc) - timedelta(days=stale_threshold_days)
+        threshold_ts = datetime.now(UTC) - timedelta(days=stale_threshold_days)
         rows = [r for r in rows if _is_stale(r[2], threshold_ts)]
 
     groups = [
@@ -82,11 +81,11 @@ def report_watchlist(
 
 
 def _age_days(created_at: str) -> float:
-    ts = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(timezone.utc)
-    delta = datetime.now(timezone.utc) - ts
+    ts = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(UTC)
+    delta = datetime.now(UTC) - ts
     return round(delta.total_seconds() / 86400, 3)
 
 
 def _is_stale(created_at: str, threshold_ts: datetime) -> bool:
-    ts = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(timezone.utc)
+    ts = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(UTC)
     return ts < threshold_ts

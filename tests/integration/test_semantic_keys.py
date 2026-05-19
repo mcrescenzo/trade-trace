@@ -18,7 +18,6 @@ from trade_trace.events.semantic_keys import (
     payloads_equivalent,
 )
 
-
 EXPECTED_EVENT_TYPES = {
     "decision.created",
     "outcome.recorded",

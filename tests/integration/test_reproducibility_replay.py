@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -22,8 +22,7 @@ import pytest
 from trade_trace.mcp_server import mcp_call
 from trade_trace.tools._helpers import CLOCK_OVERRIDE
 
-
-_FROZEN = datetime(2026, 5, 18, 14, 0, 0, tzinfo=timezone.utc)
+_FROZEN = datetime(2026, 5, 18, 14, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -221,7 +220,7 @@ def test_clock_injection_freezes_now_iso():
 
     from trade_trace.tools._helpers import now_iso
 
-    fixed = datetime(2030, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    fixed = datetime(2030, 1, 1, 12, 0, 0, tzinfo=UTC)
     token = CLOCK_OVERRIDE.set(fixed)
     try:
         assert now_iso() == "2030-01-01T12:00:00.000Z"

@@ -29,7 +29,6 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-
 MAX_SAMPLE_IDS = 100
 """Cap for `sample_ids` per diagnostic to keep the envelope bounded;
 the truncated flag fires when the underlying set exceeds the cap."""

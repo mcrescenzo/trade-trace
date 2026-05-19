@@ -19,13 +19,12 @@ context var per call so handler code does not need bespoke dry-run paths.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any, Iterator
+from typing import Any
 
 from trade_trace.events.log import EventWriter
-
 
 ProjectionUpdater = Callable[[sqlite3.Connection], None]
 
@@ -87,7 +86,7 @@ class UnitOfWork:
     def _rollback(self) -> None:
         self.conn.execute("ROLLBACK")
 
-    def __enter__(self) -> "UnitOfWork":
+    def __enter__(self) -> UnitOfWork:
         self.conn.execute("BEGIN")
         return self
 

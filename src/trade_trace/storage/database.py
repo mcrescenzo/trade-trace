@@ -14,10 +14,10 @@ from __future__ import annotations
 import os
 import sqlite3
 import stat
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
 
 BUSY_TIMEOUT_MS = 5000
 

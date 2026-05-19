@@ -28,7 +28,6 @@ from trade_trace.contracts import REPORT_STANDARD_META_KEYS, dump_envelope
 from trade_trace.mcp_server import mcp_call
 from trade_trace.reports.calibration import _ece_and_bins, _ScoredRow
 
-
 # -- fixtures -----------------------------------------------------------
 
 

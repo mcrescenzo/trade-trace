@@ -28,7 +28,6 @@ import pytest
 
 from trade_trace.mcp_server import mcp_call
 
-
 # -- helpers ------------------------------------------------------------
 
 

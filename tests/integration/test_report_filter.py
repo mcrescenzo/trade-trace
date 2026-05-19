@@ -20,7 +20,6 @@ from trade_trace.contracts.report_filter import (
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
 
-
 # -- schema completeness --------------------------------------------------
 
 

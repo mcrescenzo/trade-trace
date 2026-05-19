@@ -7,8 +7,8 @@ import pytest
 
 from trade_trace.storage import (
     CLOSED_ENUMS,
-    OPEN_ENUMS,
     MIGRATIONS,
+    OPEN_ENUMS,
     MigrationPolicyError,
     apply_pending_migrations,
     check_column_change,
@@ -18,7 +18,6 @@ from trade_trace.storage import (
     open_database,
 )
 from trade_trace.storage.paths import db_path
-
 
 # -- 1. Forward migration data preservation -------------------------------
 

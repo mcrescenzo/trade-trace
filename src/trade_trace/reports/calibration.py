@@ -15,7 +15,6 @@ from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
 
-
 DEFAULT_MIN_SAMPLE = 20
 """Per reports.md §3.2 / scoring.md §7.1: N=20 is the calibration floor."""
 
@@ -150,7 +149,7 @@ def _load_scored_rows(conn: sqlite3.Connection) -> list[_ScoredRow]:
         """
     )
     rows: list[_ScoredRow] = []
-    for score_id, forecast_id, outcome_id, score, metadata_json, yes_label, outcome_label in cur.fetchall():
+    for score_id, forecast_id, outcome_id, _score, metadata_json, yes_label, outcome_label in cur.fetchall():
         try:
             meta = json.loads(metadata_json or "{}")
         except json.JSONDecodeError:
@@ -218,10 +217,10 @@ def _compute_metrics(rows: list[_ScoredRow]) -> dict[str, Any]:
     p_values = [r.p_yes for r in rows]
     y_values = [r.y for r in rows]
 
-    brier = sum((p - y) ** 2 for p, y in zip(p_values, y_values)) / n
+    brier = sum((p - y) ** 2 for p, y in zip(p_values, y_values, strict=True)) / n
     log_score = sum(
         -y * math.log(max(p, LOG_EPS)) - (1 - y) * math.log(max(1 - p, LOG_EPS))
-        for p, y in zip(p_values, y_values)
+        for p, y in zip(p_values, y_values, strict=True)
     ) / n
     p_bar = sum(p_values) / n
     sharpness = sum((p - p_bar) ** 2 for p in p_values) / n

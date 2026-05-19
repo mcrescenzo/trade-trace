@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-
 DEFAULT_DIR_NAME = ".trade-trace"
 DB_FILENAME = "trade-trace.sqlite"
 

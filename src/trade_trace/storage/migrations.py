@@ -14,7 +14,7 @@ contract version bump.
 from __future__ import annotations
 
 import sqlite3
-from typing import Callable
+from collections.abc import Callable
 
 from trade_trace.storage.policy import check_no_reverse_migration
 

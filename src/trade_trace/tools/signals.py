@@ -29,14 +29,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.tools._helpers import new_id, now_iso, open_db_for_args
 from trade_trace.tools.errors import ToolError
-
 
 # The signals.kind open enum, mirrored from storage/policy.py for ergonomics.
 # Adding a value here is non-breaking (it's an open enum); the scan emits

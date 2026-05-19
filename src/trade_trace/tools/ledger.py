@@ -18,7 +18,6 @@ from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
-from trade_trace.events.log import EventWriter, IdempotencyConflictError
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,

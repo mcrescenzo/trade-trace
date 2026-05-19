@@ -55,7 +55,7 @@ def _parse_kv_args(unknown: list[str]) -> dict[str, Any]:
                 try:
                     value = json.loads(value)
                 except json.JSONDecodeError as exc:
-                    raise SystemExit(f"--{token[2:]} value is not valid JSON: {exc}")
+                    raise SystemExit(f"--{token[2:]} value is not valid JSON: {exc}") from exc
             elif value.lower() in {"true", "false"}:
                 value = value.lower() == "true"
             else:

@@ -10,15 +10,12 @@ Covers acceptance:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
-from trade_trace.storage import open_database
-from trade_trace.storage.paths import db_path
 
 
 def _envelope(home: Path, tool: str, args: dict):

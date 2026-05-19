@@ -12,9 +12,9 @@ tests in `tests/integration/test_bucket_constants.py` pin these edges.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Final, Mapping
-
+from typing import Final
 
 SPREAD_BUCKET_THRESHOLDS: Final[Mapping[str, float]] = MappingProxyType({
     "tight_max_exclusive": 0.005,   # ratio: spread / price

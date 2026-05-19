@@ -17,7 +17,6 @@ from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
 
-
 DEFAULT_ADHERENCE_MIN_SAMPLE = 10
 """reports.md §3.2: min 10 decisions with adherence rows."""
 

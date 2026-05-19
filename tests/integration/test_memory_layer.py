@@ -14,7 +14,6 @@ Covers acceptance criteria:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -179,7 +178,7 @@ def test_reflection_orphan_invariant_holds_after_writes(home):
 
 
 def test_memory_link_creates_typed_edge(home):
-    seeds = _seed_thesis(home)
+    _seed_thesis(home)
     # Two memory nodes: link one supersedes the other.
     n_old = _mcp(home, "memory.retain", {
         "node_type": "observation",

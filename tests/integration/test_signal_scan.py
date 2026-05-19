@@ -10,7 +10,6 @@ Covers ux0 chunk 3 acceptance:
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 import pytest

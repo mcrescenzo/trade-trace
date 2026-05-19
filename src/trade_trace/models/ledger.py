@@ -10,13 +10,13 @@ write-tool boundary, not at model load.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class DecisionType(str, Enum):
+class DecisionType(StrEnum):
     WATCH = "watch"
     SKIP = "skip"
     PAPER_ENTER = "paper_enter"
@@ -32,7 +32,7 @@ class DecisionType(str, Enum):
     REVIEW = "review"
 
 
-class OutcomeStatus(str, Enum):
+class OutcomeStatus(StrEnum):
     RESOLVED_FINAL = "resolved_final"
     RESOLVED_PROVISIONAL = "resolved_provisional"
     AMBIGUOUS = "ambiguous"

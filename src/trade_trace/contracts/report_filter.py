@@ -14,10 +14,7 @@ Sentinel semantics for `strategy.strategy_id` (reports.md §2.1 + §2.12):
 
 from __future__ import annotations
 
-from typing import Any, Optional
-
 from pydantic import BaseModel, ConfigDict, Field
-
 
 STRATEGY_NONE_SENTINEL = "__none__"
 
@@ -28,16 +25,16 @@ _STRICT = ConfigDict(extra="forbid")
 class TimeWindowFilter(BaseModel):
     model_config = _STRICT
 
-    created_at_gte: Optional[str] = Field(default=None, description="ISO 8601 UTC")
-    created_at_lt: Optional[str] = None
-    decision_at_gte: Optional[str] = Field(
+    created_at_gte: str | None = Field(default=None, description="ISO 8601 UTC")
+    created_at_lt: str | None = None
+    decision_at_gte: str | None = Field(
         default=None, description="decisions.created_at lower bound"
     )
-    decision_at_lt: Optional[str] = None
-    resolved_at_gte: Optional[str] = Field(
+    decision_at_lt: str | None = None
+    resolved_at_gte: str | None = Field(
         default=None, description="outcomes.resolved_at lower bound"
     )
-    resolved_at_lt: Optional[str] = None
+    resolved_at_lt: str | None = None
 
 
 class ActorsFilter(BaseModel):
@@ -56,7 +53,7 @@ class ActorsFilter(BaseModel):
 class StrategyFilter(BaseModel):
     model_config = _STRICT
 
-    strategy_id: Optional[str] = Field(
+    strategy_id: str | None = Field(
         default=None,
         description="Single id, slug, '__none__', or null (no filter).",
     )
@@ -83,10 +80,10 @@ class DecisionFilter(BaseModel):
     side: list[str] = Field(default_factory=list)
     tags_any: list[str] = Field(default_factory=list, description="OR over tag set.")
     tags_all: list[str] = Field(default_factory=list, description="AND over tag set.")
-    has_thesis: Optional[bool] = None
-    has_forecast: Optional[bool] = None
-    has_reflection: Optional[bool] = None
-    has_playbook_adherence: Optional[bool] = None
+    has_thesis: bool | None = None
+    has_forecast: bool | None = None
+    has_reflection: bool | None = None
+    has_playbook_adherence: bool | None = None
 
 
 class MarketContextFilter(BaseModel):
@@ -109,10 +106,10 @@ class OutcomeFilter(BaseModel):
 
     resolution_status: list[str] = Field(default_factory=list)
     scoring_state: list[str] = Field(default_factory=list)
-    score_gte: Optional[float] = Field(
+    score_gte: float | None = Field(
         default=None, description="brier_binary lower bound"
     )
-    score_lt: Optional[float] = None
+    score_lt: float | None = None
     include_late_recorded: bool = Field(
         default=False,
         description=(
@@ -129,7 +126,7 @@ class SourceFilter(BaseModel):
     source_stance: list[str] = Field(
         default_factory=list, description="supports|contradicts|neutral"
     )
-    source_freshness_before_decision: Optional[bool] = Field(
+    source_freshness_before_decision: bool | None = Field(
         default=None,
         description="bool: was source.freshness_at <= decision.created_at?",
     )

@@ -7,7 +7,6 @@ prior state must not create files, network sockets, or background side effects.
 from __future__ import annotations
 
 import io
-import os
 import socket
 from contextlib import redirect_stdout
 from pathlib import Path

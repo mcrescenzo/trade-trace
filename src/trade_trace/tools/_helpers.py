@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
@@ -16,7 +16,6 @@ from trade_trace.storage import open_database, resolve_home
 from trade_trace.storage.paths import db_path
 from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
 from trade_trace.tools.errors import ToolError
-
 
 _DETERMINISTIC_ID_COUNTER: dict[str, int] = {}
 
@@ -47,7 +46,7 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{secrets.token_urlsafe(12)}"
 
 
-from contextvars import ContextVar
+from contextvars import ContextVar  # noqa: E402
 
 CLOCK_OVERRIDE: ContextVar[datetime | None] = ContextVar(
     "trade_trace.clock_override", default=None,
@@ -62,7 +61,7 @@ def now_iso() -> str:
     override = CLOCK_OVERRIDE.get()
     if override is not None:
         return to_utc_iso8601(override.isoformat())
-    return to_utc_iso8601(datetime.now(timezone.utc).isoformat())
+    return to_utc_iso8601(datetime.now(UTC).isoformat())
 
 
 def open_db_for_args(args: dict[str, Any]):

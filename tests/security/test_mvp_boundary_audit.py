@@ -20,7 +20,6 @@ import pytest
 
 from trade_trace.core import default_registry
 
-
 SRC_ROOT = Path(__file__).resolve().parents[2] / "src"
 
 

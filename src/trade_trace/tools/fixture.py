@@ -18,8 +18,7 @@ The seed surface is `journal.fixture_seed`; the CLI maps it to
 
 from __future__ import annotations
 
-import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
@@ -30,12 +29,11 @@ from trade_trace.tools._helpers import (
 )
 from trade_trace.tools.errors import ToolError
 
-
 FIXTURE_TARGETS = ("mvp-eval",)
 
 
 # Anchor timestamp used as the deterministic clock during seeding.
-_ANCHOR = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+_ANCHOR = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
 
 
 def _journal_fixture_seed(

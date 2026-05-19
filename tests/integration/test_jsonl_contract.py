@@ -15,8 +15,6 @@ import json
 from contextlib import redirect_stdout
 from pathlib import Path
 
-import pytest
-
 from trade_trace.cli import main as cli_main
 from trade_trace.core import default_registry, dispatch
 from trade_trace.mcp_server import mcp_call

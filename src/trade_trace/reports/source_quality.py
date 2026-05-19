@@ -31,7 +31,6 @@ from typing import Any
 
 from trade_trace.timestamps import to_utc_iso8601
 
-
 STALE_SOURCE_THRESHOLD_DAYS = 7
 """Per acceptance: a source is *stale* relative to a decision if its
 `freshness_at` is more than 7 days older than the decision's `created_at`.

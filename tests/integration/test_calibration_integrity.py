@@ -310,7 +310,7 @@ def test_report_coach_embeds_integrity_diagnostics(home):
     """jzn acceptance (extension): report.coach surfaces the same panel
     plus callouts for any non-zero rate."""
 
-    seed = _seed_resolved_binary_forecast(
+    _seed_resolved_binary_forecast(
         home, p_yes=0.6, forecast_first=False,
         resolved_at="2020-01-01T00:00:00Z",
     )

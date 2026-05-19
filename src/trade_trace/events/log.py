@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from trade_trace.contracts.grammar import validate_actor_id, validate_idempotency_key
@@ -118,7 +118,7 @@ class EventWriter:
         return bool(row and row[0] == "true")
 
     def set_outbox_jsonl_enabled(self, *, now: datetime | None = None) -> None:
-        ts = to_utc_iso8601((now or datetime.now(timezone.utc)).isoformat())
+        ts = to_utc_iso8601((now or datetime.now(UTC)).isoformat())
         self.conn.execute(
             "INSERT INTO config(key, value, updated_at) VALUES "
             "('outbox.jsonl_enabled', 'true', ?) "
@@ -249,7 +249,7 @@ class EventWriter:
             from trade_trace.tools._helpers import CLOCK_OVERRIDE
 
             override = CLOCK_OVERRIDE.get()
-            now = override if override is not None else datetime.now(timezone.utc)
+            now = override if override is not None else datetime.now(UTC)
         ts = to_utc_iso8601(now.isoformat())
         # Canonicalize payload for storage so semantic comparison on replay
         # works byte-equal on structural fields. We store the canonical form;

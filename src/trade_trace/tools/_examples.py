@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 _IDEM = "00000000-0000-4000-8000-000000000000"
 
 

@@ -46,7 +46,6 @@ from trade_trace.tools._helpers import (
 )
 from trade_trace.tools.errors import ToolError
 
-
 ADHERENCE_STATUSES = ("considered", "followed", "overridden", "not_applicable")
 
 

@@ -18,14 +18,12 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sqlite3
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
 
 RESERVED_TRANSPORT_KEYS = frozenset(
     {"_event_id", "_event_type", "_actor_id", "_created_at", "_contract_version"}
@@ -192,8 +190,7 @@ def cleanup_orphan_tmp_files(home: Path, *, older_than_seconds: float = 3600) ->
 # so the write-time guard, the export-time warning, and the log redactor
 # all share one registry. SECRET_PATTERNS is kept as a backwards-compatible
 # alias for callers that imported from `trade_trace.exporter`.
-from trade_trace.security import scan_text as _scan_text
-from trade_trace.security.patterns import _compiled as SECRET_PATTERNS
+from trade_trace.security import scan_text as _scan_text  # noqa: E402
 
 
 def scan_for_secrets(text: str) -> list[dict[str, str]]:

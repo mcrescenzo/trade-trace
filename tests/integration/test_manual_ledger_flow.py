@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pytest
 
-from trade_trace.contracts.errors import ErrorCode
 from trade_trace.mcp_server import mcp_call
 
 

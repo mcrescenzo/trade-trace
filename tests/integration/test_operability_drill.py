@@ -134,7 +134,6 @@ def test_broken_migration_atomic_rollback(tmp_path):
     home = tmp_path / "home"
     _populate(home)
     db_file = db_path(home)
-    before_hash = hashlib.sha256(db_file.read_bytes()).hexdigest()
     before_version = None
     db = open_database(db_file, create_parent=False)
     try:

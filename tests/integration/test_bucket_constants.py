@@ -19,7 +19,6 @@ from trade_trace.reports import (
     volume_bucket,
 )
 
-
 # -- spread_bucket: tight < 0.005; medium < 0.02; wide >= 0.02 --------
 
 

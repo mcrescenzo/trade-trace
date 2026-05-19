@@ -26,9 +26,8 @@ embeddings opt-in path is the subject of bead ubp.
 from __future__ import annotations
 
 import json
-import math
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Final
 
 from trade_trace.contracts.errors import ErrorCode
@@ -46,7 +45,6 @@ from trade_trace.tools._helpers import (
     require,
 )
 from trade_trace.tools.errors import ToolError
-
 
 # -- retrieval constants (locked per bead tem) ----------------------
 

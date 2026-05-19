@@ -11,7 +11,6 @@ which surfaces a *warning* on shipped events rather than blocking writes).
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest

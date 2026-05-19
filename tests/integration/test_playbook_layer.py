@@ -304,7 +304,7 @@ def test_report_playbook_adherence_aggregates_by_version(home, adherence_setup):
         _seed_rule_node(home, idem_suffix=f"agg-{status}")
         for status in statuses
     ]
-    for i, (status, rule) in enumerate(zip(statuses, rule_ids)):
+    for i, (status, rule) in enumerate(zip(statuses, rule_ids, strict=True)):
         env = _mcp(home, "decision.record_adherence", {
             "decision_id": adherence_setup["decision_id"],
             "playbook_version_id": adherence_setup["version_id"],

@@ -10,8 +10,6 @@ migration cost without waiting for P1.
 
 from __future__ import annotations
 
-import json
-import sqlite3
 from pathlib import Path
 
 import pytest

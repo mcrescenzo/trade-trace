@@ -8,11 +8,10 @@ and as a denominator for downstream reports like pnl coverage.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
-
 
 _VALID_BUCKETS = ("day", "week")
 
@@ -104,7 +103,7 @@ def report_decision_velocity(
 def _bucket_key(created_at: str, *, bucket: str) -> str:
     """Return the canonical bucket label (UTC-aligned)."""
 
-    ts = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(timezone.utc)
+    ts = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(UTC)
     if bucket == "day":
         return ts.date().isoformat()
     # week: ISO week starting Monday

@@ -18,7 +18,6 @@ import pytest
 from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
 
-
 APPEND_ONLY_TABLES = [
     "snapshots",
     "theses",

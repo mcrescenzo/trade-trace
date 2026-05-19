@@ -21,7 +21,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 # Closed enums (per operability.md §4.3): adding values requires a major
 # contract version bump.
 CLOSED_ENUMS: dict[str, frozenset[str]] = {

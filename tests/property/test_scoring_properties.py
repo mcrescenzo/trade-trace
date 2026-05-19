@@ -135,7 +135,7 @@ def test_brier_monotone_in_distance_from_truth():
     for y in (0, 1):
         ranked = [(d, brier_binary(y + (1 - 2 * y) * d, y)) for d in deltas]
         # ranked is sorted by `d`; the score column must be non-decreasing.
-        for (_, s_a), (_, s_b) in zip(ranked, ranked[1:]):
+        for (_, s_a), (_, s_b) in zip(ranked, ranked[1:], strict=False):
             assert s_b >= s_a - 1e-12
 
 

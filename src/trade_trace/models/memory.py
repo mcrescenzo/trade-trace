@@ -8,13 +8,13 @@ and `from trade_trace.models import MemoryNode` succeeds.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class NodeType(str, Enum):
+class NodeType(StrEnum):
     OBSERVATION = "observation"
     REFLECTION = "reflection"
     PLAYBOOK_RULE = "playbook_rule"

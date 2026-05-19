@@ -25,7 +25,6 @@ from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
 
-
 CREDENTIAL_KEYS = [
     "api_key",
     "secret_key",

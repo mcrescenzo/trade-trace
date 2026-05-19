@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import json
 from contextlib import redirect_stdout
-from pathlib import Path
 
 from trade_trace.cli import main as cli_main
 from trade_trace.core import default_registry

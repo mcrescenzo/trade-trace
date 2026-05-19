@@ -13,6 +13,7 @@ Covers ≥6 named tests:
 
 from __future__ import annotations
 
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -208,12 +209,13 @@ def test_stale_sources_silent_when_freshness_recent(home):
     """negative: a source freshness_at = now (within 7 days of decision)
     does not fire."""
 
+    from datetime import datetime, timedelta
+
     from trade_trace.timestamps import to_utc_iso8601
-    from datetime import datetime, timezone, timedelta
 
     seeds = _seed_thesis_and_decision(home)
     recent = to_utc_iso8601(
-        (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        (datetime.now(UTC) - timedelta(hours=1)).isoformat()
     )
     src = _mcp(home, "source.add", {
         "kind": "url", "stance": "supports", "uri": "https://e.x/recent",
@@ -373,7 +375,7 @@ def test_report_coach_surfaces_source_quality_callouts(home):
     """coach embeds the source-quality panel and emits a callout per
     diagnostic with count>0."""
 
-    seeds = _seed_thesis_and_decision(home, decision_type="actual_enter")
+    _seed_thesis_and_decision(home, decision_type="actual_enter")
     env = _mcp(home, "report.coach", {})
     assert env.ok, env
     coach = env.data

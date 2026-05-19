@@ -13,7 +13,6 @@ from typing import Final
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.tools.errors import ToolError
 
-
 ACTOR_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^(agent|cli|import|system):[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
 )

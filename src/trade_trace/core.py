@@ -25,19 +25,19 @@ from trade_trace.contracts.grammar import validate_actor_id
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.log import IdempotencyConflictError
 from trade_trace.events.unit_of_work import DRY_RUN_FLAG
-from trade_trace.tools.errors import ToolError
-from trade_trace.tools.imports import register_import_stubs
 from trade_trace.tools.admin import register_admin_tools
+from trade_trace.tools.errors import ToolError
 from trade_trace.tools.fixture import register_fixture_tools
+from trade_trace.tools.imports import register_import_stubs
 from trade_trace.tools.journal import register_journal_tools
 from trade_trace.tools.ledger import register_ledger_tools
 from trade_trace.tools.memory import register_memory_tools
 from trade_trace.tools.playbook import register_playbook_tools
 from trade_trace.tools.reflection import register_reflection_tools
-from trade_trace.tools.strategy import register_strategy_tools
 from trade_trace.tools.reports import register_report_tools
 from trade_trace.tools.review_bundle import register_review_bundle
 from trade_trace.tools.signals import register_signal_tools
+from trade_trace.tools.strategy import register_strategy_tools
 
 _DEFAULT_REGISTRY: ToolRegistry | None = None
 

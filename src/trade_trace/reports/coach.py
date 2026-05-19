@@ -33,7 +33,6 @@ from trade_trace.reports.tag_aggregates import report_mistakes, report_strengths
 from trade_trace.reports.unscored import report_unscored_forecasts
 from trade_trace.reports.watchlist import report_watchlist
 
-
 FORBIDDEN_PHRASES = (
     "buy",
     "sell",

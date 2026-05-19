@@ -18,7 +18,6 @@ from trade_trace.exporter import drain_outbox
 from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
 
-
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),
     reason="POSIX permission bits not enforceable on Windows",

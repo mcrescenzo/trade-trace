@@ -30,7 +30,6 @@ from trade_trace.tools._helpers import (
 )
 from trade_trace.tools.errors import ToolError
 
-
 SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 """lowercase-kebab: alphanumeric segments separated by single hyphens."""
 

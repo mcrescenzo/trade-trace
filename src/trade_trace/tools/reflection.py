@@ -85,7 +85,6 @@ def _packet_for(
             ]
             # Calibration delta: |p_realized - p_predicted| on the
             # winning label, computed once and serialized.
-            yes_label = (forecast_row[3] or "").strip().lower()
             for fo in forecast_outcomes:
                 if fo["outcome_label"].strip().lower() == outcome_label:
                     realized = 1.0 if outcome_row[5] == "resolved_final" else None
