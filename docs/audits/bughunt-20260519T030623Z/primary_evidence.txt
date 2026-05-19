@@ -1,0 +1,535 @@
+=== Primary evidence probes for exhaustive bughunt ===
+--- git status baseline ---
+?? audits/
+?? docs/audits/
+--- pytest collect-only ---
+tests/contracts/test_agent_ergonomics.py::test_tool_schema_returns_example_payloads[venue.add]
+tests/contracts/test_agent_ergonomics.py::test_tool_schema_returns_example_payloads[instrument.add]
+tests/contracts/test_agent_ergonomics.py::test_tool_schema_returns_example_payloads[thesis.add]
+tests/contracts/test_agent_ergonomics.py::test_tool_schema_returns_example_payloads[forecast.add]
+tests/contracts/test_agent_ergonomics.py::test_tool_schema_returns_example_payloads[decision.add]
+tests/contracts/test_agent_ergonomics.py::test_tool_schema_returns_example_payloads[outcome.add]
+tests/contracts/test_agent_ergonomics.py::test_tool_schema_returns_example_payloads[source.add]
+tests/contracts/test_agent_ergonomics.py::test_tool_schema_unknown_tool_returns_not_found
+tests/contracts/test_agent_ergonomics.py::test_tool_schema_catalog_lists_every_registered_tool
+tests/contracts/test_agent_ergonomics.py::test_dry_run_returns_would_be_id_but_persists_no_row
+tests/contracts/test_agent_ergonomics.py::test_dry_run_validation_failure_still_reports_dry_run
+tests/contracts/test_agent_ergonomics.py::test_dry_run_via_cli_flag
+tests/contracts/test_agent_ergonomics.py::test_validation_error_includes_expected_format_for_timestamps
+tests/contracts/test_agent_ergonomics.py::test_not_found_includes_entity_kind
+tests/contracts/test_agent_ergonomics.py::test_idempotency_conflict_includes_diff_summary_and_original_event_id
+tests/contracts/test_agent_ergonomics.py::test_human_prose_goes_to_stderr_stdout_stays_json
+tests/contracts/test_agent_ergonomics.py::test_human_flag_does_not_leak_to_stdout
+tests/contracts/test_agent_ergonomics.py::test_exit_code_zero_on_success
+tests/contracts/test_agent_ergonomics.py::test_exit_code_two_on_validation_error
+tests/contracts/test_agent_ergonomics.py::test_exit_code_one_on_not_found
+tests/contracts/test_agent_ergonomics.py::test_thesis_add_example_payload_dry_runs_cleanly
+tests/contracts/test_cli_name_uniqueness.py::test_dot_to_space_mapping
+tests/contracts/test_cli_name_uniqueness.py::test_collision_detected_via_validate
+tests/contracts/test_cli_name_uniqueness.py::test_double_registration_raises
+tests/contracts/test_cli_name_uniqueness.py::test_injected_duplicate_invocation_during_register
+tests/contracts/test_cli_name_uniqueness.py::test_cli_main_emits_storage_error_envelope_on_collision
+tests/contracts/test_cli_name_uniqueness.py::test_runtime_registry_validates_clean
+tests/contracts/test_envelope.py::test_success_envelope_round_trips
+tests/contracts/test_envelope.py::test_error_envelope_shape
+tests/contracts/test_envelope.py::test_error_codes_match_contract_list
+tests/contracts/test_event_enum_coverage.py::test_venue_created_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_instrument_created_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_snapshot_added_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_thesis_created_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_forecast_created_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_decision_created_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_outcome_recorded_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_forecast_scored_event_emitted_on_resolution
+tests/contracts/test_event_enum_coverage.py::test_forecast_superseded_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_source_added_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_source_attached_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_memory_node_retained_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_edge_created_event_emitted_by_memory_link
+tests/contracts/test_event_enum_coverage.py::test_strategy_created_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_strategy_updated_event_emitted
+tests/contracts/test_event_enum_coverage.py::test_decision_add_emits_no_unrelated_event_types
+tests/contracts/test_event_enum_coverage.py::test_memory_retain_emits_no_edge_event
+tests/contracts/test_event_enum_coverage.py::test_unknown_event_type_rejected_at_write
+tests/contracts/test_event_enum_coverage.py::test_semantic_keys_registry_covers_each_expected_event_type
+tests/contracts/test_grammar.py::test_valid_actor_id_accepted[agent:default]
+tests/contracts/test_grammar.py::test_valid_actor_id_accepted[cli:user]
+tests/contracts/test_grammar.py::test_valid_actor_id_accepted[import:csv-fills]
+tests/contracts/test_grammar.py::test_valid_actor_id_accepted[system:report.coach]
+tests/contracts/test_grammar.py::test_valid_actor_id_accepted[agent:polymarket-scout]
+tests/contracts/test_grammar.py::test_valid_actor_id_accepted[import:polymarket-csv-2026-05]
+tests/contracts/test_grammar.py::test_valid_actor_id_accepted[agent:a]
+tests/contracts/test_grammar.py::test_valid_actor_id_accepted[agent:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]
+tests/contracts/test_grammar.py::test_invalid_actor_id_rejected[foo:bar]
+tests/contracts/test_grammar.py::test_invalid_actor_id_rejected[:default]
+tests/contracts/test_grammar.py::test_invalid_actor_id_rejected[agent]
+tests/contracts/test_grammar.py::test_invalid_actor_id_rejected[agent:]
+tests/contracts/test_grammar.py::test_invalid_actor_id_rejected[agent: leading-space]
+tests/contracts/test_grammar.py::test_invalid_actor_id_rejected[agent:-leading-dash]
+tests/contracts/test_grammar.py::test_invalid_actor_id_rejected[agent:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]
+tests/contracts/test_grammar.py::test_invalid_actor_id_rejected[agent:has spaces]
+tests/contracts/test_grammar.py::test_invalid_actor_id_rejected[agent:tab\there]
+tests/contracts/test_grammar.py::test_invalid_actor_id_rejected[AGENT:Mixed]
+tests/contracts/test_grammar.py::test_dispatch_rejects_invalid_actor_id
+tests/contracts/test_grammar.py::test_valid_idempotency_key_accepted[decision-2026-05-18T14:32:00Z-abc123]
+tests/contracts/test_grammar.py::test_valid_idempotency_key_accepted[_abc.def-XYZ]
+tests/contracts/test_grammar.py::test_valid_idempotency_key_accepted[a]
+tests/contracts/test_grammar.py::test_valid_idempotency_key_accepted[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]
+tests/contracts/test_grammar.py::test_valid_idempotency_key_accepted[ABC:def-123_xyz.foo]
+tests/contracts/test_grammar.py::test_valid_idempotency_key_accepted[  trim-me  ]
+tests/contracts/test_grammar.py::test_idempotency_key_none_passes_through
+tests/contracts/test_grammar.py::test_invalid_idempotency_key_rejected[]
+tests/contracts/test_grammar.py::test_invalid_idempotency_key_rejected[   ]
+tests/contracts/test_grammar.py::test_invalid_idempotency_key_rejected[has spaces]
+tests/contracts/test_grammar.py::test_invalid_idempotency_key_rejected[tab\tinside]
+tests/contracts/test_grammar.py::test_invalid_idempotency_key_rejected[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]
+tests/contracts/test_grammar.py::test_invalid_idempotency_key_rejected[bad/char]
+tests/contracts/test_grammar.py::test_invalid_idempotency_key_rejected[bad?char]
+tests/contracts/test_grammar.py::test_invalid_idempotency_key_rejected[smiley\u2603]
+tests/contracts/test_grammar.py::test_idempotency_key_non_string_rejected
+tests/contracts/test_grammar.py::test_write_path_rejects_malformed_actor
+tests/contracts/test_grammar.py::test_write_path_rejects_malformed_idempotency_key
+tests/contracts/test_grammar.py::test_allow_no_idempotency_meta_flag_via_dispatch
+tests/contracts/test_grammar.py::test_cli_allow_no_idempotency_sets_meta_flag
+tests/contracts/test_grammar.py::test_write_path_trims_whitespace_on_idempotency_key
+tests/contracts/test_report_envelope_completeness.py::test_report_meta_carries_full_standard_field_set[report.calibration-extra0]
+tests/contracts/test_report_envelope_completeness.py::test_report_meta_carries_full_standard_field_set[report.mistakes-extra1]
+tests/contracts/test_report_envelope_completeness.py::test_report_meta_carries_full_standard_field_set[report.strengths-extra2]
+tests/contracts/test_report_envelope_completeness.py::test_report_meta_carries_full_standard_field_set[report.pnl-extra3]
+tests/contracts/test_report_envelope_completeness.py::test_report_meta_carries_full_standard_field_set[report.watchlist-extra4]
+tests/contracts/test_report_envelope_completeness.py::test_report_meta_carries_full_standard_field_set[report.unscored_forecasts-extra5]
+tests/contracts/test_report_envelope_completeness.py::test_report_meta_carries_full_standard_field_set[report.decision_velocity-extra6]
+tests/contracts/test_report_envelope_completeness.py::test_report_meta_carries_full_standard_field_set[report.coach-extra7]
+tests/contracts/test_report_envelope_completeness.py::test_report_meta_carries_full_standard_field_set[report.filter_schema-extra8]
+tests/contracts/test_report_envelope_completeness.py::test_calibration_meta_bin_policy_is_set
+tests/contracts/test_report_envelope_completeness.py::test_reliability_bin_assignment_at_boundaries[0.0-0]
+tests/contracts/test_report_envelope_completeness.py::test_reliability_bin_assignment_at_boundaries[0.099-0]
+tests/contracts/test_report_envelope_completeness.py::test_reliability_bin_assignment_at_boundaries[0.1-1]
+tests/contracts/test_report_envelope_completeness.py::test_reliability_bin_assignment_at_boundaries[0.5-5]
+tests/contracts/test_report_envelope_completeness.py::test_reliability_bin_assignment_at_boundaries[0.999-9]
+tests/contracts/test_report_envelope_completeness.py::test_reliability_bin_assignment_at_boundaries[1.0-9]
+tests/contracts/test_report_envelope_completeness.py::test_empty_bin_has_count_zero_with_null_means
+tests/contracts/test_report_envelope_completeness.py::test_ece_excludes_empty_bins
+tests/contracts/test_report_envelope_completeness.py::test_calibration_sample_warning_below_20
+tests/contracts/test_report_envelope_completeness.py::test_calibration_sample_warning_silent_above_threshold
+tests/contracts/test_report_envelope_completeness.py::test_mcp_transport_hints_is_dict_on_mcp_path
+tests/contracts/test_report_envelope_completeness.py::test_cli_human_hint_absent_on_mcp_path
+tests/contracts/test_report_envelope_completeness.py::test_cli_human_hint_populated_when_human_flag_passed
+tests/contracts/test_report_envelope_completeness.py::test_truncated_and_next_cursor_null_by_default
+tests/golden/test_cli_mcp_parity.py::test_parity_venue_add
+tests/golden/test_cli_mcp_parity.py::test_parity_journal_schema
+tests/golden/test_cli_mcp_parity.py::test_parity_validation_error_decision_skip_missing_reason
+tests/golden/test_cli_mcp_parity.py::test_parity_invariant_violation_binary_forecast
+tests/golden/test_journal_status_parity.py::test_journal_status_parity
+tests/golden/test_journal_status_parity.py::test_cli_error_envelope_for_unknown_tool
+tests/integration/test_admin_tools.py::test_admin_tool_registered[journal.init]
+--- version smoke/golden targeted ---
+F.F.                                                                     [100%]
+=================================== FAILURES ===================================
+___________________________ test_package_importable ____________________________
+
+    def test_package_importable():
+        import trade_trace
+    
+>       assert trade_trace.__version__ == "0.0.1"
+E       AssertionError: assert '0.0.1rc0' == '0.0.1'
+E         
+E         - 0.0.1
+E         + 0.0.1rc0
+E         ?      +++
+
+tests/test_smoke.py:9: AssertionError
+__________________________ test_journal_status_parity __________________________
+
+    def test_journal_status_parity():
+        registry = build_registry()
+    
+        # MCP path (in-process)
+        mcp_env = mcp_call(
+            "journal.status",
+            {},
+            actor_id="agent:default",
+            request_id="req-mcp",
+            registry=registry,
+        ).model_dump(mode="json", exclude_none=True)
+    
+        # CLI path (in-process; captured stdout)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = cli_main(
+                [
+                    "--actor-id",
+                    "agent:default",
+                    "--request-id",
+                    "req-cli",
+                    "journal",
+                    "status",
+                ],
+                registry=registry,
+            )
+        assert rc == 0, "CLI exit code must be 0 on ok=true"
+        cli_env = json.loads(buf.getvalue().strip().splitlines()[-1])
+    
+        # Equivalent after transport-metadata normalization
+        assert _normalize(mcp_env) == _normalize(cli_env)
+        # Both envelopes must carry the contract version
+        assert mcp_env["meta"]["contract_version"] == cli_env["meta"]["contract_version"] == "1.0"
+        # Both envelopes must report the same canonical tool name
+        assert mcp_env["meta"]["tool"] == cli_env["meta"]["tool"] == "journal.status"
+        # Data payloads MUST deep-equal
+        assert mcp_env["data"] == cli_env["data"]
+        # The data payload itself must report M0 expectations
+>       assert cli_env["data"]["package_version"] == "0.0.1"
+E       AssertionError: assert '0.0.1rc0' == '0.0.1'
+E         
+E         - 0.0.1
+E         + 0.0.1rc0
+E         ?      +++
+
+tests/golden/test_journal_status_parity.py:70: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_smoke.py::test_package_importable - AssertionError: assert ...
+FAILED tests/golden/test_journal_status_parity.py::test_journal_status_parity
+2 failed, 2 passed in 0.07s
+--- invalid --*-json CLI probe ---
+rc= 1
+stdout= ''
+stderr= '--mode-json value is not valid JSON: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)\n'
+--- config_set without confirm probe ---
+cmd= journal init rc= 0 stdout= {"data": {"applied_migrations": [1, 2, 3, 4, 5, 6, 7, 8], "db_path": "/tmp/tt-config-probe-eifcriw1/trade-trace.sqlite", "embeddings_provider": "none", "fts5_available": true, "home": "/tmp/tt-config-probe-eifcriw1", "outbound_network_active": false, "schema_version": 8, "schema_version_before": 0, "sqlite_vec_available": false}, "meta": {"actor_id": "cli:default", "contract_version": "1.0", "request_id": "308fc69a14c043c1a4aa22ad9b769534", "tool": "journal.init"}, "ok": true} stderr= 
+cmd= journal config_set --key x --value y rc= 0 stdout= {"data": {"key": "x", "value": "y"}, "meta": {"actor_id": "cli:default", "contract_version": "1.0", "request_id": "ba543e1f57c7458ca9d7768f26022648", "tool": "journal.config_set"}, "ok": true} stderr= 
+config rows= [('x', 'y')]
+--- source.add secret note probe ---
+--- pytest collect-only tail/error ---
+tests/security/test_no_telemetry_packages.py::test_no_source_imports_telemetry_package[sentry]
+tests/security/test_no_telemetry_packages.py::test_no_source_imports_telemetry_package[mixpanel]
+tests/security/test_no_telemetry_packages.py::test_no_source_imports_telemetry_package[segment]
+tests/security/test_no_telemetry_packages.py::test_no_source_imports_telemetry_package[datadog]
+tests/security/test_no_telemetry_packages.py::test_no_source_imports_telemetry_package[ddtrace]
+tests/security/test_no_telemetry_packages.py::test_no_source_imports_telemetry_package[rollbar]
+tests/security/test_no_telemetry_packages.py::test_no_source_imports_telemetry_package[posthog]
+tests/security/test_no_telemetry_packages.py::test_no_source_imports_telemetry_package[amplitude]
+tests/security/test_no_telemetry_packages.py::test_no_source_imports_telemetry_package[honeycomb]
+tests/security/test_no_telemetry_packages.py::test_no_source_imports_telemetry_package[newrelic]
+tests/security/test_no_telemetry_packages.py::test_pyproject_declares_no_telemetry_dependencies
+tests/security/test_report_sql_filters.py::test_unknown_top_level_field_in_filter_rejected
+tests/security/test_report_sql_filters.py::test_unknown_nested_filter_field_rejected
+tests/security/test_report_sql_filters.py::test_injection_payload_in_actor_filter_does_not_execute['; DROP TABLE forecasts; --]
+tests/security/test_report_sql_filters.py::test_injection_payload_in_actor_filter_does_not_execute[' OR '1'='1]
+tests/security/test_report_sql_filters.py::test_injection_payload_in_actor_filter_does_not_execute[1; SELECT * FROM sources]
+tests/security/test_report_sql_filters.py::test_injection_payload_in_actor_filter_does_not_execute[agent");DELETE FROM decisions;--]
+tests/security/test_report_sql_filters.py::test_injection_payload_in_actor_filter_does_not_execute[%' UNION SELECT 1,2,3 FROM events --]
+tests/security/test_report_sql_filters.py::test_injection_payload_in_instrument_filter_does_not_execute['; DROP TABLE forecasts; --]
+tests/security/test_report_sql_filters.py::test_injection_payload_in_instrument_filter_does_not_execute[' OR '1'='1]
+tests/security/test_report_sql_filters.py::test_injection_payload_in_instrument_filter_does_not_execute[1; SELECT * FROM sources]
+tests/security/test_report_sql_filters.py::test_injection_payload_in_instrument_filter_does_not_execute[agent");DELETE FROM decisions;--]
+tests/security/test_report_sql_filters.py::test_injection_payload_in_instrument_filter_does_not_execute[%' UNION SELECT 1,2,3 FROM events --]
+tests/security/test_report_sql_filters.py::test_strategy_id_sentinel_does_not_pass_through_as_sql_literal
+tests/security/test_report_sql_filters.py::test_filter_round_trips_through_filter_echo
+tests/security/test_secret_pattern_writes.py::test_thesis_body_rejects_secret[api_key-SYNTHETIC_OPENAI_KEY_REDACTED]
+tests/security/test_secret_pattern_writes.py::test_thesis_body_rejects_secret[slack_token-xoxb-123456789-987654321-ABCDEFG]
+tests/security/test_secret_pattern_writes.py::test_thesis_body_rejects_secret[ethereum_address-0x1234567890abcdef1234567890abcdef12345678]
+tests/security/test_secret_pattern_writes.py::test_thesis_body_rejects_secret[jwt-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdef1234567890ABCDEF]
+tests/security/test_secret_pattern_writes.py::test_source_excerpt_rejects_secret[api_key-SYNTHETIC_OPENAI_KEY_REDACTED]
+tests/security/test_secret_pattern_writes.py::test_source_excerpt_rejects_secret[slack_token-xoxb-123456789-987654321-ABCDEFG]
+tests/security/test_secret_pattern_writes.py::test_source_excerpt_rejects_secret[ethereum_address-0x1234567890abcdef1234567890abcdef12345678]
+tests/security/test_secret_pattern_writes.py::test_source_excerpt_rejects_secret[jwt-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdef1234567890ABCDEF]
+tests/security/test_secret_pattern_writes.py::test_decision_reason_rejects_secret[api_key-SYNTHETIC_OPENAI_KEY_REDACTED]
+tests/security/test_secret_pattern_writes.py::test_decision_reason_rejects_secret[slack_token-xoxb-123456789-987654321-ABCDEFG]
+tests/security/test_secret_pattern_writes.py::test_decision_reason_rejects_secret[ethereum_address-0x1234567890abcdef1234567890abcdef12345678]
+tests/security/test_secret_pattern_writes.py::test_decision_reason_rejects_secret[jwt-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdef1234567890ABCDEF]
+tests/security/test_secret_pattern_writes.py::test_redact_for_log_replaces_secret_with_token[api_key-SYNTHETIC_OPENAI_KEY_REDACTED]
+tests/security/test_secret_pattern_writes.py::test_redact_for_log_replaces_secret_with_token[slack_token-xoxb-123456789-987654321-ABCDEFG]
+tests/security/test_secret_pattern_writes.py::test_redact_for_log_replaces_secret_with_token[ethereum_address-0x1234567890abcdef1234567890abcdef12345678]
+tests/security/test_secret_pattern_writes.py::test_redact_for_log_replaces_secret_with_token[jwt-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdef1234567890ABCDEF]
+tests/security/test_secret_pattern_writes.py::test_redact_for_log_idempotent_on_clean_text
+tests/security/test_secret_pattern_writes.py::test_register_adds_custom_pattern_and_blocks_write
+tests/security/test_secret_pattern_writes.py::test_reset_patterns_restores_builtin_set
+tests/security/test_secret_pattern_writes.py::test_register_rejects_invalid_name
+tests/security/test_secret_pattern_writes.py::test_register_rejects_invalid_regex
+tests/security/test_secret_pattern_writes.py::test_benign_text_does_not_trigger_any_pattern[hash_no_prefix-sha1 hash: abcdef1234567890abcdef1234567890abcdef12]
+tests/security/test_secret_pattern_writes.py::test_benign_text_does_not_trigger_any_pattern[short_skdash-instrument symbol sk-1234567]
+tests/security/test_secret_pattern_writes.py::test_benign_text_does_not_trigger_any_pattern[short_dotted-file.name.txt is a path, not a token]
+tests/security/test_secret_pattern_writes.py::test_benign_text_does_not_trigger_any_pattern[xox_substring-the company's xoxo greeting is not a token]
+tests/security/test_secret_pattern_writes.py::test_clean_thesis_body_writes_normally
+tests/security/test_secret_pattern_writes.py::test_clean_source_excerpt_writes_normally
+tests/security/test_secret_pattern_writes.py::test_clean_decision_reason_writes_normally
+tests/test_smoke.py::test_package_importable
+tests/test_smoke.py::test_models_importable
+tests/test_timestamps.py::test_normalize_utc_string_preserves_milliseconds
+tests/test_timestamps.py::test_normalize_non_utc_offset_converts_to_utc
+tests/test_timestamps.py::test_naive_timestamp_rejected
+tests/test_timestamps.py::test_sub_millisecond_truncated_not_rounded
+tests/test_timestamps.py::test_datetime_input_normalized
+tests/test_timestamps.py::test_invalid_string_raises
+tests/test_timestamps.py::test_system_clock_returns_aware_datetime
+tests/test_timestamps.py::test_fixed_clock_requires_aware_datetime
+tests/test_timestamps.py::test_fixed_clock_advance
+
+==================================== ERRORS ====================================
+___________ ERROR collecting tests/security/test_redacted_exports.py ___________
+ImportError while importing test module '/home/hermes/code/trade-trace/tests/security/test_redacted_exports.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/security/test_redacted_exports.py:24: in <module>
+    from trade_trace.exporter import (
+E   ImportError: cannot import name 'SECRET_PATTERNS' from 'trade_trace.exporter' (/home/hermes/code/trade-trace/src/trade_trace/exporter.py)
+=========================== short test summary info ============================
+ERROR tests/security/test_redacted_exports.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+827 tests collected, 1 error in 0.21s
+--- source.add secret note probe (retry) ---
+ok= True data= {'id': 'src_rlswViZfzVxF43kz', 'kind': 'note', 'stance': 'neutral', 'created_at': '2026-05-19T03:13:14.184Z'}
+sources.note= [('SYNTHETIC_OPENAI_KEY_REDACTED',)]
+event payload contains secret= True
+--- memory.reflect idempotency duplicate probe ---
+r1 ok/data= True {'id': 'mem_OvFZ_vt-ndMqNBva', 'node_type': 'reflection', 'body': 'lesson', 'importance': 5, 'confidence_base': 1.0, 'created_at': '2026-05-19T03:13:14.310Z', 'edge_id': 'edg_SBxnkEeivNft0p6g', 'target_kind': 'review', 'target_id': 'rev1'}
+--- report calibration filter static snippet ---
+    50	    `raw_filter` is a dict (likely the agent's `ReportFilter` shape) which
+    51	    gets validated by the Pydantic model; unknown fields surface as
+    52	    `pydantic.ValidationError` (the dispatcher catches and translates).
+    53	    """
+    54	
+    55	    rf = ReportFilter.model_validate(raw_filter or {})
+    56	    rows = _load_scored_rows(conn)
+    57	
+    58	    # Late-recorded default exclusion (dogfood-protocol.md §2.2).
+    59	    if rf.outcome.include_late_recorded:
+    60	        excluded_late = 0
+    61	        included_rows = rows
+    62	    else:
+    63	        excluded_late = sum(1 for r in rows if r.late_recorded)
+    64	        included_rows = [r for r in rows if not r.late_recorded]
+    65	
+    66	    sample_size = len(included_rows)
+    67	    sample_warning = None
+    68	    caveats: list[str] = []
+    69	    if excluded_late > 0:
+    70	        caveats.append(
+    71	            f"excluded {excluded_late} late-recorded forecast(s) per "
+    72	            "dogfood-protocol.md §2.2; pass outcome.include_late_recorded=true to include."
+    73	        )
+    74	    if sample_size < min_sample:
+    75	        sample_warning = (
+   128	def _load_scored_rows(conn: sqlite3.Connection) -> list[_ScoredRow]:
+   129	    """Return every scored binary forecast row resolved against its YES
+   130	    probability. Excludes scores with `score IS NULL` (failed) and scores
+   131	    whose outcome is itself superseded (scoring.md §5.1)."""
+   132	
+   133	    cur = conn.execute(
+   134	        """
+   135	        SELECT fs.id, fs.forecast_id, fs.outcome_id, fs.score, fs.metadata_json,
+   136	               f.yes_label,
+   137	               o.outcome_label
+   138	        FROM forecast_scores fs
+   139	        JOIN forecasts f ON f.id = fs.forecast_id
+   140	        JOIN outcomes o ON o.id = fs.outcome_id
+   141	        WHERE fs.metric = 'brier_binary'
+   142	          AND fs.score IS NOT NULL
+   143	          AND f.kind = 'binary'
+   144	          AND NOT EXISTS (
+   145	            SELECT 1 FROM edges e
+   146	            WHERE e.source_kind = 'outcome' AND e.target_kind = 'outcome'
+   147	              AND e.edge_type = 'supersedes' AND e.target_id = o.id
+   148	          )
+   149	        """
+   150	    )
+--- memory reflect transaction/idempotency snippet ---
+   230	def _memory_reflect(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+   231	    """Write a reflection node + `about` edge atomically. The pair is
+   232	    written in one transaction so the bead's orphan invariant holds:
+   233	    `SELECT count(*) FROM memory_nodes n WHERE n.node_type='reflection'
+   234	    AND NOT EXISTS (SELECT 1 FROM edges e WHERE e.source_kind='memory_node'
+   235	    AND e.source_id=n.id AND e.edge_type='about')` always returns 0."""
+   236	
+   237	    target_kind = require(args, "target_kind")
+   238	    target_id = require(args, "target_id")
+   239	    if target_kind not in VALID_MEMORY_ENDPOINTS:
+   240	        raise ToolError(
+   241	            ErrorCode.VALIDATION_ERROR,
+   242	            f"target_kind must be one of {VALID_MEMORY_ENDPOINTS}",
+   243	            details={"field": "target_kind", "value": target_kind,
+   244	                     "allowed": list(VALID_MEMORY_ENDPOINTS)},
+   245	        )
+   246	    _verify_endpoint_exists(
+   247	        # Open the DB just for the existence check; the retain path
+   248	        # opens its own connection.
+   249	        args, target_kind=target_kind, target_id=target_id,
+   250	    )
+   251	
+   252	    # Force node_type=reflection on this path; the body / importance /
+   253	    # bi-temporal args pass through to memory.retain.
+   254	    retain_args = {**args, "node_type": "reflection"}
+   255	    retain_args.pop("target_kind", None)
+   256	    retain_args.pop("target_id", None)
+   257	    result = _memory_retain(retain_args, ctx)
+   258	    node_id = result["id"]
+   259	
+   260	    # Write the about edge in the same logical operation.
+   261	    db = open_db_for_args(args)
+   262	    try:
+   263	        with UnitOfWork(db.connection) as uow:
+   264	            # Allow the caller to pin the edge id (used by the fixture
+   265	            # seed for byte-identical replay); otherwise generate one.
+   266	            edge_id = args.get("edge_id") or new_id("edg")
+   267	            created_at = now_iso()
+   268	            uow.execute(
+   269	                "INSERT INTO edges(id, source_kind, source_id, target_kind, "
+   270	                "target_id, edge_type, metadata_json, created_at, actor_id) "
+   271	                "VALUES (?, 'memory_node', ?, ?, ?, 'about', '{}', ?, ?)",
+   272	                (edge_id, node_id, target_kind, target_id,
+   273	                 created_at, ctx.actor_id),
+   274	            )
+   275	            emit_event(
+   276	                uow, event_type="edge.created",
+   277	                subject_kind="edge", subject_id=edge_id,
+   278	                payload={
+   279	                    "id": edge_id,
+   280	                    "source_kind": "memory_node", "source_id": node_id,
+   281	                    "target_kind": target_kind, "target_id": target_id,
+   282	                    "edge_type": "about",
+   283	                },
+   284	                actor_id=ctx.actor_id, idempotency_key=None, ctx=ctx,
+   285	            )
+   286	    finally:
+   287	        db.close()
+   288	    result["edge_id"] = edge_id
+   289	    result["target_kind"] = target_kind
+   290	    result["target_id"] = target_id
+   291	    return result
+--- forecast supersede two-phase snippet ---
+  1366	def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+  1367	    """Append a new forecast row and emit a supersedes edge new → prior.
+  1368	    Per scoring.md §4.2, the prior forecast's scoring_state should reflect
+  1369	    'superseded' — but the append-only trigger forbids UPDATE; readers
+  1370	    derive the head via the supersedes edge."""
+  1371	
+  1372	    prior_id = require(args, "prior_forecast_id")
+  1373	    db = open_db_for_args(args)
+  1374	    try:
+  1375	        prior = db.connection.execute(
+  1376	            "SELECT thesis_id FROM forecasts WHERE id = ?", (prior_id,)
+  1377	        ).fetchone()
+  1378	        if prior is None:
+  1379	            raise ToolError(
+  1380	                ErrorCode.NOT_FOUND,
+  1381	                f"forecast {prior_id!r} not found",
+  1382	                details={
+  1383	                    "entity_kind": "forecast",
+  1384	                    "prior_forecast_id": prior_id,
+  1385	                },
+  1386	            )
+  1387	    finally:
+  1388	        db.close()
+  1389	    # Re-dispatch as forecast.add with thesis_id from prior, then write the
+  1390	    # supersedes edge + forecast.superseded event in a second transaction.
+  1391	    new_args = {**args, "thesis_id": prior[0], "id": None}
+  1392	    new_args.pop("prior_forecast_id", None)
+  1393	    result = _forecast_add(new_args, ctx)
+  1394	    new_id_ = result["id"]
+  1395	    db = open_db_for_args(args)
+  1396	    try:
+  1397	        with UnitOfWork(db.connection) as uow:
+  1398	            edge_id = new_id("edg")
+  1399	            created_at = now_iso()
+  1400	            uow.execute(
+  1401	                "INSERT INTO edges(id, source_kind, source_id, target_kind, target_id, "
+  1402	                "edge_type, created_at, actor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  1403	                (
+  1404	                    edge_id, "forecast", new_id_, "forecast", prior_id,
+  1405	                    "supersedes", created_at, ctx.actor_id,
+  1406	                ),
+  1407	            )
+  1408	            emit_event(
+  1409	                uow, event_type="edge.created",
+  1410	                subject_kind="edge", subject_id=edge_id,
+  1411	                payload={
+  1412	                    "id": edge_id, "source_kind": "forecast", "source_id": new_id_,
+  1413	                    "target_kind": "forecast", "target_id": prior_id,
+  1414	                    "edge_type": "supersedes",
+  1415	                },
+  1416	                actor_id=ctx.actor_id, idempotency_key=None, ctx=ctx,
+  1417	            )
+  1418	            emit_event(
+  1419	                uow, event_type="forecast.superseded",
+  1420	                subject_kind="forecast", subject_id=new_id_,
+  1421	                payload={"prior_forecast_id": prior_id, "new_forecast_id": new_id_},
+  1422	                actor_id=ctx.actor_id, idempotency_key=None, ctx=ctx,
+  1423	            )
+  1424	    finally:
+  1425	        db.close()
+--- reflection prompt earliest forecast snippet ---
+    55	
+    56	    forecast_row = None
+    57	    forecast_outcomes: list[dict[str, Any]] = []
+    58	    calibration_delta = None
+    59	    if include_forecast:
+    60	        # The originating forecast: the earliest pending/scored binary
+    61	        # forecast on the same instrument whose thesis ties back.
+    62	        forecast_row = conn.execute(
+    63	            """
+    64	            SELECT f.id, f.thesis_id, f.kind, f.yes_label,
+    65	                   f.resolution_at, f.created_at, f.scoring_state,
+    66	                   t.instrument_id
+    67	            FROM forecasts f
+    68	            JOIN theses t ON t.id = f.thesis_id
+    69	            WHERE t.instrument_id = ?
+    70	            ORDER BY f.created_at, f.id
+    71	            LIMIT 1
+    72	            """,
+    73	            (instrument_id,),
+    74	        ).fetchone()
+    75	        if forecast_row is not None:
+    76	            fid = forecast_row[0]
+    77	            cur = conn.execute(
+    78	                "SELECT outcome_label, probability FROM forecast_outcomes "
+    79	                "WHERE forecast_id = ? ORDER BY outcome_label",
+    80	                (fid,),
+    81	            )
+    82	            forecast_outcomes = [
+    83	                {"outcome_label": r[0], "probability": r[1]}
+    84	                for r in cur.fetchall()
+    85	            ]
+    86	            # Calibration delta: |p_realized - p_predicted| on the
+    87	            # winning label, computed once and serialized.
+    88	            for fo in forecast_outcomes:
+    89	                if fo["outcome_label"].strip().lower() == outcome_label:
+    90	                    realized = 1.0 if outcome_row[5] == "resolved_final" else None
+    91	                    if realized is not None:
+    92	                        calibration_delta = round(
+    93	                            abs(realized - fo["probability"]), 6,
+    94	                        )
+    95	                    break
+    96	
+    97	    thesis_row = None
+    98	    if include_thesis:
+    99	        thesis_row = conn.execute(
+   100	            """
+--- CLI catalog contains config/init/mcp? ---
+--- docs broken link sample ---
+README.md:23: For the full vision, see [`VISION.md`](./VISION.md). For the working PRD, see [`PRD.md`](./PRD.md).
+README.md:58: - [`VISION.md`](./VISION.md) — north star
+README.md:59: - [`PRD.md`](./PRD.md) — working PRD and MVP scope
+README.md:93: Trade Trace never fetches trading data, broker data, market prices, order books, or outcomes. The agent calling it supplies all market data through the structured ingestion APIs. The single opt-in outbound path (embedding model download) carries no trading data; the optional API-embeddings path is separately opt-in and warned about at configure time. See [`PRD.md`](./PRD.md) §2.4.1.
+docs/PRD.md:5: **Companion docs:** [`VISION.md`](./VISION.md), [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md), [`docs/architecture/scoring.md`](./docs/architecture/scoring.md), [`docs/architecture/persistence.md`](./docs/architecture/persistence.md), [`docs/architecture/contracts.md`](./docs/architecture/contracts.md), [`docs/architecture/operability.md`](./docs/architecture/operability.md), [`docs/architecture/reports.md`](./docs/architecture/reports.md), [`docs/architecture/imports.md`](./docs/architecture/imports.md), [`docs/architecture/risk-units.md`](./docs/architecture/risk-units.md), [`docs/architecture/opportunity-analysis.md`](./docs/architecture/opportunity-analysis.md), [`docs/architecture/dogfood-protocol.md`](./docs/architecture/dogfood-protocol.md)
+docs/PRD.md:19: 5. Binary Brier scoring (see [`scoring.md`](./docs/architecture/scoring.md))
+docs/architecture/contracts.md:11: Companion docs: [PRD.md](../../PRD.md), [VISION.md](../../VISION.md),
+--- git status after remaining probes ---
+?? audits/
+?? docs/audits/
+--- memory.reflect idempotency replay detailed retry ---
+r1= {'ok': True, 'data': {'id': 'mem__j1DCNXkk6ChZnAR', 'node_type': 'reflection', 'body': 'lesson', 'importance': 5, 'confidence_base': 1.0, 'created_at': '2026-05-19T03:13:31.568Z', 'edge_id': 'edg_8YzHcB9_FVLbi9oH', 'target_kind': 'review', 'target_id': 'rev1'}, 'meta': {'tool': 'memory.reflect', 'actor_id': 'cli:test', 'request_id': 'cab7506b3180408e812f9e9908247aba', 'contract_version': '1.0', 'event_id': 1}}
+r2= {'ok': False, 'error': {'code': 'IDEMPOTENCY_CONFLICT', 'message': "IDEMPOTENCY_CONFLICT: event_type='memory_node.retained' actor_id='cli:test' idempotency_key='reflect-same' diff_keys=['valid_from']", 'details': {'event_type': 'memory_node.retained', 'actor_id': 'cli:test', 'idempotency_key': 'reflect-same', 'original_event_id': 1, 'diff_summary': {'compared_keys': ['confidence_base', 'decay_rate_per_day', 'importance', 'meta_json', 'node_type', 'parent_node_id', 'tags', 'valid_from', 'valid_to', 'version'], 'diff_keys': ['valid_from']}}}, 'meta': {'tool': 'memory.reflect', 'actor_id': 'cli:test', 'request_id': '5a2ad9744d8d49d699676fe728377568', 'contract_version': '1.0'}}
+edge count= 1
+all edges= [('edg_8YzHcB9_FVLbi9oH', 'mem__j1DCNXkk6ChZnAR', 'review', 'rev1')]
+orphan reflections= 0
+--- CLI catalog contains config/init/mcp? retry ---
+sample= ['decision add', 'decision record_adherence', 'forecast add', 'forecast supersede', 'import commit', 'import validate', 'instrument add', 'journal backup', 'journal config_set', 'journal fixture_seed', 'journal init', 'journal rebuild_projections', 'journal repair', 'journal rescan_scoring', 'journal restore', 'journal schema', 'journal status', 'memory link', 'memory recall', 'memory reflect']
+config set False
+journal config_set True
+init False
+journal init True
+mcp False

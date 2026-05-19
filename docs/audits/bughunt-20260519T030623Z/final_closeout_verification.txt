@@ -1,0 +1,1408 @@
+=== final closeout verification ===
+2026-05-19T03:21:13Z
+--- coverage summary ---
+{
+  "tracked_total": 158,
+  "depth_counts": {
+    "read-directly": 80,
+    "runtime-tested": 64,
+    "search-hit-reviewed": 9,
+    "excluded": 5
+  },
+  "by_lane": {
+    "cli-mcp-contracts-tools": {
+      "read-directly": 16,
+      "runtime-tested": 9
+    },
+    "storage-events-domain-security": {
+      "read-directly": 12,
+      "runtime-tested": 3
+    },
+    "reports-memory-playbook-strategy": {
+      "read-directly": 11,
+      "runtime-tested": 2
+    },
+    "docs-packaging-ci-ops": {
+      "read-directly": 11,
+      "search-hit-reviewed": 9
+    },
+    "tests-fixtures-crosscutting": {
+      "read-directly": 30,
+      "runtime-tested": 50
+    },
+    "excluded-grouped": {
+      "excluded": 5
+    }
+  },
+  "uninspected_non_excluded": []
+}
+--- candidate map ---
+{
+  "CAND-001": "trade-trace-lum",
+  "CAND-002": "trade-trace-b10",
+  "CAND-003": "trade-trace-m8c",
+  "CAND-004": "trade-trace-jky",
+  "CAND-005": "trade-trace-re4",
+  "CAND-006": "trade-trace-ke1",
+  "CAND-007": "trade-trace-85i",
+  "CAND-008": "trade-trace-e62",
+  "CAND-011": "trade-trace-1zl",
+  "CAND-012": "trade-trace-17p",
+  "CAND-014": "trade-trace-vwa"
+}
+--- open bug findings ---
+○ trade-trace-17p [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 docs-truth domain:docs-ops] - Docs advertise nonexistent CLI commands: tt config set, tt init, and tt mcp
+○ trade-trace-1zl [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 docs-truth domain:docs-ops] - README and architecture docs contain broken local links to PRD/VISION/docs paths
+○ trade-trace-85i [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 data-integrity domain:memory] - memory.reflect documents atomic reflection+about edge but uses two transactions
+○ trade-trace-b10 [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 domain:cli-contracts runtime] - journal.config_set mutates without --confirm despite confirm/preview contract
+○ trade-trace-e62 [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 domain:memory idempotency] - memory.reflect idempotent retry without valid_from returns IDEMPOTENCY_CONFLICT
+○ trade-trace-jky [● P1] [bug] [bug bughunt bughunt:exhaustive-20260519 domain:security security] - source.add persists secret-shaped title/note/summary free text unredacted
+○ trade-trace-ke1 [● P1] [bug] [api-contract bug bughunt bughunt:exhaustive-20260519 domain:reports] - ReportFilter is echoed but ignored by multiple report implementations
+○ trade-trace-lum [● P2] [bug] [api-contract bug bughunt bughunt:exhaustive-20260519 domain:cli-contracts] - Malformed CLI --*-json input bypasses JSON error-envelope contract
+○ trade-trace-m8c [● P1] [bug] [bug bughunt bughunt:exhaustive-20260519 domain:security-ops test-failure] - exporter.SECRET_PATTERNS compatibility alias is missing and blocks pytest collection
+○ trade-trace-re4 [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 data-integrity domain:storage-integrity] - forecast.supersede commits replacement forecast before supersedes edge/event
+○ trade-trace-vwa [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 domain:tests test-failure] - Smoke/golden tests assert stale 0.0.1 while runtime/package version is 0.0.1rc0
+--- containers/gates all statuses ---
+○ trade-trace-17p [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 docs-truth domain:docs-ops] - Docs advertise nonexistent CLI commands: tt config set, tt init, and tt mcp
+○ trade-trace-1zl [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 docs-truth domain:docs-ops] - README and architecture docs contain broken local links to PRD/VISION/docs paths
+○ trade-trace-2d3 [● P2] [epic] [bughunt bughunt:exhaustive-20260519] - EPIC: exhaustive repo bughunt 2026-05-19
+○ trade-trace-85i [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 data-integrity domain:memory] - memory.reflect documents atomic reflection+about edge but uses two transactions
+✓ trade-trace-8md [P2] [task] [bughunt bughunt-gate bughunt:exhaustive-20260519 planning] - Run exhaustive bughunt lane synthesis before final verification
+○ trade-trace-b10 [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 domain:cli-contracts runtime] - journal.config_set mutates without --confirm despite confirm/preview contract
+○ trade-trace-e62 [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 domain:memory idempotency] - memory.reflect idempotent retry without valid_from returns IDEMPOTENCY_CONFLICT
+○ trade-trace-jky [● P1] [bug] [bug bughunt bughunt:exhaustive-20260519 domain:security security] - source.add persists secret-shaped title/note/summary free text unredacted
+○ trade-trace-ke1 [● P1] [bug] [api-contract bug bughunt bughunt:exhaustive-20260519 domain:reports] - ReportFilter is echoed but ignored by multiple report implementations
+○ trade-trace-lum [● P2] [bug] [api-contract bug bughunt bughunt:exhaustive-20260519 domain:cli-contracts] - Malformed CLI --*-json input bypasses JSON error-envelope contract
+○ trade-trace-m8c [● P1] [bug] [bug bughunt bughunt:exhaustive-20260519 domain:security-ops test-failure] - exporter.SECRET_PATTERNS compatibility alias is missing and blocks pytest collection
+○ trade-trace-re4 [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 data-integrity domain:storage-integrity] - forecast.supersede commits replacement forecast before supersedes edge/event
+○ trade-trace-vwa [● P2] [bug] [bug bughunt bughunt:exhaustive-20260519 domain:tests test-failure] - Smoke/golden tests assert stale 0.0.1 while runtime/package version is 0.0.1rc0
+✓ trade-trace-w9r [P2] [task] [bughunt bughunt-gate bughunt:exhaustive-20260519] - Final verification: exhaustive repo bughunt 2026-05-19
+--- dep list epic ---
+  trade-trace-17p: Docs advertise nonexistent CLI commands: tt config set, tt init, and tt mcp [P2] (open) via relates-to
+  trade-trace-1up: Make memory.reflect node + about-edge write truly atomic [P1] (open) via relates-to
+  trade-trace-1zl: README and architecture docs contain broken local links to PRD/VISION/docs paths [P2] (open) via relates-to
+  trade-trace-85i: memory.reflect documents atomic reflection+about edge but uses two transactions [P2] (open) via relates-to
+  trade-trace-8md: Run exhaustive bughunt lane synthesis before final verification [P2] (closed) via relates-to
+  trade-trace-aec: Add replay-safe idempotency to strategy.update [P1] (open) via relates-to
+  trade-trace-aq0: Fix stale hard-coded package version assertions in smoke/golden tests [P1] (open) via relates-to
+  trade-trace-b10: journal.config_set mutates without --confirm despite confirm/preview contract [P2] (open) via relates-to
+  trade-trace-drt: Define signed quantity convention and fix projection realized P&L sign coverage [P1] (open) via relates-to
+  trade-trace-e62: memory.reflect idempotent retry without valid_from returns IDEMPOTENCY_CONFLICT [P2] (open) via relates-to
+  trade-trace-iyt: Preserve true source_quality diagnostic counts before sample truncation [P2] (open) via relates-to
+  trade-trace-jky: source.add persists secret-shaped title/note/summary free text unredacted [P1] (open) via relates-to
+  trade-trace-ke1: ReportFilter is echoed but ignored by multiple report implementations [P1] (open) via relates-to
+  trade-trace-lum: Malformed CLI --*-json input bypasses JSON error-envelope contract [P2] (open) via relates-to
+  trade-trace-m8c: exporter.SECRET_PATTERNS compatibility alias is missing and blocks pytest collection [P1] (open) via relates-to
+  trade-trace-qfxw: Cover explicit metadata_json credential injection in no-credentials policy [P1] (open) via relates-to
+  trade-trace-re4: forecast.supersede commits replacement forecast before supersedes edge/event [P2] (open) via relates-to
+  trade-trace-vwa: Smoke/golden tests assert stale 0.0.1 while runtime/package version is 0.0.1rc0 [P2] (open) via relates-to
+  trade-trace-w9r: Final verification: exhaustive repo bughunt 2026-05-19 [P2] (closed) via relates-to
+  trade-trace-xpj: Repair stale SECRET_PATTERNS import in redacted export security test [P1] (open) via relates-to
+  trade-trace-zgz: Propagate calibration record-id truncation to top-level/meta truncated flag [P2] (open) via relates-to
+
+--- children epic json (expected [] for relation-based) ---
+[]
+--- graph epic ---
+
+📊 Dependency graph for trade-trace-2d3:
+
+  Status: ○ open  ◐ in_progress  ● blocked  ✓ closed  ❄ deferred
+
+  LAYER 0 (ready)                    LAYER 1                      
+
+  ┌───────────────────────────┐      ┌───────────────────────────┐
+  │ ○ Fix broken relative li… │   ╭─▶│ ✓ Final verification: ex… │
+  │ trade-trace-05c P2        │   │  │ trade-trace-w9r P2        │
+  └───────────────────────────┘   │  └───────────────────────────┘
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ Add schema/meta consis… │   │
+  │ trade-trace-0ib P3        │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ Docs advertise nonexis… │   │
+  │ trade-trace-17p P2        │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ Make memory.reflect no… │   │
+  │ trade-trace-1up P1        │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ README and architectur… │   │
+  │ trade-trace-1zl P2        │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ Move fixture_seed wall… │   │
+  │ trade-trace-29u0 P3       │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ EPIC: exhaustive repo … │   │
+  │ trade-trace-2d3 P2        │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ Expand no-network defa… │   │
+  │ trade-trace-2ifs P2       │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ Choose strict or exten… │   │
+  │ trade-trace-30u P2        │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ Remove nested full-sui… │   │
+  │ trade-trace-4rp P2        │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ Clarify and harden exp… │   │
+  │ trade-trace-67sg P3       │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ Decide and cover secre… │   │
+  │ trade-trace-7j1l P2       │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ○ memory.reflect documen… │   │
+  │ trade-trace-85i P2        │   │
+  └───────────────────────────┘   │
+                                  │
+  ┌───────────────────────────┐   │
+  │ ✓ Run exhaustive bughunt… │───╯
+  │ trade-trace-8md P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Clarify low-level repo… │
+  │ trade-trace-9gs P3        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Scope AGENTS/CLAUDE se… │
+  │ trade-trace-9zy P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Add replay-safe idempo… │
+  │ trade-trace-aec P1        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Validate polymorphic e… │
+  │ trade-trace-amc P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Fix stale hard-coded p… │
+  │ trade-trace-aq0 P1        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ journal.config_set mut… │
+  │ trade-trace-b10 P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Capture one as_of cloc… │
+  │ trade-trace-bew P3        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Replace signal.scan JS… │
+  │ trade-trace-c2h P3        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Define and enforce sup… │
+  │ trade-trace-d4k P1        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Unify report.coach raw… │
+  │ trade-trace-d7a P3        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Make scoring “property… │
+  │ trade-trace-dff P3        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Harden events table wi… │
+  │ trade-trace-dhm P1        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Define signed quantity… │
+  │ trade-trace-drt P1        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ memory.reflect idempot… │
+  │ trade-trace-e62 P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Handle malformed event… │
+  │ trade-trace-eo4 P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Run quality gates befo… │
+  │ trade-trace-go2 P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Preserve true source_q… │
+  │ trade-trace-iyt P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ source.add persists se… │
+  │ trade-trace-jky P1        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ EPIC: no-tech-debt bac… │
+  │ trade-trace-joz P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ ReportFilter is echoed… │
+  │ trade-trace-ke1 P1        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Extend file-permission… │
+  │ trade-trace-ljl9 P2       │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Malformed CLI --*-json… │
+  │ trade-trace-lum P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Reconcile memory.refle… │
+  │ trade-trace-m0h P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ exporter.SECRET_PATTER… │
+  │ trade-trace-m8c P1        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Pin future MCP stdio s… │
+  │ trade-trace-pqp2 P2       │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Sanitize event_type be… │
+  │ trade-trace-qc7 P3        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Cover explicit metadat… │
+  │ trade-trace-qfxw P1       │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Make FTS5 dependency e… │
+  │ trade-trace-qis P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Reject stray positiona… │
+  │ trade-trace-r5k P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ forecast.supersede com… │
+  │ trade-trace-re4 P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Reconcile README/PRD v… │
+  │ trade-trace-tka P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Smoke/golden tests ass… │
+  │ trade-trace-vwa P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Add storage-level time… │
+  │ trade-trace-wmz P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Repair stale SECRET_PA… │
+  │ trade-trace-xpj P1        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Enforce or explicitly … │
+  │ trade-trace-z4q P2        │
+  └───────────────────────────┘
+
+  ┌───────────────────────────┐
+  │ ○ Propagate calibration … │
+  │ trade-trace-zgz P2        │
+  └───────────────────────────┘
+
+  Dependencies: 1 blocking relationships
+  Total: 51 issues across 2 layers
+
+--- dep cycles ---
+
+✓ No dependency cycles detected
+
+--- duplicate scan threshold 0.45 ---
+{
+  "count": 100,
+  "method": "mechanical",
+  "pairs": [
+    {
+      "issue_a_id": "trade-trace-qfxw",
+      "issue_a_title": "Cover explicit metadata_json credential injection in no-credentials policy",
+      "issue_b_id": "trade-trace-7j1l",
+      "issue_b_title": "Decide and cover secret scanning for all persisted free-text and metadata surfaces",
+      "method": "mechanical",
+      "similarity": 0.687530900443511
+    },
+    {
+      "issue_a_id": "trade-trace-d4k",
+      "issue_a_title": "Define and enforce supported ReportFilter semantics per report",
+      "issue_b_id": "trade-trace-wmz",
+      "issue_b_title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "method": "mechanical",
+      "similarity": 0.6817624194073013
+    },
+    {
+      "issue_a_id": "trade-trace-dhm",
+      "issue_a_title": "Harden events table with SQLite append-only triggers",
+      "issue_b_id": "trade-trace-wmz",
+      "issue_b_title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "method": "mechanical",
+      "similarity": 0.6709025088313377
+    },
+    {
+      "issue_a_id": "trade-trace-wmz",
+      "issue_a_title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "issue_b_id": "trade-trace-z4q",
+      "issue_b_title": "Enforce or explicitly grandfather strategy_id references after strategies table exists",
+      "method": "mechanical",
+      "similarity": 0.670128998284208
+    },
+    {
+      "issue_a_id": "trade-trace-d4k",
+      "issue_a_title": "Define and enforce supported ReportFilter semantics per report",
+      "issue_b_id": "trade-trace-7j1l",
+      "issue_b_title": "Decide and cover secret scanning for all persisted free-text and metadata surfaces",
+      "method": "mechanical",
+      "similarity": 0.6685793361050946
+    },
+    {
+      "issue_a_id": "trade-trace-85i",
+      "issue_a_title": "memory.reflect documents atomic reflection+about edge but uses two transactions",
+      "issue_b_id": "trade-trace-re4",
+      "issue_b_title": "forecast.supersede commits replacement forecast before supersedes edge/event",
+      "method": "mechanical",
+      "similarity": 0.6666598899910395
+    },
+    {
+      "issue_a_id": "trade-trace-7j1l",
+      "issue_a_title": "Decide and cover secret scanning for all persisted free-text and metadata surfaces",
+      "issue_b_id": "trade-trace-wmz",
+      "issue_b_title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "method": "mechanical",
+      "similarity": 0.6595012233905102
+    },
+    {
+      "issue_a_id": "trade-trace-dhm",
+      "issue_a_title": "Harden events table with SQLite append-only triggers",
+      "issue_b_id": "trade-trace-z4q",
+      "issue_b_title": "Enforce or explicitly grandfather strategy_id references after strategies table exists",
+      "method": "mechanical",
+      "similarity": 0.658734150319897
+    },
+    {
+      "issue_a_id": "trade-trace-d4k",
+      "issue_a_title": "Define and enforce supported ReportFilter semantics per report",
+      "issue_b_id": "trade-trace-z4q",
+      "issue_b_title": "Enforce or explicitly grandfather strategy_id references after strategies table exists",
+      "method": "mechanical",
+      "similarity": 0.6556865786092358
+    },
+    {
+      "issue_a_id": "trade-trace-iyt",
+      "issue_a_title": "Preserve true source_quality diagnostic counts before sample truncation",
+      "issue_b_id": "trade-trace-zgz",
+      "issue_b_title": "Propagate calibration record-id truncation to top-level/meta truncated flag",
+      "method": "mechanical",
+      "similarity": 0.6505479923162198
+    },
+    {
+      "issue_a_id": "trade-trace-d4k",
+      "issue_a_title": "Define and enforce supported ReportFilter semantics per report",
+      "issue_b_id": "trade-trace-dhm",
+      "issue_b_title": "Harden events table with SQLite append-only triggers",
+      "method": "mechanical",
+      "similarity": 0.6480746958677153
+    },
+    {
+      "issue_a_id": "trade-trace-4rp",
+      "issue_a_title": "Remove nested full-suite pytest subprocess from default dogfood verification test",
+      "issue_b_id": "trade-trace-29u0",
+      "issue_b_title": "Move fixture_seed wall-clock performance assertion out of default functional suite",
+      "method": "mechanical",
+      "similarity": 0.6454875909446236
+    },
+    {
+      "issue_a_id": "trade-trace-eo4",
+      "issue_a_title": "Handle malformed event payload JSON per outbox row during export drain",
+      "issue_b_id": "trade-trace-qc7",
+      "issue_b_title": "Sanitize event_type before using it in JSONL export filenames",
+      "method": "mechanical",
+      "similarity": 0.6442880202612982
+    },
+    {
+      "issue_a_id": "trade-trace-7j1l",
+      "issue_a_title": "Decide and cover secret scanning for all persisted free-text and metadata surfaces",
+      "issue_b_id": "trade-trace-14iy",
+      "issue_b_title": "Guard or scope runtime secret regex registration against ReDoS",
+      "method": "mechanical",
+      "similarity": 0.6418656269924161
+    },
+    {
+      "issue_a_id": "trade-trace-67sg",
+      "issue_a_title": "Clarify and harden export secret-warning and shareable-export boundary",
+      "issue_b_id": "trade-trace-qc7",
+      "issue_b_title": "Sanitize event_type before using it in JSONL export filenames",
+      "method": "mechanical",
+      "similarity": 0.6390624662731703
+    },
+    {
+      "issue_a_id": "trade-trace-drt",
+      "issue_a_title": "Define signed quantity convention and fix projection realized P\u0026L sign coverage",
+      "issue_b_id": "trade-trace-bew",
+      "issue_b_title": "Capture one as_of clock instant inside report.watchlist",
+      "method": "mechanical",
+      "similarity": 0.6365511618737651
+    },
+    {
+      "issue_a_id": "trade-trace-amc",
+      "issue_a_title": "Validate polymorphic edge endpoints and audit orphan edges",
+      "issue_b_id": "trade-trace-z4q",
+      "issue_b_title": "Enforce or explicitly grandfather strategy_id references after strategies table exists",
+      "method": "mechanical",
+      "similarity": 0.6337153019014263
+    },
+    {
+      "issue_a_id": "trade-trace-amc",
+      "issue_a_title": "Validate polymorphic edge endpoints and audit orphan edges",
+      "issue_b_id": "trade-trace-wmz",
+      "issue_b_title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "method": "mechanical",
+      "similarity": 0.6321483712234635
+    },
+    {
+      "issue_a_id": "trade-trace-m8c",
+      "issue_a_title": "exporter.SECRET_PATTERNS compatibility alias is missing and blocks pytest collection",
+      "issue_b_id": "trade-trace-vwa",
+      "issue_b_title": "Smoke/golden tests assert stale 0.0.1 while runtime/package version is 0.0.1rc0",
+      "method": "mechanical",
+      "similarity": 0.6321309586782036
+    },
+    {
+      "issue_a_id": "trade-trace-bew",
+      "issue_a_title": "Capture one as_of clock instant inside report.watchlist",
+      "issue_b_id": "trade-trace-d7a",
+      "issue_b_title": "Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+      "method": "mechanical",
+      "similarity": 0.6317084312185489
+    },
+    {
+      "issue_a_id": "trade-trace-wmz",
+      "issue_a_title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "issue_b_id": "trade-trace-14iy",
+      "issue_b_title": "Guard or scope runtime secret regex registration against ReDoS",
+      "method": "mechanical",
+      "similarity": 0.6301565824482858
+    },
+    {
+      "issue_a_id": "trade-trace-9gs",
+      "issue_a_title": "Clarify low-level report output metric semantics for playbook adherence and P\u0026L coverage",
+      "issue_b_id": "trade-trace-d7a",
+      "issue_b_title": "Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+      "method": "mechanical",
+      "similarity": 0.6283814132912632
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-iyt",
+      "issue_b_title": "Preserve true source_quality diagnostic counts before sample truncation",
+      "method": "mechanical",
+      "similarity": 0.6266112306339603
+    },
+    {
+      "issue_a_id": "trade-trace-drt",
+      "issue_a_title": "Define signed quantity convention and fix projection realized P\u0026L sign coverage",
+      "issue_b_id": "trade-trace-d4k",
+      "issue_b_title": "Define and enforce supported ReportFilter semantics per report",
+      "method": "mechanical",
+      "similarity": 0.6260966216220278
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-zgz",
+      "issue_b_title": "Propagate calibration record-id truncation to top-level/meta truncated flag",
+      "method": "mechanical",
+      "similarity": 0.6200378562294153
+    },
+    {
+      "issue_a_id": "trade-trace-qfxw",
+      "issue_a_title": "Cover explicit metadata_json credential injection in no-credentials policy",
+      "issue_b_id": "trade-trace-c2h",
+      "issue_b_title": "Replace signal.scan JSON LIKE dedupe with structured related-ref matching",
+      "method": "mechanical",
+      "similarity": 0.6191849701724568
+    },
+    {
+      "issue_a_id": "trade-trace-7j1l",
+      "issue_a_title": "Decide and cover secret scanning for all persisted free-text and metadata surfaces",
+      "issue_b_id": "trade-trace-amc",
+      "issue_b_title": "Validate polymorphic edge endpoints and audit orphan edges",
+      "method": "mechanical",
+      "similarity": 0.6184327057099813
+    },
+    {
+      "issue_a_id": "trade-trace-xpj",
+      "issue_a_title": "Repair stale SECRET_PATTERNS import in redacted export security test",
+      "issue_b_id": "trade-trace-67sg",
+      "issue_b_title": "Clarify and harden export secret-warning and shareable-export boundary",
+      "method": "mechanical",
+      "similarity": 0.6180220787844023
+    },
+    {
+      "issue_a_id": "trade-trace-9gs",
+      "issue_a_title": "Clarify low-level report output metric semantics for playbook adherence and P\u0026L coverage",
+      "issue_b_id": "trade-trace-bew",
+      "issue_b_title": "Capture one as_of clock instant inside report.watchlist",
+      "method": "mechanical",
+      "similarity": 0.6179447149164081
+    },
+    {
+      "issue_a_id": "trade-trace-7j1l",
+      "issue_a_title": "Decide and cover secret scanning for all persisted free-text and metadata surfaces",
+      "issue_b_id": "trade-trace-z4q",
+      "issue_b_title": "Enforce or explicitly grandfather strategy_id references after strategies table exists",
+      "method": "mechanical",
+      "similarity": 0.6178646169818769
+    },
+    {
+      "issue_a_id": "trade-trace-dhm",
+      "issue_a_title": "Harden events table with SQLite append-only triggers",
+      "issue_b_id": "trade-trace-7j1l",
+      "issue_b_title": "Decide and cover secret scanning for all persisted free-text and metadata surfaces",
+      "method": "mechanical",
+      "similarity": 0.6162310555105579
+    },
+    {
+      "issue_a_id": "trade-trace-2ifs",
+      "issue_a_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "issue_b_id": "trade-trace-29u0",
+      "issue_b_title": "Move fixture_seed wall-clock performance assertion out of default functional suite",
+      "method": "mechanical",
+      "similarity": 0.6161750314380531
+    },
+    {
+      "issue_a_id": "trade-trace-d4k",
+      "issue_a_title": "Define and enforce supported ReportFilter semantics per report",
+      "issue_b_id": "trade-trace-d7a",
+      "issue_b_title": "Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+      "method": "mechanical",
+      "similarity": 0.6155495577339568
+    },
+    {
+      "issue_a_id": "trade-trace-d4k",
+      "issue_a_title": "Define and enforce supported ReportFilter semantics per report",
+      "issue_b_id": "trade-trace-amc",
+      "issue_b_title": "Validate polymorphic edge endpoints and audit orphan edges",
+      "method": "mechanical",
+      "similarity": 0.614839850795756
+    },
+    {
+      "issue_a_id": "trade-trace-drt",
+      "issue_a_title": "Define signed quantity convention and fix projection realized P\u0026L sign coverage",
+      "issue_b_id": "trade-trace-9gs",
+      "issue_b_title": "Clarify low-level report output metric semantics for playbook adherence and P\u0026L coverage",
+      "method": "mechanical",
+      "similarity": 0.6147227557959978
+    },
+    {
+      "issue_a_id": "trade-trace-aq0",
+      "issue_a_title": "Fix stale hard-coded package version assertions in smoke/golden tests",
+      "issue_b_id": "trade-trace-xpj",
+      "issue_b_title": "Repair stale SECRET_PATTERNS import in redacted export security test",
+      "method": "mechanical",
+      "similarity": 0.6130458198182984
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-1up",
+      "issue_b_title": "Make memory.reflect node + about-edge write truly atomic",
+      "method": "mechanical",
+      "similarity": 0.6128685900298674
+    },
+    {
+      "issue_a_id": "trade-trace-ljl9",
+      "issue_a_title": "Extend file-permission tests to directories, temp files, WAL/SHM, and backups",
+      "issue_b_id": "trade-trace-2ifs",
+      "issue_b_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "method": "mechanical",
+      "similarity": 0.6109816319911743
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-bew",
+      "issue_b_title": "Capture one as_of clock instant inside report.watchlist",
+      "method": "mechanical",
+      "similarity": 0.6106274858399695
+    },
+    {
+      "issue_a_id": "trade-trace-zgz",
+      "issue_a_title": "Propagate calibration record-id truncation to top-level/meta truncated flag",
+      "issue_b_id": "trade-trace-d7a",
+      "issue_b_title": "Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+      "method": "mechanical",
+      "similarity": 0.6096916499645102
+    },
+    {
+      "issue_a_id": "trade-trace-xpj",
+      "issue_a_title": "Repair stale SECRET_PATTERNS import in redacted export security test",
+      "issue_b_id": "trade-trace-qc7",
+      "issue_b_title": "Sanitize event_type before using it in JSONL export filenames",
+      "method": "mechanical",
+      "similarity": 0.6088503142795432
+    },
+    {
+      "issue_a_id": "trade-trace-iyt",
+      "issue_a_title": "Preserve true source_quality diagnostic counts before sample truncation",
+      "issue_b_id": "trade-trace-9gs",
+      "issue_b_title": "Clarify low-level report output metric semantics for playbook adherence and P\u0026L coverage",
+      "method": "mechanical",
+      "similarity": 0.6081914100736907
+    },
+    {
+      "issue_a_id": "trade-trace-tka",
+      "issue_a_title": "Reconcile README/PRD vector dependency claims with pyproject and deferred embeddings posture",
+      "issue_b_id": "trade-trace-05c",
+      "issue_b_title": "Fix broken relative links across README, PRD, and architecture docs",
+      "method": "mechanical",
+      "similarity": 0.607530315327714
+    },
+    {
+      "issue_a_id": "trade-trace-d4k",
+      "issue_a_title": "Define and enforce supported ReportFilter semantics per report",
+      "issue_b_id": "trade-trace-bew",
+      "issue_b_title": "Capture one as_of clock instant inside report.watchlist",
+      "method": "mechanical",
+      "similarity": 0.6072678905893825
+    },
+    {
+      "issue_a_id": "trade-trace-dhm",
+      "issue_a_title": "Harden events table with SQLite append-only triggers",
+      "issue_b_id": "trade-trace-amc",
+      "issue_b_title": "Validate polymorphic edge endpoints and audit orphan edges",
+      "method": "mechanical",
+      "similarity": 0.6064470477765369
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-z4q",
+      "issue_b_title": "Enforce or explicitly grandfather strategy_id references after strategies table exists",
+      "method": "mechanical",
+      "similarity": 0.6060385476369818
+    },
+    {
+      "issue_a_id": "trade-trace-d4k",
+      "issue_a_title": "Define and enforce supported ReportFilter semantics per report",
+      "issue_b_id": "trade-trace-9gs",
+      "issue_b_title": "Clarify low-level report output metric semantics for playbook adherence and P\u0026L coverage",
+      "method": "mechanical",
+      "similarity": 0.6058640814839011
+    },
+    {
+      "issue_a_id": "trade-trace-drt",
+      "issue_a_title": "Define signed quantity convention and fix projection realized P\u0026L sign coverage",
+      "issue_b_id": "trade-trace-aec",
+      "issue_b_title": "Add replay-safe idempotency to strategy.update",
+      "method": "mechanical",
+      "similarity": 0.6051950528926304
+    },
+    {
+      "issue_a_id": "trade-trace-d4k",
+      "issue_a_title": "Define and enforce supported ReportFilter semantics per report",
+      "issue_b_id": "trade-trace-14iy",
+      "issue_b_title": "Guard or scope runtime secret regex registration against ReDoS",
+      "method": "mechanical",
+      "similarity": 0.605110259955425
+    },
+    {
+      "issue_a_id": "trade-trace-iyt",
+      "issue_a_title": "Preserve true source_quality diagnostic counts before sample truncation",
+      "issue_b_id": "trade-trace-bew",
+      "issue_b_title": "Capture one as_of clock instant inside report.watchlist",
+      "method": "mechanical",
+      "similarity": 0.6046735811711326
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-dhm",
+      "issue_b_title": "Harden events table with SQLite append-only triggers",
+      "method": "mechanical",
+      "similarity": 0.6043417974444538
+    },
+    {
+      "issue_a_id": "trade-trace-drt",
+      "issue_a_title": "Define signed quantity convention and fix projection realized P\u0026L sign coverage",
+      "issue_b_id": "trade-trace-d7a",
+      "issue_b_title": "Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+      "method": "mechanical",
+      "similarity": 0.6040236149521869
+    },
+    {
+      "issue_a_id": "trade-trace-amc",
+      "issue_a_title": "Validate polymorphic edge endpoints and audit orphan edges",
+      "issue_b_id": "trade-trace-14iy",
+      "issue_b_title": "Guard or scope runtime secret regex registration against ReDoS",
+      "method": "mechanical",
+      "similarity": 0.6039833760032556
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-2ifs",
+      "issue_b_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "method": "mechanical",
+      "similarity": 0.6034175100696959
+    },
+    {
+      "issue_a_id": "trade-trace-m0h",
+      "issue_a_title": "Reconcile memory.reflect docs/API shape with implementation",
+      "issue_b_id": "trade-trace-05c",
+      "issue_b_title": "Fix broken relative links across README, PRD, and architecture docs",
+      "method": "mechanical",
+      "similarity": 0.6031313563369989
+    },
+    {
+      "issue_a_id": "trade-trace-pqp2",
+      "issue_a_title": "Pin future MCP stdio security boundary before transport implementation",
+      "issue_b_id": "trade-trace-7j1l",
+      "issue_b_title": "Decide and cover secret scanning for all persisted free-text and metadata surfaces",
+      "method": "mechanical",
+      "similarity": 0.6025322463134338
+    },
+    {
+      "issue_a_id": "trade-trace-29u0",
+      "issue_a_title": "Move fixture_seed wall-clock performance assertion out of default functional suite",
+      "issue_b_id": "trade-trace-bew",
+      "issue_b_title": "Capture one as_of clock instant inside report.watchlist",
+      "method": "mechanical",
+      "similarity": 0.6021780062680395
+    },
+    {
+      "issue_a_id": "trade-trace-aq0",
+      "issue_a_title": "Fix stale hard-coded package version assertions in smoke/golden tests",
+      "issue_b_id": "trade-trace-2ifs",
+      "issue_b_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "method": "mechanical",
+      "similarity": 0.6018991134993827
+    },
+    {
+      "issue_a_id": "trade-trace-xpj",
+      "issue_a_title": "Repair stale SECRET_PATTERNS import in redacted export security test",
+      "issue_b_id": "trade-trace-4rp",
+      "issue_b_title": "Remove nested full-suite pytest subprocess from default dogfood verification test",
+      "method": "mechanical",
+      "similarity": 0.6014184251009038
+    },
+    {
+      "issue_a_id": "trade-trace-eo4",
+      "issue_a_title": "Handle malformed event payload JSON per outbox row during export drain",
+      "issue_b_id": "trade-trace-67sg",
+      "issue_b_title": "Clarify and harden export secret-warning and shareable-export boundary",
+      "method": "mechanical",
+      "similarity": 0.6000584432438879
+    },
+    {
+      "issue_a_id": "trade-trace-1up",
+      "issue_a_title": "Make memory.reflect node + about-edge write truly atomic",
+      "issue_b_id": "trade-trace-qc7",
+      "issue_b_title": "Sanitize event_type before using it in JSONL export filenames",
+      "method": "mechanical",
+      "similarity": 0.5995800075967221
+    },
+    {
+      "issue_a_id": "trade-trace-qfxw",
+      "issue_a_title": "Cover explicit metadata_json credential injection in no-credentials policy",
+      "issue_b_id": "trade-trace-2ifs",
+      "issue_b_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "method": "mechanical",
+      "similarity": 0.5980028806970592
+    },
+    {
+      "issue_a_id": "trade-trace-m0h",
+      "issue_a_title": "Reconcile memory.reflect docs/API shape with implementation",
+      "issue_b_id": "trade-trace-tka",
+      "issue_b_title": "Reconcile README/PRD vector dependency claims with pyproject and deferred embeddings posture",
+      "method": "mechanical",
+      "similarity": 0.5979494741664282
+    },
+    {
+      "issue_a_id": "trade-trace-2ifs",
+      "issue_a_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "issue_b_id": "trade-trace-wmz",
+      "issue_b_title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "method": "mechanical",
+      "similarity": 0.5979032358366474
+    },
+    {
+      "issue_a_id": "trade-trace-zgz",
+      "issue_a_title": "Propagate calibration record-id truncation to top-level/meta truncated flag",
+      "issue_b_id": "trade-trace-bew",
+      "issue_b_title": "Capture one as_of clock instant inside report.watchlist",
+      "method": "mechanical",
+      "similarity": 0.5966450550769948
+    },
+    {
+      "issue_a_id": "trade-trace-drt",
+      "issue_a_title": "Define signed quantity convention and fix projection realized P\u0026L sign coverage",
+      "issue_b_id": "trade-trace-iyt",
+      "issue_b_title": "Preserve true source_quality diagnostic counts before sample truncation",
+      "method": "mechanical",
+      "similarity": 0.5959027038910445
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-29u0",
+      "issue_b_title": "Move fixture_seed wall-clock performance assertion out of default functional suite",
+      "method": "mechanical",
+      "similarity": 0.5956418738365199
+    },
+    {
+      "issue_a_id": "trade-trace-1up",
+      "issue_a_title": "Make memory.reflect node + about-edge write truly atomic",
+      "issue_b_id": "trade-trace-m0h",
+      "issue_b_title": "Reconcile memory.reflect docs/API shape with implementation",
+      "method": "mechanical",
+      "similarity": 0.595049582500369
+    },
+    {
+      "issue_a_id": "trade-trace-pqp2",
+      "issue_a_title": "Pin future MCP stdio security boundary before transport implementation",
+      "issue_b_id": "trade-trace-14iy",
+      "issue_b_title": "Guard or scope runtime secret regex registration against ReDoS",
+      "method": "mechanical",
+      "similarity": 0.5949439660322313
+    },
+    {
+      "issue_a_id": "trade-trace-2ifs",
+      "issue_a_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "issue_b_id": "trade-trace-4rp",
+      "issue_b_title": "Remove nested full-suite pytest subprocess from default dogfood verification test",
+      "method": "mechanical",
+      "similarity": 0.5948677120046246
+    },
+    {
+      "issue_a_id": "trade-trace-qis",
+      "issue_a_title": "Make FTS5 dependency explicit or gracefully optional for memory migrations",
+      "issue_b_id": "trade-trace-wmz",
+      "issue_b_title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "method": "mechanical",
+      "similarity": 0.5945738755704663
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-wmz",
+      "issue_b_title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "method": "mechanical",
+      "similarity": 0.5932054940364442
+    },
+    {
+      "issue_a_id": "trade-trace-2ifs",
+      "issue_a_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "issue_b_id": "trade-trace-67sg",
+      "issue_b_title": "Clarify and harden export secret-warning and shareable-export boundary",
+      "method": "mechanical",
+      "similarity": 0.593136992709079
+    },
+    {
+      "issue_a_id": "trade-trace-ljl9",
+      "issue_a_title": "Extend file-permission tests to directories, temp files, WAL/SHM, and backups",
+      "issue_b_id": "trade-trace-67sg",
+      "issue_b_title": "Clarify and harden export secret-warning and shareable-export boundary",
+      "method": "mechanical",
+      "similarity": 0.5925988445965291
+    },
+    {
+      "issue_a_id": "trade-trace-drt",
+      "issue_a_title": "Define signed quantity convention and fix projection realized P\u0026L sign coverage",
+      "issue_b_id": "trade-trace-2ifs",
+      "issue_b_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "method": "mechanical",
+      "similarity": 0.5923072662198567
+    },
+    {
+      "issue_a_id": "trade-trace-pqp2",
+      "issue_a_title": "Pin future MCP stdio security boundary before transport implementation",
+      "issue_b_id": "trade-trace-wmz",
+      "issue_b_title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "method": "mechanical",
+      "similarity": 0.5920186302004495
+    },
+    {
+      "issue_a_id": "trade-trace-drt",
+      "issue_a_title": "Define signed quantity convention and fix projection realized P\u0026L sign coverage",
+      "issue_b_id": "trade-trace-wmz",
+      "issue_b_title": "Add storage-level timestamp invariant coverage or explicit delegation policy",
+      "method": "mechanical",
+      "similarity": 0.5920027223614777
+    },
+    {
+      "issue_a_id": "trade-trace-iyt",
+      "issue_a_title": "Preserve true source_quality diagnostic counts before sample truncation",
+      "issue_b_id": "trade-trace-d7a",
+      "issue_b_title": "Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+      "method": "mechanical",
+      "similarity": 0.5917769102511512
+    },
+    {
+      "issue_a_id": "trade-trace-2ifs",
+      "issue_a_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "issue_b_id": "trade-trace-d7a",
+      "issue_b_title": "Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+      "method": "mechanical",
+      "similarity": 0.5916208829844576
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-qc7",
+      "issue_b_title": "Sanitize event_type before using it in JSONL export filenames",
+      "method": "mechanical",
+      "similarity": 0.5915385465128042
+    },
+    {
+      "issue_a_id": "trade-trace-drt",
+      "issue_a_title": "Define signed quantity convention and fix projection realized P\u0026L sign coverage",
+      "issue_b_id": "trade-trace-ljl9",
+      "issue_b_title": "Extend file-permission tests to directories, temp files, WAL/SHM, and backups",
+      "method": "mechanical",
+      "similarity": 0.591438548716143
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-d7a",
+      "issue_b_title": "Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+      "method": "mechanical",
+      "similarity": 0.5907085805359786
+    },
+    {
+      "issue_a_id": "trade-trace-2ifs",
+      "issue_a_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "issue_b_id": "trade-trace-7j1l",
+      "issue_b_title": "Decide and cover secret scanning for all persisted free-text and metadata surfaces",
+      "method": "mechanical",
+      "similarity": 0.5904931305905536
+    },
+    {
+      "issue_a_id": "trade-trace-29u0",
+      "issue_a_title": "Move fixture_seed wall-clock performance assertion out of default functional suite",
+      "issue_b_id": "trade-trace-d7a",
+      "issue_b_title": "Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+      "method": "mechanical",
+      "similarity": 0.5902826061502577
+    },
+    {
+      "issue_a_id": "trade-trace-2ifs",
+      "issue_a_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "issue_b_id": "trade-trace-bew",
+      "issue_b_title": "Capture one as_of clock instant inside report.watchlist",
+      "method": "mechanical",
+      "similarity": 0.5902054661647518
+    },
+    {
+      "issue_a_id": "trade-trace-dff",
+      "issue_a_title": "Make scoring “property” tests exercise production behavior or rename them",
+      "issue_b_id": "trade-trace-bew",
+      "issue_b_title": "Capture one as_of clock instant inside report.watchlist",
+      "method": "mechanical",
+      "similarity": 0.5900806615506713
+    },
+    {
+      "issue_a_id": "trade-trace-zgz",
+      "issue_a_title": "Propagate calibration record-id truncation to top-level/meta truncated flag",
+      "issue_b_id": "trade-trace-9gs",
+      "issue_b_title": "Clarify low-level report output metric semantics for playbook adherence and P\u0026L coverage",
+      "method": "mechanical",
+      "similarity": 0.5899383567393868
+    },
+    {
+      "issue_a_id": "trade-trace-drt",
+      "issue_a_title": "Define signed quantity convention and fix projection realized P\u0026L sign coverage",
+      "issue_b_id": "trade-trace-zgz",
+      "issue_b_title": "Propagate calibration record-id truncation to top-level/meta truncated flag",
+      "method": "mechanical",
+      "similarity": 0.589300321952591
+    },
+    {
+      "issue_a_id": "trade-trace-qfxw",
+      "issue_a_title": "Cover explicit metadata_json credential injection in no-credentials policy",
+      "issue_b_id": "trade-trace-xpj",
+      "issue_b_title": "Repair stale SECRET_PATTERNS import in redacted export security test",
+      "method": "mechanical",
+      "similarity": 0.5892673324879878
+    },
+    {
+      "issue_a_id": "trade-trace-eo4",
+      "issue_a_title": "Handle malformed event payload JSON per outbox row during export drain",
+      "issue_b_id": "trade-trace-bew",
+      "issue_b_title": "Capture one as_of clock instant inside report.watchlist",
+      "method": "mechanical",
+      "similarity": 0.5888126741330167
+    },
+    {
+      "issue_a_id": "trade-trace-aq0",
+      "issue_a_title": "Fix stale hard-coded package version assertions in smoke/golden tests",
+      "issue_b_id": "trade-trace-4rp",
+      "issue_b_title": "Remove nested full-suite pytest subprocess from default dogfood verification test",
+      "method": "mechanical",
+      "similarity": 0.5886034249376491
+    },
+    {
+      "issue_a_id": "trade-trace-d4k",
+      "issue_a_title": "Define and enforce supported ReportFilter semantics per report",
+      "issue_b_id": "trade-trace-aec",
+      "issue_b_title": "Add replay-safe idempotency to strategy.update",
+      "method": "mechanical",
+      "similarity": 0.5883255172144316
+    },
+    {
+      "issue_a_id": "trade-trace-67sg",
+      "issue_a_title": "Clarify and harden export secret-warning and shareable-export boundary",
+      "issue_b_id": "trade-trace-d7a",
+      "issue_b_title": "Unify report.coach raw/wrapped group extraction for mistakes and strengths",
+      "method": "mechanical",
+      "similarity": 0.5876922562380443
+    },
+    {
+      "issue_a_id": "trade-trace-drt",
+      "issue_a_title": "Define signed quantity convention and fix projection realized P\u0026L sign coverage",
+      "issue_b_id": "trade-trace-aq0",
+      "issue_b_title": "Fix stale hard-coded package version assertions in smoke/golden tests",
+      "method": "mechanical",
+      "similarity": 0.5875273248448925
+    },
+    {
+      "issue_a_id": "trade-trace-2ifs",
+      "issue_a_title": "Expand no-network default tests beyond journal.init/status/schema",
+      "issue_b_id": "trade-trace-iyt",
+      "issue_b_title": "Preserve true source_quality diagnostic counts before sample truncation",
+      "method": "mechanical",
+      "similarity": 0.5868502424384495
+    },
+    {
+      "issue_a_id": "trade-trace-1up",
+      "issue_a_title": "Make memory.reflect node + about-edge write truly atomic",
+      "issue_b_id": "trade-trace-29u0",
+      "issue_b_title": "Move fixture_seed wall-clock performance assertion out of default functional suite",
+      "method": "mechanical",
+      "similarity": 0.5867814122556254
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-eo4",
+      "issue_b_title": "Handle malformed event payload JSON per outbox row during export drain",
+      "method": "mechanical",
+      "similarity": 0.5865753879328066
+    },
+    {
+      "issue_a_id": "trade-trace-qfxw",
+      "issue_a_title": "Cover explicit metadata_json credential injection in no-credentials policy",
+      "issue_b_id": "trade-trace-d4k",
+      "issue_b_title": "Define and enforce supported ReportFilter semantics per report",
+      "method": "mechanical",
+      "similarity": 0.5864084194727501
+    },
+    {
+      "issue_a_id": "trade-trace-aec",
+      "issue_a_title": "Add replay-safe idempotency to strategy.update",
+      "issue_b_id": "trade-trace-67sg",
+      "issue_b_title": "Clarify and harden export secret-warning and shareable-export boundary",
+      "method": "mechanical",
+      "similarity": 0.5860649219680287
+    },
+    {
+      "issue_a_id": "trade-trace-d4k",
+      "issue_a_title": "Define and enforce supported ReportFilter semantics per report",
+      "issue_b_id": "trade-trace-pqp2",
+      "issue_b_title": "Pin future MCP stdio security boundary before transport implementation",
+      "method": "mechanical",
+      "similarity": 0.5859879878184111
+    }
+  ],
+  "schema_version": 1,
+  "threshold": 0.45
+}
+--- lint ---
+Template warnings (8 issues, 8 warnings):
+
+trade-trace-qfxw [bug]: Cover explicit metadata_json credential injection in no-credentials policy
+  ⚠ Missing: ## Steps to Reproduce
+
+trade-trace-drt [bug]: Define signed quantity convention and fix projection realized P&L sign coverage
+  ⚠ Missing: ## Steps to Reproduce
+
+trade-trace-aec [bug]: Add replay-safe idempotency to strategy.update
+  ⚠ Missing: ## Steps to Reproduce
+
+trade-trace-1up [bug]: Make memory.reflect node + about-edge write truly atomic
+  ⚠ Missing: ## Steps to Reproduce
+
+trade-trace-aq0 [bug]: Fix stale hard-coded package version assertions in smoke/golden tests
+  ⚠ Missing: ## Steps to Reproduce
+
+trade-trace-xpj [bug]: Repair stale SECRET_PATTERNS import in redacted export security test
+  ⚠ Missing: ## Steps to Reproduce
+
+trade-trace-iyt [bug]: Preserve true source_quality diagnostic counts before sample truncation
+  ⚠ Missing: ## Steps to Reproduce
+
+trade-trace-zgz [bug]: Propagate calibration record-id truncation to top-level/meta truncated flag
+  ⚠ Missing: ## Steps to Reproduce
+
+--- orphans ---
+✓ No orphaned issues found
+--- bd status ---
+
+📊 Issue Database Status
+
+Summary:
+  Total Issues:           173
+  Open:                   86
+  In Progress:            2
+  Blocked:                14
+  Closed:                 85
+  Ready to Work:          72
+
+For more details, use 'bd list' to see individual issues.
+
+--- representative show: epic ---
+○ trade-trace-2d3 [EPIC] · EPIC: exhaustive repo bughunt 2026-05-19   [● P2 · OPEN]
+Owner: Michael Crescenzo · Type: epic
+Created: 2026-05-19 · Updated: 2026-05-19
+
+DESCRIPTION
+Goal:
+Run an exhaustive, coverage-enumerated repo-wide bughunt for /home/hermes/code/trade-trace on branch main at the current working tree/HEAD, focused on concrete defects suitable for remediation.
+
+Scope:
+- In scope: tracked source, tests, docs-contract files, project config, packaging, CI, CLI/MCP contracts, storage/migrations, domain models/events, reports/scoring, security/privacy boundaries, and operational docs.
+- Exclusions/grouped: Beads internal metadata under .beads/, LICENSE boilerplate, and generated/cache/runtime artifacts not tracked by git. Existing untracked audits/no-tech-debt-20260518 is adjacent prior audit evidence, not a member of this bughunt unless explicitly referenced by a candidate.
+
+Bug definition:
+Report only concrete failure modes: incorrect behavior relative to code/docs/API/CLI/test contract, data loss/corruption or integrity risk, security/privacy issue, auth/session bug, concurrency/idempotency/timeout bug, broken deploy/build/test/package/install path, API/schema/serialization/config mismatch, user-visible CLI/MCP contract failure, misleading operational docs/backlog truth, or dead/unreachable code that creates a real risk. Reject pure style/naming, speculative cleanup, broad refactors, and feature requests.
+
+Graph rule:
+This epic is the narrative/root index, not the executable remediation task. Labels are indexes only. Task-to-task dependencies and gate beads are authoritative for sequencing. Membership model is relation-based: accepted bug beads are related to this epic with `bd dep relate <epic-id> <bug-id>`. `bd children <epic-id>` may correctly return [] in this model.
+
+Canonical navigation:
+- Open bughunt findings: `bd list --label bughunt:exhaustive-20260519 --label bug --status open --flat --limit 0 --sort id`
+- All related members/gates: `bd dep list <epic-id>` and `bd graph <epic-id>`
+- All labelled containers/gates/findings: `bd list --label bughunt:exhaustive-20260519 --status open,in_progress,closed --flat --limit 0 --sort id`
+Counting rule: distinguish bug findings from this narrative epic and synthesis/final-verification gates even when labels overlap.
+
+Artifacts:
+- Run directory: docs/audits/bughunt-20260519T030623Z/
+- Manifest: docs/audits/bughunt-20260519T030623Z/manifest.json
+- Coverage ledger: docs/audits/bughunt-20260519T030623Z/coverage_ledger.json
+- Domain map: docs/audits/bughunt-20260519T030623Z/domain_map.md
+- Candidate matrix, advisor packet, mutation audit, and final verification packet will be persisted in the same run directory before finalization.
+
+Rule for adding bug beads:
+Every accepted bug bead must have labels `bug,bughunt,bughunt:exhaustive-20260519,domain:<domain>`, concrete evidence, duplicate rationale, acceptance criteria, validation command or explicit validation gap, and provenance to a candidate matrix row. New findings must be related to this epic.
+
+Synthesis/dedupe rule:
+All delegated findings must be normalized into a central candidate matrix before Beads writes. Dedupe by failure mode, root cause, affected behavior, and fix surface, not title similarity. Advisor or independent substitute review gates materialization.
+
+Final verification and close rule:
+Keep this epic open while related bug findings remain open. Close only after final verification confirms candidate disposition, relation/label readbacks, duplicate disposition, dependency-cycle check, lint/orphan status, and artifact disposition.
+
+Truthfulness:
+This is an exhaustive coverage-enumerated bughunt over the stated tracked-file manifest, not proof that all bugs have been found.
+
+
+NOTES
+Planning review 2026-05-19: this bughunt control graph is present, but only the epic and final gate exist so far. docs/audits/bughunt-20260519T030623Z/ and docs/audits/deadcode-2026-05-18/ are untracked artifacts in the worktree and need disposition before the bughunt final gate closes. Do not count trade-trace-w9r as meaningful final verification until raw candidates/lane outputs are synthesized and materialized or explicitly rejected.
+
+ACCEPTANCE CRITERIA
+Coverage ledger, candidate matrix, advisor gate, mutation audit, related bug findings, and final verification packet are persisted; relation/label readbacks reconcile.
+
+LABELS: bughunt, bughunt:exhaustive-20260519
+
+RELATED
+  ↔ ○ trade-trace-e62: (BUG) memory.reflect idempotent retry without valid_from returns IDEMPOTENCY_CONFLICT ● P2
+  ↔ ○ trade-trace-m8c: (BUG) exporter.SECRET_PATTERNS compatibility alias is missing and blocks pytest collection ● P1
+  ↔ ○ trade-trace-qfxw: (BUG) Cover explicit metadata_json credential injection in no-credentials policy ● P1
+  ↔ ○ trade-trace-re4: (BUG) forecast.supersede commits replacement forecast before supersedes edge/event ● P2
+  ↔ ○ trade-trace-vwa: (BUG) Smoke/golden tests assert stale 0.0.1 while runtime/package version is 0.0.1rc0 ● P2
+  ↔ ○ trade-trace-xpj: (BUG) Repair stale SECRET_PATTERNS import in redacted export security test ● P1
+  ↔ ○ trade-trace-zgz: (BUG) Propagate calibration record-id truncation to top-level/meta truncated flag ● P2
+  ↔ ○ trade-trace-ke1: (BUG) ReportFilter is echoed but ignored by multiple report implementations ● P1
+  ↔ ○ trade-trace-lum: (BUG) Malformed CLI --*-json input bypasses JSON error-envelope contract ● P2
+  ↔ ○ trade-trace-1up: (BUG) Make memory.reflect node + about-edge write truly atomic ● P1
+  ↔ ○ trade-trace-1zl: (BUG) README and architecture docs contain broken local links to PRD/VISION/docs paths ● P2
+  ↔ ○ trade-trace-b10: (BUG) journal.config_set mutates without --confirm despite confirm/preview contract ● P2
+  ↔ ○ trade-trace-iyt: (BUG) Preserve true source_quality diagnostic counts before sample truncation ● P2
+  ↔ ○ trade-trace-aec: (BUG) Add replay-safe idempotency to strategy.update ● P1
+  ↔ ○ trade-trace-aq0: (BUG) Fix stale hard-coded package version assertions in smoke/golden tests ● P1
+  ↔ ✓ trade-trace-w9r: Final verification: exhaustive repo bughunt 2026-05-19 ● P2
+  ↔ ○ trade-trace-17p: (BUG) Docs advertise nonexistent CLI commands: tt config set, tt init, and tt mcp ● P2
+  ↔ ○ trade-trace-85i: (BUG) memory.reflect documents atomic reflection+about edge but uses two transactions ● P2
+  ↔ ○ trade-trace-drt: (BUG) Define signed quantity convention and fix projection realized P&L sign coverage ● P1
+  ↔ ○ trade-trace-jky: (BUG) source.add persists secret-shaped title/note/summary free text unredacted ● P1
+  ↔ ✓ trade-trace-8md: Run exhaustive bughunt lane synthesis before final verification ● P2
+
+--- representative show: P1 security alias ---
+○ trade-trace-m8c [BUG] · exporter.SECRET_PATTERNS compatibility alias is missing and blocks pytest collection   [● P1 · OPEN]
+Owner: Michael Crescenzo · Type: bug
+Created: 2026-05-19 · Updated: 2026-05-19
+
+DESCRIPTION
+Context:
+storage-events-domain-security / src/trade_trace/exporter.py, tests/security/test_redacted_exports.py, .github/workflows/workflow.yml
+
+Observed behavior:
+Full pytest collection aborts with ImportError.
+
+Expected behavior:
+Compatibility alias exists or tests/docs use canonical registry; collection succeeds.
+
+Evidence:
+primary_evidence.txt: pytest collect-only reports ImportError cannot import SECRET_PATTERNS; exporter.py comments promise alias; test imports it.
+
+Failure mode / impact:
+CI/release validation cannot collect suite; public import compatibility broken.
+
+## Steps to Reproduce
+PYTHONPATH=src python3 -m pytest --collect-only -q -p no:cacheprovider
+
+Duplicate check:
+Compared against existing open Beads and the exhaustive bughunt candidate matrix after `bd find-duplicates` preflight. Not a duplicate because this candidate has a distinct root cause/failure mode/fix surface. Possible overlap: none.
+
+Suggested fix direction:
+Implement the smallest fix that makes observed behavior match the stated contract. For static-only candidates, first add a failure-injection or targeted regression test proving the risk.
+
+Validation:
+PYTHONPATH=src python3 -m pytest --collect-only -q -p no:cacheprovider
+
+Acceptance criteria:
+- Concrete failure no longer occurs
+- Regression test or equivalent validation covers the case
+- Related contract/docs/tests remain consistent
+
+Provenance:
+Discovered by repo-bughunt candidate CAND-003 in domain storage-events-domain-security.
+Advisor gate: accepted after advisor critique; static-only candidates scoped with validation gap where applicable.
+Disposition reason: Evidence spot-checked by coordinator; concrete failure mode; not a duplicate after root-cause/fix-surface comparison..
+
+
+ACCEPTANCE CRITERIA
+Concrete failure no longer occurs; Regression test or equivalent validation covers the case; Related contract/docs/tests remain consistent
+
+LABELS: bug, bughunt, bughunt:exhaustive-20260519, domain:security-ops, test-failure
+
+RELATED
+  ↔ ○ trade-trace-2d3: (EPIC) EPIC: exhaustive repo bughunt 2026-05-19 ● P2
+
+--- representative show: report filter ---
+○ trade-trace-ke1 [BUG] · ReportFilter is echoed but ignored by multiple report implementations   [● P1 · OPEN]
+Owner: Michael Crescenzo · Type: bug
+Created: 2026-05-19 · Updated: 2026-05-19
+
+DESCRIPTION
+Context:
+reports-memory-playbook-strategy / src/trade_trace/reports/calibration.py, src/trade_trace/reports/tag_aggregates.py, src/trade_trace/reports/watchlist.py, src/trade_trace/reports/unscored.py, src/trade_trace/reports/playbook_adherence.py, src/trade_trace/contracts/report_filter.py
+
+Observed behavior:
+Reports accept/echo filters but compute over global or over-broad rows.
+
+Expected behavior:
+Apply supported filters or reject unsupported filter fields; never echo ignored filters as applied.
+
+Evidence:
+primary_evidence.txt: calibration.py validates ReportFilter then calls _load_scored_rows(conn) globally; delegate found same pattern in tag_aggregates/watchlist/unscored/playbook_adherence.
+
+Failure mode / impact:
+Agents can make strategy/time/instrument decisions from falsely scoped reports.
+
+## Steps to Reproduce
+Seed mixed data and run report.calibration/report.playbook_adherence with filters; metrics/record_ids must exclude non-matching rows.
+
+Duplicate check:
+Compared against existing open Beads and the exhaustive bughunt candidate matrix after `bd find-duplicates` preflight. Not a duplicate because this candidate has a distinct root cause/failure mode/fix surface. Possible overlap: none.
+
+Suggested fix direction:
+Implement the smallest fix that makes observed behavior match the stated contract. For static-only candidates, first add a failure-injection or targeted regression test proving the risk.
+
+Validation:
+Seed mixed data and run report.calibration/report.playbook_adherence with filters; metrics/record_ids must exclude non-matching rows.
+
+Acceptance criteria:
+- Concrete failure no longer occurs
+- Regression test or equivalent validation covers the case
+- Related contract/docs/tests remain consistent
+
+Provenance:
+Discovered by repo-bughunt candidate CAND-006 in domain reports-memory-playbook-strategy.
+Advisor gate: accepted after advisor critique; static-only candidates scoped with validation gap where applicable.
+Disposition reason: Evidence spot-checked by coordinator; concrete failure mode; not a duplicate after root-cause/fix-surface comparison..
+
+
+ACCEPTANCE CRITERIA
+Concrete failure no longer occurs; Regression test or equivalent validation covers the case; Related contract/docs/tests remain consistent
+
+LABELS: api-contract, bug, bughunt, bughunt:exhaustive-20260519, domain:reports
+
+RELATED
+  ↔ ○ trade-trace-2d3: (EPIC) EPIC: exhaustive repo bughunt 2026-05-19 ● P2
+
+--- git status -sb ---
+## main...origin/main [ahead 1]
+?? audits/
+?? docs/audits/
+--- git status --short ---
+?? audits/
+?? docs/audits/
