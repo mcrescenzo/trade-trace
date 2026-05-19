@@ -281,6 +281,24 @@ def _copy_home_for_validate(home: Path) -> tempfile.TemporaryDirectory[str]:
     return tmp
 
 
+_IMMUTABLE_REPLAY_KEYS: dict[str, frozenset[str]] = {
+    # Fields the exporter emits as part of the post-mutation row state
+    # but the receiving tool refuses to set. The importer drops them
+    # before dispatch so a journal round-trip succeeds without
+    # require an exporter wire-format change (trade-trace-qtfs).
+    "strategy.update": frozenset({
+        "name", "slug", "id", "created_at", "updated_at",
+    }),
+}
+
+
+def _strip_immutable_replay_keys(tool: str, args: dict[str, Any]) -> dict[str, Any]:
+    forbidden = _IMMUTABLE_REPLAY_KEYS.get(tool)
+    if not forbidden:
+        return args
+    return {k: v for k, v in args.items() if k not in forbidden}
+
+
 def _dispatch_row(row: ParsedRow, home: str | None, actor_id: str):
     from trade_trace.core import dispatch
 
@@ -291,6 +309,10 @@ def _dispatch_row(row: ParsedRow, home: str | None, actor_id: str):
     # field may be the event_type for legacy exports; dispatch
     # canonicalizes via the same map the exporter uses.
     resolved_tool = _resolve_import_tool(row.tool)
+    # The exporter writes full post-mutation projection state into the
+    # JSONL payload — drop fields the receiving tool refuses to set
+    # so a journal round-trip succeeds (trade-trace-qtfs).
+    row_args = _strip_immutable_replay_keys(resolved_tool, row_args)
     # The exporter does not currently preserve the original
     # idempotency_key in the JSONL line, and journal replay is the
     # documented at-least-once import path — opt the dispatch-level

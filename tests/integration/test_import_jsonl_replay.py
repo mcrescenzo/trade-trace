@@ -427,3 +427,98 @@ def test_journal_export_replays_m3_m4_writes_into_fresh_home(tmp_path: Path):
             f"{table} row count diverged source={_count(source, table)} "
             f"target={_count(target, table)}"
         )
+
+
+def test_importer_filters_payload_to_receiving_tool_schema_for_strategy_update(tmp_path: Path):
+    """Per trade-trace-qtfs: the exporter currently serializes the
+    full post-mutation row state (including immutable fields like
+    name/slug for strategy.update). The importer must drop fields
+    the receiving tool would reject so a journal round-trip
+    succeeds. This test pins the round-trip behavior — the
+    importer-side fix filters payload keys to those present in the
+    target tool's json_schema.properties."""
+
+    source = tmp_path / "src"
+    _init(source)
+    cfg = _call("journal.config_set", {"home": str(source), "key": "outbox.jsonl_enabled", "value": "true", "_confirm": True, "idempotency_key": "qtfs-cfg"})
+    assert cfg["ok"], cfg
+
+    strat = _call("strategy.create", {"home": str(source), "name": "qtfs-s", "slug": "qtfs-s", "description": "orig", "idempotency_key": "qtfs-create"})
+    assert strat["ok"], strat
+    strategy_id = strat["data"]["id"]
+    upd = _call("strategy.update", {"home": str(source), "strategy_id": strategy_id, "description": "rewritten", "idempotency_key": "qtfs-update"})
+    assert upd["ok"], upd
+
+    from trade_trace.exporter import drain_outbox, iter_jsonl_files
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path as _db_path
+
+    db = open_database(_db_path(source))
+    try:
+        drain_outbox(db.connection, source)
+        db.connection.commit()
+    finally:
+        db.close()
+    export_dir = iter_jsonl_files(source)[0].parent
+
+    target = tmp_path / "dst"
+    _init(target)
+
+    env = _call("import.commit", {"home": str(target), "path": str(export_dir), "transaction_mode": "single", "idempotency_key": "qtfs-commit"})
+    import json as _json
+    assert env["ok"] is True, _json.dumps(env, indent=2, default=str)
+    assert env["data"]["committed_count"] == 2, _json.dumps(env, indent=2, default=str)
+
+    db = open_database(_db_path(target))
+    try:
+        row = db.connection.execute(
+            "SELECT description FROM strategies WHERE slug = ?", ("qtfs-s",),
+        ).fetchone()
+    finally:
+        db.close()
+    assert row is not None, "strategy.create did not project into target"
+    assert row[0] == "rewritten", row
+
+
+def test_journal_export_replays_playbook_writes_into_fresh_home(tmp_path: Path):
+    """Per trade-trace-qtfs: playbook.created + playbook.proposed_version
+    round-trip into a fresh home through the importer. propose_version
+    requires a reflection node id, so we seed one via memory.retain
+    (node_type='reflection') before proposing the version."""
+
+    source = tmp_path / "src"
+    _init(source)
+    cfg = _call("journal.config_set", {"home": str(source), "key": "outbox.jsonl_enabled", "value": "true", "_confirm": True, "idempotency_key": "qtfs-pb-cfg"})
+    assert cfg["ok"], cfg
+
+    pb = _call("playbook.create", {"home": str(source), "name": "qtfs-pb", "description": "round-trip", "idempotency_key": "qtfs-pb-create"})
+    assert pb["ok"], pb
+    pb_id = pb["data"]["id"]
+    mem = _call("memory.retain", {"home": str(source), "node_type": "reflection", "body": "rationale", "idempotency_key": "qtfs-pb-mem"})
+    assert mem["ok"], mem
+    pv = _call("playbook.propose_version", {"home": str(source), "playbook_id": pb_id, "provenance_reflection_node_id": mem["data"]["id"], "rules_json": [{"id": "r1", "trigger": "if x", "action": "do y"}], "idempotency_key": "qtfs-pb-version"})
+    assert pv["ok"], pv
+
+    from trade_trace.exporter import drain_outbox, iter_jsonl_files
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path as _db_path
+
+    db = open_database(_db_path(source))
+    try:
+        drain_outbox(db.connection, source)
+        db.connection.commit()
+    finally:
+        db.close()
+    export_dir = iter_jsonl_files(source)[0].parent
+
+    target = tmp_path / "dst"
+    _init(target)
+
+    env = _call("import.commit", {"home": str(target), "path": str(export_dir), "transaction_mode": "single", "idempotency_key": "qtfs-pb-commit"})
+    import json as _json
+    assert env["ok"] is True, _json.dumps(env, indent=2, default=str)
+    assert env["data"]["committed_count"] == 3, _json.dumps(env, indent=2, default=str)
+    for table in ("playbooks", "playbook_versions", "memory_nodes"):
+        assert _count(target, table) == _count(source, table), (
+            f"{table} row count diverged source={_count(source, table)} target={_count(target, table)}"
+        )
