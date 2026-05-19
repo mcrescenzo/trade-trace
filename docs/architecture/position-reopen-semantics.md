@@ -5,10 +5,11 @@
 > future contributor (or AI agent) can replay/rebuild projections
 > without inventing domain policy.
 >
-> No behavior changes in this doc — implementation already follows the
-> "same `position_id`, latest-interval projection" model; see the
-> validation test list at the bottom for the regression coverage that
-> pins this decision.
+> No behavior changes in this doc — the regression tests at the bottom
+> pin the existing math. A misleading inline comment in
+> `projections.py:65-67` ("re-opens start a new accumulation") describes
+> intent that the code does not implement; this doc supersedes that
+> comment.
 
 ## Problem
 
@@ -20,30 +21,40 @@ instrument. The replay/projection layer must answer:
 
 1. Does a re-open re-use the original `position_id`, or mint a new one?
 2. What does the `positions` projection row contain after a re-open —
-   the latest interval, the union of all intervals, or every interval
+   the latest interval, the lifetime aggregate, or every interval
    independently?
 3. How are realized P&L and R-multiple values carried across intervals?
 
 ## Decision
 
 **The same `position_id` carries every interval; the `positions`
-projection captures the most recent open interval.** Specifically:
+projection is a single lifetime aggregate, not a per-interval ledger.**
+Specifically:
 
 - **Identity is logical, not per-interval.** A `position_id` represents
   a `(instrument_id, account, strategy)` slot. A close followed by a
   re-open on the same slot is "the same position holding a new amount,"
   not "a brand new position."
 
-- **The projection is the current state, not a ledger.** The
-  `positions` row tracks the latest open interval's `avg_entry_price`,
-  `opened_at`, `quantity`, `unrealized_pnl`, etc. The full lifecycle
-  history is preserved in `position_events`; the projection is a
-  rebuildable convenience.
+- **`opened_at` is the first event's timestamp.** It is the lifetime
+  origin of the position, not the latest open interval's timestamp.
 
-- **`realized_pnl` accumulates across the full position lifecycle.**
-  Closing fills add their realized contribution into the running sum.
-  Re-opens do not reset `realized_pnl`; reports comparing "what did
-  this position cost me" against the full history are stable.
+- **`closed_at` is the timestamp of the most recent event that drove
+  cumulative quantity to zero.** A subsequent `open` event un-pins
+  `status` from `closed` back to `open` but does not clear
+  `closed_at`; the projection prefers consistency with the latest
+  event in the group.
+
+- **`avg_entry_price` is the lifetime volume-weighted average across
+  every entry event** (`open` + `add`), not just the latest interval's.
+  `weighted_entry_price_qty` and `abs_entry_qty` accumulate across the
+  full history; re-opens fold their fill into the lifetime VWAP.
+
+- **`realized_pnl` accumulates across the full lifecycle** using the
+  running lifetime VWAP at each exit. A close after a re-open computes
+  P&L against the current VWAP, not the per-interval entry price.
+  Fees and slippage are subtracted from `realized_pnl` on every exit
+  event.
 
 - **R-multiple columns mirror the latest non-NULL value** seen on a
   `position_events` row in the group. Carrying R values through a
@@ -53,21 +64,20 @@ projection captures the most recent open interval.** Specifically:
 
 - **Re-opens are NOT modelled as a separate lifecycle event.** A
   `position_events` row with `event_type='open'` after the cumulative
-  quantity returned to zero is interpreted as a re-open by the
-  projection without requiring a discriminator column.
+  quantity returned to zero is interpreted as continuing accumulation
+  without requiring a discriminator column.
 
 ### Rationale
 
 1. The MVP's analytic surface (`report.pnl`, `report.watchlist`,
-   `report.risk`) reads from the `positions` projection. Switching to
-   per-interval identity would require every report to UNION-ALL across
-   intervals and apply window functions to find the latest, which is
-   slower and harder to reason about.
+   `report.risk`) reads from the `positions` projection. A lifetime
+   aggregate is one row per `position_id` regardless of how many open
+   intervals it has had, which keeps report queries simple.
 2. Position identity is rarely the question agents ask. The questions
-   are: "what's my current exposure?" (latest open interval) and
-   "what did this position cost me over time?" (cumulative realized).
-   Both are easy to answer with the latest-interval projection plus
-   the running realized sum.
+   are: "what's my current exposure?" (current `quantity` from
+   `position_events`) and "what did this position cost me over time?"
+   (lifetime `realized_pnl`). Both are answerable from the lifetime
+   aggregate.
 3. The full per-interval history is **not lost** — it lives in
    `position_events`. Anything that wants per-interval analytics walks
    the event log directly. This matches the broader trade-trace
@@ -79,57 +89,61 @@ projection captures the most recent open interval.** Specifically:
 
 ```text
 position_events for pos_42:
-  t0  open   +100 @ 0.40  (paper_enter)
-  t1  close  -100 @ 0.55  (paper_exit; realized = +15)
-  t2  open   +50  @ 0.60  (paper_enter)
+  t0  open   +100 @ 0.40  fees 0.5
+  t1  close  -100 @ 0.55  fees 0.5
+  t2  open   +50  @ 0.60  fees 0.5
 ```
 
 Projection row at `t2`:
 
-| field             | value     |
-|-------------------|-----------|
-| `id`              | `pos_42`  |
-| `status`          | `open`    |
-| `opened_at`       | `t2`      |
-| `avg_entry_price` | `0.60`    |
-| `realized_pnl`    | `+15.0`   |
-| `closed_at`       | `NULL`    |
+| field             | value                                   |
+|-------------------|-----------------------------------------|
+| `id`              | `pos_42`                                |
+| `status`          | `open`                                  |
+| `opened_at`       | `t0` (first event timestamp)            |
+| `closed_at`       | `t1` (last close timestamp)             |
+| `avg_entry_price` | `(100·0.40 + 50·0.60) / 150 = 0.4666…`  |
+| `realized_pnl`    | `(0.55 − 0.40)·100 − 0.5 = 14.5`        |
+| `updated_at`      | `t2`                                    |
 
-`opened_at` reflects the latest open interval; `realized_pnl` accumulates
-across the full history.
+The lifetime VWAP folds the t2 fill into the running average.
+`realized_pnl` reflects the single close that has happened so far.
 
 ### Example 2: open → close → reopen → close
 
 ```text
 position_events for pos_43:
-  t0  open   +100 @ 0.40
-  t1  close  -100 @ 0.55  (realized = +15)
-  t2  open   +50  @ 0.60
-  t3  close  -50  @ 0.45  (realized = -7.5)
+  t0  open   +100 @ 0.40  fees 0.5
+  t1  close  -100 @ 0.55  fees 0.5
+  t2  open   +50  @ 0.60  fees 0.5
+  t3  close  -50  @ 0.45  fees 0.5
 ```
 
 Projection row at `t3`:
 
-| field          | value      |
-|----------------|------------|
-| `id`           | `pos_43`   |
-| `status`       | `closed`   |
-| `opened_at`    | `t2`       |
-| `closed_at`    | `t3`       |
-| `realized_pnl` | `+7.5`     |
+| field             | value                                                       |
+|-------------------|-------------------------------------------------------------|
+| `id`              | `pos_43`                                                    |
+| `status`          | `closed`                                                    |
+| `opened_at`       | `t0`                                                        |
+| `closed_at`       | `t3`                                                        |
+| `avg_entry_price` | `0.4666…`                                                   |
+| `realized_pnl`    | `14.5 + (0.45 − 0.4666…)·50 − 0.5 = 14.5 − 1.333… = 13.166…`|
+| `updated_at`      | `t3`                                                        |
 
-`opened_at` / `closed_at` reflect the latest interval. `realized_pnl`
-is the lifetime sum.
+The second close computes P&L against the lifetime VWAP that the t2
+fill folded into. The reported `realized_pnl` is `≈ 13.166…`, not the
+sum of two independently-computed per-interval P&Ls.
 
-### Example 3: a re-open with no prior close (data error)
+### Example 3: a same-sign exit after a close (data error)
 
-If `position_events` carries a second `open` on the same `position_id`
-without an intervening close, the projection treats the second open as
-an `add` (it bumps `quantity_delta` and refreshes
-`avg_entry_price` using the volume-weighted average). The event log
-remains the source of truth; the integrity check in
-`tests/integration/test_projection_rebuild.py` will surface unusual
-sequences.
+If `position_events` carries a `close` row whose sign does not reduce
+the current exposure (e.g. another `close` after cumulative quantity
+already returned to zero, or a `close` with the wrong sign), the
+projection raises `INVARIANT_VIOLATION` per
+`tests/integration/test_projection_rebuild.py::test_rebuild_rejects_same_sign_exit_quantity_delta`.
+The event log is the source of truth; integrity checks surface
+malformed sequences.
 
 ## Compatibility and migration
 
@@ -139,7 +153,7 @@ sequences.
 - **Replay determinism.** Two runs of `rebuild_projections` against
   the same `position_events` data produce byte-identical `positions`
   rows. This is verified by the existing
-  `tests/integration/test_projection_rebuild.py::test_rebuild_is_deterministic`.
+  `tests/integration/test_projection_rebuild.py::test_rebuild_idempotent_after_seeded_position`.
 - **External imports** must preserve `position_id` on re-opens (the
   importer's responsibility). Importing a re-open as a fresh
   `position_id` would create two projection rows on the same logical
@@ -150,19 +164,17 @@ sequences.
 The decision is pinned by these regression tests
 (`tests/integration/test_projection_rebuild.py`):
 
-- `test_rebuild_is_deterministic` — repeat invocations produce the same
-  rows in the same order.
-- `test_reopen_after_close_uses_latest_interval_for_opened_at` (NEW —
-  follow-up bead): asserts the Example 1 / Example 2 shape (`opened_at`
-  pinned to the latest `open` event).
-- `test_realized_pnl_accumulates_across_intervals` (NEW — follow-up bead):
-  asserts Example 2's lifetime `realized_pnl` sum, not just the latest
-  interval's.
+- `test_rebuild_idempotent_after_seeded_position` — repeat invocations
+  produce the same rows.
+- `test_reopen_after_close_uses_first_event_for_opened_at` — asserts
+  Example 1 / 2's `opened_at` pinned to the first event, not the latest
+  open.
+- `test_realized_pnl_accumulates_across_intervals_with_lifetime_vwap`
+  — asserts Example 2's `13.166…` lifetime realized P&L, which proves
+  the re-open fill folds into the running VWAP before the second close
+  computes against it.
 
-Follow-up beads:
-
-- File a test-only bead to add the two NEW tests above (they pin the
-  decision without changing implementation).
-- If the team later decides per-interval identity is required (e.g.
-  for an audit/compliance feature), open a separate design bead — it
-  is a schema + report contract change, not a projections-only one.
+If the team later decides per-interval identity (or per-interval VWAP)
+is required for an audit/compliance feature, open a separate design
+bead — it is a schema + report contract change, not a projections-only
+one.

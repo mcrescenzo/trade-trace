@@ -341,3 +341,104 @@ def test_rebuild_envelope_carries_duration_ms(home):
     assert "duration_ms" in env["data"]
     assert isinstance(env["data"]["duration_ms"], int)
     assert env["data"]["duration_ms"] >= 0
+
+
+# -- reopen semantics (trade-trace-7h2u + trade-trace-9f8d) -------------
+
+
+def _seed_open_close_reopen(
+    home: Path, *, final_close: bool = False,
+) -> tuple[str, str]:
+    """Seed a position with an open → close → reopen sequence on the same
+    `position_id`. When `final_close` is True the position is closed
+    again after the reopen, producing two complete cycles."""
+
+    from trade_trace.tools._helpers import new_id
+
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market",
+        "title": "X",
+    })
+    instrument_id = inst["data"]["id"]
+    position_id = new_id("pos")
+
+    sequence = [
+        # t0 open 100 @ 0.40
+        ("open", 100, 0.40, 0.5, "2026-05-18T14:00:00Z"),
+        # t1 close all @ 0.55 → realized = 100 * (0.55 - 0.40) - fees
+        ("close", -100, 0.55, 0.5, "2026-05-18T16:00:00Z"),
+        # t2 reopen 50 @ 0.60
+        ("open", 50, 0.60, 0.5, "2026-05-19T10:00:00Z"),
+    ]
+    if final_close:
+        # t3 close the reopened 50 @ 0.45 → realized = 50 * (0.45 - 0.60) - fees
+        sequence.append(
+            ("close", -50, 0.45, 0.5, "2026-05-19T15:00:00Z"),
+        )
+
+    db = open_database(db_path(home))
+    try:
+        with db.transaction():
+            for evt, qty, price, fees, ts in sequence:
+                db.connection.execute(
+                    "INSERT INTO position_events(id, position_id, instrument_id, "
+                    "event_type, quantity_delta, price, fees, slippage, created_at, "
+                    "actor_id) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+                    (new_id("pev"), position_id, instrument_id, evt,
+                     qty, price, fees, ts, "agent:default"),
+                )
+    finally:
+        db.close()
+    return position_id, instrument_id
+
+
+def test_reopen_after_close_uses_first_event_for_opened_at(home):
+    """Per docs/architecture/position-reopen-semantics.md (trade-trace-7h2u):
+    the `positions` projection is a lifetime aggregate per `position_id`.
+    `opened_at` pins to the FIRST event ever (the lifetime origin), not
+    the latest open interval — even after the position has fully closed
+    and re-opened."""
+
+    _seed_open_close_reopen(home)
+    env = _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+    assert env["ok"] is True
+    rows = _positions_snapshot(home)
+    assert len(rows) == 1, rows
+    row = rows[0]
+    # opened_at index is 5 per the SELECT order in _positions_snapshot.
+    opened_at = row[5]
+    status = row[4]
+    assert opened_at == "2026-05-18T14:00:00Z", (
+        "opened_at must pin to the first event (lifetime origin), not the "
+        f"latest open after a close+reopen (got {opened_at!r})"
+    )
+    # Still open after the reopen.
+    assert status == "open"
+
+
+def test_realized_pnl_accumulates_across_intervals_with_lifetime_vwap(home):
+    """Per docs/architecture/position-reopen-semantics.md (trade-trace-7h2u):
+    a close after a reopen computes realized P&L against the lifetime
+    volume-weighted average entry price (which folded the reopen fill in),
+    not a per-interval average. For open100@0.40, close@0.55, open50@0.60,
+    close50@0.45 with 0.5 fees per fill, the lifetime VWAP at the second
+    close is (100*0.40 + 50*0.60)/150 = 0.4666..., and the realized P&L
+    is the sum 14.5 + (0.45 - 0.4666...)*50 - 0.5 = 13.166..."""
+
+    _seed_open_close_reopen(home, final_close=True)
+    env = _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+    assert env["ok"] is True
+    rows = _positions_snapshot(home)
+    assert len(rows) == 1, rows
+    row = rows[0]
+    realized = row[8]
+    status = row[4]
+    lifetime_vwap = (100 * 0.40 + 50 * 0.60) / 150
+    expected = (0.55 - 0.40) * 100 - 0.5 + (0.45 - lifetime_vwap) * 50 - 0.5
+    assert realized == pytest.approx(expected, rel=1e-6), (
+        f"realized_pnl must use lifetime VWAP for the second close "
+        f"(got {realized!r}; expected {expected!r})"
+    )
+    assert status == "closed"
