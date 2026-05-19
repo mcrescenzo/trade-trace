@@ -32,7 +32,7 @@ from trade_trace.storage import (
     open_database,
     resolve_home,
 )
-from trade_trace.storage.database import has_fts5, has_sqlite_vec
+from trade_trace.storage.database import has_fts5
 from trade_trace.storage.paths import db_path
 from trade_trace.tools.errors import ToolError
 from trade_trace.version import CONTRACT_VERSION, __version__
@@ -61,7 +61,7 @@ def _journal_init(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             (CONTRACT_VERSION,),
         )
         fts5 = has_fts5(db.connection)
-        vec = has_sqlite_vec(db.connection)
+        vec = False
     finally:
         db.close()
 

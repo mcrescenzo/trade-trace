@@ -213,12 +213,11 @@ def test_journal_config_set_embeddings_provider_none_succeeds(home):
     assert env.ok
 
 
-def test_journal_config_set_embeddings_provider_unsupported_value(home):
-    """Per the embeddings opt-in deferral (bead a4p), values other than
-    'none' surface UNSUPPORTED_CAPABILITY."""
+def test_journal_config_set_embeddings_provider_api_unsupported(home):
+    """External API providers remain unsupported/no-network in the local substrate."""
 
     env = _mcp(home, "journal.config_set", {
-        "key": "embeddings.provider", "value": "local",
+        "key": "embeddings.provider", "value": "api:openai",
     })
     assert env.ok is False
     assert env.error.code.value == "UNSUPPORTED_CAPABILITY"

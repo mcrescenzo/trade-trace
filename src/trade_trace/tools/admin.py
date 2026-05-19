@@ -336,10 +336,7 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                 details={"field": "value", "value": value,
                          "allowed": sorted(allowed)},
             )
-        if value != "none":
-            # The actual provider activation lives in bead a4p; surface
-            # the unsupported state explicitly so the agent doesn't
-            # think the embeddings strategy is suddenly active.
+        if value != "none" and value != "local":
             raise ToolError(
                 ErrorCode.UNSUPPORTED_CAPABILITY,
                 "embeddings.provider != 'none' is deferred to bead "

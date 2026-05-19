@@ -1025,11 +1025,30 @@ def _migration_008_playbooks(conn: sqlite3.Connection) -> None:
 
 
 def _migration_009_events_append_only(conn: sqlite3.Connection) -> None:
-    """Harden the durable `events` audit log as append-only.
+    """Harden `events` append-only and add opt-in memory embeddings storage.
 
-    `outbox` intentionally remains mutable because exporters update queue
-    state (`state`, `exported_at`, `error_text`, `attempt_count`).
+    The embedding table is a regular row table containing sqlite-vec-compatible
+    float32 blobs plus provider/model metadata. The sqlite-vec extension is only
+    loaded by the connection layer when embeddings.provider != 'none'.
     """
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_node_embeddings (
+            node_id TEXT NOT NULL REFERENCES memory_nodes(id) ON DELETE CASCADE,
+            provider TEXT NOT NULL,
+            dim INTEGER NOT NULL CHECK (dim > 0),
+            model_id TEXT NOT NULL,
+            embedding BLOB NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (node_id, provider, model_id)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_memory_node_embeddings_provider "
+        "ON memory_node_embeddings(provider, model_id, dim)"
+    )
 
     update_msg = (
         "append-only invariant: UPDATE on events is forbidden; "
@@ -1040,7 +1059,7 @@ def _migration_009_events_append_only(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         f"""
-        CREATE TRIGGER trg_events_no_update
+        CREATE TRIGGER IF NOT EXISTS trg_events_no_update
         BEFORE UPDATE ON events
         BEGIN
             SELECT RAISE(ABORT, '{update_msg}');
@@ -1049,7 +1068,7 @@ def _migration_009_events_append_only(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         f"""
-        CREATE TRIGGER trg_events_no_delete
+        CREATE TRIGGER IF NOT EXISTS trg_events_no_delete
         BEFORE DELETE ON events
         BEGIN
             SELECT RAISE(ABORT, '{delete_msg}');
@@ -1132,7 +1151,7 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
          "memory_node_fts"]),
     (7, ["strategies"]),
     (8, ["playbooks", "playbook_versions", "decision_playbook_rules"]),
-    (9, []),
+    (9, ["memory_node_embeddings"]),
     (10, []),
 ]
 

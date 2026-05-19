@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import struct
 from datetime import datetime
 from typing import Any, Final
 
@@ -666,7 +667,7 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "strategies must be a non-empty list",
             details={"field": "strategies", "value": requested_strategies},
         )
-    valid_strategies = {"bm25", "temporal", "graph"}
+    valid_strategies = {"bm25", "temporal", "graph", "semantic"}
     invalid = [s for s in requested_strategies if s not in valid_strategies]
     if invalid:
         raise ToolError(
@@ -681,6 +682,9 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
     db = open_db_for_args(args)
     try:
+        provider = _embeddings_provider(db.connection)
+        if provider != "none" and "semantic" not in requested_strategies:
+            requested_strategies = [*requested_strategies, "semantic"]
         in_scope_rows = _load_in_scope_nodes(db.connection, as_of=as_of)
         # Apply node_types filter BEFORE ranking so each strategy only
         # sees the eligible candidate set.
@@ -698,6 +702,10 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             rankings["graph"] = _graph_rank(
                 db.connection, context=context, in_scope_rows=in_scope_rows,
             )
+        if "semantic" in requested_strategies and provider != "none":
+            semantic_ranked = _semantic_rank(db.connection, query, provider, in_scope_rows)
+            if semantic_ranked:
+                rankings["semantic"] = semantic_ranked
 
         combined = _rrf_combine(rankings)
         # Apply importance + supersession adjustments.
@@ -965,6 +973,79 @@ def _graph_rank(
         node_id for node_id in in_scope_rows if node_id not in connected_set
     )
     return [*sorted(connected), *rest]
+
+
+def _embeddings_provider(conn: sqlite3.Connection) -> str:
+    try:
+        row = conn.execute(
+            "SELECT value FROM config WHERE key = 'embeddings.provider'"
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return "none"
+    return str(row[0]) if row and row[0] else "none"
+
+
+def _float32_blob(values: list[float]) -> bytes:
+    return struct.pack(f"<{len(values)}f", *values)
+
+
+def _blob_to_float32(blob: bytes, dim: int) -> list[float]:
+    if len(blob) != dim * 4:
+        return []
+    return list(struct.unpack(f"<{dim}f", blob))
+
+
+def _query_embedding(query: str, *, dim: int, provider: str, model_id: str) -> list[float]:
+    """Deterministic local embedding stub for opt-in offline operation."""
+
+    _ = (provider, model_id)
+    buckets = [0.0] * dim
+    for i, byte in enumerate(query.encode("utf-8")):
+        buckets[(byte + i) % dim] += float((byte % 31) + 1)
+    norm = sum(v * v for v in buckets) ** 0.5
+    return [v / norm for v in buckets] if norm else buckets
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    if len(a) != len(b) or not a:
+        return 0.0
+    denom_a = sum(v * v for v in a) ** 0.5
+    denom_b = sum(v * v for v in b) ** 0.5
+    if denom_a == 0.0 or denom_b == 0.0:
+        return 0.0
+    return sum(x * y for x, y in zip(a, b, strict=True)) / (denom_a * denom_b)
+
+
+def _semantic_rank(
+    conn: sqlite3.Connection,
+    query: str,
+    provider: str,
+    in_scope: dict[str, dict[str, Any]],
+) -> list[str]:
+    if not in_scope:
+        return []
+    try:
+        rows = conn.execute(
+            "SELECT node_id, embedding, dim, model_id FROM memory_node_embeddings "
+            "WHERE provider = ?",
+            (provider,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    scored: list[tuple[str, float]] = []
+    query_cache: dict[tuple[int, str], list[float]] = {}
+    for node_id, blob, dim, model_id in rows:
+        if node_id not in in_scope:
+            continue
+        key = (int(dim), str(model_id))
+        if key not in query_cache:
+            query_cache[key] = _query_embedding(query, dim=key[0], provider=provider, model_id=key[1])
+        vec = _blob_to_float32(bytes(blob), key[0])
+        if not vec:
+            continue
+        scored.append((node_id, _cosine(query_cache[key], vec)))
+    scored.sort(key=lambda r: (-r[1], r[0]))
+    return [node_id for node_id, score in scored if score > 0.0]
 
 
 def _rrf_combine(

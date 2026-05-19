@@ -22,6 +22,32 @@ from pathlib import Path
 BUSY_TIMEOUT_MS = 5000
 
 
+def _configured_embeddings_provider(conn: sqlite3.Connection) -> str:
+    """Return persisted embeddings.provider, defaulting to air-gapped none."""
+
+    try:
+        row = conn.execute(
+            "SELECT value FROM config WHERE key = 'embeddings.provider'"
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return "none"
+    if row is None or row[0] in (None, ""):
+        return "none"
+    return str(row[0])
+
+
+def load_sqlite_vec_extension(conn: sqlite3.Connection) -> None:  # pragma: no cover - optional
+    """Load sqlite-vec lazily so base installs do not require the extra."""
+
+    import sqlite_vec  # type: ignore[import-not-found]
+
+    conn.enable_load_extension(True)
+    try:
+        sqlite_vec.load(conn)
+    finally:
+        conn.enable_load_extension(False)
+
+
 def _set_user_only_permissions(path: Path) -> None:
     """Best-effort `chmod 0600` on platforms where it's supported. Silently
     skipped on platforms where stat permissions aren't meaningful (e.g. Windows
@@ -125,6 +151,8 @@ def open_database(path: Path, *, create_parent: bool = True) -> Database:
     conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA synchronous = NORMAL")
+    if _configured_embeddings_provider(conn) != "none":
+        load_sqlite_vec_extension(conn)
     return Database(path=path, connection=conn)
 
 
@@ -148,11 +176,7 @@ def has_sqlite_vec(conn: sqlite3.Connection) -> bool:  # pragma: no cover - opti
     Vectors are off by default in MVP; this is informational only."""
 
     try:
-        import sqlite_vec  # type: ignore[import-not-found]
-
-        conn.enable_load_extension(True)
-        sqlite_vec.load(conn)
-        conn.enable_load_extension(False)
+        load_sqlite_vec_extension(conn)
         # Smoke-test by creating a vec0 virtual table.
         conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS __veccheck USING vec0(x float[4])")
         conn.execute("DROP TABLE IF EXISTS __veccheck")
