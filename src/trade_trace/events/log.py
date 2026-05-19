@@ -308,25 +308,9 @@ class EventWriter:
         )
 
 
-def write_event(
-    conn: sqlite3.Connection,
-    *,
-    event_type: str,
-    subject_kind: str,
-    subject_id: str,
-    payload: dict[str, Any],
-    actor_id: str,
-    idempotency_key: str | None = None,
-    **kwargs: Any,
-) -> EventRecord:
-    """Convenience function that wraps EventWriter for one-off callers."""
-
-    return EventWriter(conn).write(
-        event_type=event_type,
-        subject_kind=subject_kind,
-        subject_id=subject_id,
-        payload=payload,
-        actor_id=actor_id,
-        idempotency_key=idempotency_key,
-        **kwargs,
-    )
+# Note: a top-level `write_event()` convenience wrapper was removed per
+# bead trade-trace-mky / DEBT-CRT-002. It had zero callers across src/
+# and tests/, and shipping a separate write entrypoint alongside
+# `EventWriter` invited transaction/idempotency confusion. All callers
+# go through `EventWriter` inside a `UnitOfWork` so the events row and
+# its surrounding ledger write share one transaction.

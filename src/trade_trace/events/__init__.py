@@ -4,7 +4,6 @@ from trade_trace.events.log import (
     EventRecord,
     EventWriter,
     IdempotencyConflictError,
-    write_event,
 )
 from trade_trace.events.semantic_keys import (
     SEMANTIC_KEYS,
@@ -23,5 +22,4 @@ __all__ = [
     "UnitOfWork",
     "canonicalize_payload",
     "payloads_equivalent",
-    "write_event",
 ]
