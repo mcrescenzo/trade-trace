@@ -187,3 +187,87 @@ def test_import_rejects_non_import_ready_tools(tmp_path: Path):
     assert env["ok"] is True
     assert env["data"]["committed_count"] == 0
     assert [err["details"]["tool"] for err in env["data"]["errors"]] == ["import.commit", "journal.status"]
+
+
+# -- bucket-B cascaded event skip + count (trade-trace-j5b8) -----------
+
+
+def test_import_skips_cascaded_event_lines_with_counter(tmp_path: Path):
+    """Per trade-trace-j5b8 and docs/architecture/jsonl-replay-taxonomy.md:
+    a JSONL export contains both the parent write (e.g. `thesis.add`
+    serialized as `tool=thesis.created`) and the cascaded
+    `edge.created` line emitted inside that tool's transaction. The
+    importer must replay the parent write but skip the cascaded event
+    with a `cascaded_skipped` counter — replaying both would either
+    fail (no such tool as `edge.created`) or double-write."""
+
+    home = tmp_path / "home"
+    _init(home)
+
+    jsonl = tmp_path / "cascade.jsonl"
+    _write_jsonl(jsonl, [
+        # Bucket A: replayable.
+        _venue_line(),
+        _instrument_line(),
+        # Bucket B: cascaded events. These previously hit "tool is not
+        # import-ready" errors; now they're silently skipped.
+        {
+            "tool": "edge.created",
+            "args": {
+                "id": "edg_cascade", "source_kind": "thesis",
+                "source_id": "t_ignored", "target_kind": "thesis",
+                "target_id": "t_ignored2", "edge_type": "supersedes",
+            },
+            "idempotency_key": "edg-cascade-1",
+        },
+        {
+            "tool": "playbook_rule.followed",
+            "args": {"decision_id": "d_ignored", "rule_id": "r_ignored"},
+            "idempotency_key": "rule-followed-1",
+        },
+    ])
+
+    env = _call("import.commit", {
+        "home": str(home),
+        "path": str(jsonl),
+        "transaction_mode": "single",
+        "idempotency_key": "j5b8-commit",
+    })
+    assert env["ok"] is True, env
+    data = env["data"]
+    # Two cascaded lines skipped + counted.
+    assert data["cascaded_skipped"] == 2, data
+    # Two parent writes committed (venue + instrument).
+    assert data["committed_count"] == 2
+    # No errors surfaced for the cascaded lines.
+    assert data["errors"] == []
+    # And no `edges` row was double-written (the cascaded edge.created
+    # would have produced one, the parent write produces zero in this
+    # minimal fixture).
+    assert _count(home, "edges") == 0
+
+
+def test_import_validate_reports_cascaded_skipped(tmp_path: Path):
+    """`import.validate` surfaces the same counter so a dry-run shows
+    the operator how many cascaded lines the eventual commit will skip."""
+
+    home = tmp_path / "home"
+    _init(home)
+
+    jsonl = tmp_path / "validate.jsonl"
+    _write_jsonl(jsonl, [
+        _venue_line(),
+        {
+            "tool": "forecast.scored",
+            "args": {"forecast_id": "fc_ignored"},
+            "idempotency_key": "scored-validate-1",
+        },
+    ])
+
+    env = _call("import.validate", {
+        "home": str(home), "path": str(jsonl),
+    })
+    assert env["ok"] is True, env
+    data = env["data"]
+    assert data["cascaded_skipped"] == 1
+    assert data["validated"] == 1  # the venue
