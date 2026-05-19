@@ -2,8 +2,8 @@
 
 Realized + unrealized P&L over the `positions` projection (rebuildable
 per persistence.md §7 / trade-trace-5zg). Per-group metrics: realized,
-unrealized, mark-to-market total, count of closed positions, data
-coverage (`positions_with_marks / total_positions`).
+unrealized, mark-to-market total, count of closed/open positions. Summary
+metrics include open_mark_coverage (`open_positions_with_marks / open_positions`).
 """
 
 from __future__ import annotations
@@ -39,8 +39,15 @@ def report_pnl(
     open_ = [r for r in rows if r[3] == "open"]
     realized = sum(r[4] or 0.0 for r in rows)
     unrealized = sum(r[5] or 0.0 for r in rows if r[5] is not None)
-    marked = sum(1 for r in rows if r[5] is not None)
-    coverage = (marked / len(rows)) if rows else 0.0
+    # Per bead trade-trace-9gs / DEBT-030: a position is "marked" when
+    # it has an unrealized_pnl reading. That number only applies to
+    # OPEN positions (closed positions don't carry a mark — they
+    # have realized_pnl instead). Including closed rows in the
+    # denominator made `data_coverage` misleading: a journal full of
+    # cleanly closed positions would show low coverage even though
+    # every relevant row was up to date.
+    marked_open = sum(1 for r in open_ if r[5] is not None)
+    open_mark_coverage = (marked_open / len(open_)) if open_ else 0.0
 
     sample_size = len(closed)
     sample_warning = (
@@ -87,7 +94,7 @@ def report_pnl(
             "mark_to_market_pnl": round(realized + unrealized, 6),
             "closed_position_count": len(closed),
             "open_position_count": len(open_),
-            "data_coverage": round(coverage, 6),
+            "open_mark_coverage": round(open_mark_coverage, 6),
         },
         "caveats": [],
     }

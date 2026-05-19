@@ -321,6 +321,10 @@ def test_report_playbook_adherence_aggregates_by_version(home, adherence_setup):
     assert group["metrics"]["followed"] == 1
     assert group["metrics"]["overridden"] == 1
     assert group["metrics"]["total_adherence_rows"] == 3
+    assert group["metrics"]["decision_count"] == 1
+    assert group["sample_size"] == 1
+    assert env.data["summary"]["sample_size"] == 1
+    assert env.data["summary"]["metrics"]["total_adherence_rows"] == 3
 
 
 def test_report_playbook_adherence_filter_by_playbook(home, adherence_setup):

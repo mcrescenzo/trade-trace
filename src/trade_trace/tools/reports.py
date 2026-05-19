@@ -511,8 +511,9 @@ def register_report_tools(registry: ToolRegistry) -> None:
         _make_filter_only_report(report_pnl),
         description=(
             "Realized + unrealized + mark-to-market P&L over the positions "
-            "projection. Per-instrument groups; summary carries data_coverage "
-            "(positions_with_marks / total). Reads the rebuildable positions "
+            "projection. Per-instrument groups; summary carries "
+            "open_mark_coverage (open positions with marks / open positions). "
+            "Reads the rebuildable positions "
             "projection (trade-trace-5zg)."
         ),
     )

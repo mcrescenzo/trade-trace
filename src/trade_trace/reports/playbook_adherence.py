@@ -119,8 +119,18 @@ def report_playbook_adherence(
     for row in rows:
         summary_counts[row[4]] += 1
 
+    # Per bead trade-trace-9gs / DEBT-029: `summary.sample_size`
+    # previously counted adherence rows (the same number reported as
+    # `metrics.total_adherence_rows`), while every group's
+    # `sample_size` counted distinct decisions. Same name with two
+    # different meanings inside one envelope was a footgun. Summary
+    # now counts distinct decisions to match the per-group field; the
+    # raw row count stays available under
+    # `metrics.total_adherence_rows`.
+    all_decision_ids = {row[1] for row in rows}
+
     summary: dict[str, Any] = {
-        "sample_size": len(rows),
+        "sample_size": len(all_decision_ids),
         "sample_warning": None,
         "filter": filter_dict,
         "metrics": {

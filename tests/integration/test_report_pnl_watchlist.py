@@ -83,6 +83,53 @@ def test_pnl_rolls_up_positions(home):
     assert summary["realized_pnl"] == pytest.approx(19.5, rel=1e-3)
 
 
+def test_pnl_open_mark_coverage_counts_only_open_positions(home):
+    """Closed positions do not need marks, so they must not depress the
+    open-position mark coverage denominator. One of two open positions has
+    unrealized_pnl, therefore coverage is 1 / 2 regardless of closed rows.
+    """
+
+    venue = _envelope(home, "venue.add", {
+        "name": "PM-Coverage", "kind": "prediction_market"
+    })
+    instruments = [
+        _envelope(home, "instrument.add", {
+            "venue_id": venue["data"]["id"],
+            "asset_class": "prediction_market",
+            "title": f"Coverage {idx}",
+        })["data"]["id"]
+        for idx in range(3)
+    ]
+    db = open_database(db_path(home))
+    try:
+        with db.transaction():
+            rows = [
+                ("pos_closed_a", instruments[0], "closed", 12.0, None),
+                ("pos_closed_b", instruments[0], "closed", -2.0, None),
+                ("pos_open_marked", instruments[1], "open", None, 3.5),
+                ("pos_open_unmarked", instruments[2], "open", None, None),
+            ]
+            for pos_id, instrument_id, status, realized, unrealized in rows:
+                db.connection.execute(
+                    "INSERT INTO positions(id, instrument_id, kind, side, "
+                    "status, opened_at, closed_at, resolved_at, realized_pnl, "
+                    "unrealized_pnl, avg_entry_price, updated_at) VALUES "
+                    "(?, ?, 'paper', 'long', ?, '2026-05-18T14:00:00Z', "
+                    "NULL, NULL, ?, ?, 0.40, '2026-05-18T16:00:00Z')",
+                    (pos_id, instrument_id, status, realized, unrealized),
+                )
+    finally:
+        db.close()
+
+    env = _envelope(home, "report.pnl", {})
+    assert env["ok"], env
+    metrics = env["data"]["summary"]["metrics"]
+    assert metrics["closed_position_count"] == 2
+    assert metrics["open_position_count"] == 2
+    assert metrics["open_mark_coverage"] == pytest.approx(0.5)
+    assert "data_coverage" not in metrics
+
+
 # -- report.watchlist ---------------------------------------------
 
 
