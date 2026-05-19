@@ -245,9 +245,16 @@ def cleanup_orphan_tmp_files(home: Path, *, older_than_seconds: float = 3600) ->
 # Patterns live in `trade_trace.security.patterns` per bead trade-trace-sy1
 # so the write-time guard, the export-time warning, and the log redactor
 # all share one registry. SECRET_PATTERNS is kept as a backwards-compatible
-# alias for callers that imported from `trade_trace.exporter`.
-from trade_trace.security import scan_text as _scan_text  # noqa: E402
-from trade_trace.security.patterns import _compiled as SECRET_PATTERNS  # noqa: E402, F401
+# alias resolved through the public `compiled_patterns()` adapter
+# (trade-trace-n57b); we no longer reach for the private `_compiled` dict.
+from trade_trace.security import (  # noqa: E402
+    compiled_patterns as _compiled_patterns,
+)
+from trade_trace.security import (  # noqa: E402
+    scan_text as _scan_text,
+)
+
+SECRET_PATTERNS = _compiled_patterns()
 
 
 def scan_for_secrets(text: str) -> list[dict[str, Any]]:

@@ -207,3 +207,26 @@ def test_export_is_full_local_not_redacted(tmp_path: Path):
     assert _SK + "FIXTUREFIXTU12345678" in line["args"]["reason"]
     # And the operator got a stderr-equivalent surface via the result.
     assert result.secret_warnings, "expected the drain to surface the warning"
+
+
+# -- compiled_patterns() adapter freshness (trade-trace-n57b) -----------
+
+
+def test_compiled_patterns_returns_fresh_snapshot_per_call():
+    """Per trade-trace-n57b: `compiled_patterns()` must return a fresh
+    dict snapshot so mutating the returned dict cannot poke the live
+    registry. The exporter and tests previously imported `_compiled`
+    directly, which was private and mutable."""
+
+    from trade_trace.security import compiled_patterns, scan_text
+
+    snap = compiled_patterns()
+    snap["malicious_pattern"] = None  # type: ignore[assignment]
+
+    # The live registry is unaffected — scan_text still uses the four
+    # built-in patterns + any test-registered ones.
+    matches = scan_text("nothing here")
+    assert all(m.pattern_kind != "malicious_pattern" for m in matches)
+    # And a fresh call returns a clean snapshot.
+    fresh = compiled_patterns()
+    assert "malicious_pattern" not in fresh

@@ -155,6 +155,17 @@ def list_patterns() -> dict[str, str]:
     return {name: pattern.pattern for name, pattern in _compiled.items()}
 
 
+def compiled_patterns() -> dict[str, re.Pattern[str]]:
+    """Return a fresh `dict[str, re.Pattern]` snapshot of the active
+    registry (trade-trace-n57b). Use this when a caller needs the
+    compiled pattern objects (for example, to enumerate names in a
+    parametrized test fixture). Mutating the returned dict does not
+    affect the live registry; subsequent `scan_text` calls re-walk
+    `_compiled`."""
+
+    return dict(_compiled)
+
+
 def scan_text(text: str) -> list[SecretMatch]:
     """Return every secret-shaped substring in `text`. Each match is a
     `SecretMatch` carrying the pattern_kind, the literal match, byte
