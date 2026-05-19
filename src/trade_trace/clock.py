@@ -46,15 +46,15 @@ class FixedClock:
         self._fixed = self._fixed + timedelta(seconds=seconds, days=days)
 
 
-_DEFAULT_CLOCK: Clock = SystemClock()
-
-
-def default_clock() -> Clock:
-    return _DEFAULT_CLOCK
-
-
-def set_default_clock(clock: Clock) -> None:
-    """For tests only — production code should pass the clock explicitly."""
-
-    global _DEFAULT_CLOCK
-    _DEFAULT_CLOCK = clock
+# Process-global `_DEFAULT_CLOCK` / `default_clock()` / `set_default_clock()`
+# were removed per bead trade-trace-xeq / DEBT-CRT-001: nothing in the
+# runtime referenced them and the deterministic-clock injection point
+# the rest of the codebase actually uses is the `CLOCK_OVERRIDE`
+# ContextVar in `trade_trace.tools._helpers`. Keeping a second
+# process-global injection surface invited per-test bleed and
+# disagreed with the per-call ContextVar pattern.
+#
+# Clock / SystemClock / FixedClock above stay — Clock is the protocol
+# consumers type against and FixedClock is used by tests that need a
+# stationary instant. Production code passes a Clock explicitly to
+# callers that need it; nothing reads from a module-global.
