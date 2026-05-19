@@ -106,7 +106,7 @@ sentence-transformers" are now obsolete — see bead trade-trace-tka.
 outbound network calls (verified by
 `tests/security/test_no_network_default.py`). MVP recall runs with FTS5
 + graph + temporal retrieval. The semantic strategy plus
-`tt config set embeddings.provider local` and `tt model import <path>`
+`tt journal config_set embeddings.provider local` and `tt model import <path>`
 ship behind bead trade-trace-a4p. See
 [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md)
 §8.
@@ -231,7 +231,7 @@ Still planned (P1+):
 ```bash
 tt review bundle ...                 # P1 (contract is M1-locked; impl in P1)
 tt import validate / import commit   # P1 (contract is M1-locked; impl in P1)
-tt config set embeddings.provider local  # P1: sqlite-vec + bge-small (bead trade-trace-a4p)
+tt journal config_set embeddings.provider local  # P1: sqlite-vec + bge-small (bead trade-trace-a4p)
 tt model import / model warm         # P1: air-gap embedding model staging (bead a4p)
 tt memory reindex --confirm          # P1: re-embed on provider change (bead a4p)
 ```

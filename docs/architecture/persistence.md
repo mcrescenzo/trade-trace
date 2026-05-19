@@ -150,10 +150,14 @@ Indexes:
 ### 4.1 Export semantics
 
 - Outbox rows are inserted in the same transaction as their `events` row,
-  only when the user has enabled JSONL export (`config.toml` flag).
-- The exporter is invoked by an explicit CLI/MCP call
-  (`export.drain --kind=jsonl`); there is no background daemon (see PRD
-  §2.7).
+  only when the user has enabled JSONL export via the
+  `outbox.jsonl_enabled` key (set with `tt journal config_set`).
+- The drain is invoked programmatically via `drain_outbox()` in
+  `src/trade_trace/exporter.py`; there is no background daemon (see
+  PRD §2.7). An explicit `export.drain` CLI/MCP tool surface is
+  deferred to a future export-tool bead — today the drain runs
+  inside the test/dogfood suites and is reachable from a Python
+  shell.
 - Successful export sets `state = 'exported'` and `exported_at`. Failed
   export increments `attempt_count` and records `error_text`.
 - The exporter is idempotent: replaying an already-exported event re-writes

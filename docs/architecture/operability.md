@@ -254,7 +254,7 @@ The "complete backup is `cp trade-trace.sqlite`" promise in
   while writers are active. The WAL is reconciled into the backup at
   copy time. This is the documented backup path.
 - **Unsafe**: a plain `cp` of just the `.sqlite` file while writers are
-  active misses WAL contents. The product CLI surfaces `tt backup
+  active misses WAL contents. The product CLI surfaces `tt journal backup
   --to <path>` which wraps `.backup` correctly.
 
 ### 5.2 Outbox-mid-drain edge case
@@ -268,7 +268,7 @@ overwrite the same file.
 
 ### 5.3 Restore
 
-Restore is `tt restore --from <path>`. The command:
+Restore is `tt journal restore --from <path>`. The command:
 
 1. Validates the source DB's schema version is compatible (equal to or
    one less than the installed version; in the latter case, runs
@@ -342,7 +342,9 @@ Mitigations:
 
 - **Log-time scanning** (§6.3): pattern-redact before any secret-shaped
   string reaches a log.
-- **Export-time warning**: `export.drain` and `review.bundle` scan
+- **Export-time warning**: the JSONL drain pass (the `drain_outbox` function in
+  `src/trade_trace/exporter.py`; no MCP tool surface today, deferred
+  to a future export-tool bead) and `review.bundle` scan
   outgoing payloads for the same patterns and emit a stderr warning
   with the matching event IDs. The export still proceeds; the warning
   is a "did you mean to ship these out?" check, not a block.
@@ -431,7 +433,9 @@ The exporter writes lock-free per-file. On `ENOSPC`:
   `"disk_full"`, `attempt_count` increments.
 - The exporter emits a `signal.emitted` with `kind = "export_disk_full"`
   and `severity = "critical"`.
-- Subsequent `export.drain` invocations resume from the failed row once
+- Subsequent the JSONL drain pass (the `drain_outbox` function in
+  `src/trade_trace/exporter.py`; no MCP tool surface today, deferred
+  to a future export-tool bead) invocations resume from the failed row once
   disk pressure clears.
 
 ## 10. Crash Recovery
@@ -456,7 +460,9 @@ If `journal.init` or any tool call detects a corrupted WAL:
 ### 10.3 Exporter resume
 
 The exporter is idempotent (§9, [persistence.md](persistence.md) §4.1).
-If the process is killed mid-drain, the next `export.drain` invocation
+If the process is killed mid-drain, the next the JSONL drain pass (the `drain_outbox` function in
+  `src/trade_trace/exporter.py`; no MCP tool surface today, deferred
+  to a future export-tool bead) invocation
 re-tries rows in `state = 'pending'` or `state = 'failed'` (with
 `attempt_count` capped at 10 before the row is left in `failed` state
 and surfaced via signal).

@@ -57,9 +57,9 @@ The `snapshots.source` and `outcomes.source` columns are free-form strings. MVP 
 One — and only one — path in Trade Trace makes outbound network calls: the optional local embedding model download for the `SEMANTIC` recall strategy. It is:
 
 - **Off by default in MVP.** A fresh `journal.init` does not download anything. `memory.recall` runs with BM25 + temporal (+ graph if requested) and returns valid results without vectors. The "air-gappable on first run" promise (VISION §safety) holds out of the box.
-- **Opt-in via explicit config.** The agent or operator runs `tt config set embeddings.provider local` (or `journal.init --enable-embeddings`) to authorize the one-time model download. The download targets only the local model's host (no telemetry, no metrics, no API key submission).
+- **Opt-in via explicit config.** The agent or operator runs `tt journal config_set embeddings.provider local` (or `journal.init --enable-embeddings`) to authorize the one-time model download. The download targets only the local model's host (no telemetry, no metrics, no API key submission).
 - **Disjoint from trading data.** The download fetches model weights; it never transmits trading records, snapshots, theses, or any journal data outward.
-- **Disableable.** `tt config set embeddings.provider none` removes the SEMANTIC strategy entirely. Air-gapped installs may pre-stage the model with `tt model import <path>` instead.
+- **Disableable.** `tt journal config_set embeddings.provider none` removes the SEMANTIC strategy entirely. Air-gapped installs may pre-stage the model with `tt model import <path>` instead.
 
 Remote embedding *providers* (OpenAI, etc.) are a separate, also-opt-in path covered in [`memory-layer.md`](./architecture/memory-layer.md) §8.3. They DO send memory text outward and carry an explicit warning at configure time. They are never enabled by default.
 
