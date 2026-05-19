@@ -10,7 +10,7 @@ trade-trace-mcp
 ```
 
 The server communicates on stdin/stdout only. Tool calls use `MCP_ACTOR_ID` as
-the actor id when set; otherwise they default to `mcp:default`. Do not write
+the actor id when set; otherwise they default to `agent:mcp-default`. Do not write
 logs to stdout while the server is running because stdout is reserved for the
 MCP JSON-RPC protocol.
 
@@ -143,7 +143,7 @@ Deferred or optional after the manual loop: JSONL/CSV import implementations (th
 
 ## Quickstart for an agent (MCP)
 
-See [`docs/AGENT_GUIDE.md`](./docs/AGENT_GUIDE.md) for the supported agent journal loop, including connect instructions, ordered tool calls, idempotency/dry-run patterns, common pitfalls, and `tool.schema` self-discovery.
+Start with [`docs/AI_AGENT_MCP_GETTING_STARTED.md`](./docs/AI_AGENT_MCP_GETTING_STARTED.md) for MCP install/configuration, first verification calls, stdio rules, actor identity, idempotency/dry-run patterns, and the minimal journal loop. Then use [`docs/AGENT_GUIDE.md`](./docs/AGENT_GUIDE.md) for the longer journal-loop operating guide.
 
 ## CLI dogfood surface
 

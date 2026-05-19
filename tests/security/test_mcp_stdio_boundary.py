@@ -193,8 +193,8 @@ def test_mcp_tool_specs_fail_closed_on_secret_shaped_schema_key(credential_key: 
         mcp_tool_specs(registry)
 
 
-def test_stdio_actor_id_defaults_to_mcp_default_and_accepts_explicit_env_override():
-    assert stdio_actor_id({}) == "mcp:default"
+def test_stdio_actor_id_defaults_to_valid_agent_actor_and_accepts_explicit_env_override():
+    assert stdio_actor_id({}) == "agent:mcp-default"
     assert stdio_actor_id({"MCP_ACTOR_ID": "agent:alice"}) == "agent:alice"
 
 

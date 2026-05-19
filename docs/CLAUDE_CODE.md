@@ -26,7 +26,7 @@ Optional actor identity for tool calls:
 export MCP_ACTOR_ID="agent:claude-code"
 ```
 
-If `MCP_ACTOR_ID` is not set, Trade Trace uses `mcp:default`.
+If `MCP_ACTOR_ID` is not set, Trade Trace uses `agent:mcp-default`.
 
 ## Per-project setup
 

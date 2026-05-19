@@ -18,7 +18,7 @@ from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope
 from trade_trace.contracts.tool_registry import ToolRegistry
 from trade_trace.core import default_registry, dispatch
 
-DEFAULT_MCP_ACTOR_ID = "mcp:default"
+DEFAULT_MCP_ACTOR_ID = "agent:mcp-default"
 
 
 SECRET_TRANSPORT_HINT_KEYS = {
@@ -184,7 +184,7 @@ def serve_stdio(registry: ToolRegistry | None = None) -> None:  # pragma: no cov
 
     Actor identity is resolved once per call from ``MCP_ACTOR_ID`` via
     :func:`stdio_actor_id`; if unset, the deterministic default is
-    ``mcp:default``. Protocol output is written only by the MCP SDK to stdout;
+    ``agent:mcp-default``. Protocol output is written only by the MCP SDK to stdout;
     callers should send diagnostics to stderr to avoid corrupting JSON-RPC.
     """
 
