@@ -122,7 +122,10 @@ def report_calibration(
         "summary": summary,
         "groups": groups,
         "bin_policy": DEFAULT_BIN_POLICY,
-        "truncated": False,
+        # Per bead trade-trace-zgz: top-level truncated must reflect any
+        # truncated group so envelope meta.truncated does not under-report
+        # capped data (the dispatcher copies this onto ctx.meta_hints).
+        "truncated": any(g.get("truncated") for g in groups),
         "next_cursor": None,
     }
 

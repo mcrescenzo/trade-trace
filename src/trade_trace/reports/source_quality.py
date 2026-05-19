@@ -92,12 +92,21 @@ def _count(conn: sqlite3.Connection, sql: str) -> int:
 def _bundle(
     *, diagnostic: str, items: list[dict[str, Any]], sample_kind: str,
 ) -> dict[str, Any]:
-    truncated = len(items) > MAX_SAMPLE_IDS
+    """Capture the true total before truncating samples.
+
+    Per bead trade-trace-iyt: the count must reflect the real number of
+    matches even when the sample list is capped at MAX_SAMPLE_IDS so
+    operators don't undercount large hygiene problems. The capped
+    sample_ids / samples list is for agent drill-down only.
+    """
+
+    total_count = len(items)
+    truncated = total_count > MAX_SAMPLE_IDS
     if truncated:
         items = items[:MAX_SAMPLE_IDS]
     return {
         "diagnostic": diagnostic,
-        "count": len(items),
+        "count": total_count,
         "sample_ids": {sample_kind: [it["id"] for it in items]},
         "samples": items,
         "truncated": truncated,

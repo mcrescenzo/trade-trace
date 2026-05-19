@@ -393,3 +393,57 @@ def test_empty_db_returns_no_data_warning(home):
     env = _mcp(home, "report.source_quality", {})
     assert env.ok
     assert env.data["summary"]["sample_warning"] == "no_data"
+
+
+# -- 11. iyt: true count survives sample truncation ------------------
+
+
+def test_diagnostic_count_reflects_true_total_when_samples_capped(home):
+    """Per bead trade-trace-iyt: _bundle must report the true total
+    even when sample_ids/samples are capped at MAX_SAMPLE_IDS. Before
+    the fix, count tracked the capped list length and silently
+    under-reported large hygiene problems."""
+
+    from trade_trace.reports.source_quality import MAX_SAMPLE_IDS
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+
+    venue = _mcp(home, "venue.add",
+                 {"name": "PM", "kind": "prediction_market"}).data["id"]
+    inst = _mcp(home, "instrument.add", {
+        "venue_id": venue, "asset_class": "prediction_market", "title": "X",
+    }).data["id"]
+    total = MAX_SAMPLE_IDS + 5
+    # Seed sensitive sources + edges attaching each to the instrument so
+    # the sensitive_sources diagnostic catches every one. Direct SQL is
+    # the only way to reach `redaction_status='sensitive'` (the source.add
+    # tool surface doesn't expose the column).
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        for i in range(total):
+            db.connection.execute(
+                "INSERT INTO sources(id, kind, title, redaction_status, "
+                "created_at, actor_id) VALUES (?, 'note', ?, 'sensitive', "
+                "?, 'agent:default')",
+                (f"src_iyt_{i:03d}", f"t{i}", "2026-05-19T12:00:00Z"),
+            )
+            db.connection.execute(
+                "INSERT INTO edges(id, source_kind, source_id, target_kind, "
+                "target_id, edge_type, created_at, actor_id) VALUES "
+                "(?, 'source', ?, 'instrument', ?, 'about', ?, 'agent:default')",
+                (f"edg_iyt_{i:03d}", f"src_iyt_{i:03d}", inst,
+                 "2026-05-19T12:00:00Z"),
+            )
+        db.connection.commit()
+    finally:
+        db.close()
+
+    env = _mcp(home, "report.source_quality", {})
+    assert env.ok, env
+    diag = env.data["diagnostics"]["sensitive_sources"]
+    assert diag["count"] == total, (
+        f"diagnostic count must reflect true total ({total}); "
+        f"got {diag['count']}"
+    )
+    assert diag["truncated"] is True
+    assert len(diag["sample_ids"]["sources"]) == MAX_SAMPLE_IDS
