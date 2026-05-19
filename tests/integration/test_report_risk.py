@@ -48,21 +48,6 @@ def _instrument(home: Path, title: str = "R") -> str:
     return instrument_id
 
 
-def _thesis_for(home: Path, instrument_id: str) -> str:
-    """Get the thesis_id seeded by _instrument() for an instrument."""
-
-    db = open_database(db_path(home), create_parent=False)
-    try:
-        row = db.connection.execute(
-            "SELECT id FROM theses WHERE instrument_id = ? "
-            "ORDER BY created_at DESC LIMIT 1",
-            (instrument_id,),
-        ).fetchone()
-    finally:
-        db.close()
-    return row[0]
-
-
 def _closed_position(home: Path, instrument_id: str, realized_pnl: float, status: str = "closed") -> None:
     db = open_database(db_path(home))
     try:

@@ -14,19 +14,6 @@ from typing import Literal
 
 FieldKind = Literal["R", "O", "X"]
 
-# Columns in column order matching PRD §3.1 table.
-COLUMNS = (
-    "instrument_id",
-    "thesis_id",
-    "side",
-    "quantity",
-    "price",
-    "fees",
-    "slippage",
-    "reason",
-    "review_by",
-)
-
 DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
     "watch": {
         "instrument_id": "R", "thesis_id": "O", "side": "O",
