@@ -12,6 +12,7 @@ dogfood gate. The bead acceptance also requires:
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -22,6 +23,14 @@ import pytest
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
+
+DOGFOOD_FULL_SUITE_ENV = "TRADE_TRACE_RUN_DOGFOOD_FULL_SUITE"
+"""Opt-in env flag for the c1r closing condition's full-suite re-run
+(bead trade-trace-4rp / DEBT-031). The nested pytest invocation
+duplicates CI and blows up runtime/blast radius when run by default,
+so the gate now runs only when this env var is set (e.g.
+`TRADE_TRACE_RUN_DOGFOOD_FULL_SUITE=1 pytest tests/integration/test_final_dogfood_verification.py`).
+"""
 
 
 @pytest.fixture(scope="module")
@@ -376,12 +385,28 @@ def test_l16_calibration_sharpness_distinguishes_confident_from_flat(
 # -- final-verification close conditions ------------------------
 
 
+@pytest.mark.skipif(
+    not os.environ.get(DOGFOOD_FULL_SUITE_ENV),
+    reason=(
+        "Nested full-suite re-run skipped by default per bead "
+        "trade-trace-4rp; set "
+        f"{DOGFOOD_FULL_SUITE_ENV}=1 to opt in."
+    ),
+)
 def test_dogfood_full_repo_suite_passes():
     """Re-run the full repo suite in the same session — the c1r bead
-    acceptance closing condition. We invoke pytest as a subprocess and
-    confirm it exits 0; we DON'T re-include this test in the inner
-    subprocess (use -p no:cacheprovider to avoid cache interactions and
-    --deselect to skip self)."""
+    acceptance closing condition.
+
+    Off by default per bead trade-trace-4rp: running pytest as a
+    subprocess inside pytest duplicates CI, multiplies the test runtime
+    by ~2x, and lets unrelated import errors in any one test obscure
+    the dogfood gate. CI re-runs the full suite outside this test. To
+    re-enable the nested run for local pre-release verification, set
+    `TRADE_TRACE_RUN_DOGFOOD_FULL_SUITE=1` in the environment.
+
+    The inner pytest invocation deselects this test so the recursion
+    bottoms out.
+    """
 
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", "-q",
