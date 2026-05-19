@@ -1111,6 +1111,89 @@ MIGRATIONS: list[Migration] = [
 ]
 
 
+# Tables each migration is the FIRST to create. Used by
+# `_assert_schema_matches_meta` (bead trade-trace-0ib) to detect a
+# stale/lost `meta.schema_version` against the actual on-disk schema.
+# Migrations that only add columns/triggers (004, 009, 010) appear
+# with an empty list; the check focuses on table-creation order
+# which is the canonical signal of how far migrations have run.
+_MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
+    (1, ["meta"]),
+    (2, ["events", "outbox", "config"]),
+    (3, [
+        "venues", "instruments", "snapshots", "theses", "forecasts",
+        "forecast_outcomes", "forecast_scores", "decisions",
+        "decision_tags", "outcomes", "sources", "edges",
+        "position_events", "positions",
+    ]),
+    (4, []),
+    (5, ["signals"]),
+    (6, ["memory_nodes", "memory_recall_events", "memory_node_stats",
+         "memory_node_fts"]),
+    (7, ["strategies"]),
+    (8, ["playbooks", "playbook_versions", "decision_playbook_rules"]),
+    (9, []),
+    (10, []),
+]
+
+
+class SchemaMetaMismatchError(RuntimeError):
+    """The DB's `meta.schema_version` disagrees with the tables that
+    actually exist on disk (bead trade-trace-0ib / DEBT-015).
+
+    Raised before any migration runs so an opaque DDL failure ("table
+    X already exists") is replaced with an actionable diagnostic.
+    """
+
+    def __init__(self, current_version: int, unexpected_tables: list[str]) -> None:
+        self.current_version = current_version
+        self.unexpected_tables = sorted(unexpected_tables)
+        super().__init__(
+            f"schema/meta mismatch: meta.schema_version={current_version} "
+            f"but the following table(s) already exist on disk: "
+            f"{self.unexpected_tables!r}. This usually means a prior "
+            "migration committed without updating the meta row, or the "
+            "meta row was reset by an out-of-band recovery. Restore the "
+            "DB from a backup (tt journal restore --from <path>) or "
+            "remove the unexpected tables manually before re-running "
+            "tt journal init. See operability.md §4 for the migration "
+            "policy."
+        )
+
+
+def _assert_schema_matches_meta(
+    conn: sqlite3.Connection, current_version: int,
+) -> None:
+    """Detect a schema/meta mismatch before the migration loop starts.
+
+    Walks `_MIGRATION_TABLES_CREATED` for migrations the meta row
+    claims have NOT yet run and asserts none of those tables already
+    exist in `sqlite_master`. If any do, raise
+    `SchemaMetaMismatchError` with the offending names so the
+    operator can recover deliberately instead of debugging an
+    "table X already exists" error mid-loop.
+    """
+
+    # No tables exist at version 0 → migration 001 creates `meta`.
+    # Use sqlite_master directly so the check works even when `meta`
+    # is itself missing or stale.
+    rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND name NOT LIKE 'sqlite_%'"
+    ).fetchall()
+    existing = {r[0] for r in rows}
+
+    unexpected: list[str] = []
+    for version, tables in _MIGRATION_TABLES_CREATED:
+        if version <= current_version:
+            continue
+        for table in tables:
+            if table in existing:
+                unexpected.append(table)
+    if unexpected:
+        raise SchemaMetaMismatchError(current_version, unexpected)
+
+
 def current_version(conn: sqlite3.Connection) -> int:
     """Return the integer `schema_version` currently recorded in `meta`,
     or 0 if no `meta` table exists yet (fresh DB)."""
@@ -1151,6 +1234,11 @@ def apply_pending_migrations(
     check_no_reverse_migration(current_version=start, target_version=end)
     if start >= end:
         return start, start
+
+    # Schema/meta consistency check (bead trade-trace-0ib): raise a
+    # typed SchemaMetaMismatchError BEFORE running migrations if the
+    # meta version disagrees with the tables on disk.
+    _assert_schema_matches_meta(conn, start)
 
     conn.execute("BEGIN")
     try:

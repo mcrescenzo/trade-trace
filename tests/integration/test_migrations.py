@@ -133,6 +133,70 @@ def test_memory_layer_migration_requires_fts5(tmp_path: Path, monkeypatch):
         db.close()
 
 
+def test_schema_meta_mismatch_raises_actionable_error(tmp_path: Path):
+    """Per bead trade-trace-0ib / DEBT-015: when the DB has tables on
+    disk that the meta.schema_version claims haven't been migrated
+    yet, the migration runner raises SchemaMetaMismatchError with
+    the offending table names BEFORE attempting the next migration —
+    replacing the opaque "table X already exists" DDL failure with
+    actionable remediation text."""
+
+    from trade_trace.storage.migrations import SchemaMetaMismatchError
+
+    db = _open(tmp_path)
+    try:
+        apply_pending_migrations(db.connection, target_version=3)
+        assert current_version(db.connection) == 3
+
+        # Simulate an out-of-band recovery that reset meta but left
+        # the M1 ledger tables on disk.
+        db.connection.execute(
+            "UPDATE meta SET value = '1' WHERE key = 'schema_version'"
+        )
+        assert current_version(db.connection) == 1
+
+        with pytest.raises(SchemaMetaMismatchError) as exc:
+            apply_pending_migrations(db.connection)
+
+        msg = str(exc.value)
+        assert "schema/meta mismatch" in msg
+        assert "meta.schema_version=1" in msg
+        # The error names at least one of the M1 ledger tables that
+        # exists on disk but is claimed unrun.
+        assert any(t in msg for t in ("decisions", "theses", "venues"))
+        assert "table venues already exists" not in msg.lower()
+        # And points at the recovery surfaces.
+        assert "journal restore" in msg or "operability" in msg
+    finally:
+        db.close()
+
+
+def test_missing_meta_with_existing_objects_raises_actionable_error(tmp_path: Path):
+    """A DB with objects on disk but no usable meta.schema_version should
+    fail before migration 001/002 can produce opaque DDL errors."""
+
+    from trade_trace.storage.migrations import SchemaMetaMismatchError
+
+    db = _open(tmp_path)
+    try:
+        db.connection.execute(
+            "CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT)"
+        )
+
+        with pytest.raises(SchemaMetaMismatchError) as exc:
+            apply_pending_migrations(db.connection)
+
+        msg = str(exc.value)
+        assert "schema/meta mismatch" in msg
+        assert "meta.schema_version=0" in msg
+        assert "events" in msg
+        assert "already exist" in msg
+        assert "journal restore" in msg or "operability" in msg
+        assert current_version(db.connection) == 0
+    finally:
+        db.close()
+
+
 def test_require_fts5_passes_on_modern_sqlite(tmp_path: Path):
     """The positive case — most CPython distributions ship FTS5, so
     `_require_fts5` must be a no-op on a default SQLite connection."""
