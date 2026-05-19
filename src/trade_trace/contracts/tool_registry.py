@@ -14,6 +14,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from trade_trace.contracts.json_schema_derive import derive_schema
+
 
 class CLINameCollisionError(RuntimeError):
     """Raised when two tool names map to the same CLI invocation.
@@ -137,6 +139,11 @@ class ToolRegistry:
         prior = self.by_cli.get(invocation)
         if prior is not None and prior != name:
             raise CLINameCollisionError([(prior, name)])
+        effective_json_schema = (
+            json_schema if json_schema is not None
+            else derive_schema(example_minimal) if example_minimal is not None
+            else None
+        )
         self.by_name[name] = ToolRegistration(
             name=name,
             cli_invocation=invocation,
@@ -145,7 +152,7 @@ class ToolRegistry:
             is_write=is_write,
             example_minimal=example_minimal,
             example_rich=example_rich,
-            json_schema=json_schema,
+            json_schema=effective_json_schema,
         )
         self.by_cli[invocation] = name
 
