@@ -137,39 +137,9 @@ The MVP proves a complete learning-loop slice with narrow breadth:
 
 Deferred or optional after the manual loop: JSONL/CSV import implementations (the write schemas are import-ready in MVP), `sqlite-vec` semantic recall, multi-class/scalar scoring, trading-native edge/market reports (forecast-vs-market, calibration-by-liquidity-bucket), `report.compare`, `report.strategy_performance`, `report.risk` (see [`docs/architecture/risk-units.md`](./docs/architecture/risk-units.md)), `report.opportunity` (see [`docs/architecture/opportunity-analysis.md`](./docs/architecture/opportunity-analysis.md)), `review.bundle` implementation, exact ForecastBench compatibility, sync, HTTP/SSE, websockets, and a web viewer.
 
-## Quickstart for an agent (MCP, planned)
+## Quickstart for an agent (MCP)
 
-```jsonc
-{"tool": "journal.init"}
-
-{"tool": "instrument.add", "args": {
-  "venue": "manual",
-  "asset_class": "prediction_market",
-  "title": "Will X happen by 2026-06-30?",
-  "currency_or_collateral": "USDC",
-  "actor_id": "agent:default"
-}}
-
-{"tool": "strategy.create", "args": {"name": "Thin-liquidity prediction markets", "slug": "thin-liquidity-prediction-markets", "hypothesis": "Markets with < $5K ADV near resolution are systematically mispriced; favor skips when spread > expected edge.", "actor_id": "agent:default"}}
-
-{"tool": "snapshot.add", "args": {"instrument_id": "...", "price": 0.37, "bid": 0.36, "ask": 0.39, "actor_id": "agent:default"}}
-{"tool": "thesis.add", "args": {"instrument_id": "...", "side": "yes", "body": "...", "falsification_criteria": "...", "strategy_id": "...", "actor_id": "agent:default"}}
-{"tool": "forecast.add", "args": {"thesis_id": "...", "kind": "binary", "outcomes": [{"label": "YES", "probability": 0.48}, {"label": "NO", "probability": 0.52}], "actor_id": "agent:default"}}
-{"tool": "decision.add", "args": {"instrument_id": "...", "thesis_id": "...", "type": "skip", "reason": "Estimated edge < spread + resolution risk", "strategy_id": "...", "tags": ["liquidity-ignored", "good-skip"], "actor_id": "agent:default"}}
-
-{"tool": "outcome.add", "args": {"instrument_id": "...", "outcome_label": "NO", "outcome_value": 0.0, "status": "resolved_final", "resolved_at": "2026-06-30T00:00:00Z", "actor_id": "agent:default"}}
-
-{"tool": "report.coach", "args": {"horizon_days": 30, "strategy_id": "..."}}
-
-{"tool": "memory.reflect", "args": {
-  "target": {"kind": "decision", "id": "..."},
-  "insight": "Skip was correct here; spread compression never materialized.",
-  "strength_tags": ["good-skip", "good-liquidity-discipline"],
-  "actor_id": "agent:default"
-}}
-
-{"tool": "memory.recall", "args": {"context": {"kind": "strategy", "id": "..."}, "node_types": ["observation", "reflection", "playbook_rule"], "k": 10}}
-```
+See [`docs/AGENT_GUIDE.md`](./docs/AGENT_GUIDE.md) for the supported agent journal loop, including connect instructions, ordered tool calls, idempotency/dry-run patterns, common pitfalls, and `tool.schema` self-discovery.
 
 ## CLI dogfood surface
 
