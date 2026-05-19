@@ -469,14 +469,24 @@ def _import_commit(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 
 def register_import_stubs(registry: ToolRegistry) -> None:
+    from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
+
+    def _examples_for(tool: str) -> dict[str, Any]:
+        ex = WRITE_TOOL_EXAMPLES.get(tool)
+        if ex is None:
+            return {"example_minimal": None, "example_rich": None}
+        return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
+
     registry.register(
         "import.validate",
         _import_validate,
         description="Dry-run validate a JSONL file/directory without writing.",
+        **_examples_for("import.validate"),
     )
     registry.register(
         "import.commit",
         _import_commit,
         description="Replay a JSONL file/directory through core dispatch.",
         is_write=True,
+        **_examples_for("import.commit"),
     )

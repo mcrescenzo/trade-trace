@@ -165,6 +165,205 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "idempotency_key": _IDEM,
         },
     },
+    "snapshot.add": {
+        "minimal": {
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "captured_at": "2026-05-22T14:30:00.000Z",
+            "price": 0.62,
+            "idempotency_key": _IDEM,
+        },
+        "rich": {
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "captured_at": "2026-05-22T14:30:00.000Z",
+            "price": 0.62,
+            "bid": 0.61,
+            "ask": 0.63,
+            "metadata_json": {"feed": "kalshi-rest"},
+            "idempotency_key": _IDEM,
+        },
+    },
+    "forecast.supersede": {
+        "minimal": {
+            "prior_forecast_id": "fcst_PRIOR_FORECAST_ID_HERE",
+            "kind": "binary",
+            "outcomes": [
+                {"outcome_label": "yes", "probability": 0.7},
+                {"outcome_label": "no", "probability": 0.3},
+            ],
+            "idempotency_key": _IDEM,
+        },
+        "rich": {
+            "prior_forecast_id": "fcst_PRIOR_FORECAST_ID_HERE",
+            "kind": "binary",
+            "yes_label": "yes",
+            "resolution_at": "2026-05-22T20:30:00Z",
+            "resolution_rule_text": "Official close price > strike",
+            "outcomes": [
+                {"outcome_label": "yes", "probability": 0.7},
+                {"outcome_label": "no", "probability": 0.3},
+            ],
+            "idempotency_key": _IDEM,
+        },
+    },
+    "source.attach_to_thesis": {
+        "minimal": {
+            "source_id": "src_SOURCE_ID_HERE",
+            "target_id": "thes_THESIS_ID_HERE",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "source.attach_to_decision": {
+        "minimal": {
+            "source_id": "src_SOURCE_ID_HERE",
+            "target_id": "dec_DECISION_ID_HERE",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "source.attach_to_forecast": {
+        "minimal": {
+            "source_id": "src_SOURCE_ID_HERE",
+            "target_id": "fcst_FORECAST_ID_HERE",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "source.attach_to_memory_node": {
+        "minimal": {
+            "source_id": "src_SOURCE_ID_HERE",
+            "target_id": "mem_MEMORY_NODE_ID_HERE",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "memory.retain": {
+        "minimal": {
+            "node_type": "observation",
+            "body": "Liquidity tightened ahead of earnings.",
+            "idempotency_key": _IDEM,
+        },
+        "rich": {
+            "node_type": "reflection",
+            "body": "Should have weighed liquidity profile more heavily.",
+            "importance": 7,
+            "valid_from": "2026-05-22T14:00:00Z",
+            "meta_json": {"tags": ["liquidity-ignored"]},
+            "idempotency_key": _IDEM,
+        },
+    },
+    "memory.reflect": {
+        "minimal": {
+            "target_kind": "thesis",
+            "target_id": "thes_THESIS_ID_HERE",
+            "body": "Falsifying evidence emerged when liquidity dried up.",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "memory.link": {
+        "minimal": {
+            "source_kind": "memory_node",
+            "source_id": "mem_FROM_NODE_HERE",
+            "target_kind": "memory_node",
+            "target_id": "mem_TO_NODE_HERE",
+            "edge_type": "supports",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "playbook.create": {
+        "minimal": {
+            "name": "earnings-momentum",
+            "description": "Buy ahead of earnings beats >= 2σ.",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "playbook.propose_version": {
+        "minimal": {
+            "playbook_id": "pbk_PLAYBOOK_ID_HERE",
+            "rules_json": '[{"text": "Skip if spread > 50bp"}]',
+            "provenance_reflection_node_id": "mem_REFLECTION_NODE_HERE",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "decision.record_adherence": {
+        "minimal": {
+            "decision_id": "dec_DECISION_ID_HERE",
+            "playbook_version_id": "pbv_PLAYBOOK_VERSION_HERE",
+            "rule_id": "rule_RULE_ID_HERE",
+            "outcome": "followed",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "strategy.create": {
+        "minimal": {
+            "name": "earnings-momentum",
+            "description": "Buy ahead of earnings beats >= 2σ.",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "strategy.update": {
+        "minimal": {
+            "strategy_id": "stg_STRATEGY_ID_HERE",
+            "description": "Updated thesis: also requires CPI beat.",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "import.validate": {
+        "minimal": {
+            "path": "/tmp/trade-trace-import/bundle.jsonl",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "import.commit": {
+        "minimal": {
+            "path": "/tmp/trade-trace-import/bundle.jsonl",
+            "transaction_mode": "single",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "import.csv_fills": {
+        "minimal": {
+            "path": "/tmp/trade-trace-import/fills.csv",
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "journal.fixture_seed": {
+        "minimal": {
+            "target": "mvp-eval",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "journal.backup": {
+        "minimal": {
+            "dest": "/tmp/trade-trace-backup-2026-05-22",
+            "_confirm": True,
+            "idempotency_key": _IDEM,
+        },
+    },
+    "journal.restore": {
+        "minimal": {
+            "src": "/tmp/trade-trace-backup-2026-05-22",
+            "_confirm": True,
+            "idempotency_key": _IDEM,
+        },
+    },
+    "journal.config_set": {
+        "minimal": {
+            "key": "embeddings.provider",
+            "value": "local",
+            "_confirm": True,
+            "idempotency_key": _IDEM,
+        },
+    },
+    "memory.reindex": {
+        "minimal": {
+            "_confirm": True,
+            "idempotency_key": _IDEM,
+        },
+    },
+    "model.import": {
+        "minimal": {
+            "src": "/tmp/models/bge-small-en-v1.5",
+            "idempotency_key": _IDEM,
+        },
+    },
 }
 """Per-tool example payloads. Keys are MCP tool names (`subject.verb`)."""
 

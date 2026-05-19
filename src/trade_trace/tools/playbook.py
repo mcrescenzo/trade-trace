@@ -556,10 +556,19 @@ def _playbook_adherence(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
 
 
 def register_playbook_tools(registry: ToolRegistry) -> None:
+    from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
+
+    def _examples_for(tool: str) -> dict[str, Any]:
+        ex = WRITE_TOOL_EXAMPLES.get(tool)
+        if ex is None:
+            return {"example_minimal": None, "example_rich": None}
+        return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
+
     registry.register(
         "playbook.create",
         _playbook_create,
         is_write=True,
+        **_examples_for("playbook.create"),
         description=(
             "Register a named playbook. `name` is unique; duplicate "
             "raises VALIDATION_ERROR with details.field='name'. The "
@@ -594,6 +603,7 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
         "playbook.propose_version",
         _playbook_propose_version,
         is_write=True,
+        **_examples_for("playbook.propose_version"),
         description=(
             "Append a new playbook_versions row anchored to a reflection "
             "node (provenance_reflection_node_id, required). The version "
@@ -615,6 +625,7 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
         "decision.record_adherence",
         _decision_record_adherence,
         is_write=True,
+        **_examples_for("decision.record_adherence"),
         description=(
             "Record one normalized adherence row per "
             "(decision, playbook_version, rule_node). status ∈ "

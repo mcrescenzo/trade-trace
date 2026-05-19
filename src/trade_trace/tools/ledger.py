@@ -1916,23 +1916,24 @@ def register_ledger_tools(registry: ToolRegistry) -> None:
 
     registry.register("venue.add", _venue_add, is_write=True, **_examples_for("venue.add"))
     registry.register("instrument.add", _instrument_add, is_write=True, **_examples_for("instrument.add"))
-    registry.register("snapshot.add", _snapshot_add, is_write=True)
+    registry.register("snapshot.add", _snapshot_add, is_write=True, **_examples_for("snapshot.add"))
     registry.register("thesis.add", _thesis_add, is_write=True, **_examples_for("thesis.add"))
     registry.register("forecast.add", _forecast_add, is_write=True, **_examples_for("forecast.add"))
-    registry.register("forecast.supersede", _forecast_supersede, is_write=True)
+    registry.register("forecast.supersede", _forecast_supersede, is_write=True, **_examples_for("forecast.supersede"))
     registry.register("decision.add", _decision_add, is_write=True, json_schema=_DECISION_ADD_SCHEMA, **_examples_for("decision.add"))
     registry.register("outcome.add", _outcome_add, is_write=True, **_examples_for("outcome.add"))
     # resolve.record is an alias for outcome.add (PRD §4.4).
     registry.register("resolve.record", _outcome_add, is_write=True, **_examples_for("outcome.add"))
     registry.register("resolve.pending", _resolve_pending)
     registry.register("source.add", _source_add, is_write=True, json_schema=_SOURCE_ADD_SCHEMA, **_examples_for("source.add"))
-    registry.register("source.attach_to_thesis", _make_source_attacher("thesis"), is_write=True)
-    registry.register("source.attach_to_decision", _make_source_attacher("decision"), is_write=True)
-    registry.register("source.attach_to_forecast", _make_source_attacher("forecast"), is_write=True)
+    registry.register("source.attach_to_thesis", _make_source_attacher("thesis"), is_write=True, **_examples_for("source.attach_to_thesis"))
+    registry.register("source.attach_to_decision", _make_source_attacher("decision"), is_write=True, **_examples_for("source.attach_to_decision"))
+    registry.register("source.attach_to_forecast", _make_source_attacher("forecast"), is_write=True, **_examples_for("source.attach_to_forecast"))
     # M3 memory layer landed (bead e86); source.attach_to_memory_node uses
     # the shared attacher factory now that `memory_nodes` exists.
     registry.register(
         "source.attach_to_memory_node",
         _make_source_attacher("memory_node"),
         is_write=True,
+        **_examples_for("source.attach_to_memory_node"),
     )

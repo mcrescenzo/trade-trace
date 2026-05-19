@@ -400,6 +400,14 @@ def _import_csv_fills(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 
 def register_csv_import(registry: ToolRegistry) -> None:
+    from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
+
+    def _examples_for(tool: str) -> dict[str, Any]:
+        ex = WRITE_TOOL_EXAMPLES.get(tool)
+        if ex is None:
+            return {"example_minimal": None, "example_rich": None}
+        return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
+
     registry.register(
         "import.csv_fills",
         _import_csv_fills,
@@ -415,4 +423,5 @@ def register_csv_import(registry: ToolRegistry) -> None:
             "with the same import_run_id is a clean replay."
         ),
         is_write=True,
+        **_examples_for("import.csv_fills"),
     )

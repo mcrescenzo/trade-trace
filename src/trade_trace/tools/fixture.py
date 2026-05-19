@@ -454,10 +454,19 @@ def _build_decision_args(
 
 
 def register_fixture_tools(registry: ToolRegistry) -> None:
+    from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
+
+    def _examples_for(tool: str) -> dict[str, Any]:
+        ex = WRITE_TOOL_EXAMPLES.get(tool)
+        if ex is None:
+            return {"example_minimal": None, "example_rich": None}
+        return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
+
     registry.register(
         "journal.fixture_seed",
         _journal_fixture_seed,
         is_write=True,
+        **_examples_for("journal.fixture_seed"),
         description=(
             "Populate the journal with a deterministic fixture for the "
             "MVP eval harness (bead trade-trace-8dv). Required arg "

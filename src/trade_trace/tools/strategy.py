@@ -394,10 +394,19 @@ def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 
 def register_strategy_tools(registry: ToolRegistry) -> None:
+    from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
+
+    def _examples_for(tool: str) -> dict[str, Any]:
+        ex = WRITE_TOOL_EXAMPLES.get(tool)
+        if ex is None:
+            return {"example_minimal": None, "example_rich": None}
+        return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
+
     registry.register(
         "strategy.create",
         _strategy_create,
         is_write=True,
+        **_examples_for("strategy.create"),
         description=(
             "Create a first-class strategy row (not a tag). Required: "
             "name, slug (lowercase-kebab, unique). Optional: description, "
@@ -425,6 +434,7 @@ def register_strategy_tools(registry: ToolRegistry) -> None:
         "strategy.update",
         _strategy_update,
         is_write=True,
+        **_examples_for("strategy.update"),
         description=(
             "Partial update on description, hypothesis, status, meta_json. "
             "name and slug are immutable. status='archived' is the archival "

@@ -1156,10 +1156,19 @@ def _source_refs_for(conn: sqlite3.Connection, node_id: str) -> list[dict[str, s
 def register_memory_tools(registry: ToolRegistry) -> None:
     """Register memory.* tools on the supplied registry (bead e86)."""
 
+    from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
+
+    def _examples_for(tool: str) -> dict[str, Any]:
+        ex = WRITE_TOOL_EXAMPLES.get(tool)
+        if ex is None:
+            return {"example_minimal": None, "example_rich": None}
+        return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
+
     registry.register(
         "memory.retain",
         _memory_retain,
         is_write=True,
+        **_examples_for("memory.retain"),
         description=(
             "Create a typed memory_node row. node_type ∈ "
             "{observation, reflection, playbook_rule}. Carries bi-temporal "
@@ -1173,6 +1182,7 @@ def register_memory_tools(registry: ToolRegistry) -> None:
         "memory.reflect",
         _memory_reflect,
         is_write=True,
+        **_examples_for("memory.reflect"),
         description=(
             "Write a reflection node + about-edge atomically against a "
             "ledger or memory endpoint (decision, thesis, forecast, outcome, "
@@ -1184,6 +1194,7 @@ def register_memory_tools(registry: ToolRegistry) -> None:
         "memory.link",
         _memory_link,
         is_write=True,
+        **_examples_for("memory.link"),
         description=(
             "Create an explicit typed edge between memory/ledger endpoints. "
             "Validates source_kind, target_kind, and edge_type against the "

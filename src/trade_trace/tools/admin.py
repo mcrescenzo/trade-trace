@@ -805,6 +805,14 @@ def _memory_reindex(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 
 def register_admin_tools(registry: ToolRegistry) -> None:
+    from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
+
+    def _examples_for(tool: str) -> dict[str, Any]:
+        ex = WRITE_TOOL_EXAMPLES.get(tool)
+        if ex is None:
+            return {"example_minimal": None, "example_rich": None}
+        return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
+
     registry.register(
         "journal.repair",
         _journal_repair,
@@ -819,6 +827,7 @@ def register_admin_tools(registry: ToolRegistry) -> None:
         "journal.backup",
         _journal_backup,
         is_write=True,
+        **_examples_for("journal.backup"),
         description=(
             "Copy the SQLite DB + outbox JSONL tree into <dest> plus a "
             "SHA-256 manifest. Idempotent over the same dest. Requires "
@@ -830,6 +839,7 @@ def register_admin_tools(registry: ToolRegistry) -> None:
         "journal.restore",
         _journal_restore,
         is_write=True,
+        **_examples_for("journal.restore"),
         description=(
             "Restore from <src> back into $TRADE_TRACE_HOME, verifying "
             "every file's SHA-256 against the manifest before copying. "
@@ -842,6 +852,7 @@ def register_admin_tools(registry: ToolRegistry) -> None:
         "journal.config_set",
         _journal_config_set,
         is_write=True,
+        **_examples_for("journal.config_set"),
         description=(
             "Persist a key=value pair into the config table. The "
             "embeddings.provider key is validated against the closed "
@@ -859,6 +870,7 @@ def register_admin_tools(registry: ToolRegistry) -> None:
         "model.import",
         _model_import,
         is_write=True,
+        **_examples_for("model.import"),
         description=(
             "Copy a pre-staged BAAI/bge-small-en-v1.5 model directory under "
             "$TRADE_TRACE_HOME/models/bge-small-en-v1.5 for air-gap SEMANTIC "
@@ -880,6 +892,7 @@ def register_admin_tools(registry: ToolRegistry) -> None:
         "memory.reindex",
         _memory_reindex,
         is_write=True,
+        **_examples_for("memory.reindex"),
         description=(
             "Re-embed all memory nodes for the active embeddings provider "
             "inside a single transaction. Requires --confirm to write; "
