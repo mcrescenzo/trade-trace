@@ -148,6 +148,66 @@ def test_position_detail_context_renders_lifecycle_for_closed_position(rich_home
     assert timestamps == sorted(timestamps), "events must render chronologically"
 
 
+def test_dashboard_overview_combines_pnl_and_risk_per_w422(rich_home: Path) -> None:
+    """Overview MUST surface both P&L and risk summary metrics in one
+    dashboard context (per bead trade-trace-w422). The headline tiles
+    cover the P&L lane; mean R + expectancy round out the risk lane."""
+
+    from trade_trace.console.pages import dashboard_overview_context
+
+    ctx = dashboard_overview_context(str(rich_home))
+    assert ctx["dashboard_slug"] == "overview"
+    assert ctx["evidence"]["tool"] == "report.pnl"
+    tile_keys = {tile["key"] for tile in ctx["highlighted_metrics"]}
+    # P&L tiles
+    assert {"realized_pnl", "unrealized_pnl", "open_position_count"} & tile_keys
+    # Risk tiles (mean_r + expectancy_r at minimum)
+    assert "mean_r" in tile_keys
+    assert "expectancy_r" in tile_keys
+    # record_ids are aggregated across both reports.
+    assert isinstance(ctx["evidence"]["record_ids"], dict)
+
+
+def test_report_export_packet_returns_full_envelope_per_sqtq(rich_home: Path) -> None:
+    """Export packets bundle the full ReportResult envelope + filter +
+    request_id + record_ids + exported_at; the rest is metadata for
+    reproducing the call."""
+
+    from trade_trace.console.pages import report_export_packet
+
+    packet = report_export_packet(home=str(rich_home), tool="report.pnl")
+    assert packet["tool"] == "report.pnl"
+    assert packet["cli_invocation"] == "tt report pnl"
+    assert packet["envelope"]["ok"] is True
+    assert packet["envelope"]["data"]["summary"]["metrics"]
+    assert "exported_at" in packet
+    assert packet["filter"] is not None
+    assert isinstance(packet["record_ids"], dict)
+
+
+def test_report_export_packet_rejects_lazy_write_tool(rich_home: Path) -> None:
+    """The export packet endpoint inherits the safe-report allowlist.
+    Attempting to export report.coach must raise ReportAdapterError."""
+
+    import pytest as _pytest
+
+    from trade_trace.console.pages import report_export_packet
+    from trade_trace.console.reporting import ReportAdapterError
+
+    with _pytest.raises(ReportAdapterError):
+        report_export_packet(home=str(rich_home), tool="report.coach")
+
+
+def test_dashboard_compare_context_uses_report_compare(rich_home: Path) -> None:
+    from trade_trace.console.pages import dashboard_compare_context
+
+    ctx = dashboard_compare_context(str(rich_home))
+    assert ctx["evidence"]["tool"] == "report.compare"
+    assert "compare_form" in ctx
+    assert ctx["compare_form"]["base_report"] == "calibration"
+    assert "strategy_id" in ctx["compare_form"]["allowed_group_by"]
+
+
 def test_position_detail_context_surfaces_open_no_mark_caveat(rich_home: Path) -> None:
     """An open position without a snapshot mark must carry the
     open_no_mark caveat in the rendered context."""

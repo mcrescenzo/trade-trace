@@ -129,6 +129,22 @@ def _build_app(home_path: str) -> Any:
 
     @app.get("/", response_class=HTMLResponse)
     def overview_html(request: _Request) -> Any:
+        """Reporting-lane Overview per trade-trace-w422.
+
+        Replaces the legacy DB-meta snapshot with a P&L / risk roll-up
+        dashboard built on the safe-report adapter. The legacy
+        `pages.overview_context` function still exists for tests that
+        pin its shape, but this route now serves the canonical reader
+        view per reporting-product.md §3 (Reporting lane Overview)."""
+
+        return _render_dashboard(request, pages.dashboard_overview_context)
+
+    @app.get("/overview-legacy", response_class=HTMLResponse, include_in_schema=False)
+    def overview_legacy_html(request: _Request) -> Any:
+        """Legacy DB-meta snapshot kept under a developer-lane URL so
+        operators auditing schema_version / row counts can still reach
+        it. Linked from the Audit / Integrity page when needed."""
+
         path, db = _open()
         try:
             ctx = pages.overview_context(db.connection, db_path=path)
@@ -228,6 +244,53 @@ def _build_app(home_path: str) -> Any:
     @app.get("/evidence", response_class=HTMLResponse)
     def dashboard_evidence_html(request: _Request) -> Any:
         return _render_dashboard(request, pages.dashboard_evidence_context)
+
+    @app.get("/reports/compare", response_class=HTMLResponse)
+    def dashboard_compare_html(
+        request: _Request,
+        base_report: str = "calibration",
+        group_by: str = "strategy_id",
+    ) -> Any:
+        """Comparison builder per bead trade-trace-sqtq. Wraps
+        report.compare(base_report, group_by, filter={}). Defaults
+        compare calibration across strategies; the per-page form
+        rebinds base_report (calibration|pnl) and group_by."""
+
+        from trade_trace.console.reporting import ReportAdapterError
+
+        home, db = _open()
+        try:
+            try:
+                ctx = pages.dashboard_compare_context(
+                    str(home), base_report=base_report, group_by=group_by,
+                )
+            except ReportAdapterError as exc:
+                raise fastapi.HTTPException(status_code=400, detail=str(exc)) from exc
+        finally:
+            db.close()
+        return _render(request, "dashboard.html", ctx)
+
+    @app.get("/reports/{tool}/export.json")
+    def report_export_json(tool: str) -> Any:
+        """Read-only export packet per bead trade-trace-sqtq. Returns
+        the report's full envelope + filter + request_id + as_of +
+        record_ids + exported_at as JSON, with no credentials. The
+        adapter enforces the safe-report allowlist; any
+        non-allowlisted tool surfaces as a 400."""
+
+        from trade_trace.console.reporting import ReportAdapterError
+
+        # The CLI invocation uses dots in tool names; the URL path
+        # uses the same dotted name (e.g. `/reports/report.pnl/export.json`).
+        home, db = _open()
+        try:
+            try:
+                packet = pages.report_export_packet(home=str(home), tool=tool)
+            except ReportAdapterError as exc:
+                raise fastapi.HTTPException(status_code=400, detail=str(exc)) from exc
+        finally:
+            db.close()
+        return packet
 
     @app.get("/trades", response_class=HTMLResponse)
     def trades_html(

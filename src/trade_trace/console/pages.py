@@ -348,6 +348,102 @@ def reporting_dashboard_context(
     }
 
 
+def dashboard_overview_context(home: str) -> dict[str, Any]:
+    """Per-bead trade-trace-w422 the Overview page upgrades from the
+    DB-meta snapshot to a P&L / risk / performance roll-up dashboard.
+
+    The page combines two report calls into one dashboard context:
+    - report.pnl provides realized/unrealized totals + open mark coverage.
+    - report.risk provides expectancy + win rate + R distribution.
+
+    Tile selection comes from the `pnl` + `risk` REPORTING_DASHBOARD_TILES
+    sets, ordered so the headline P&L numbers come first."""
+
+    from trade_trace.console.reporting import run_report
+    from trade_trace.console.reporting.metric_glossary import page_explanation
+
+    pnl_ctx = run_report("report.pnl", {"filter": {}},
+                        actor_id="agent:console", home=home)
+    risk_ctx = run_report("report.risk", {"filter": {}},
+                         actor_id="agent:console", home=home)
+
+    combined_metrics = {**pnl_ctx.summary_metrics, **risk_ctx.summary_metrics}
+    combined_caveats = list(pnl_ctx.summary_caveats) + list(risk_ctx.summary_caveats)
+    combined_sample_warning = (
+        pnl_ctx.summary_sample_warning or risk_ctx.summary_sample_warning
+    )
+
+    # Aggregate evidence so the Overview tile drilldowns surface both
+    # tools' record_ids; the user can pivot to whichever report
+    # backs the metric they clicked.
+    aggregated_records: dict[str, list[str]] = {}
+    for ctx in (pnl_ctx, risk_ctx):
+        for kind, ids in ctx.evidence.record_ids.items():
+            aggregated_records.setdefault(kind, []).extend(ids)
+
+    # `evidence.tool` carries report.pnl as the primary surface since
+    # the headline tiles are P&L. The CLI invocation matches so a
+    # user reproducing the call lands on the right report.
+    # The Overview surfaces P&L (4 tiles) + mean R + expectancy. Pick
+    # specific risk tiles so the headline shows the two metrics most
+    # users want from the landing dashboard.
+    overview_tiles = list(REPORTING_DASHBOARD_TILES["pnl"]) + [
+        tile for tile in REPORTING_DASHBOARD_TILES["risk"]
+        if tile["key"] in ("mean_r", "expectancy_r")
+    ]
+
+    return {
+        "page_title": "Overview",
+        "generated_at": _iso_now(),
+        "tool": "report.pnl",
+        "summary_metrics": combined_metrics,
+        "summary_sample_warning": combined_sample_warning,
+        "summary_filter": pnl_ctx.summary_filter,
+        "summary_caveats": combined_caveats,
+        "groups": [
+            {
+                "key": g.key,
+                "label": g.label,
+                "metrics": g.metrics,
+                "filter": g.filter,
+                "record_ids": g.record_ids,
+                "examples": g.examples,
+                "sample_size": g.sample_size,
+                "sample_warning": g.sample_warning,
+                "truncated": g.truncated,
+            }
+            for g in pnl_ctx.groups
+        ],
+        "drilldowns": pnl_ctx.drilldowns,
+        "as_of": pnl_ctx.as_of,
+        "truncated": pnl_ctx.truncated,
+        "next_cursor": pnl_ctx.next_cursor,
+        "evidence": {
+            "tool": "report.pnl",
+            "cli_invocation": "tt report pnl",
+            "filter": pnl_ctx.summary_filter,
+            "request_id": pnl_ctx.evidence.request_id,
+            "record_ids": aggregated_records,
+            "examples": pnl_ctx.evidence.examples,
+        },
+        "raw_envelope": pnl_ctx.raw_envelope,
+        "page_explanation": page_explanation("overview"),
+        "dashboard_slug": "overview",
+        "dashboard_eyebrow": "Overview",
+        "dashboard_heading": "P&L · risk · performance overview",
+        "highlighted_metrics": overview_tiles,
+        "chart_canvas_id": "chart-overview-pnl-by-group",
+        "chart_config_json": _dashboard_bar_chart_json(
+            label="Realized P&L by instrument",
+            groups=[{
+                "label": g.label,
+                "metrics": g.metrics,
+            } for g in pnl_ctx.groups],
+            metric_key="realized_pnl",
+        ),
+    }
+
+
 def dashboard_pnl_context(home: str) -> dict[str, Any]:
     """Per-page context for the P&L dashboard (trade-trace-a94a)."""
 
@@ -480,6 +576,79 @@ def dashboard_decision_intelligence_context(home: str) -> dict[str, Any]:
         ),
     })
     return base
+
+
+def dashboard_compare_context(
+    home: str, *,
+    base_report: str = "calibration",
+    group_by: str = "strategy_id",
+) -> dict[str, Any]:
+    """Per-page context for the comparison builder (trade-trace-sqtq).
+
+    Wraps report.compare and projects the cross-group result into the
+    standard dashboard shape. Defaults compare calibration across
+    strategies; the per-page filter form lets the user change the
+    base report (`calibration` or `pnl`) and the group_by axis."""
+
+    base = reporting_dashboard_context(
+        home=home, tool="report.compare",
+        args={"base_report": base_report, "group_by": group_by, "filter": {}},
+        page_slug="reports", page_title="Compare",
+    )
+    base.update({
+        "dashboard_slug": "compare",
+        "dashboard_eyebrow": "Reports · Comparison",
+        "dashboard_heading": f"Compare {base_report} by {group_by}",
+        "highlighted_metrics": [
+            {"key": "n_groups", "label": "Groups", "tone": "neutral",
+             "fallback": 0},
+            {"key": "skipped_groups", "label": "Skipped groups",
+             "tone": "warn", "fallback": 0},
+        ],
+        "chart_canvas_id": "chart-compare",
+        "chart_config_json": _dashboard_bar_chart_json(
+            label=f"{base_report} per {group_by}",
+            groups=base["groups"],
+            metric_key="brier" if base_report == "calibration" else "realized_pnl",
+        ),
+        "compare_form": {
+            "base_report": base_report,
+            "group_by": group_by,
+            "allowed_base_reports": ["calibration", "pnl"],
+            "allowed_group_by": [
+                "strategy_id", "agent_id", "model_id",
+                "playbook_version_id", "decision_type",
+            ],
+        },
+    })
+    return base
+
+
+def report_export_packet(
+    *, home: str, tool: str, args: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Read-only export packet per trade-trace-sqtq.
+
+    Bundles the report's full envelope, the originating filter, the
+    request_id, and the CLI invocation a user would run to reproduce
+    the call. Returns a plain dict so the route handler can serialize
+    it as JSON. Never includes credentials or cross-session identifiers
+    — every field comes from the public ReportResult envelope.
+    """
+
+    from trade_trace.console.reporting import run_report
+
+    ctx = run_report(tool, args or {}, actor_id="agent:console", home=home)
+    return {
+        "tool": ctx.tool,
+        "cli_invocation": ctx.evidence.cli_invocation,
+        "filter": ctx.summary_filter,
+        "request_id": ctx.evidence.request_id,
+        "as_of": ctx.as_of,
+        "envelope": ctx.raw_envelope,
+        "record_ids": ctx.evidence.record_ids,
+        "exported_at": _iso_now(),
+    }
 
 
 def dashboard_evidence_context(home: str) -> dict[str, Any]:
