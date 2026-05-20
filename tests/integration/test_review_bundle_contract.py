@@ -227,8 +227,16 @@ def test_unsupported_filter_field_rejected(home):
     assert env.ok is False
     assert env.error.code.value == "VALIDATION_ERROR"
     details = env.error.details
+    assert details["field"] == "filter"
     assert "decision.decision_type" in details["unsupported_filter_paths"]
     assert details["report"] == "review.bundle"
+    assert set(details["supported_filter_paths"]) == {
+        "actors.actor_id",
+        "instrument.venue_id",
+        "strategy.strategy_id",
+        "time_window.decision_at_gte",
+        "time_window.decision_at_lt",
+    }
 
 
 def test_supported_actor_filter_narrows_decisions(home):

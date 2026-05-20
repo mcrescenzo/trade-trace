@@ -39,11 +39,12 @@ from trade_trace.reports import (
     report_unscored_forecasts,
     report_watchlist,
 )
-from trade_trace.reports._filter_support import (
-    SUPPORTED_FILTER_FIELDS,
-    UnsupportedFilterError,
-)
+from trade_trace.reports._filter_support import UnsupportedFilterError
 from trade_trace.tools._helpers import open_db_for_args
+from trade_trace.tools._report_filter_errors import (
+    report_filter_validation_to_tool_error,
+    unsupported_filter_to_tool_error,
+)
 from trade_trace.tools.errors import ToolError
 
 _EMPTY_SCHEMA: dict[str, Any] = {
@@ -156,18 +157,7 @@ def _unsupported_filter_to_tool_error(exc: UnsupportedFilterError) -> ToolError:
     envelope. The agent gets the offending leaf paths and the supported
     set so it can prune its input and retry."""
 
-    return ToolError(
-        ErrorCode.VALIDATION_ERROR,
-        str(exc),
-        details={
-            "field": "filter",
-            "report": exc.report,
-            "unsupported_filter_paths": exc.paths,
-            "supported_filter_paths": sorted(
-                SUPPORTED_FILTER_FIELDS.get(exc.report, frozenset())
-            ),
-        },
-    )
+    return unsupported_filter_to_tool_error(exc)
 
 
 def _propagate_report_meta(ctx: ToolContext, data: dict[str, Any]) -> None:
@@ -232,11 +222,7 @@ def _report_calibration(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                 min_sample=min_sample if min_sample is not None else 20,
             )
         except ValidationError as exc:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"ReportFilter validation failed: {exc.errors()}",
-                details={"field": "filter", "validation_errors": exc.errors()},
-            ) from exc
+            raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
         # Embed integrity diagnostics in the panel so the panel can never
@@ -280,11 +266,7 @@ def _report_playbook_adherence(
                 playbook_id=playbook_id, strategy_id=strategy_id,
             )
         except ValidationError as exc:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"ReportFilter validation failed: {exc.errors()}",
-                details={"field": "filter", "validation_errors": exc.errors()},
-            ) from exc
+            raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
     finally:
@@ -351,11 +333,7 @@ def _report_unscored_forecasts(args: dict[str, Any], ctx: ToolContext) -> dict[s
         try:
             data = report_unscored_forecasts(db.connection, raw_filter=raw_filter)
         except ValidationError as exc:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"ReportFilter validation failed: {exc.errors()}",
-                details={"field": "filter", "validation_errors": exc.errors()},
-            ) from exc
+            raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
     finally:
@@ -383,11 +361,7 @@ def _report_decision_velocity(args: dict[str, Any], ctx: ToolContext) -> dict[st
                 db.connection, raw_filter=raw_filter, bucket=bucket,
             )
         except ValidationError as exc:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"ReportFilter validation failed: {exc.errors()}",
-                details={"field": "filter", "validation_errors": exc.errors()},
-            ) from exc
+            raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
     finally:
@@ -409,11 +383,7 @@ def _report_compare(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 min_sample=args.get("min_sample"),
             )
         except ValidationError as exc:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"ReportFilter validation failed: {exc.errors()}",
-                details={"field": "filter", "validation_errors": exc.errors()},
-            ) from exc
+            raise report_filter_validation_to_tool_error(exc) from exc
         except (UnsupportedFilterError, ValueError) as exc:
             if isinstance(exc, UnsupportedFilterError):
                 raise _unsupported_filter_to_tool_error(exc) from exc
@@ -445,11 +415,7 @@ def _report_strategy_performance(args: dict[str, Any], ctx: ToolContext) -> dict
                 min_sample=args.get("min_sample"),
             )
         except ValidationError as exc:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"ReportFilter validation failed: {exc.errors()}",
-                details={"field": "filter", "validation_errors": exc.errors()},
-            ) from exc
+            raise report_filter_validation_to_tool_error(exc) from exc
         except (UnsupportedFilterError, ValueError) as exc:
             if isinstance(exc, UnsupportedFilterError):
                 raise _unsupported_filter_to_tool_error(exc) from exc
@@ -474,11 +440,7 @@ def _report_opportunity(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                 min_sample=args.get("min_sample", 20),
             )
         except ValidationError as exc:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"ReportFilter validation failed: {exc.errors()}",
-                details={"field": "filter", "validation_errors": exc.errors()},
-            ) from exc
+            raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
         except ValueError as exc:
@@ -499,11 +461,7 @@ def _make_filter_only_report(fn):
             try:
                 data = fn(db.connection, raw_filter=args.get("filter"))
             except ValidationError as exc:
-                raise ToolError(
-                    ErrorCode.VALIDATION_ERROR,
-                    f"ReportFilter validation failed: {exc.errors()}",
-                    details={"field": "filter", "validation_errors": exc.errors()},
-                ) from exc
+                raise report_filter_validation_to_tool_error(exc) from exc
             except UnsupportedFilterError as exc:
                 raise _unsupported_filter_to_tool_error(exc) from exc
         finally:
@@ -536,11 +494,7 @@ def _report_watchlist(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 stale_threshold_days=stale_threshold_days,
             )
         except ValidationError as exc:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"ReportFilter validation failed: {exc.errors()}",
-                details={"field": "filter", "validation_errors": exc.errors()},
-            ) from exc
+            raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
     finally:
@@ -563,11 +517,7 @@ def _report_coach(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 stale_threshold_days=stale_threshold_days,
             )
         except ValidationError as exc:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"ReportFilter validation failed: {exc.errors()}",
-                details={"field": "filter", "validation_errors": exc.errors()},
-            ) from exc
+            raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
         except TradingAdvicePhraseError as exc:

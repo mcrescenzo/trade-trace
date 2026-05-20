@@ -33,6 +33,10 @@ from trade_trace.reports._filter_support import (
 from trade_trace.reports.calibration import report_calibration
 from trade_trace.security.patterns import redact_for_log
 from trade_trace.tools._helpers import open_db_for_args
+from trade_trace.tools._report_filter_errors import (
+    report_filter_validation_to_tool_error,
+    unsupported_filter_to_tool_error,
+)
 from trade_trace.tools.errors import ToolError
 
 REVIEW_BUNDLE_REPORT = "review.bundle"
@@ -440,23 +444,12 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
     try:
         rf = ReportFilter.model_validate(parsed.filter)
     except ValidationError as exc:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            f"ReportFilter validation failed: {exc.errors()}",
-            details={"field": "filter", "validation_errors": exc.errors()},
-        ) from exc
+        raise report_filter_validation_to_tool_error(exc) from exc
 
     try:
         enforce_supported_filter(rf, report=REVIEW_BUNDLE_REPORT)
     except UnsupportedFilterError as exc:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            str(exc),
-            details={
-                "report": exc.report,
-                "unsupported_filter_paths": exc.paths,
-            },
-        ) from exc
+        raise unsupported_filter_to_tool_error(exc) from exc
     filter_view = applied_filter_view(rf, report=REVIEW_BUNDLE_REPORT)
 
     db = open_db_for_args(args)
