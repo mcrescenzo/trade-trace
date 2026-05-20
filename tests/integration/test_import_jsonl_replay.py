@@ -94,6 +94,95 @@ def test_import_commit_per_row_partial_progress(tmp_path: Path):
     assert _count(home, "instruments") == 0
 
 
+def test_import_commit_per_row_diagnostic_only_accounting(tmp_path: Path):
+    home = tmp_path / "home"
+    _init(home)
+    file = tmp_path / "diagnostic-only.jsonl"
+    _write_jsonl(file, [
+        {
+            "tool": "signal.emitted",
+            "args": {"id": "sig_ignored", "kind": "sample_size_warning"},
+            "idempotency_key": "signal-emitted-1",
+        },
+    ])
+
+    env = _call("import.commit", {"home": str(home), "path": str(file), "transaction_mode": "per_row"})
+
+    assert env["ok"] is True, env
+    data = env["data"]
+    assert data["diagnostic_skipped"] == 1, data
+    assert data["cascaded_skipped"] == 0, data
+    assert data["validated"] == 0, data
+    assert data["would_create"] == 0, data
+    assert data["committed_count"] == 0, data
+    assert data["errors"] == []
+
+
+def test_import_commit_per_row_cascaded_only_accounting(tmp_path: Path):
+    home = tmp_path / "home"
+    _init(home)
+    file = tmp_path / "cascaded-only.jsonl"
+    _write_jsonl(file, [
+        {
+            "tool": "edge.created",
+            "args": {
+                "id": "edg_cascade", "source_kind": "thesis",
+                "source_id": "t_ignored", "target_kind": "thesis",
+                "target_id": "t_ignored2", "edge_type": "supersedes",
+            },
+            "idempotency_key": "edg-cascade-1",
+        },
+    ])
+
+    env = _call("import.commit", {"home": str(home), "path": str(file), "transaction_mode": "per_row"})
+
+    assert env["ok"] is True, env
+    data = env["data"]
+    assert data["cascaded_skipped"] == 1, data
+    assert data["diagnostic_skipped"] == 0, data
+    assert data["validated"] == 0, data
+    assert data["would_create"] == 0, data
+    assert data["committed_count"] == 0, data
+    assert data["errors"] == []
+
+
+def test_import_commit_per_row_mixed_committed_and_skipped_accounting(tmp_path: Path):
+    home = tmp_path / "home"
+    _init(home)
+    file = tmp_path / "mixed-skipped.jsonl"
+    _write_jsonl(file, [
+        _venue_line(),
+        {
+            "tool": "signal.emitted",
+            "args": {"id": "sig_ignored", "kind": "sample_size_warning"},
+            "idempotency_key": "signal-emitted-1",
+        },
+        {
+            "tool": "edge.created",
+            "args": {
+                "id": "edg_cascade", "source_kind": "thesis",
+                "source_id": "t_ignored", "target_kind": "thesis",
+                "target_id": "t_ignored2", "edge_type": "supersedes",
+            },
+            "idempotency_key": "edg-cascade-1",
+        },
+    ])
+
+    env = _call("import.commit", {"home": str(home), "path": str(file), "transaction_mode": "per_row"})
+
+    assert env["ok"] is True, env
+    data = env["data"]
+    assert data["validated"] == 1, data
+    assert data["would_create"] == 1, data
+    assert data["diagnostic_skipped"] == 1, data
+    assert data["cascaded_skipped"] == 1, data
+    assert data["committed_count"] == 1, data
+    assert data["errors"] == []
+    assert _count(home, "venues") == 1
+    assert _count(home, "signals") == 0
+    assert _count(home, "edges") == 0
+
+
 def test_import_commit_idempotent_replay(tmp_path: Path):
     home = tmp_path / "home"
     _init(home)

@@ -153,6 +153,8 @@ def _labels(row: sqlite3.Row, metrics: dict[str, Any]) -> list[str]:
     threshold_bad = max(0.03 * float(entry), 0.3 * float(row["declared_risk_amount"] or 0.0))
     favorable_outcome = (row["realized_pnl"] is not None and float(row["realized_pnl"]) > 0) or (row["outcome_value"] is not None and float(row["outcome_value"]) > 0)
     adverse_outcome = (row["realized_pnl"] is not None and float(row["realized_pnl"]) < 0) or (row["outcome_value"] is not None and float(row["outcome_value"]) <= 0)
+    playbook_overridden = bool(row["overridden_playbook_rule_count"])
+    invalidation_hit_at = None
     if row["decision_type"] in _SKIP_TYPES:
         if fav is not None and fav >= threshold_pos:
             labels.append("missed_positive_edge")
@@ -162,9 +164,9 @@ def _labels(row: sqlite3.Row, metrics: dict[str, Any]) -> list[str]:
         risk = row["declared_risk_amount"]
         if risk and adv is not None and adv >= float(risk) and favorable_outcome:
             labels.append("right_thesis_wrong_timing")
-        if favorable_outcome:
+        if favorable_outcome and (playbook_overridden or invalidation_hit_at is not None):
             labels.append("bad_process_good_outcome")
-        if adverse_outcome:
+        if adverse_outcome and not playbook_overridden and invalidation_hit_at is None:
             labels.append("good_process_bad_outcome")
     return labels or ["unclassified"]
 
@@ -194,13 +196,19 @@ def report_opportunity(
                d.declared_risk_amount, d.created_at AS decision_at,
                t.side AS thesis_side, t.time_horizon_at, f.resolution_at,
                o.id AS outcome_id, o.resolved_at, o.outcome_value,
-               p.realized_pnl, ss.price AS decision_snapshot_price
+               p.realized_pnl, ss.price AS decision_snapshot_price,
+               COALESCE(dpr_counts.overridden_playbook_rule_count, 0) AS overridden_playbook_rule_count
         FROM decisions d
         LEFT JOIN theses t ON t.id = d.thesis_id
         LEFT JOIN forecasts f ON f.id = d.forecast_id
         LEFT JOIN outcomes o ON o.instrument_id = d.instrument_id AND o.status = 'resolved_final'
         LEFT JOIN positions p ON p.instrument_id = d.instrument_id
         LEFT JOIN snapshots ss ON ss.id = d.snapshot_id
+        LEFT JOIN (
+            SELECT decision_id, SUM(CASE WHEN status = 'overridden' THEN 1 ELSE 0 END) AS overridden_playbook_rule_count
+            FROM decision_playbook_rules
+            GROUP BY decision_id
+        ) dpr_counts ON dpr_counts.decision_id = d.id
         WHERE d.type IN ('watch','skip','paper_enter','actual_enter','add')
         ORDER BY d.created_at ASC, d.id ASC
         LIMIT ?

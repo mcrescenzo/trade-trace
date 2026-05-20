@@ -464,8 +464,13 @@ def _import_commit(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             _add_error(validation.errors, max_errors, err)
         for err in _forward_reference_errors(rows, max_errors):
             _add_error(validation.errors, max_errors, err)
-        validation.validated = len(rows) if not validation.errors else 0
-        validation.would_create = len(rows) if not validation.errors else 0
+        replayable_rows = [
+            row for row in rows
+            if row.tool not in _DIAGNOSTIC_EVENT_TOOLS
+            and row.tool not in _CASCADED_EVENT_TOOLS
+        ]
+        validation.validated = len(replayable_rows) if not validation.errors else 0
+        validation.would_create = len(replayable_rows) if not validation.errors else 0
     for err in parse_errors:
         if not _add_error(validation.errors, max_errors, err):
             truncated = True

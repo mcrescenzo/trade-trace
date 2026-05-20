@@ -89,8 +89,8 @@ labels — useful in `report.mistakes`/`strengths` and in `report.coach`:
 | `missed_positive_edge` | decision was `skip`/`watch` AND `max_favorable_move >= missed_positive_threshold` (default = +0.5R or +5% price, whichever is more conservative for the asset class) AND no invalidation hit. |
 | `good_skip` | decision was `skip`/`watch` AND `max_adverse_move >= good_skip_threshold` (default = -0.3R or -3% price) OR `invalidation_hit_at` is non-NULL. |
 | `right_thesis_wrong_timing` | decision entered a position, `max_adverse_move` violated declared R before resolution, but the final outcome aligned with thesis direction. |
-| `bad_process_good_outcome` | outcome was favorable but `decision_playbook_rules.status = "overridden"` exists with `status != "considered"`, OR `invalidation_hit_at` is set and was ignored. |
-| `good_process_bad_outcome` | outcome was adverse, but no `overridden` rule and no `invalidation_hit_at`. The agent followed the playbook; the market won. |
+| `bad_process_good_outcome` | outcome was favorable but a `decision_playbook_rules.status = "overridden"` row exists for the decision, OR `invalidation_hit_at` is set and was ignored. Current implementation evaluates overridden playbook rules; `invalidation_hit_at` remains `NULL` until machine-checkable invalidation predicates are implemented. |
+| `good_process_bad_outcome` | outcome was adverse, but no `overridden` rule and no `invalidation_hit_at`. The agent followed the playbook; the market won. Current implementation evaluates the overridden-rule predicate and treats `invalidation_hit_at` as unavailable/`NULL`. |
 
 Labels are mutually-not-exclusive — a single decision can carry both
 `right_thesis_wrong_timing` and `good_process_bad_outcome`. They are

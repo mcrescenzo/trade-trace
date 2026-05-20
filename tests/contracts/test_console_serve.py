@@ -146,3 +146,13 @@ def test_pyproject_declares_console_extra():
     assert "\nconsole = [" in text, "pyproject.toml missing the [console] extra"
     assert "fastapi" in text
     assert "uvicorn" in text
+
+
+def test_pyproject_console_browser_recipe_requires_runtime_extra():
+    """Browser smoke tests start `tt console serve`, so the operator
+    recipe must install both the Console runtime and Playwright harness."""
+
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+    assert "pip install 'trade-trace[console,console-test]'" in text
+    assert "required because the smoke harness starts `tt console serve`" in text

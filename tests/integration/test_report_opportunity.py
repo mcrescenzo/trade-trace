@@ -40,6 +40,7 @@ def _seed_decision_path(
     realized_pnl: float | None = None,
     outcome_value: float | None = None,
     snapshots: list[tuple[str, float]] | None = None,
+    playbook_status: str | None = None,
 ) -> str:
     inst = _instrument(home, title)
     thesis_id = new_id("thesis")
@@ -72,6 +73,39 @@ def _seed_decision_path(
                     "realized_pnl, avg_entry_price, updated_at) VALUES (?, ?, 'paper', ?, 'closed', "
                     "'2026-01-01T00:00:00Z', '2026-01-03T00:00:00Z', ?, ?, '2026-01-03T00:00:00Z')",
                     (new_id("pos"), inst, side, realized_pnl, decision_price),
+                )
+            if playbook_status is not None:
+                reflection_id = new_id("mem")
+                rule_id = new_id("mem")
+                playbook_id = new_id("playbook")
+                version_id = new_id("pbv")
+                conn.execute(
+                    "INSERT INTO memory_nodes(id, node_type, title, body, valid_from, created_at, actor_id) "
+                    "VALUES (?, 'reflection', 'reflection', 'reflection', '2026-01-01T00:00:00Z', "
+                    "'2026-01-01T00:00:00Z', 'agent:default')",
+                    (reflection_id,),
+                )
+                conn.execute(
+                    "INSERT INTO memory_nodes(id, node_type, title, body, valid_from, created_at, actor_id) "
+                    "VALUES (?, 'playbook_rule', 'rule', 'rule', '2026-01-01T00:00:00Z', "
+                    "'2026-01-01T00:00:00Z', 'agent:default')",
+                    (rule_id,),
+                )
+                conn.execute(
+                    "INSERT INTO playbooks(id, name, created_at, actor_id) "
+                    "VALUES (?, ?, '2026-01-01T00:00:00Z', 'agent:default')",
+                    (playbook_id, f"Playbook-{title}"),
+                )
+                conn.execute(
+                    "INSERT INTO playbook_versions(id, playbook_id, version, provenance_reflection_node_id, "
+                    "created_at, actor_id) VALUES (?, ?, 1, ?, '2026-01-01T00:00:00Z', 'agent:default')",
+                    (version_id, playbook_id, reflection_id),
+                )
+                conn.execute(
+                    "INSERT INTO decision_playbook_rules(id, decision_id, playbook_version_id, rule_node_id, "
+                    "status, created_at, actor_id) VALUES (?, ?, ?, ?, ?, '2026-01-01T00:00:00Z', "
+                    "'agent:default')",
+                    (new_id("dpr"), decision_id, version_id, rule_id, playbook_status),
                 )
             for captured_at, price in (snapshots or []):
                 conn.execute(
@@ -120,7 +154,7 @@ def test_favorable_skip_classifies_missed_positive_edge(home):
     assert "missed_positive_edge" in data["summary"]["buckets"]
 
 
-def test_adverse_then_final_win_classifies_wrong_timing_and_good_outcome(home):
+def test_adverse_then_final_win_classifies_wrong_timing_without_process_label(home):
     decision_id = _seed_decision_path(
         home,
         title="adverse-win",
@@ -139,7 +173,68 @@ def test_adverse_then_final_win_classifies_wrong_timing_and_good_outcome(home):
     rec = _record(_report(home), decision_id)
     assert rec["metrics"]["max_adverse_move"]["price_delta"] == pytest.approx(0.12)
     assert "right_thesis_wrong_timing" in rec["classification_labels"]
+    assert "bad_process_good_outcome" not in rec["classification_labels"]
+
+
+def test_favorable_enter_with_overridden_playbook_rule_gets_bad_process_good_outcome(home):
+    decision_id = _seed_decision_path(
+        home,
+        title="override-win",
+        decision_type="actual_enter",
+        realized_pnl=0.15,
+        outcome_value=1.0,
+        playbook_status="overridden",
+        snapshots=[
+            ("2026-01-01T06:00:00Z", 1.04),
+            ("2026-01-01T12:00:00Z", 1.08),
+            ("2026-01-02T00:00:00Z", 1.12),
+            ("2026-01-02T12:00:00Z", 1.20),
+            ("2026-01-03T00:00:00Z", 1.15),
+        ],
+    )
+    rec = _record(_report(home), decision_id)
     assert "bad_process_good_outcome" in rec["classification_labels"]
+
+
+def test_adverse_enter_without_overridden_playbook_rule_gets_good_process_bad_outcome(home):
+    decision_id = _seed_decision_path(
+        home,
+        title="followed-loss",
+        decision_type="actual_enter",
+        realized_pnl=-0.15,
+        outcome_value=0.0,
+        playbook_status="followed",
+        snapshots=[
+            ("2026-01-01T06:00:00Z", 0.98),
+            ("2026-01-01T12:00:00Z", 0.96),
+            ("2026-01-02T00:00:00Z", 0.90),
+            ("2026-01-02T12:00:00Z", 0.88),
+            ("2026-01-03T00:00:00Z", 0.85),
+        ],
+    )
+    rec = _record(_report(home), decision_id)
+    assert "good_process_bad_outcome" in rec["classification_labels"]
+    assert "bad_process_good_outcome" not in rec["classification_labels"]
+
+
+def test_adverse_enter_with_overridden_playbook_rule_does_not_get_good_process_bad_outcome(home):
+    decision_id = _seed_decision_path(
+        home,
+        title="override-loss",
+        decision_type="actual_enter",
+        realized_pnl=-0.15,
+        outcome_value=0.0,
+        playbook_status="overridden",
+        snapshots=[
+            ("2026-01-01T06:00:00Z", 0.98),
+            ("2026-01-01T12:00:00Z", 0.96),
+            ("2026-01-02T00:00:00Z", 0.90),
+            ("2026-01-02T12:00:00Z", 0.88),
+            ("2026-01-03T00:00:00Z", 0.85),
+        ],
+    )
+    rec = _record(_report(home), decision_id)
+    assert "good_process_bad_outcome" not in rec["classification_labels"]
 
 
 def test_noisy_unfavorable_skip_classifies_good_skip(home):
