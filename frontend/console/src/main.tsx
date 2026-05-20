@@ -613,13 +613,13 @@ function OverviewPage() {
       </section>
       <section className="mt-5 grid gap-4 xl:grid-cols-2">
         <ReportSummary title="P&L rollup" query={pnl} metricKeys={['realized_pnl', 'unrealized_pnl', 'mark_to_market_pnl']} href="/reports/pnl" />
-        <ReportSummary title="Risk rollup" query={risk} metricKeys={['mean_r', 'expectancy_r', 'win_rate']} href="/reports/risk" />
+        <ReportSummary title="Risk rollup" query={risk} metricKeys={['mean_r', 'expectancy_r', 'win_rate_r']} href="/reports/risk" />
         <ReportSummary title="Strategy performance" query={strategy} metricKeys={['total_trades', 'realized_pnl', 'win_rate']} href="/reports/strategy" />
         <ReportSummary title="Calibration" query={calibration} metricKeys={['sample_size', 'brier', 'ece']} href="/calibration" />
       </section>
       <section className="mt-5 grid gap-4 xl:grid-cols-2">
         <OverviewReportGroups title="P&L contributors" query={pnl} href="/reports/pnl" metricKeys={['realized_pnl', 'unrealized_pnl', 'mark_to_market_pnl']} />
-        <OverviewReportGroups title="Risk contributors" query={risk} href="/reports/risk" metricKeys={['mean_r', 'expectancy_r', 'win_rate']} />
+        <OverviewReportGroups title="Risk contributors" query={risk} href="/reports/risk" metricKeys={['mean_r', 'expectancy_r', 'win_rate_r']} />
         <OverviewReportGroups title="Strategy contributors" query={strategy} href="/reports/strategy" metricKeys={['realized_pnl', 'closed_count', 'open_count']} />
         <OverviewReportGroups title="Calibration contributors" query={calibration} href="/calibration" metricKeys={['brier', 'ece', 'sample_size']} />
       </section>
@@ -786,6 +786,9 @@ function ReportPage({
   if (tool === 'report.pnl') {
     return <PnlDashboardPage />
   }
+  if (tool === 'report.risk') {
+    return <RiskDashboardPage query={query} />
+  }
   const metrics = query.data?.summary_metrics ?? {}
   const chartRows = Object.entries(metrics)
     .filter(([, value]) => typeof value === 'number')
@@ -842,6 +845,64 @@ function realRecordId(value: unknown) {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
+}
+
+function RiskDashboardPage({ query }: { query: ReturnType<typeof useReport> }) {
+  const metrics = query.data?.summary_metrics ?? {}
+  const data = rawData(query.data)
+  const summary = data.summary && typeof data.summary === 'object' ? data.summary as Record<string, unknown> : {}
+  const distribution = Array.isArray(metrics.r_distribution) ? metrics.r_distribution as Array<Record<string, unknown>> : []
+  const histogramRows = distribution.map((row) => ({ ...row, bucket: `${row.lower == null ? '-∞' : row.lower} to ${row.upper == null ? '+∞' : row.upper}` }))
+  const outcomeRows = [
+    { outcome: 'Wins', count: metrics.win_count, definition: 'closed rows with positive realized R' },
+    { outcome: 'Losses', count: metrics.loss_count, definition: 'closed rows with negative realized R' },
+    { outcome: 'Breakeven', count: metrics.breakeven_count, definition: 'closed rows with zero realized R' },
+    { outcome: 'Pending with risk', count: metrics.n_pending_with_risk ?? summary.pending_risk_count, definition: 'declared-risk decisions without closed/resolved P&L yet' },
+    { outcome: 'Missing risk budget', count: summary.missing_risk_count, definition: 'closed decisions excluded because declared_risk_amount is missing or zero' }
+  ]
+  const missingRiskSample = Array.isArray(summary.decisions_missing_risk_sample) ? summary.decisions_missing_risk_sample : []
+  const groupExamples = (query.data?.groups ?? []).flatMap((group) => Array.isArray((group as Record<string, unknown>).examples) ? (group as Record<string, unknown>).examples as Array<Record<string, unknown>> : [])
+  const examples = query.data?.evidence.examples?.length ? query.data.evidence.examples : groupExamples
+  const coverage = numberValue(metrics.coverage)
+  return (
+    <>
+      <PageHeader eyebrow="Risk" title="Risk/R-multiple and position analytics" />
+      <PageExplainer answers="What the local report can say about realized R-multiples, expectancy, outcomes, payoff, pending-risk rows, and missing risk budgets." data="report.risk summary metrics, R distribution bins, backend caveats, group evidence, examples, and contributing local decision IDs only." read="R metrics include only closed/resolved positions with declared risk. Missing-risk and pending-risk counts explain what was excluded or incomplete." mislead="Low sample size, incomplete outcomes, or missing risk budgets can dominate results. This is not portfolio/live-risk modeling, VaR, leverage/margin analysis, or trading advice." />
+      {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} /> : (
+        <div className="space-y-4">
+          <section className="rounded border border-warning/40 bg-warning/10 p-4">
+            <h3 className="mb-2 font-semibold text-warning">Interpretation limits</h3>
+            <p className="mb-2 text-sm text-muted-foreground">This dashboard displays backend-supported local report fields only. It does not infer risk for rows without declared_risk_amount and does not model live exposure.</p>
+            <CaveatChips value={[query.data?.summary_sample_warning, ...(query.data?.summary_caveats ?? [])].filter(Boolean)} />
+          </section>
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label="Closed with R" value={metricValue(metrics, 'n_closed_with_risk')} icon={Activity} />
+            <MetricCard label="Expectancy R" value={metricValue(metrics, 'expectancy_r')} icon={BarChart3} />
+            <MetricCard label="Win rate R" value={metricValue(metrics, 'win_rate_r')} icon={BarChart3} />
+            <MetricCard label="Payoff ratio R" value={metricValue(metrics, 'payoff_ratio_r')} icon={BarChart3} />
+            <MetricCard label="Mean R" value={metricValue(metrics, 'mean_r')} icon={BarChart3} />
+            <MetricCard label="Median R" value={metricValue(metrics, 'median_r')} icon={BarChart3} />
+            <MetricCard label="Best R" value={metricValue(metrics, 'best_r')} icon={BarChart3} />
+            <MetricCard label="Worst R" value={metricValue(metrics, 'worst_r')} icon={BarChart3} />
+          </section>
+          <section className="grid gap-4 md:grid-cols-3">
+            <div className="rounded border border-border bg-card p-4"><p className="text-sm font-medium">Risk coverage</p><p className="mt-1 text-2xl font-semibold">{coverage == null ? 'n/a' : `${Math.round(coverage * 100)}%`}</p><p className="mt-1 text-xs text-muted-foreground">closed rows with declared risk divided by total closed rows, from report.risk</p></div>
+            <div className="rounded border border-border bg-card p-4"><p className="text-sm font-medium">Pending risk rows</p><p className="mt-1 text-2xl font-semibold">{metricValue(metrics, 'n_pending_with_risk')}</p><p className="mt-1 text-xs text-muted-foreground">declared risk exists, but outcome/P&L is incomplete</p></div>
+            <div className="rounded border border-border bg-card p-4"><p className="text-sm font-medium">Missing risk budgets</p><p className="mt-1 text-2xl font-semibold">{String(summary.missing_risk_count ?? 'n/a')}</p><p className="mt-1 text-xs text-muted-foreground">excluded from R metrics; inspect samples below when returned</p></div>
+          </section>
+          <ChartPanel title="R-multiple distribution" rows={histogramRows.map((row: Record<string, unknown>) => ({ name: String(row.bucket), value: Number(row.count ?? 0) }))} />
+          <DataTable rows={histogramRows} emptyMessage="No R distribution bins were returned by the local risk report." columns={[{ key: 'bucket', header: 'R bucket' }, { key: 'count', header: 'Count' }]} renderDetail={(row) => <JsonBlock value={row} />} />
+          <DataTable rows={outcomeRows} columns={[{ key: 'outcome', header: 'Outcome/risk status' }, { key: 'count', header: 'Count' }, { key: 'definition', header: 'Definition' }]} />
+          <DataTable rows={(query.data?.groups ?? []).map((row) => ({ ...row, ...row.metrics }))} emptyMessage="No risk groups were returned by the local report." columns={[{ key: 'label', header: 'Group' }, { key: 'sample_size', header: 'Closed with R' }, { key: 'mean_r', header: 'Mean R' }, { key: 'expectancy_r', header: 'Expectancy R' }, { key: 'win_rate_r', header: 'Win rate R' }, { key: 'payoff_ratio_r', header: 'Payoff' }, { key: 'sample_warning', header: 'Warning', cell: (value) => <CaveatChips value={value} /> }]} renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={query.data?.raw_envelope} />} />
+          <DataTable rows={examples} emptyMessage="No contributing trade/decision examples were returned by the local risk report." columns={[{ key: 'kind', header: 'Kind' }, { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> }, { key: 'summary', header: 'Summary' }]} renderDetail={(row) => {
+            const decisionId = realRecordId(row.id)
+            return <ReportGroupDetail row={decisionId ? { ...row, record_ids: { decisions: [decisionId] } } : row} rawEnvelope={query.data?.raw_envelope} />
+          }} />
+          <details className="rounded border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Missing-risk budget sample IDs ({missingRiskSample.length}) and raw report envelope</summary><div className="mt-2"><JsonBlock value={{ decisions_missing_risk_sample: missingRiskSample, record_ids: query.data?.evidence.record_ids, raw_envelope: query.data?.raw_envelope }} /></div></details>
+        </div>
+      )}
+    </>
+  )
 }
 
 function CalibrationPage({ query, filter, setFilter }: { query: ReturnType<typeof useReport>; filter: ConsoleFilter; setFilter: (filter: ConsoleFilter) => void }) {
