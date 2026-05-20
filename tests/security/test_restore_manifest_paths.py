@@ -48,6 +48,21 @@ def _make_manifest_dir(parent: Path, files: list[tuple[str, bytes]]) -> Path:
     return src
 
 
+def _make_manifest_only(parent: Path, manifest_path_value) -> Path:
+    src = parent / f"src-{len(list(parent.glob('src-*')))}"
+    src.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "files": [{
+            "path": manifest_path_value,
+            "size": 5,
+            "sha256": hashlib.sha256(b"pwned").hexdigest(),
+        }],
+        "created_at": "2026-05-19T00:00:00.000Z",
+    }
+    (src / "manifest.json").write_text(json.dumps(manifest))
+    return src
+
+
 def test_journal_restore_rejects_parent_traversal(tmp_path, home):
     """A manifest entry with `..` segments must be rejected with
     VALIDATION_ERROR and `details.field == "path"` BEFORE any disk read
@@ -109,6 +124,37 @@ def test_journal_restore_rejects_absolute_path(tmp_path, home):
     assert env["error"]["code"] == "VALIDATION_ERROR"
     assert env["error"]["details"]["field"] == "path"
     assert env["error"]["details"]["manifest_path"] == "/etc/passwd-evil"
+
+
+@pytest.mark.parametrize(
+    ("manifest_path", "case"),
+    [
+        ("C:/Users/Public/evil.db", "windows-drive"),
+        ("", "empty"),
+        (123, "non-string"),
+    ],
+)
+def test_journal_restore_rejects_other_unsafe_manifest_paths(tmp_path, home, manifest_path, case):
+    """Characterize restore-specific details for generic unsafe path cases."""
+
+    src = _make_manifest_only(tmp_path, manifest_path)
+    env = mcp_call(
+        "journal.restore",
+        {
+            "home": str(home),
+            "src": str(src),
+            "_confirm": True,
+            "idempotency_key": f"d2jv-{case}",
+        },
+        actor_id="agent:default",
+    ).model_dump(mode="json", exclude_none=True)
+    assert env["ok"] is False, env
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"] == {
+        "field": "path",
+        "manifest_path": manifest_path,
+        "reason": "unsafe_manifest_path",
+    }
 
 
 def test_journal_restore_accepts_valid_relative_paths(tmp_path, home):

@@ -126,18 +126,54 @@ def _trusted_bge_small_lock() -> tuple[dict[str, Any], ...]:
     return BGE_SMALL_LOCK
 
 
-def _safe_model_relpath(rel: str) -> Path:
+def safe_relative_path(rel: object) -> Path:
+    """Return *rel* as a safe, non-empty relative path.
+
+    This low-level helper is intentionally domain-neutral: callers translate
+    failures into their own ToolError code/message/details at the trust
+    boundary. It rejects absolute POSIX paths, Windows absolute/drive paths,
+    empty/non-string values, and any parent traversal segment before callers
+    attempt disk reads or writes.
+    """
+
     if not isinstance(rel, str) or not rel:
-        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "invalid trusted model path", details={"path": rel})
+        raise ValueError("path must be a non-empty string")
     path = Path(rel)
     win = PureWindowsPath(rel)
     if path.is_absolute() or win.is_absolute() or win.drive or ".." in path.parts or ".." in win.parts:
-        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "invalid trusted model path", details={"path": rel})
+        raise ValueError("path is not a safe relative path")
     return path
 
 
-def _resolve_under(root: Path, rel: str) -> Path:
-    rel_path = _safe_model_relpath(rel)
+def resolve_under_root(root: Path, rel: object) -> Path:
+    """Resolve a safe relative path beneath *root*, rejecting escapes.
+
+    The containment check is performed after symlink resolution with
+    ``strict=False`` so callers can validate intended destinations before the
+    final file exists, while still detecting existing symlink pivots that would
+    escape the root.
+    """
+
+    rel_path = safe_relative_path(rel)
+    root_resolved = root.resolve(strict=False)
+    candidate = (root / rel_path).resolve(strict=False)
+    if root_resolved != candidate and root_resolved not in candidate.parents:
+        raise ValueError("path resolves outside root")
+    return candidate
+
+
+def _safe_model_relpath(rel: object) -> Path:
+    try:
+        return safe_relative_path(rel)
+    except ValueError as exc:
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "invalid trusted model path", details={"path": rel}) from exc
+
+
+def _resolve_under(root: Path, rel: object) -> Path:
+    try:
+        rel_path = safe_relative_path(rel)
+    except ValueError as exc:
+        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "invalid trusted model path", details={"path": rel}) from exc
     root_resolved = root.resolve(strict=False)
     candidate = (root / rel_path).resolve(strict=False)
     if root_resolved != candidate and root_resolved not in candidate.parents:
@@ -448,55 +484,54 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     # trade-trace-l24k. A tampered manifest entry with `..` segments, an
     # absolute path, or a Windows drive prefix must be rejected before
     # any read/copy so a malicious backup cannot write or corrupt files
-    # outside `home` with the process's permissions. `_safe_model_relpath`
-    # already implements the rel-path check used by `model.import`; reuse
-    # it here, then constrain the resolved candidate to live under home.
-    home_resolved = home.resolve(strict=False)
-    src_resolved = src_path.resolve(strict=False)
+    # outside `home` with the process's permissions. Use the same generic
+    # rel-path and root-containment helpers as `model.import`, then translate
+    # failures into journal.restore-specific ToolError details.
     validated: list[tuple[dict[str, Any], Path, Path]] = []
     for entry in manifest["files"]:
+        raw_path = entry["path"]
         try:
-            rel = _safe_model_relpath(entry["path"])
-        except ToolError as exc:
-            # Re-raise with a journal.restore-specific message but keep
-            # the structured details so callers can branch.
+            rel = safe_relative_path(raw_path)
+        except ValueError as exc:
             raise ToolError(
                 ErrorCode.VALIDATION_ERROR,
-                f"manifest path {entry['path']!r} is not a safe relative "
+                f"manifest path {raw_path!r} is not a safe relative "
                 "path under TRADE_TRACE_HOME (no `..`, absolutes, or "
                 "Windows drives allowed) per trade-trace-l24k",
                 details={
                     "field": "path",
-                    "manifest_path": entry["path"],
+                    "manifest_path": raw_path,
                     "reason": "unsafe_manifest_path",
                 },
             ) from exc
-        src_file = (src_path / rel).resolve(strict=False)
-        out_file = (home / rel).resolve(strict=False)
-        if src_resolved != src_file and src_resolved not in src_file.parents:
+        try:
+            src_file = resolve_under_root(src_path, raw_path)
+        except ValueError as exc:
             raise ToolError(
                 ErrorCode.VALIDATION_ERROR,
-                f"manifest path {entry['path']!r} resolves outside the "
+                f"manifest path {raw_path!r} resolves outside the "
                 "backup source after symlink resolution",
                 details={
                     "field": "path",
-                    "manifest_path": entry["path"],
-                    "src": str(src_resolved),
-                    "resolved": str(src_file),
+                    "manifest_path": raw_path,
+                    "src": str(src_path.resolve(strict=False)),
+                    "resolved": str((src_path / rel).resolve(strict=False)),
                 },
-            )
-        if home_resolved != out_file and home_resolved not in out_file.parents:
+            ) from exc
+        try:
+            out_file = resolve_under_root(home, raw_path)
+        except ValueError as exc:
             raise ToolError(
                 ErrorCode.VALIDATION_ERROR,
-                f"manifest path {entry['path']!r} resolves outside "
+                f"manifest path {raw_path!r} resolves outside "
                 "TRADE_TRACE_HOME after symlink resolution",
                 details={
                     "field": "path",
-                    "manifest_path": entry["path"],
-                    "home": str(home_resolved),
-                    "resolved": str(out_file),
+                    "manifest_path": raw_path,
+                    "home": str(home.resolve(strict=False)),
+                    "resolved": str((home / rel).resolve(strict=False)),
                 },
-            )
+            ) from exc
         validated.append((entry, src_file, out_file))
 
     # Verify hashes BEFORE copying anything so a corrupt source aborts
