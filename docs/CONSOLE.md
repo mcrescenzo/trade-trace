@@ -72,18 +72,91 @@ page. Optional `Off / 10s / 30s / 60s` polling persists in
 `localStorage`. The UTC↔Local time-zone toggle also persists
 client-side; the server always returns UTC ISO 8601.
 
+Per the reporting product overhaul ([trade-trace-3o4a]), the
+navigation now splits three lanes (reporting / strategies+playbooks /
+developer-audit). The reporting lane covers the Tradervue-like reading
+experience; the developer-audit lane preserves the inspection surface.
+
+### Reporting lane
+
 | Page | What it shows |
 |------|---------------|
-| Overview (`/`) | DB path, schema version, last-event timestamp, projection row counts, and the lazy-write deny set. Empty home → concrete CLI-hint affordances (`tt journal init`, `tt journal fixture-seed`). |
-| Journal (`/journal`) | Paginated event stream with event-type / actor / subject-kind filters and per-row Raw JSON drilldown. |
-| Decisions (`/decisions`) | Paginated decisions table with detail page (`/decisions/<id>`) showing decision row plus related events. |
-| Reports (`/reports`) | The list of read-only `report.*` tools the Console exposes. Side-effect-risky handlers (`signal.scan`, `report.coach`) are **not** invocable from this page. |
-| Calibration (`/calibration`) | Forecast totals and scored counts. Run `tt report calibration` for the full reliability diagram. |
+| Overview (`/`) | P&L + risk + performance roll-up dashboard: realized/unrealized P&L tiles, open-position count, open-mark coverage, mean R, expectancy. Evidence affordance deep-links into `report.pnl` and `report.risk` record IDs. |
+| Trades (`/trades`) | Every trade-typed decision (`actual_enter`, `actual_exit`, `paper_enter`, `paper_exit`, `add`, `reduce`) with side / qty / price / declared risk / strategy / per-row caveat chips. Filterable by strategy, instrument, decision type; cursor pagination. |
+| Reports (`/reports`) | Index of read-only `report.*` tools the Console exposes. Side-effect-risky handlers (`signal.scan`, `report.coach`) are not invocable. |
+| P&L (`/reports/pnl`) | `report.pnl` dashboard with realized / unrealized / MTM tiles, open-mark coverage caveat, per-instrument bar chart. |
+| Risk (`/reports/risk`) | `report.risk` R-multiple panel: mean / median R, expectancy, win rate, payoff ratio, pending-with-risk caveat. |
+| Performance (`/reports/performance`) | Decision velocity bucketed by day; placeholder for the dedicated equity-curve / drawdown view. |
+| Strategy (`/reports/strategy`) | `report.strategy_performance` — wraps `report.compare(base_report='pnl', group_by='strategy_id')`. |
+| Decision intelligence (`/reports/decisions`) | Watch + overdue watch + stale watch surface from `report.watchlist`. |
+| Compare (`/reports/compare`) | Comparison builder. `base_report` × `group_by` form bound to the closed enums (calibration/pnl × strategy_id/agent_id/model_id/playbook_version_id/decision_type). |
+| Calibration (`/calibration`) | Brier / log score / ECE / sharpness / baseline panel + reliability bins from `report.calibration`. Integrity diagnostics embedded. |
+| Evidence (`/evidence`) | Provenance hygiene from `report.source_quality`: missing / stale / contradictory / duplicated / sensitive sources. |
+| Audit · Integrity (`/integrity`) | Legacy developer-lane integrity snapshot (source totals, attachment counts, outbox pending). Kept alongside the new Evidence dashboard. |
+
+### Strategies / Playbooks
+
+| Page | What it shows |
+|------|---------------|
 | Strategies (`/strategies`) | Paginated strategies table. |
 | Playbooks (`/playbooks`) | Paginated playbooks table. |
-| Evidence & Integrity (`/integrity`) | Source totals, decision-source attachment counts, event-log totals, outbox-pending count. |
+
+### Developer / Audit lane
+
+| Page | What it shows |
+|------|---------------|
+| Journal (`/journal`) | Paginated event stream with event-type / actor / subject-kind filters and per-row Raw JSON drilldown. |
+| Decisions (`/decisions`) | Paginated decisions table with detail page (`/decisions/<id>`) showing decision row plus related events. |
+| Position detail (`/positions/<id>`) | Per-position lifecycle audit: realized/unrealized P&L tiles, full `position_events` lineage chronologically, opening decision strategy/playbook, missing-mark / no-strategy caveats. |
 | Logs (`/logs`) | Last N lines of `<home>/logs/trade-trace.log` (configurable via `TRADE_TRACE_LOG_DIR`). Optional level filter, malformed-line tolerance, and the same secret redaction the logging module applies on write. |
 | Raw JSON (`/raw`) | Index of latest events plus per-event payload viewer (`/raw?event_id=<n>`). |
+| Legacy Overview (`/overview-legacy`) | DB-meta snapshot kept for operators auditing schema_version / row counts; the reporting-lane Overview at `/` is the canonical reader view. |
+
+### Read-only data flow
+
+Every dashboard renders server-computed metrics — there is no
+frontend financial math. The `report.*` tools produce a
+`ReportResult` envelope; the
+`trade_trace.console.reporting.adapter.run_report` helper enforces
+the closed safe-report allowlist (`SAFE_REPORT_TOOLS`) and projects
+the envelope into a typed `DashboardContext` Jinja consumes. Every
+aggregate metric exposes an Evidence affordance with the originating
+tool name, CLI invocation, request_id, and per-record drilldown IDs
+(per the §6 evidence contract in
+[`architecture/reporting-product.md`](./architecture/reporting-product.md)).
+
+### Filter URL state
+
+The reporting dashboards share a single `f=<base64url-json>` URL
+parameter carrying the canonical `ReportFilter`. Bookmarking or
+sharing a dashboard URL preserves the filter; the encoder /
+decoder lives at
+`trade_trace.console.reporting.filter_state` (trade-trace-hayy).
+Empty filter encodes to `e30` (base64url of `{}`); unknown axes are
+rejected via `ReportFilter.model_validate` (`extra="forbid"`) so a
+crafted URL can never silently broaden the filter.
+
+### Read-only export packets
+
+Every reporting dashboard exposes `/reports/<tool>/export.json`
+(e.g. `/reports/report.pnl/export.json`) which bundles the full
+ReportResult envelope, originating filter, request_id, as_of, and
+record_ids in one JSON packet for cross-tool audit. No credentials
+are ever embedded; the packet is the same envelope the CLI / MCP
+client would receive. Per-bead trade-trace-sqtq.
+
+### Charting
+
+Dashboards render charts via the vendored Chart.js asset under
+`static/vendor/chartjs/`. The bootstrap script
+(`static/js/chart-bootstrap.js`) reads `<script
+type="application/json" data-chart="<canvas-id>">` blocks via
+`JSON.parse` (no `eval`, no `new Function` — CSP-clean). The asset
+is downloaded once via the curl in
+`static/vendor/chartjs/README.md`; when the binary is missing every
+chart canvas degrades to a visible "asset not loaded" caveat
+(numeric evidence below is unaffected). See trade-trace-ycag for
+the bootstrap and trade-trace-nfn4 for the binary install.
 
 The operational logging contract lives in
 [`docs/architecture/logging.md`](./architecture/logging.md)
