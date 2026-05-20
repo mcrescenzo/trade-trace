@@ -18,7 +18,10 @@ def test_shell_has_primary_nav_and_main_landmark() -> None:
 def test_chart_panel_labels_canvas_equivalent_region() -> None:
     source = (SRC_ROOT / "ui" / "ChartPanel.tsx").read_text(encoding="utf-8")
     assert 'role="img"' in source
-    assert "aria-label={title}" in source
+    assert "aria-label={`" in source
+    assert "${title}" in source
+    assert "Bar chart of" in source
+    assert "${rows.length}" in source
 
 
 def test_data_table_uses_semantic_table_head() -> None:
