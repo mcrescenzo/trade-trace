@@ -87,7 +87,7 @@ _PLAYBOOK_PROPOSE_VERSION_SCHEMA = _schema(
     description=(
         "Append a version anchored to a reflection. Optional parent_version_id "
         "overrides the default prior-head lineage; description is scanned for "
-        "secret-shaped text. Rule/rule_json/rules_json payloads are not accepted; "
+        "sensitive-shaped text. Rule/rule_json/rules_json payloads are not accepted; "
         "create playbook_rule memory nodes separately."
     ),
 )
@@ -446,7 +446,7 @@ def _playbook_propose_version(
                         ErrorCode.VALIDATION_ERROR,
                         "version must be an integer when provided",
                         details={"field": "version", "value": args.get("version")},
-                    )
+                    ) from None
                 if next_version < 1:
                     raise ToolError(
                         ErrorCode.VALIDATION_ERROR,
