@@ -207,7 +207,8 @@ def _build_app(home_path: str) -> Any:
 
         from trade_trace.console.reporting import ReportAdapterError
 
-        home, db = _open()
+        home = resolve_home(home_path)
+        _, db = _open()
         try:
             try:
                 ctx = builder(str(home))
@@ -258,7 +259,8 @@ def _build_app(home_path: str) -> Any:
 
         from trade_trace.console.reporting import ReportAdapterError
 
-        home, db = _open()
+        home = resolve_home(home_path)
+        _, db = _open()
         try:
             try:
                 ctx = pages.dashboard_compare_context(
@@ -282,7 +284,8 @@ def _build_app(home_path: str) -> Any:
 
         # The CLI invocation uses dots in tool names; the URL path
         # uses the same dotted name (e.g. `/reports/report.pnl/export.json`).
-        home, db = _open()
+        home = resolve_home(home_path)
+        _, db = _open()
         try:
             try:
                 packet = pages.report_export_packet(home=str(home), tool=tool)
