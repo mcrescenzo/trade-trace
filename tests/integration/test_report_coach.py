@@ -48,7 +48,8 @@ def test_coach_empty_db_returns_advisory_packet(home):
     for key in (
         "filter", "top_mistakes", "top_strengths", "unscored_forecasts",
         "stale_watches", "sample_warnings", "calibration_drift",
-        "override_outcomes", "callouts", "is_advisory_only",
+        "override_outcomes", "low_sample_context", "callouts", "next_actions",
+        "is_advisory_only",
     ):
         assert key in data, f"missing coach packet field {key!r}"
     assert data["is_advisory_only"] is True
@@ -186,3 +187,52 @@ def test_coach_surfaces_unscored_callout(home):
     data = env["data"]
     assert data["unscored_forecasts"]["count"] == 1
     assert any("pending forecast" in c for c in data["callouts"])
+    assert any(a["category"] == "unresolved_forecasts" for a in data["next_actions"])
+
+
+def test_coach_low_sample_separates_caveat_from_process_actions(home):
+    """N=1 remains explicitly insufficient while process gaps are actionable."""
+
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market", "title": "X",
+    })
+    thesis = _envelope(home, "thesis.add", {
+        "instrument_id": inst["data"]["id"], "side": "yes", "body": "...",
+    })
+    forecast = _envelope(home, "forecast.add", {
+        "thesis_id": thesis["data"]["id"], "kind": "binary", "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.6},
+            {"outcome_label": "no", "probability": 0.4},
+        ],
+    })
+    _envelope(home, "decision.add", {
+        "instrument_id": inst["data"]["id"],
+        "forecast_id": forecast["data"]["id"],
+        "thesis_id": thesis["data"]["id"],
+        "type": "paper_enter", "side": "yes", "quantity": 1, "price": 0.6,
+    })
+    _envelope(home, "decision.add", {
+        "instrument_id": inst["data"]["id"], "type": "watch",
+        "reason": "needs a dated revisit",
+    })
+    _envelope(home, "outcome.add", {
+        "instrument_id": inst["data"]["id"],
+        "resolved_at": "2026-06-30T00:00:00Z",
+        "outcome_label": "yes", "status": "resolved_final",
+    })
+
+    env = _envelope(home, "report.coach", {})
+    assert env["ok"] is True
+    data = env["data"]
+    assert data["low_sample_context"]["scored_forecast_count"] == 1
+    assert "Insufficient calibration sample" in data["low_sample_context"]["statistical_caveat"]
+    categories = {a["category"] for a in data["next_actions"]}
+    assert "calibration_data" in categories
+    assert "watch_review" in categories
+    assert "decision_completeness" in categories
+    assert "reflection_hygiene" in categories
+    assert not any("infer skill" in a["action"] and a["category"] != "calibration_data"
+                   for a in data["next_actions"])

@@ -109,17 +109,44 @@ def report_coach(
         if warn:
             sample_warnings.append(f"{label}: {warn}")
 
+    low_sample_context = _low_sample_context(conn, min_sample=20)
     callouts: list[str] = []
+    next_actions: list[dict[str, Any]] = []
+    if low_sample_context["scored_forecast_count"] < low_sample_context["min_sample"]:
+        next_actions.append({
+            "category": "calibration_data",
+            "reason": (
+                f"Only {low_sample_context['scored_forecast_count']} scored forecast(s); "
+                f"below the {low_sample_context['min_sample']} item calibration floor."
+            ),
+            "action": (
+                "Do not infer skill or pattern quality yet; keep logging forecasts and "
+                "outcomes until the floor is reached."
+            ),
+            "record_ids": {"forecasts": low_sample_context["scored_forecast_ids"]},
+        })
     if unscored_summary["count"] > 0:
         callouts.append(
             f"{unscored_summary['count']} pending forecast(s) past resolution_at — "
             "resolve before this dimension distorts calibration aggregates."
         )
+        next_actions.append({
+            "category": "unresolved_forecasts",
+            "reason": f"{unscored_summary['count']} forecast(s) are past resolution_at without a score.",
+            "action": "Resolve or supersede these forecasts so calibration denominators stay explicit.",
+            "record_ids": {"forecasts": unscored_summary["forecast_ids"]},
+        })
     if stale_summary["count"] > 0:
         callouts.append(
             f"{stale_summary['count']} watch decision(s) older than "
             f"{stale_threshold_days} days — revisit or close them."
         )
+        next_actions.append({
+            "category": "watch_review",
+            "reason": f"{stale_summary['count']} watch decision(s) exceed the {stale_threshold_days} day age threshold.",
+            "action": "Record a review decision or set a review_by date for each stale watch.",
+            "record_ids": {"decisions": stale_summary["decision_ids"]},
+        })
     if top_mistakes:
         worst = top_mistakes[0]
         callouts.append(
@@ -160,6 +187,14 @@ def report_coach(
                 f"{diagnostic_key}: {diag['count']} record(s) — review "
                 "via report.source_quality for sample_ids."
             )
+            next_actions.append({
+                "category": "source_quality",
+                "reason": f"{diagnostic_key} has {diag['count']} record(s).",
+                "action": "Run report.source_quality and repair the listed provenance hygiene gaps.",
+                "record_ids": diag.get("sample_ids", {}),
+            })
+
+    next_actions.extend(_process_quality_gaps(conn))
 
     # Surface the anti-goodhart integrity panel (bead trade-trace-jzn) so
     # the coach output carries the same denominator/hygiene context as
@@ -196,7 +231,9 @@ def report_coach(
         "override_outcomes": override_outcomes,
         "integrity_diagnostics": integrity,
         "source_quality": source_quality,
+        "low_sample_context": low_sample_context,
         "callouts": callouts,
+        "next_actions": next_actions,
         "is_advisory_only": True,
     }
     _assert_no_trade_advice(packet)
@@ -237,6 +274,128 @@ def _top_tag_summary(report: dict[str, Any]) -> list[dict[str, Any]]:
         for g in _report_groups(report)[:3]
         if g["metrics"]["scored_forecast_count"] > 0
     ]
+
+
+def _low_sample_context(conn: sqlite3.Connection, *, min_sample: int) -> dict[str, Any]:
+    """Separate statistical sufficiency from early process hygiene."""
+
+    rows = conn.execute(
+        """
+        SELECT DISTINCT f.id
+        FROM forecasts f
+        JOIN forecast_scores fs ON fs.forecast_id = f.id
+        WHERE fs.metric = 'brier_binary'
+          AND fs.score IS NOT NULL
+          AND f.kind = 'binary'
+        ORDER BY f.created_at, f.id
+        LIMIT 100
+        """
+    ).fetchall()
+    count = len(rows)
+    return {
+        "scored_forecast_count": count,
+        "min_sample": min_sample,
+        "statistical_caveat": (
+            "Insufficient calibration sample: use process-quality checks, not "
+            "skill or pattern conclusions."
+        ) if count < min_sample else None,
+        "scored_forecast_ids": [r[0] for r in rows[:5]],
+    }
+
+
+def _process_quality_gaps(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Return concrete, non-statistical cleanup actions for early journals."""
+
+    actions: list[dict[str, Any]] = []
+    missing_forecast = _sample_ids(conn, """
+        SELECT id FROM decisions
+        WHERE forecast_id IS NULL
+        ORDER BY created_at, id
+        LIMIT 5
+    """)
+    if missing_forecast:
+        actions.append({
+            "category": "decision_completeness",
+            "reason": f"{len(missing_forecast)} sampled decision(s) have no linked forecast.",
+            "action": "Backfill a forecast link or note why the decision is intentionally unforecasted.",
+            "record_ids": {"decisions": missing_forecast},
+        })
+
+    missing_thesis = _sample_ids(conn, """
+        SELECT id FROM decisions
+        WHERE thesis_id IS NULL
+        ORDER BY created_at, id
+        LIMIT 5
+    """)
+    if missing_thesis:
+        actions.append({
+            "category": "decision_completeness",
+            "reason": f"{len(missing_thesis)} sampled decision(s) have no linked thesis.",
+            "action": "Attach or create a thesis so the rationale can be audited later.",
+            "record_ids": {"decisions": missing_thesis},
+        })
+
+    watch_without_date = _sample_ids(conn, """
+        SELECT id FROM decisions
+        WHERE type = 'watch' AND review_by IS NULL
+        ORDER BY created_at, id
+        LIMIT 5
+    """)
+    if watch_without_date:
+        actions.append({
+            "category": "watch_review",
+            "reason": f"{len(watch_without_date)} sampled watch decision(s) have no review_by date.",
+            "action": "Set review_by or record a review decision to close the loop.",
+            "record_ids": {"decisions": watch_without_date},
+        })
+
+    unreflected = _sample_ids(conn, """
+        SELECT d.id
+        FROM decisions d
+        WHERE NOT EXISTS (
+            SELECT 1 FROM edges e
+            JOIN memory_nodes n ON n.id = e.source_id
+            WHERE e.source_kind = 'memory_node'
+              AND e.target_kind = 'decision'
+              AND e.target_id = d.id
+              AND e.edge_type = 'about'
+              AND n.node_type = 'reflection'
+        )
+        ORDER BY d.created_at, d.id
+        LIMIT 5
+    """)
+    if unreflected:
+        actions.append({
+            "category": "reflection_hygiene",
+            "reason": f"{len(unreflected)} sampled decision(s) have no attached reflection.",
+            "action": "Use memory.reflect on recent decisions after outcomes or scheduled reviews.",
+            "record_ids": {"decisions": unreflected},
+        })
+
+    missing_adherence = _sample_ids(conn, """
+        SELECT d.id
+        FROM decisions d
+        WHERE d.playbook_version_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM decision_playbook_rules dpr
+            WHERE dpr.decision_id = d.id
+          )
+        ORDER BY d.created_at, d.id
+        LIMIT 5
+    """)
+    if missing_adherence:
+        actions.append({
+            "category": "playbook_hygiene",
+            "reason": f"{len(missing_adherence)} sampled playbook-scoped decision(s) have no adherence rows.",
+            "action": "Record considered/followed/overridden rule rows so report.playbook_adherence has an audit trail.",
+            "record_ids": {"decisions": missing_adherence},
+        })
+
+    return actions
+
+
+def _sample_ids(conn: sqlite3.Connection, sql: str) -> list[str]:
+    return [str(r[0]) for r in conn.execute(sql).fetchall()]
 
 
 def _override_outcomes_panel(conn: sqlite3.Connection) -> dict[str, Any]:
