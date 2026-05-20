@@ -100,8 +100,8 @@ def test_base_template_splits_nav_into_three_lanes_per_i1ds():
 
 
 @pytest.mark.parametrize("name", [
-    "overview", "journal", "decisions", "reports", "calibration",
-    "strategies", "playbooks", "integrity", "raw", "trades",
+    "overview", "journal", "decisions", "reports", "strategies",
+    "playbooks", "integrity", "raw", "trades", "error",
 ])
 def test_top_level_template_exists(name: str):
     assert (TEMPLATE_DIR / f"{name}.html").is_file(), f"missing template {name}.html"
@@ -168,9 +168,20 @@ def test_static_assets_are_vendored():
         STATIC_DIR / "css" / "console.css",
         STATIC_DIR / "js" / "console.js",
         STATIC_DIR / "js" / "htmx.min.js",
+        STATIC_DIR / "favicon.svg",
     ]
     for path in expected:
         assert path.is_file(), f"missing vendored asset {path}"
+
+
+def test_active_nav_uses_longest_route_match():
+    """Nested routes like /reports/pnl must not mark both Reports and
+    P&L as current. The JS should select only the longest matching
+    route."""
+
+    js = (STATIC_DIR / "js" / "console.js").read_text(encoding="utf-8")
+    assert "bestMatch" in js
+    assert "target.length > bestLength" in js
 
 
 def test_main_element_has_focus_target_for_accessibility():

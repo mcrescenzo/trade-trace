@@ -27,7 +27,7 @@ from datetime import UTC
 from pathlib import Path
 from typing import Any
 
-from trade_trace.console.pagination import Page, _decode_cursor, _encode_cursor, paginate_query
+from trade_trace.console.pagination import Page, paginate_created_at_id_query, paginate_query
 
 LAZY_WRITE_DENY_SET: tuple[str, ...] = (
     "report" + "." + "coach",
@@ -74,7 +74,7 @@ def status(conn: sqlite3.Connection, *, db_path: Path) -> dict[str, Any]:
         "last_event_at": last_event_at,
         "row_counts": row_counts,
         "lazy_write_handlers_blocked": list(LAZY_WRITE_DENY_SET),
-        "logs_deferred": True,
+        "logs_available": True,
         "now": datetime.now(UTC).isoformat(),
     }
 
@@ -92,9 +92,15 @@ def _table_page(
     limit: int,
 ) -> Page:
     sql = f"SELECT {', '.join(columns)} FROM {table}"
-    page = paginate_query(
-        conn, sql=sql, order_by=order_by, cursor=cursor, limit=limit,
-    )
+    if order_by == "created_at DESC" and columns[0] == "id" and columns[-1] == "created_at":
+        page = paginate_created_at_id_query(
+            conn, sql=sql, cursor=cursor, limit=limit,
+            id_index=0, created_at_index=len(columns) - 1,
+        )
+    else:
+        page = paginate_query(
+            conn, sql=sql, order_by=order_by, cursor=cursor, limit=limit,
+        )
     page.rows = [dict(zip(columns, row, strict=True)) for row in page.rows]
     return page
 
@@ -157,21 +163,22 @@ def decisions_list(
     if instrument_id:
         clauses.append("instrument_id = ?")
         params.append(instrument_id)
-    if cursor is not None:
-        clauses.append("created_at < ?")
-        params.append(_decode_cursor(cursor))
     where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
     sql = (
         f"SELECT {', '.join(columns)} FROM decisions"
-        f"{where} ORDER BY created_at DESC LIMIT ?"
+        f"{where}"
     )
-    rows = list(conn.execute(sql, tuple(params) + (clamped_limit + 1,)))
-    next_cursor = None
-    if len(rows) > clamped_limit:
-        rows = rows[:clamped_limit]
-        next_cursor = _encode_cursor(rows[-1][7])
-    return Page(rows=[dict(zip(columns, row, strict=True)) for row in rows],
-                next_cursor=next_cursor, limit=clamped_limit)
+    page = paginate_created_at_id_query(
+        conn,
+        sql=sql,
+        cursor=cursor,
+        limit=clamped_limit,
+        params=tuple(params),
+        id_index=0,
+        created_at_index=7,
+    )
+    page.rows = [dict(zip(columns, row, strict=True)) for row in page.rows]
+    return page
 
 
 def memory_nodes_list(conn: sqlite3.Connection, *, cursor: str | None, limit: int) -> Page:

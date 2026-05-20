@@ -67,6 +67,20 @@ def rich_client(tmp_path: Path) -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture()
+def client_no_raise(tmp_path: Path) -> TestClient:
+    home = _seed_home(tmp_path)
+    app = _build_app(str(home))
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture()
+def missing_db_client(tmp_path: Path) -> TestClient:
+    home = tmp_path / "missing"
+    app = _build_app(str(home))
+    return TestClient(app, raise_server_exceptions=False)
+
+
 HTML_ROUTES = [
     "/",
     "/journal",
@@ -97,6 +111,67 @@ def test_status_endpoint_serves_documented_fields(client: TestClient) -> None:
     assert body["read_only"] is True
     assert "db_path" in body
     assert "row_counts" in body
+
+
+@pytest.mark.parametrize("route", ["/", "/journal", "/decisions", "/raw"])
+def test_missing_db_html_routes_render_typed_error_page(
+    missing_db_client: TestClient,
+    route: str,
+) -> None:
+    response = missing_db_client.get(route)
+
+    assert response.status_code == 503
+    assert "text/html" in response.headers["content-type"]
+    assert "missing" in response.text
+    assert "tt journal init" in response.text
+
+
+@pytest.mark.parametrize("route", [
+    "/journal?cursor=not-a-real-cursor",
+    "/decisions?cursor=not-a-real-cursor",
+    "/strategies?cursor=not-a-real-cursor",
+    "/trades?cursor=not-a-real-cursor",
+])
+def test_html_list_routes_reject_malformed_cursor_as_400(
+    client_no_raise: TestClient,
+    route: str,
+) -> None:
+    response = client_no_raise.get(route)
+
+    assert response.status_code == 400
+    assert "text/html" in response.headers["content-type"]
+    assert "invalid cursor" in response.text
+
+
+@pytest.mark.parametrize("route", [
+    "/api/events?cursor=not-a-real-cursor",
+    "/api/decisions?cursor=not-a-real-cursor",
+    "/api/strategies?cursor=not-a-real-cursor",
+])
+def test_json_list_routes_reject_malformed_cursor_as_400(
+    client_no_raise: TestClient,
+    route: str,
+) -> None:
+    response = client_no_raise.get(route)
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["type"] == "pagination_error"
+
+
+def test_static_favicon_is_served(client: TestClient) -> None:
+    response = client.get("/static/favicon.svg")
+
+    assert response.status_code == 200
+    assert "image/svg+xml" in response.headers["content-type"]
+
+
+def test_calibration_route_serves_full_report_dashboard(rich_client: TestClient) -> None:
+    response = rich_client.get("/calibration")
+
+    assert response.status_code == 200, response.text[:300]
+    assert "Brier" in response.text
+    assert "Forecasts total" not in response.text
+    assert 'data-dashboard="calibration"' in response.text
 
 
 def test_report_dashboard_route_decodes_f_and_passes_filter_to_report(

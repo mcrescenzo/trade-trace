@@ -103,7 +103,7 @@ def overview_context(
             for row in recent_events
         ],
         "lazy_write_handlers_blocked": status["lazy_write_handlers_blocked"],
-        "logs_deferred": True,
+        "logs_available": True,
         "empty_state": {
             "title": "No journal data yet.",
             "next_steps": [
@@ -912,35 +912,31 @@ def reports_context(conn: sqlite3.Connection) -> dict[str, Any]:
     from trade_trace.core import default_registry
 
     registry = default_registry()
-    report_tools = [
-        name for name in registry.names()
-        if name.startswith("report.") and name != "report.coach"
-    ]
+    dashboard_routes = {
+        "report.calibration": "/calibration",
+        "report.compare": "/reports/compare",
+        "report.decision_velocity": "/reports/performance",
+        "report.pnl": "/reports/pnl",
+        "report.risk": "/reports/risk",
+        "report.source_quality": "/evidence",
+        "report.strategy_performance": "/reports/strategy",
+        "report.watchlist": "/reports/decisions",
+    }
+    report_tools = []
+    for name in sorted(
+        n for n in registry.names()
+        if n.startswith("report.") and n != "report.coach"
+    ):
+        report_tools.append({
+            "name": name,
+            "href": dashboard_routes.get(name),
+            "export_href": f"/reports/{name}/export.json",
+        })
     return {
         "page_title": "Reports",
         "generated_at": _iso_now(),
-        "report_tools": sorted(report_tools),
+        "report_tools": report_tools,
         "lazy_write_handlers_blocked": ["report.coach", "signal.scan"],
-    }
-
-
-def calibration_context(conn: sqlite3.Connection) -> dict[str, Any]:
-    forecasts = conn.execute("SELECT COUNT(*) FROM forecasts").fetchone()[0]
-    scores = conn.execute("SELECT COUNT(*) FROM forecast_scores").fetchone()[0]
-    return {
-        "page_title": "Calibration",
-        "generated_at": _iso_now(),
-        "forecasts_total": forecasts,
-        "forecasts_scored": scores,
-        "empty_state": {
-            "title": "No forecasts to calibrate yet.",
-            "next_steps": [
-                ("Add a forecast", "tt forecast add --probability=0.65 ..."),
-                ("Record an outcome", "tt outcome add ..."),
-            ],
-        }
-        if forecasts == 0
-        else None,
     }
 
 

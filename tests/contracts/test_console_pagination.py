@@ -133,6 +133,64 @@ def test_descending_order_supported(conn):
     assert [r[0] for r in page2.rows] == list(range(20, 10, -1))
 
 
+def test_created_at_ordered_console_lists_do_not_repeat_first_page(conn):
+    """Created-at ordered Console tables select `id` first but sort by
+    `created_at`. Pagination must encode the actual ordering key so
+    the second page advances instead of repeating page one."""
+
+    from trade_trace.console.endpoints import strategies_list
+
+    conn.execute(
+        "CREATE TABLE strategies("
+        "id TEXT PRIMARY KEY, name TEXT, slug TEXT, status TEXT, created_at TEXT)"
+    )
+    conn.executemany(
+        "INSERT INTO strategies(id, name, slug, status, created_at) VALUES (?, ?, ?, ?, ?)",
+        [
+            ("strat-3", "Strategy 3", "s3", "active", "2026-05-20T03:00:00Z"),
+            ("strat-2", "Strategy 2", "s2", "active", "2026-05-20T02:00:00Z"),
+            ("strat-1", "Strategy 1", "s1", "active", "2026-05-20T01:00:00Z"),
+        ],
+    )
+
+    page1 = strategies_list(conn, cursor=None, limit=1)
+    page2 = strategies_list(conn, cursor=page1.next_cursor, limit=1)
+
+    assert [row["id"] for row in page1.rows] == ["strat-3"]
+    assert [row["id"] for row in page2.rows] == ["strat-2"]
+
+
+def test_created_at_ordered_console_lists_keep_duplicate_timestamps(conn):
+    """Rows sharing the same timestamp need an id tie-breaker; otherwise
+    the cursor skips siblings with duplicate `created_at` values."""
+
+    from trade_trace.console.endpoints import playbooks_list
+
+    conn.execute(
+        "CREATE TABLE playbooks("
+        "id TEXT PRIMARY KEY, name TEXT, description TEXT, status TEXT, created_at TEXT)"
+    )
+    conn.executemany(
+        "INSERT INTO playbooks(id, name, description, status, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [
+            ("pb-3", "Playbook 3", "third", "active", "2026-05-20T03:00:00Z"),
+            ("pb-2", "Playbook 2", "second", "active", "2026-05-20T03:00:00Z"),
+            ("pb-1", "Playbook 1", "first", "active", "2026-05-20T01:00:00Z"),
+        ],
+    )
+
+    seen: list[str] = []
+    cursor: str | None = None
+    for _ in range(3):
+        page = playbooks_list(conn, cursor=cursor, limit=1)
+        assert page.rows
+        seen.append(page.rows[0]["id"])
+        cursor = page.next_cursor
+
+    assert seen == ["pb-3", "pb-2", "pb-1"]
+
+
 def test_empty_table_returns_empty_page_and_null_cursor(conn):
     from trade_trace.console.pagination import paginate_query
 

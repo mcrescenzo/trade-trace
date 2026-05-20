@@ -33,7 +33,6 @@ TEMPLATE_DIR = REPO_ROOT / "src" / "trade_trace" / "console" / "templates"
 
 DASHBOARD_TEMPLATES: tuple[str, ...] = (
     "dashboard.html",
-    "dashboard_pnl.html",
     "trades.html",
     "position_detail.html",
 )
@@ -45,6 +44,13 @@ def _template(name: str) -> str:
 
 def test_dashboard_macros_template_exists() -> None:
     assert (TEMPLATE_DIR / "_dashboard_macros.html").is_file()
+
+
+def test_legacy_dashboard_pnl_template_removed() -> None:
+    """P&L is rendered through the generic dashboard template; keeping
+    a second P&L template invites route/template drift."""
+
+    assert not (TEMPLATE_DIR / "dashboard_pnl.html").exists()
 
 
 def test_dashboard_templates_have_one_h1() -> None:

@@ -21,6 +21,7 @@ from __future__ import annotations
 import errno
 import socket
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -82,11 +83,12 @@ def _build_app(home_path: str) -> Any:
     assert deps is not None, "_build_app must not be called without deps"
     fastapi, _ = deps
 
-    from fastapi.responses import HTMLResponse  # type: ignore[import-not-found]
+    from fastapi.responses import HTMLResponse, JSONResponse  # type: ignore[import-not-found]
     from fastapi.staticfiles import StaticFiles  # type: ignore[import-not-found]
     from fastapi.templating import Jinja2Templates  # type: ignore[import-not-found]
 
     from trade_trace.console import endpoints, pages
+    from trade_trace.console.pagination import PaginationError
     from trade_trace.console.security import apply_security_headers
     from trade_trace.storage.database import (
         ReadOnlyDatabaseError,
@@ -108,6 +110,82 @@ def _build_app(home_path: str) -> Any:
         StaticFiles(directory=str(console_root / "static")),
         name="static",
     )
+
+    def _generated_at() -> str:
+        return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    def _render_console_error(
+        request: Any,
+        *,
+        status_code: int,
+        title: str,
+        message: str,
+        reason: str,
+        next_steps: list[tuple[str, str]],
+    ) -> Any:
+        return templates.TemplateResponse(
+            request,
+            "error.html",
+            {
+                "page_title": title,
+                "generated_at": _generated_at(),
+                "error_title": title,
+                "error_message": message,
+                "reason": reason,
+                "next_steps": next_steps,
+            },
+            status_code=status_code,
+        )
+
+    def _wants_json(request: Any) -> bool:
+        return request.url.path.startswith("/api/") or request.url.path.endswith(".json")
+
+    @app.exception_handler(ReadOnlyDatabaseError)
+    async def _readonly_database_error(request: Any, exc: ReadOnlyDatabaseError) -> Any:
+        status_code = 503
+        detail = {
+            "type": "readonly_database_error",
+            "reason": exc.reason,
+            "message": str(exc),
+        }
+        if _wants_json(request):
+            return JSONResponse(status_code=status_code, content={"detail": detail})
+        next_steps = [
+            ("Initialize a journal", "tt journal init"),
+            ("Check the selected home", "tt console serve --home /path/to/home"),
+        ]
+        if exc.reason == "unsupported_schema":
+            next_steps = [
+                ("Use a Trade Trace journal home", "tt console serve --home /path/to/home"),
+                ("Initialize a new journal", "tt journal init"),
+            ]
+        return _render_console_error(
+            request,
+            status_code=status_code,
+            title="Console data unavailable",
+            message=str(exc),
+            reason=exc.reason,
+            next_steps=next_steps,
+        )
+
+    @app.exception_handler(PaginationError)
+    async def _pagination_error(request: Any, exc: PaginationError) -> Any:
+        detail = {
+            "type": "pagination_error",
+            "message": str(exc),
+        }
+        if _wants_json(request):
+            return JSONResponse(status_code=400, content={"detail": detail})
+        return _render_console_error(
+            request,
+            status_code=400,
+            title="Invalid pagination cursor",
+            message=str(exc),
+            reason="pagination_error",
+            next_steps=[
+                ("Restart from the first page", request.url.path),
+            ],
+        )
 
     @app.middleware("http")
     async def _security_headers(request: Any, call_next: Any) -> Any:
@@ -391,13 +469,8 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "reports.html", ctx)
 
     @app.get("/calibration", response_class=HTMLResponse)
-    def calibration_html(request: _Request) -> Any:
-        _, db = _open()
-        try:
-            ctx = pages.calibration_context(db.connection)
-        finally:
-            db.close()
-        return _render(request, "calibration.html", ctx)
+    def calibration_html(request: _Request, f: str | None = None) -> Any:
+        return _render_dashboard(request, pages.dashboard_calibration_context, f=f)
 
     @app.get("/strategies", response_class=HTMLResponse)
     def strategies_html(request: _Request, cursor: str | None = None, limit: int = 50) -> Any:
@@ -459,7 +532,7 @@ def _build_app(home_path: str) -> Any:
                 "read_only": True,
                 "reason": exc.reason,
                 "message": str(exc),
-                "logs_deferred": True,
+                "logs_available": True,
             }
         try:
             return endpoints.status(db.connection, db_path=path)

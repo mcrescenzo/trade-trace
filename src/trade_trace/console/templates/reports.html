@@ -10,8 +10,13 @@
   <ul class="tt-report-list" aria-label="Available reports">
     {% for tool in report_tools %}
       <li>
-        <code>{{ tool }}</code>
-        <span>Read-only</span>
+        <code>{{ tool.name }}</code>
+        {% if tool.href %}
+          <a href="{{ tool.href }}">Open dashboard</a>
+        {% else %}
+          <span>Read-only</span>
+        {% endif %}
+        <a href="{{ tool.export_href }}">Export JSON</a>
       </li>
     {% endfor %}
   </ul>

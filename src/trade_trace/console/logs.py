@@ -25,7 +25,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from trade_trace.console.security import is_loopback_address  # noqa: F401
 from trade_trace.storage.paths import resolve_home
 
 LOG_FILENAME = "trade-trace.log"

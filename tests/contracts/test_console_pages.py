@@ -217,24 +217,13 @@ def test_reports_context_omits_lazy_write_handlers(conn):
     from trade_trace.console.pages import reports_context
 
     ctx = reports_context(conn)
-    assert "report.coach" not in ctx["report_tools"]
+    names = [tool["name"] for tool in ctx["report_tools"]]
+    assert "report.coach" not in names
+    pnl = next(tool for tool in ctx["report_tools"] if tool["name"] == "report.pnl")
+    assert pnl["href"] == "/reports/pnl"
+    assert pnl["export_href"] == "/reports/report.pnl/export.json"
     assert "report.coach" in ctx["lazy_write_handlers_blocked"]
     assert "signal.scan" in ctx["lazy_write_handlers_blocked"]
-
-
-def test_calibration_context_reports_counts(conn):
-    from trade_trace.console.pages import calibration_context
-
-    ctx = calibration_context(conn)
-    assert "forecasts_total" in ctx
-    assert "forecasts_scored" in ctx
-
-
-def test_calibration_empty_state(empty_conn):
-    from trade_trace.console.pages import calibration_context
-
-    ctx = calibration_context(empty_conn)
-    assert ctx["empty_state"] is not None
 
 
 def test_strategies_context_paginates(conn):

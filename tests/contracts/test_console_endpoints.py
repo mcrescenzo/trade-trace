@@ -83,7 +83,7 @@ def test_status_endpoint_returns_documented_fields(tmp_path: Path):
     assert data["schema_version"] is not None
     assert data["row_counts"]["memory_nodes"] == 5
     assert data["lazy_write_handlers_blocked"] == ["report.coach", "signal.scan"]
-    assert data["logs_deferred"] is True
+    assert data["logs_available"] is True
 
 
 def test_journal_events_list_paginates(tmp_path: Path):

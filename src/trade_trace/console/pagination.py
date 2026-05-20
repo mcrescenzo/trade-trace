@@ -133,3 +133,49 @@ def paginate_query(
         # invariant trivial to enforce.
         next_cursor = _encode_cursor(last[0])
     return Page(rows=rows, next_cursor=next_cursor, limit=clamped_limit)
+
+
+def paginate_created_at_id_query(
+    conn: sqlite3.Connection,
+    *,
+    sql: str,
+    cursor: str | None,
+    limit: int = DEFAULT_LIMIT,
+    params: tuple[Any, ...] = (),
+    id_index: int = 0,
+    created_at_index: int = -1,
+) -> Page:
+    """Run a newest-first `(created_at, id)` keyset page.
+
+    Several Console tables select `id` first for display but sort by
+    `created_at`. A simple cursor over the first selected column would
+    repeat or skip rows. This helper encodes the true order key plus an
+    id tie-breaker so duplicate timestamps walk correctly.
+    """
+
+    clamped_limit = max(1, min(int(limit), MAX_LIMIT))
+    where = ""
+    page_params: list[Any] = list(params)
+    if cursor is not None:
+        after = _decode_cursor(cursor)
+        if not isinstance(after, list) or len(after) != 2:
+            raise PaginationError(
+                "created_at cursor payload must contain [created_at, id]",
+            )
+        after_created_at, after_id = after
+        connector = " AND " if " WHERE " in sql.upper() else " WHERE "
+        where = (
+            connector
+            + "(created_at < ? OR (created_at = ? AND id < ?))"
+        )
+        page_params.extend([after_created_at, after_created_at, after_id])
+
+    paged_sql = f"{sql}{where} ORDER BY created_at DESC, id DESC LIMIT ?"
+    rows = list(conn.execute(paged_sql, tuple(page_params) + (clamped_limit + 1,)))
+
+    next_cursor: str | None = None
+    if len(rows) > clamped_limit:
+        rows = rows[:clamped_limit]
+        last = rows[-1]
+        next_cursor = _encode_cursor([last[created_at_index], last[id_index]])
+    return Page(rows=rows, next_cursor=next_cursor, limit=clamped_limit)

@@ -54,15 +54,22 @@
   function syncActiveNav() {
     var route = currentRoute();
     var links = document.querySelectorAll("[data-nav-route]");
+    var bestMatch = null;
+    var bestLength = -1;
     for (var i = 0; i < links.length; i++) {
       var link = links[i];
       var target = link.getAttribute("data-nav-route") || "/";
       var active = target === "/" ? route === "/" : route.indexOf(target) === 0;
       if (active) {
-        link.setAttribute("aria-current", "page");
-      } else {
-        link.removeAttribute("aria-current");
+        if (target.length > bestLength) {
+          bestMatch = link;
+          bestLength = target.length;
+        }
       }
+      link.removeAttribute("aria-current");
+    }
+    if (bestMatch) {
+      bestMatch.setAttribute("aria-current", "page");
     }
     document.body.setAttribute("data-route", route);
   }
