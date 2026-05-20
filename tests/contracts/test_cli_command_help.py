@@ -44,3 +44,29 @@ def test_top_level_help_remains_global_only(capsys):
     assert "--actor-id" in help_text
     assert "tool options from schema" not in help_text
     assert "--instrument-id" not in help_text
+
+
+
+def test_report_playbook_adherence_help_advertises_scoping_args(capsys):
+    rc = cli_main(["report", "playbook_adherence", "--help"])
+
+    out = capsys.readouterr()
+    help_text = out.out + out.err
+    assert rc == 0
+    assert "Tool: report.playbook_adherence" in help_text
+    assert "--filter <object>  optional" in help_text
+    assert "--playbook-id <string>  optional" in help_text
+    assert "--strategy-id <string>  optional" in help_text
+
+
+def test_playbook_propose_version_help_advertises_optional_lineage_fields(capsys):
+    rc = cli_main(["playbook", "propose_version", "--help"])
+
+    out = capsys.readouterr()
+    help_text = out.out + out.err
+    assert rc == 0
+    assert "--playbook-id <string>  required" in help_text
+    assert "--provenance-reflection-node-id <string>  required" in help_text
+    assert "--parent-version-id <string>  optional" in help_text
+    assert "--description <string>  optional" in help_text
+    assert "--metadata-json <object>  optional" in help_text

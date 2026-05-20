@@ -74,6 +74,43 @@ VALID_MEMORY_ENDPOINTS: Final[tuple[str, ...]] = (
 """Endpoint kinds for memory edges. Matches the edges table CHECK
 constraint; `memory.link` validates the target row exists before writing."""
 
+
+_MEMORY_REFLECT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "target_kind": {"type": "string", "enum": list(VALID_MEMORY_ENDPOINTS)},
+        "target_id": {"type": "string"},
+        "target": {
+            "type": "object",
+            "properties": {"kind": {"type": "string", "enum": list(VALID_MEMORY_ENDPOINTS)}, "id": {"type": "string"}},
+            "description": "Sugar equivalent to target_kind + target_id.",
+        },
+        "body": {"type": "string"},
+        "insight": {"type": "string", "description": "Sugar equivalent to body."},
+        "strength_tags": {"type": "array", "items": {"type": "string"}},
+        "weakness_tags": {"type": "array", "items": {"type": "string"}},
+        "title": {"type": "string"},
+        "importance": {"type": "integer", "minimum": 1, "maximum": 10},
+        "confidence_base": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "decay_rate_per_day": {"type": "number"},
+        "valid_from": {"type": "string"},
+        "valid_to": {"type": "string"},
+        "meta_json": {"type": "object"},
+        "parent_node_id": {"type": "string"},
+        "edge_id": {"type": "string"},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["idempotency_key"],
+    "description": (
+        "Write a reflection node plus about-edge. Use either canonical "
+        "target_kind/target_id/body or sugar target={kind,id}/insight. "
+        "At least one target shape and one body/insight value are required at runtime. "
+        "strength_tags and weakness_tags are folded into meta_json.tags. "
+        "Edge-sugar fields derived_from/supports/contradicts/supersedes are deferred; use memory.link."
+    ),
+}
+
 ENDPOINT_TABLES: Final[dict[str, str]] = {
     "memory_node": "memory_nodes",
     "decision": "decisions",
@@ -1187,8 +1224,10 @@ def register_memory_tools(registry: ToolRegistry) -> None:
             "Write a reflection node + about-edge atomically against a "
             "ledger or memory endpoint (decision, thesis, forecast, outcome, "
             "memory_node, etc.). Enforces the orphan invariant: every "
-            "reflection has an about-edge."
+            "reflection has an about-edge. Accepts canonical "
+            "target_kind/target_id/body and README sugar target/insight."
         ),
+        json_schema=_MEMORY_REFLECT_SCHEMA,
     )
     registry.register(
         "memory.link",

@@ -50,6 +50,68 @@ from trade_trace.tools.errors import ToolError
 ADHERENCE_STATUSES = ("considered", "followed", "overridden", "not_applicable")
 
 
+def _schema(properties: dict[str, Any], *, required: list[str] | None = None, description: str = "") -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": required or [],
+        "description": description,
+    }
+
+
+_PLAYBOOK_LIST_SCHEMA = _schema(
+    {"limit": {"type": "integer", "minimum": 1, "maximum": 1000}},
+    description="Optional limit defaults to 100 and is capped at 1000.",
+)
+_PLAYBOOK_SHOW_SCHEMA = _schema(
+    {"playbook_id": {"type": "string"}},
+    required=["playbook_id"],
+    description="Show one playbook and versions; NOT_FOUND on a bad playbook_id.",
+)
+_PLAYBOOK_LIST_VERSIONS_SCHEMA = _schema(
+    {"playbook_id": {"type": "string"}},
+    required=["playbook_id"],
+    description="List versions for one playbook; NOT_FOUND on a bad playbook_id.",
+)
+_PLAYBOOK_PROPOSE_VERSION_SCHEMA = _schema(
+    {
+        "playbook_id": {"type": "string"},
+        "provenance_reflection_node_id": {"type": "string"},
+        "parent_version_id": {"type": "string"},
+        "description": {"type": "string"},
+        "metadata_json": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    required=["playbook_id", "provenance_reflection_node_id", "idempotency_key"],
+    description=(
+        "Append a version anchored to a reflection. Optional parent_version_id "
+        "overrides the default prior-head lineage; description is scanned for "
+        "secret-shaped text. Rule/rule_json/rules_json payloads are not accepted; "
+        "create playbook_rule memory nodes separately."
+    ),
+)
+_DECISION_RECORD_ADHERENCE_SCHEMA = _schema(
+    {
+        "decision_id": {"type": "string"},
+        "playbook_version_id": {"type": "string"},
+        "rule_node_id": {"type": "string"},
+        "status": {"type": "string", "enum": list(ADHERENCE_STATUSES)},
+        "reason": {"type": "string"},
+        "metadata_json": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    required=["decision_id", "playbook_version_id", "rule_node_id", "status", "idempotency_key"],
+    description=(
+        "Record advisory playbook adherence. status must be one of considered, "
+        "followed, overridden, not_applicable. rule_node_id must reference a "
+        "memory_node with node_type='playbook_rule'. Use reason for override "
+        "rationale; bad endpoints return typed NOT_FOUND/VALIDATION_ERROR."
+    ),
+)
+
+# -- playbook.create
 # -- playbook.create ----------------------------------------------
 
 
@@ -638,6 +700,7 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
         "playbook.list",
         _playbook_list,
         description="List every playbook. Sorted by name.",
+        json_schema=_PLAYBOOK_LIST_SCHEMA
     )
     registry.register(
         "playbook.show",
@@ -646,6 +709,7 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
             "Return one playbook row plus its full version history "
             "(ordered ascending). NOT_FOUND on bad playbook_id."
         ),
+        json_schema=_PLAYBOOK_SHOW_SCHEMA
     )
     registry.register(
         "playbook.list_versions",
@@ -655,6 +719,7 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
             "an agent inspecting the rule lineage independently of "
             "playbook.show."
         ),
+        json_schema=_PLAYBOOK_LIST_VERSIONS_SCHEMA
     )
     registry.register(
         "playbook.propose_version",
@@ -667,6 +732,7 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
             "number auto-increments; parent_version_id defaults to the "
             "prior head. Emits playbook.proposed_version event."
         ),
+        json_schema=_PLAYBOOK_PROPOSE_VERSION_SCHEMA
     )
     registry.register(
         "playbook.adherence",
@@ -693,4 +759,5 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
             "playbook_rule.followed for every other status. Advisory only "
             "— no auto-rejection of the decision."
         ),
+        json_schema=_DECISION_RECORD_ADHERENCE_SCHEMA
     )

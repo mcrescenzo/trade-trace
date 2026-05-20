@@ -255,6 +255,15 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "body": "Falsifying evidence emerged when liquidity dried up.",
             "idempotency_key": _IDEM,
         },
+        "rich": {
+            "target": {"kind": "decision", "id": "dec_DECISION_ID_HERE"},
+            "insight": "I over-weighted headline momentum and under-weighted spread quality.",
+            "strength_tags": ["thesis-check"],
+            "weakness_tags": ["liquidity-ignored"],
+            "importance": 7,
+            "meta_json": {"review": "2026-Q1"},
+            "idempotency_key": _IDEM,
+        },
     },
     "memory.link": {
         "minimal": {

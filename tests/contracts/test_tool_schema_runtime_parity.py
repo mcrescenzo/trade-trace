@@ -176,3 +176,66 @@ def test_playbook_adherence_schema_requires_playbook_id_only():
     assert "playbook_id" in properties
     assert "strategy_id" in properties
     assert "strategy_id" not in schema.get("required", [])
+
+
+
+def test_all_report_tools_advertise_argument_schema_or_explicit_no_arg_schema():
+    reg = default_registry()
+    report_tools = [name for name in reg.names() if name.startswith("report.")]
+
+    assert report_tools
+    for tool_name in report_tools:
+        schema = _schema_for(tool_name)
+        assert schema["type"] == "object"
+        assert "properties" in schema
+        assert "required" in schema
+
+
+def test_report_playbook_adherence_schema_advertises_all_runtime_scopes():
+    schema = _schema_for("report.playbook_adherence")
+    properties = schema.get("properties", {})
+
+    for key in ("filter", "playbook_id", "strategy_id"):
+        assert key in properties
+        assert key not in schema.get("required", [])
+
+
+def test_memory_reflect_schema_advertises_canonical_and_sugar_shapes():
+    schema = _schema_for("memory.reflect")
+    properties = schema.get("properties", {})
+
+    for key in (
+        "target_kind",
+        "target_id",
+        "body",
+        "target",
+        "insight",
+        "strength_tags",
+        "weakness_tags",
+        "meta_json",
+    ):
+        assert key in properties
+    assert "derived_from" not in properties
+    assert "supports" not in properties
+
+
+def test_playbook_read_and_write_schemas_advertise_runtime_optional_fields():
+    assert "limit" in _schema_for("playbook.list")["properties"]
+    assert _schema_for("playbook.show")["required"] == ["playbook_id"]
+    assert _schema_for("playbook.list_versions")["required"] == ["playbook_id"]
+
+    propose = _schema_for("playbook.propose_version")
+    for key in ("description", "metadata_json", "parent_version_id"):
+        assert key in propose["properties"]
+        assert key not in propose["required"]
+
+    adherence = _schema_for("decision.record_adherence")
+    assert adherence["properties"]["status"]["enum"] == [
+        "considered",
+        "followed",
+        "overridden",
+        "not_applicable",
+    ]
+    for key in ("reason", "metadata_json"):
+        assert key in adherence["properties"]
+        assert key not in adherence["required"]

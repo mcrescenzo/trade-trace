@@ -47,6 +47,111 @@ from trade_trace.tools._helpers import open_db_for_args
 from trade_trace.tools.errors import ToolError
 
 
+_EMPTY_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "description": "No tool-specific arguments are accepted.",
+}
+
+
+def _schema(
+    properties: dict[str, Any],
+    *,
+    required: list[str] | None = None,
+    description: str = "",
+) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": required or [],
+        "description": description,
+    }
+
+
+_FILTER_PROP = {
+    "type": "object",
+    "description": (
+        "ReportFilter object; call report.filter_schema for the canonical "
+        "nested schema and supported fields."
+    ),
+}
+
+
+_REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
+    "report.filter_schema": _schema(
+        {"mode": {"type": "string", "enum": ["validation", "serialization"]}},
+        description=(
+            "Optional mode selects validation (accepted input) or "
+            "serialization (emitted echo) ReportFilter schema."
+        ),
+    ),
+    "report.calibration": _schema(
+        {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
+        description="Optional ReportFilter and low-N warning threshold; defaults min_sample=20.",
+    ),
+    "report.playbook_adherence": _schema(
+        {
+            "filter": _FILTER_PROP,
+            "playbook_id": {"type": "string"},
+            "strategy_id": {"type": "string"},
+        },
+        description="Optional ReportFilter plus top-level playbook_id/strategy_id scoping.",
+    ),
+    "report.source_quality": _schema({"stale_threshold_days": {"type": "integer", "minimum": 0}}),
+    "report.calibration_integrity": _EMPTY_SCHEMA,
+    "report.unscored_forecasts": _schema({"filter": _FILTER_PROP}),
+    "report.decision_velocity": _schema(
+        {"filter": _FILTER_PROP, "bucket": {"type": "string", "enum": ["day", "week"]}},
+        description="bucket defaults to day; only day/week are accepted.",
+    ),
+    "report.mistakes": _schema({"filter": _FILTER_PROP}),
+    "report.strengths": _schema({"filter": _FILTER_PROP}),
+    "report.pnl": _schema({"filter": _FILTER_PROP}),
+    "report.risk": _schema({"filter": _FILTER_PROP}),
+    "report.opportunity": _schema(
+        {
+            "filter": _FILTER_PROP,
+            "minimum_coverage": {"type": "string", "enum": ["sparse", "partial", "full"]},
+            "max_records": {"type": "integer", "minimum": 1},
+            "include_labels": {"type": "boolean"},
+            "min_sample": {"type": "integer", "minimum": 1},
+        }
+    ),
+    "report.compare": _schema(
+        {
+            "base_report": {"type": "string", "enum": ["calibration", "pnl"]},
+            "group_by": {
+                "type": "string",
+                "description": (
+                    "Allowlisted by base_report; common values include "
+                    "strategy_id, instrument_id, tag."
+                ),
+            },
+            "filter": _FILTER_PROP,
+            "min_sample": {"type": "integer", "minimum": 1},
+        }
+    ),
+    "report.strategy_performance": _schema(
+        {
+            "strategy_id": {"type": "string"},
+            "filter": _FILTER_PROP,
+            "min_sample": {"type": "integer", "minimum": 1},
+        }
+    ),
+    "report.watchlist": _schema(
+        {
+            "filter": _FILTER_PROP,
+            "mode": {"type": "string", "enum": ["all", "stale"]},
+            "stale_threshold_days": {"type": "integer", "minimum": 0},
+        }
+    ),
+    "report.coach": _schema(
+        {"filter": _FILTER_PROP, "stale_threshold_days": {"type": "integer", "minimum": 0}}
+    ),
+}
+
+
 def _unsupported_filter_to_tool_error(exc: UnsupportedFilterError) -> ToolError:
     """Translate a typed UnsupportedFilterError into a VALIDATION_ERROR
     envelope. The agent gets the offending leaf paths and the supported
@@ -515,6 +620,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "`__none__` sentinel meaning for `strategy.strategy_id` so "
             "agents can build filter UIs without reading the docs."
         ),
+        json_schema=_REPORT_SCHEMAS["report.filter_schema"],
     )
     registry.register(
         "report.calibration",
@@ -529,6 +635,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "six anti-goodhart hygiene diagnostics from "
             "report.calibration_integrity under data.integrity_diagnostics."
         ),
+        json_schema=_REPORT_SCHEMAS["report.calibration"]
     )
     registry.register(
         "report.playbook_adherence",
@@ -540,6 +647,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "playbook_id (single playbook), strategy_id (single strategy "
             "across decisions). Per bead fbq."
         ),
+        json_schema=_REPORT_SCHEMAS["report.playbook_adherence"]
     )
     registry.register(
         "report.source_quality",
@@ -554,6 +662,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
         ),
         example_minimal={"stale_threshold_days": 7},
         optional_keys=("stale_threshold_days",),
+        json_schema=_REPORT_SCHEMAS["report.source_quality"]
     )
     registry.register(
         "report.calibration_integrity",
@@ -568,6 +677,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "scored_forecasts, denominator_coverage_pct). Empty DBs surface "
             "sample_warning='no_data'."
         ),
+        json_schema=_REPORT_SCHEMAS["report.calibration_integrity"]
     )
     registry.register(
         "report.unscored_forecasts",
@@ -580,6 +690,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
         ),
         example_minimal={"filter": {}},
         optional_keys=("filter",),
+        json_schema=_REPORT_SCHEMAS["report.unscored_forecasts"]
     )
     registry.register(
         "report.decision_velocity",
@@ -589,6 +700,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "decision_at_* window. Bucket boundaries are UTC-aligned; "
             "groups[] are ordered by bucket key ascending."
         ),
+        json_schema=_REPORT_SCHEMAS["report.decision_velocity"]
     )
     registry.register(
         "report.mistakes",
@@ -598,6 +710,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "associated scored forecasts (worst first). Per-group metrics: "
             "decision_count, scored_forecast_count, mean_brier."
         ),
+        json_schema=_REPORT_SCHEMAS["report.mistakes"]
     )
     registry.register(
         "report.strengths",
@@ -606,6 +719,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "Tag-aggregated patterns ranked by mean Brier (best first). "
             "Mirror of report.mistakes."
         ),
+        json_schema=_REPORT_SCHEMAS["report.strengths"]
     )
     registry.register(
         "report.pnl",
@@ -617,6 +731,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "Reads the rebuildable positions "
             "projection (trade-trace-5zg)."
         ),
+        json_schema=_REPORT_SCHEMAS["report.pnl"]
     )
     registry.register(
         "report.risk",
@@ -631,6 +746,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "positions (declared risk but not closed) are surfaced separately "
             "in metrics.n_pending_with_risk."
         ),
+        json_schema=_REPORT_SCHEMAS["report.risk"]
     )
     registry.register(
         "report.opportunity",
@@ -659,6 +775,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "include_labels",
             "min_sample",
         ),
+        json_schema=_REPORT_SCHEMAS["report.opportunity"]
     )
     registry.register(
         "report.compare",
@@ -671,6 +788,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "emitted; summary.sample_warning is set when any group is low-N."
         ),
         example_minimal={"base_report": "calibration", "group_by": "strategy_id", "filter": {}},
+        json_schema=_REPORT_SCHEMAS["report.compare"]
     )
     registry.register(
         "report.strategy_performance",
@@ -682,6 +800,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "strategies including the __none__ no-strategy bucket."
         ),
         example_minimal={"strategy_id": "strat_example", "filter": {}},
+        json_schema=_REPORT_SCHEMAS["report.strategy_performance"]
     )
     registry.register(
         "report.watchlist",
@@ -693,6 +812,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
         ),
         example_minimal={"filter": {}, "mode": "all", "stale_threshold_days": 14},
         optional_keys=("filter", "mode", "stale_threshold_days"),
+        json_schema=_REPORT_SCHEMAS["report.watchlist"]
     )
     registry.register(
         "report.coach",
@@ -706,4 +826,5 @@ def register_report_tools(registry: ToolRegistry) -> None:
         ),
         example_minimal={"filter": {}, "stale_threshold_days": 14},
         optional_keys=("filter", "stale_threshold_days"),
+        json_schema=_REPORT_SCHEMAS["report.coach"]
     )
