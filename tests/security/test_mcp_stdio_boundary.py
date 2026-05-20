@@ -8,6 +8,7 @@ transport hints, and a deterministic MCP actor default.
 
 from __future__ import annotations
 
+import asyncio
 import builtins
 import importlib
 import json
@@ -15,11 +16,13 @@ import socket
 from typing import Any
 
 import pytest
+from mcp import types
 
 import trade_trace.mcp_server as mcp_server
 from trade_trace.contracts.tool_registry import ToolRegistry
 from trade_trace.mcp_server import (
     SECRET_TRANSPORT_HINT_KEYS,
+    _build_stdio_server,
     mcp_call,
     mcp_tool_specs,
     serve_stdio,
@@ -181,3 +184,65 @@ def test_mcp_call_existing_default_actor_remains_unchanged_until_stdio_46p():
 
     env = mcp_call("journal.status", {})
     assert env.meta.actor_id == "agent:default"
+
+
+def _stdio_call_result(server, name: str, arguments: Any):  # noqa: ANN001
+    request = types.CallToolRequest.model_construct(
+        params=types.CallToolRequestParams.model_construct(name=name, arguments=arguments)
+    )
+    return server.request_handlers[types.CallToolRequest](request)
+
+
+def test_stdio_schema_validation_failure_returns_trade_trace_error_envelope(monkeypatch):
+    monkeypatch.setenv("MCP_ACTOR_ID", "agent:stdio-boundary")
+    registry = ToolRegistry()
+    registry.register(
+        "boundary.echo",
+        _noop_handler,
+        json_schema={
+            "type": "object",
+            "properties": {"message": {"type": "string"}},
+            "required": ["message"],
+        },
+    )
+    registry.validate()
+
+    result = asyncio.run(_stdio_call_result(_build_stdio_server(registry), "boundary.echo", {}))
+    structured = result.root.structuredContent
+    assert structured is not None
+
+    assert structured["ok"] is False
+    assert structured["error"]["code"] == "VALIDATION_ERROR"
+    assert structured["error"]["details"]["tool"] == "boundary.echo"
+    assert structured["error"]["details"]["validator"] == "required"
+    assert structured["meta"]["tool"] == "boundary.echo"
+    assert structured["meta"]["actor_id"] == "agent:stdio-boundary"
+    assert structured["meta"]["request_id"]
+    assert structured["meta"]["contract_version"]
+    assert structured["meta"]["mcp_transport_hints"] == {}
+
+
+def test_stdio_wrong_type_arguments_return_trade_trace_error_envelope(monkeypatch):
+    monkeypatch.setenv("MCP_ACTOR_ID", "agent:stdio-boundary")
+    registry = ToolRegistry()
+    registry.register("boundary.echo", _noop_handler)
+    registry.validate()
+
+    result = asyncio.run(
+        _stdio_call_result(_build_stdio_server(registry), "boundary.echo", ["not", "an", "object"])
+    )
+    structured = result.root.structuredContent
+    assert structured is not None
+
+    assert structured["ok"] is False
+    assert structured["error"]["code"] == "VALIDATION_ERROR"
+    assert structured["error"]["details"] == {
+        "tool": "boundary.echo",
+        "field": "arguments",
+        "expected": "object",
+        "actual": "list",
+    }
+    assert structured["meta"]["tool"] == "boundary.echo"
+    assert structured["meta"]["actor_id"] == "agent:stdio-boundary"
+    assert structured["meta"]["request_id"]
+    assert structured["meta"]["contract_version"]

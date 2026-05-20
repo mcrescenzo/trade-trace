@@ -14,9 +14,12 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
-from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope
+import jsonschema
+
+from trade_trace.contracts.envelope import ErrorEnvelope, Meta, SuccessEnvelope, error_envelope
+from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolRegistry
-from trade_trace.core import default_registry, dispatch
+from trade_trace.core import default_registry, dispatch, new_request_id
 
 DEFAULT_MCP_ACTOR_ID = "agent:mcp-default"
 
@@ -115,6 +118,26 @@ def mcp_call(
     return envelope
 
 
+def _stdio_validation_error(
+    tool_name: str,
+    message: str,
+    *,
+    actor_id: str,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return a Trade Trace envelope for stdio boundary validation failures."""
+
+    meta = Meta(tool=tool_name, actor_id=actor_id, request_id=new_request_id())
+    meta.mcp_transport_hints = {}
+    envelope = error_envelope(
+        meta,
+        ErrorCode.VALIDATION_ERROR,
+        message,
+        details or {"tool": tool_name},
+    )
+    return envelope.model_dump(mode="json", exclude_none=True)
+
+
 def _build_stdio_server(registry: ToolRegistry | None = None):
     """Build the low-level MCP SDK server without starting a transport."""
 
@@ -145,12 +168,46 @@ def _build_stdio_server(registry: ToolRegistry | None = None):
             for spec in mcp_tool_specs(reg)
         ]
 
-    @server.call_tool(validate_input=True)
-    async def _call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    @server.call_tool(validate_input=False)
+    async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
+        actor_id = stdio_actor_id(os.environ)
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            return _stdio_validation_error(
+                name,
+                "MCP tool arguments must be a JSON object",
+                actor_id=actor_id,
+                details={
+                    "tool": name,
+                    "field": "arguments",
+                    "expected": "object",
+                    "actual": type(arguments).__name__,
+                },
+            )
+
+        registration = reg.get(name) if name in reg.names() else None
+        schema = registration.json_schema if registration is not None else None
+        if schema:
+            try:
+                jsonschema.validate(instance=arguments, schema=schema)
+            except jsonschema.ValidationError as exc:
+                return _stdio_validation_error(
+                    name,
+                    f"Input validation error: {exc.message}",
+                    actor_id=actor_id,
+                    details={
+                        "tool": name,
+                        "field": ".".join(str(part) for part in exc.path) or None,
+                        "validator": exc.validator,
+                        "validator_value": exc.validator_value,
+                    },
+                )
+
         envelope = mcp_call(
             name,
             arguments,
-            actor_id=stdio_actor_id(os.environ),
+            actor_id=actor_id,
             registry=reg,
         )
         return envelope.model_dump(mode="json", exclude_none=True)
