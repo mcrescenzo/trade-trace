@@ -23,11 +23,11 @@ def test_overview_renders_navigation_and_no_console_errors(page, console_url):
     assert page.get_by_text("Read-only Console").is_visible()
     assert page.get_by_text("read-only").first.is_visible()
 
-    # Nav contains the documented routes.
+    # Nav contains the documented primary routes from routeCatalog.ts.
     for label in (
-        "Overview", "Journal", "Decisions", "Reports",
-        "Calibration", "Strategies", "Playbooks",
-        "Evidence", "Raw JSON", "Logs",
+        "Overview", "Trades", "Reports", "Period review",
+        "Process analytics", "Calibration", "Evidence",
+        "Strategies", "Playbooks", "Journal", "Decisions",
     ):
         assert page.get_by_role("link", name=label).is_visible(), label
 

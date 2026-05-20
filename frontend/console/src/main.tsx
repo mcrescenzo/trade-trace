@@ -215,6 +215,9 @@ function Shell() {
   return (
     <Tooltip.Provider>
       <div className="min-h-screen bg-background text-foreground">
+        <a href="#console-main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:shadow">
+          Skip to main content
+        </a>
         <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-border bg-card/90 px-4 py-5 lg:block">
           <Link to="/" className="mb-6 flex items-center gap-3">
             <span className="grid size-10 place-items-center rounded bg-primary text-sm font-bold text-white">
@@ -232,7 +235,7 @@ function Shell() {
               <Link
                 key={item.to}
                 to={item.to}
-                className="flex items-center gap-3 rounded px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground [&.active]:bg-accent [&.active]:text-foreground"
+                className="flex items-center gap-3 rounded px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground [&.active]:bg-accent [&.active]:font-medium [&.active]:text-foreground"
               >
                 <item.icon className="size-4" aria-hidden />
                 {item.label}
@@ -267,7 +270,7 @@ function Shell() {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="inline-flex shrink-0 items-center gap-2 rounded border border-border px-3 py-1.5 text-sm text-muted-foreground [&.active]:bg-accent [&.active]:text-foreground"
+                  className="inline-flex shrink-0 items-center gap-2 rounded border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground [&.active]:bg-accent [&.active]:font-medium [&.active]:text-foreground"
                 >
                   <item.icon className="size-4" aria-hidden />
                   {item.label}
@@ -275,7 +278,7 @@ function Shell() {
               ))}
             </nav>
           </header>
-          <main className="mx-auto max-w-7xl px-4 py-6 md:px-6">
+          <main id="console-main" className="mx-auto max-w-7xl px-4 py-6 md:px-6">
             <Outlet />
           </main>
         </div>
@@ -294,13 +297,21 @@ function PageHeader({ title, eyebrow }: { title: string; eyebrow: string }) {
 }
 
 function LoadingBlock({ label = 'Loading' }: { label?: string }) {
-  return <div className="rounded border border-border bg-card p-5 text-sm text-muted-foreground">{label}</div>
+  return (
+    <div className="rounded border border-border bg-card p-5" role="status" aria-live="polite" aria-busy="true">
+      <p className="text-sm font-medium text-foreground">{label}…</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3" aria-hidden>
+        {[0, 1, 2].map((item) => <div key={item} className="h-16 rounded bg-muted" />)}
+      </div>
+    </div>
+  )
 }
 
 function ErrorBlock({ error }: { error: unknown }) {
   return (
-    <div className="rounded border border-danger/30 bg-danger/10 p-5 text-sm text-danger">
-      {error instanceof Error ? error.message : 'Unable to load data'}
+    <div className="rounded border border-danger/30 bg-danger/10 p-5 text-sm text-danger" role="alert">
+      <p className="font-semibold">Unable to load data</p>
+      <p className="mt-1">{error instanceof Error ? error.message : 'The local console endpoint did not return data for this view.'}</p>
     </div>
   )
 }

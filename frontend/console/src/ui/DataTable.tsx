@@ -67,8 +67,11 @@ export function DataTable<T extends Record<string, unknown>>({
     getSortedRowModel: getSortedRowModel()
   })
 
+  const visibleRows = table.getRowModel().rows
+  const tableLabel = columns.map((column) => column.header).join(', ')
+
   return (
-    <div className="overflow-hidden rounded border border-border bg-card">
+    <div className="min-w-0 overflow-hidden rounded border border-border bg-card">
       {searchable ? (
         <div className="border-b border-border p-3">
           <label className="sr-only" htmlFor="table-search">
@@ -76,15 +79,18 @@ export function DataTable<T extends Record<string, unknown>>({
           </label>
           <input
             id="table-search"
-            className="w-full rounded border border-border bg-background px-3 py-2 text-sm md:max-w-sm"
+            className="w-full rounded border border-border bg-background px-3 py-2 text-sm shadow-sm md:max-w-sm"
             placeholder="Search rows"
             value={globalFilter}
             onChange={(event) => setGlobalFilter(event.target.value)}
           />
         </div>
       ) : null}
-      <div className="max-h-[620px] overflow-auto">
+      <div className="max-h-[620px] min-w-0 overflow-auto" tabIndex={0} aria-label={`Scrollable table: ${tableLabel}`}>
         <table className="min-w-full border-collapse text-sm">
+          <caption className="sr-only">
+            {tableLabel}. {visibleRows.length === 0 ? emptyMessage : `${visibleRows.length} visible row${visibleRows.length === 1 ? '' : 's'}. Use column header buttons to sort.`}
+          </caption>
           <thead className="sticky top-0 bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
@@ -93,7 +99,7 @@ export function DataTable<T extends Record<string, unknown>>({
                   <th key={header.id} className="border-b border-border px-3 py-2 font-medium">
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 text-left uppercase tracking-wide"
+                      className="inline-flex items-center gap-1 rounded text-left uppercase tracking-wide"
                       onClick={header.column.getToggleSortingHandler()}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
@@ -109,14 +115,15 @@ export function DataTable<T extends Record<string, unknown>>({
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row) => (
+            {visibleRows.map((row) => (
               <Fragment key={row.id}>
                 <tr key={row.id} className="border-b border-border last:border-0">
                   {renderDetail ? (
                     <td className="px-3 py-2">
                       <button
                         type="button"
-                        className="rounded border border-border px-2 py-1 text-xs"
+                        className="rounded border border-border px-2 py-1 text-xs shadow-sm"
+                        aria-expanded={expandedRowId === row.id}
                         onClick={() => setExpandedRowId((current) => (current === row.id ? null : row.id))}
                       >
                         {expandedRowId === row.id ? 'Hide' : 'Detail'}
@@ -124,7 +131,7 @@ export function DataTable<T extends Record<string, unknown>>({
                     </td>
                   ) : null}
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="max-w-72 truncate px-3 py-2">
+                    <td key={cell.id} className="max-w-72 whitespace-nowrap px-3 py-2 align-top">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -138,10 +145,13 @@ export function DataTable<T extends Record<string, unknown>>({
                 ) : null}
               </Fragment>
             ))}
-            {table.getRowModel().rows.length === 0 ? (
+            {visibleRows.length === 0 ? (
               <tr>
-                <td className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length + (renderDetail ? 1 : 0)}>
-                  {emptyMessage}
+                <td className="px-3 py-8 text-center" colSpan={columns.length + (renderDetail ? 1 : 0)}>
+                  <div className="mx-auto max-w-md rounded border border-dashed border-border bg-background/70 p-4">
+                    <p className="font-medium text-foreground">No rows to display</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{emptyMessage}</p>
+                  </div>
                 </td>
               </tr>
             ) : null}

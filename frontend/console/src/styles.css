@@ -12,7 +12,7 @@
   --accent: 210 40% 94%;
   --primary: 221 83% 53%;
   --positive: 160 84% 32%;
-  --warning: 38 92% 50%;
+  --warning: 38 92% 32%;
   --danger: 0 72% 51%;
 }
 
@@ -27,10 +27,35 @@ html {
 
 body {
   margin: 0;
+  overflow-x: hidden;
+}
+
+#root {
+  overflow-x: hidden;
 }
 
 button,
 a {
   -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.18);
+}
+
+main,
+section,
+article,
+div {
+  min-width: 0;
+}
+
+table {
+  max-width: 100%;
 }
 
