@@ -303,6 +303,19 @@ def _build_app(home_path: str) -> Any:
             raise fastapi.HTTPException(status_code=404, detail=f"event {event_id} not found")
         return event
 
+    @app.get("/api/console/record-events")
+    def record_events(subject_kind: str, subject_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        _, db = _open()
+        try:
+            return endpoints.record_events(
+                db.connection,
+                subject_kind=subject_kind,
+                subject_id=subject_id,
+                limit=limit,
+            )
+        finally:
+            db.close()
+
     @app.get("/api/console/logs")
     def logs(level: str | None = None, tail: int = 200) -> dict[str, Any]:
         from trade_trace.console.logs import logs_context

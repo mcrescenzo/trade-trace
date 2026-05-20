@@ -42,6 +42,8 @@ import {
   pageQuery
 } from './api'
 
+type RecordEvent = EventRow & { payload_json?: string | null }
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -209,16 +211,107 @@ function ChipList({ value }: { value: unknown }) {
   )
 }
 
+function JsonBlock({ value }: { value: unknown }) {
+  let parsed = value
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value)
+    } catch {
+      parsed = value
+    }
+  }
+  return <pre className="max-h-80 overflow-auto rounded border border-border bg-card p-3 text-xs">{typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2)}</pre>
+}
+
+function recordSubject(row: Record<string, unknown>, subjectKind?: string) {
+  if (subjectKind === 'event') return null
+  const id = String(row.decision_id ?? row.id ?? row.position_id ?? '')
+  return id && subjectKind ? { kind: subjectKind, id } : null
+}
+
+function RecordDetail({ row, subjectKind }: { row: Record<string, unknown>; subjectKind?: string }) {
+  const subject = recordSubject(row, subjectKind)
+  const eventId = subjectKind === 'event' ? Number(row.id) : null
+  const relatedEvents = useQuery({
+    queryKey: ['record-events', subject?.kind, subject?.id],
+    enabled: Boolean(subject),
+    queryFn: () =>
+      fetchJson<RecordEvent[]>(
+        pageQuery('/api/console/record-events', { subject_kind: subject!.kind, subject_id: subject!.id, limit: 10 })
+      )
+  })
+  const directEvent = useQuery({
+    queryKey: ['event-detail', eventId],
+    enabled: eventId != null && Number.isFinite(eventId),
+    queryFn: () => fetchJson<RecordEvent>(`/api/console/events/${eventId}`)
+  })
+  const events = eventId != null ? (directEvent.data ? [directEvent.data] : []) : (relatedEvents.data ?? [])
+  const loading = relatedEvents.isLoading || directEvent.isLoading
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Record fields</p>
+        <JsonBlock value={row} />
+      </div>
+      <div>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Raw payload access</p>
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Loading raw payload…</p>
+        ) : events.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No contributing record IDs available.</p>
+        ) : (
+          <div className="space-y-2">
+            {events.map((event) => (
+              <details key={event.id} className="rounded border border-border p-3">
+                <summary className="cursor-pointer text-sm font-medium">Event {event.id}: {event.event_type}</summary>
+                <div className="mt-2 space-y-2">
+                  <a className="text-sm underline" href={`/api/console/raw/${event.id}`} target="_blank" rel="noreferrer">
+                    Open raw payload endpoint
+                  </a>
+                  <JsonBlock value={event.payload_json ?? event} />
+                </div>
+              </details>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ReportGroupDetail({ row, rawEnvelope }: { row: Record<string, unknown>; rawEnvelope: unknown }) {
+  const recordIds = row.record_ids && typeof row.record_ids === 'object' ? row.record_ids : null
+  const hasRecordIds = recordIds && Object.values(recordIds as Record<string, unknown>).some((value) => Array.isArray(value) && value.length > 0)
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contributing record IDs</p>
+        {hasRecordIds ? <JsonBlock value={recordIds} /> : <p className="text-sm text-muted-foreground">No contributing record IDs available.</p>}
+      </div>
+      <div>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Report group evidence</p>
+        <JsonBlock value={row} />
+      </div>
+      <details className="rounded border border-border p-3">
+        <summary className="cursor-pointer text-sm font-medium">Raw report envelope</summary>
+        <div className="mt-2"><JsonBlock value={rawEnvelope ?? { message: 'Raw report envelope unavailable' }} /></div>
+      </details>
+    </div>
+  )
+}
+
 function PageTable<T extends Record<string, unknown>>({
   endpoint,
   queryKey,
   columns,
-  emptyMessage
+  emptyMessage,
+  subjectKind
 }: {
   endpoint: string
   queryKey: string
   columns: Parameters<typeof DataTable<T>>[0]['columns']
   emptyMessage: string
+  subjectKind?: string
 }) {
   const [cursor, setCursor] = React.useState<string | null>(null)
   const [history, setHistory] = React.useState<string[]>([])
@@ -234,7 +327,12 @@ function PageTable<T extends Record<string, unknown>>({
     <ErrorBlock error={query.error} />
   ) : (
     <div className="space-y-3">
-      <DataTable rows={query.data?.rows ?? []} columns={columns} emptyMessage={emptyMessage} />
+      <DataTable
+        rows={query.data?.rows ?? []}
+        columns={columns}
+        emptyMessage={emptyMessage}
+        renderDetail={(row) => <RecordDetail row={row} subjectKind={subjectKind} />}
+      />
       <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
         <span>
           Showing up to {query.data?.limit ?? limit} rows{nextCursor ? '; more rows available' : ''}.
@@ -338,6 +436,7 @@ function TradesPage() {
       <PageTable<TradeRow>
         endpoint="/api/console/trades"
         queryKey="trades"
+        subjectKind="decision"
         emptyMessage="No matching trades for the selected view."
         columns={[
           { key: 'decision_id', header: 'Decision', cell: (value) => <CopyId value={value} /> },
@@ -398,6 +497,7 @@ function ReportPage({
               { key: 'sample_warning', header: 'Warning' },
               { key: 'metrics', header: 'Metrics' }
             ]}
+            renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={query.data?.raw_envelope} />}
           />
         </div>
       )}
@@ -427,6 +527,7 @@ function EventsPage({ endpoint, title }: { endpoint: string; title: string }) {
       <PageTable<EventRow>
         endpoint={endpoint}
         queryKey={endpoint}
+        subjectKind="event"
         emptyMessage="No audit rows match this view."
         columns={[
           { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
@@ -447,6 +548,7 @@ function StrategiesPage() {
       <PageTable<Record<string, unknown>>
         endpoint="/api/console/strategies"
         queryKey="strategies"
+        subjectKind="strategy"
         emptyMessage="No strategy records exist in this journal."
         columns={[
           { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
@@ -467,6 +569,7 @@ function PlaybooksPage() {
       <PageTable<Record<string, unknown>>
         endpoint="/api/console/playbooks"
         queryKey="playbooks"
+        subjectKind="playbook"
         emptyMessage="No playbook records exist in this journal."
         columns={[
           { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
@@ -487,6 +590,7 @@ function DecisionsPage() {
       <PageTable<Record<string, unknown>>
         endpoint="/api/console/decisions"
         queryKey="decisions"
+        subjectKind="decision"
         emptyMessage="No matching decisions for this view."
         columns={[
           { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },

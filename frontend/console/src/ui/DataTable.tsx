@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Fragment } from 'react'
 import { useMemo, useState } from 'react'
 import {
   ColumnDef,
@@ -27,15 +28,18 @@ export function DataTable<T extends Record<string, unknown>>({
   rows,
   columns,
   emptyMessage = 'No rows match this view.',
-  searchable = true
+  searchable = true,
+  renderDetail
 }: {
   rows: T[]
   columns: Column<T>[]
   emptyMessage?: string
   searchable?: boolean
+  renderDetail?: (row: T) => ReactNode
 }) {
   const [globalFilter, setGlobalFilter] = useState('')
   const [sorting, setSorting] = useState<SortingState>([])
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
   const columnDefs = useMemo(
     () =>
       columns.map<ColumnDef<T>>((column) => ({
@@ -81,6 +85,7 @@ export function DataTable<T extends Record<string, unknown>>({
           <thead className="sticky top-0 bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
+                {renderDetail ? <th className="border-b border-border px-3 py-2 font-medium">Detail</th> : null}
                 {headerGroup.headers.map((header) => (
                   <th key={header.id} className="border-b border-border px-3 py-2 font-medium">
                     <button
@@ -102,17 +107,37 @@ export function DataTable<T extends Record<string, unknown>>({
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="border-b border-border last:border-0">
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="max-w-72 truncate px-3 py-2">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
+              <Fragment key={row.id}>
+                <tr key={row.id} className="border-b border-border last:border-0">
+                  {renderDetail ? (
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 text-xs"
+                        onClick={() => setExpandedRowId((current) => (current === row.id ? null : row.id))}
+                      >
+                        {expandedRowId === row.id ? 'Hide' : 'Detail'}
+                      </button>
+                    </td>
+                  ) : null}
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id} className="max-w-72 truncate px-3 py-2">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+                {renderDetail && expandedRowId === row.id ? (
+                  <tr key={`${row.id}-detail`} className="border-b border-border bg-background/70">
+                    <td className="px-3 py-3" colSpan={columns.length + 1}>
+                      {renderDetail(row.original)}
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
             ))}
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length}>
+                <td className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length + (renderDetail ? 1 : 0)}>
                   {emptyMessage}
                 </td>
               </tr>

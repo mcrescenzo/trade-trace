@@ -144,6 +144,42 @@ def event_detail(conn: sqlite3.Connection, *, event_id: int) -> dict[str, Any] |
     }
 
 
+def record_events(
+    conn: sqlite3.Connection,
+    *,
+    subject_kind: str,
+    subject_id: str,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Return journal event envelopes that contributed to a local record.
+
+    This narrow read-only lookup backs contextual Console detail drawers without
+    promoting raw JSON to primary navigation.
+    """
+
+    clamped_limit = max(1, min(int(limit), 100))
+    rows = conn.execute(
+        "SELECT id, event_type, subject_kind, subject_id, payload_json, "
+        "actor_id, created_at, request_id "
+        "FROM events WHERE subject_kind = ? AND subject_id = ? "
+        "ORDER BY id DESC LIMIT ?",
+        (subject_kind, subject_id, clamped_limit),
+    ).fetchall()
+    return [
+        {
+            "id": row[0],
+            "event_type": row[1],
+            "subject_kind": row[2],
+            "subject_id": row[3],
+            "payload_json": row[4],
+            "actor_id": row[5],
+            "created_at": row[6],
+            "request_id": row[7],
+        }
+        for row in rows
+    ]
+
+
 def decisions_list(
     conn: sqlite3.Connection,
     *,

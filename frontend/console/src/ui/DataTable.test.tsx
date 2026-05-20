@@ -49,4 +49,18 @@ describe('DataTable', () => {
     render(<DataTable rows={[]} columns={[{ key: 'id', header: 'ID' }]} emptyMessage="No strategy records exist." />)
     expect(screen.getByText('No strategy records exist.')).toBeInTheDocument()
   })
+
+  it('expands contextual row details on demand', () => {
+    render(
+      <DataTable
+        rows={[{ id: 'd1', type: 'actual_enter' }]}
+        columns={[{ key: 'id', header: 'ID' }]}
+        renderDetail={(row) => <div>Raw payload access for {String(row.id)}</div>}
+      />
+    )
+
+    expect(screen.queryByText('Raw payload access for d1')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Detail' }))
+    expect(screen.getByText('Raw payload access for d1')).toBeInTheDocument()
+  })
 })
