@@ -1,6 +1,6 @@
 # Agent workbench dogfood evidence retention
 
-Status: active convention for the agent-native workbench ergonomics beta/dogfood program.
+> Status: **shipped** — active convention for the agent-native workbench ergonomics beta/dogfood program.
 
 Companion docs: [MVP Dogfood and Provenance Protocol](dogfood-protocol.md), [Agent guide](../AGENT_GUIDE.md).
 

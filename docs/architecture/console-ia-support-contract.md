@@ -1,6 +1,6 @@
 # Console IA and support contract
 
-> Status: product/IA support contract for trade-trace-r3hc. This document is durable implementation guidance for the React Console overhaul. It narrows the broader reporting-product architecture into page naming, data-source, audit-access, and copy rules.
+> Status: **decision document for trade-trace-r3hc** — product/IA support contract. This document is durable implementation guidance for the React Console overhaul. It narrows the broader reporting-product architecture into page naming, data-source, audit-access, and copy rules.
 
 ## 1. Purpose and product boundary
 

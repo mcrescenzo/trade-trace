@@ -1,6 +1,6 @@
 # Console Release Gate
 
-> Status: release checklist for the React/Vite Console.
+> Status: **shipped** — release checklist for the React/Vite Console.
 
 ## Required Gates
 

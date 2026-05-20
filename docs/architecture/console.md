@@ -1,7 +1,7 @@
 # Console Architecture
 
-> Status: clean-break implementation contract for the package-shipped
-> React Console.
+> Status: **shipped** — clean-break implementation contract for the
+> package-shipped React Console.
 
 ## Decisions
 

@@ -1,6 +1,6 @@
 # Console Review Notes
 
-> Superseded by the clean-break React Console architecture.
+> Status: **shipped** — superseded by the clean-break React Console architecture.
 
 Historical server-rendered Console review notes are no longer authoritative. Use:
 

@@ -1,5 +1,7 @@
 # Console Agentic Visual Review
 
+> Status: **shipped** — visual QA rubric for the React Console release gate.
+
 Use this rubric after building the React Console and starting
 `tt console serve` against the rich fixture.
 
