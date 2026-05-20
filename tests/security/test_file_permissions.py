@@ -267,3 +267,51 @@ def test_journal_backup_outputs_are_0600_with_0700_dir(
                 f"backup dir leaked {child.relative_to(dest)}: "
                 f"mode {oct(_mode(child))}"
             )
+
+
+def test_journal_restore_tightens_permissive_backup_modes(
+    tmp_path: Path, permissive_umask,
+):
+    """`journal.restore` must not preserve permissive source modes.
+
+    `shutil.copy2` preserves source permission bits on POSIX, so a backup tree
+    copied through a permissive medium (0644 files / 0755 dirs) would otherwise
+    restore world-readable journal data. Restore re-pins journal-owned regular
+    files to 0600 and directories under TRADE_TRACE_HOME to 0700.
+    """
+
+    home = tmp_path / "home"
+    _drive_one_event(home)
+
+    backup = tmp_path / "backup-src"
+    env = mcp_call("journal.backup", {
+        "home": str(home), "dest": str(backup), "_confirm": True,
+    })
+    assert env.ok, env
+
+    # Simulate a permissive backup/source transport before restore.
+    os.chmod(backup, 0o755)
+    for child in backup.rglob("*"):
+        if child.is_dir():
+            os.chmod(child, 0o755)
+        elif child.is_file():
+            os.chmod(child, 0o644)
+
+    restored_home = tmp_path / "restored-home"
+    env = mcp_call("journal.restore", {
+        "home": str(restored_home), "src": str(backup), "_confirm": True,
+    })
+    assert env.ok, env
+
+    assert _mode(restored_home) == 0o700
+    for child in restored_home.rglob("*"):
+        if child.is_file():
+            assert _mode(child) == 0o600, (
+                f"restore leaked {child.relative_to(restored_home)}: "
+                f"mode {oct(_mode(child))}"
+            )
+        elif child.is_dir():
+            assert _mode(child) == 0o700, (
+                f"restore dir leaked {child.relative_to(restored_home)}: "
+                f"mode {oct(_mode(child))}"
+            )

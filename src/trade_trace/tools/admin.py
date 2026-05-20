@@ -528,10 +528,18 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             )
 
     home.mkdir(parents=True, exist_ok=True)
+    chmod_user_only_dir(home)
     restored: list[str] = []
     for entry, src_file, out_file in validated:
         out_file.parent.mkdir(parents=True, exist_ok=True)
+        for parent in (out_file.parent, *out_file.parent.parents):
+            if parent == home:
+                chmod_user_only_dir(parent)
+                break
+            if home in parent.parents:
+                chmod_user_only_dir(parent)
         shutil.copy2(src_file, out_file)
+        chmod_user_only_file(out_file)
         restored.append(entry["path"])
     return {
         "preview_only": False,
