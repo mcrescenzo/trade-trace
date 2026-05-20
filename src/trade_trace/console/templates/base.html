@@ -32,16 +32,30 @@ contract (trade-trace-1kkv.13).
       <button class="tt-nav-toggle" type="button" data-nav-toggle aria-controls="tt-primary-nav" aria-expanded="false">
         Menu
       </button>
+      {# Per docs/architecture/reporting-product.md §3.1 the nav is
+         split into three lanes — Reporting, Strategy & Playbook, and
+         Developer / Audit — so the Tradervue-like reading experience
+         lives separately from the inspection surface. Adding a new
+         dashboard means adding a `<li>` under the matching `<ul
+         data-nav-lane>`, NOT a flat-list entry. The three `<ul>`s use
+         the same hx-* attributes so htmx partial loads continue to
+         work uniformly. #}
       <nav class="tt-nav" aria-label="Primary">
-        <ul id="tt-primary-nav">
+        <ul id="tt-primary-nav" class="tt-nav-lane" data-nav-lane="reporting" aria-label="Reporting dashboards">
           <li><a href="/" hx-get="/" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/">Overview</a></li>
-          <li><a href="/journal" hx-get="/journal" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/journal">Journal</a></li>
-          <li><a href="/decisions" hx-get="/decisions" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/decisions">Decisions</a></li>
           <li><a href="/reports" hx-get="/reports" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/reports">Reports</a></li>
           <li><a href="/calibration" hx-get="/calibration" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/calibration">Calibration</a></li>
+          <li><a href="/integrity" hx-get="/integrity" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/integrity">Evidence &amp; Integrity</a></li>
+        </ul>
+        <span class="tt-nav-divider" role="separator" aria-hidden="true"></span>
+        <ul class="tt-nav-lane" data-nav-lane="strategies" aria-label="Strategies and playbooks">
           <li><a href="/strategies" hx-get="/strategies" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/strategies">Strategies</a></li>
           <li><a href="/playbooks" hx-get="/playbooks" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/playbooks">Playbooks</a></li>
-          <li><a href="/integrity" hx-get="/integrity" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/integrity">Evidence &amp; Integrity</a></li>
+        </ul>
+        <span class="tt-nav-divider" role="separator" aria-hidden="true"></span>
+        <ul class="tt-nav-lane" data-nav-lane="developer" aria-label="Developer and audit">
+          <li><a href="/journal" hx-get="/journal" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/journal">Journal</a></li>
+          <li><a href="/decisions" hx-get="/decisions" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/decisions">Decisions</a></li>
           <li><a href="/logs" hx-get="/logs" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/logs">Logs</a></li>
           <li><a href="/raw" hx-get="/raw" hx-select="#tt-main > *" hx-target="#tt-main" hx-push-url="true" data-nav-route="/raw">Raw JSON</a></li>
         </ul>

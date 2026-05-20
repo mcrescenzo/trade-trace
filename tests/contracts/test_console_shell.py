@@ -59,6 +59,45 @@ def test_base_template_includes_logs_nav_after_jtec():
     assert "Logs page deferred" not in html
 
 
+def test_base_template_splits_nav_into_three_lanes_per_i1ds():
+    """Per `docs/architecture/reporting-product.md` §3.1 the nav must
+    visibly split reporting / strategies+playbooks / developer
+    audiences. trade-trace-i1ds wires the three `<ul data-nav-lane>`
+    blocks; this test pins the IA so a follow-up bead can't quietly
+    collapse them back into a flat list."""
+
+    html = _base_html()
+    for lane in ("reporting", "strategies", "developer"):
+        assert f'data-nav-lane="{lane}"' in html, (
+            f"nav missing lane {lane!r}; per reporting-product.md §3.1 "
+            "the IA splits reporting / strategies / developer-audit"
+        )
+    # The reporting lane MUST surface the user-facing reading
+    # entrypoints (Overview + Reports + Calibration + Evidence) and
+    # MUST NOT mix in developer surfaces.
+    reporting_block = html.split('data-nav-lane="reporting"', 1)[1].split("</ul>", 1)[0]
+    for required in ('href="/"', 'href="/reports"',
+                     'href="/calibration"', 'href="/integrity"'):
+        assert required in reporting_block, (
+            f"reporting lane missing {required}"
+        )
+    for forbidden in ('href="/journal"', 'href="/raw"', 'href="/logs"'):
+        assert forbidden not in reporting_block, (
+            f"reporting lane must not include developer/audit route {forbidden}"
+        )
+    # Strategies and playbooks share their own lane.
+    strategies_block = html.split('data-nav-lane="strategies"', 1)[1].split("</ul>", 1)[0]
+    assert 'href="/strategies"' in strategies_block
+    assert 'href="/playbooks"' in strategies_block
+    # Developer/audit lane keeps the inspection surfaces.
+    dev_block = html.split('data-nav-lane="developer"', 1)[1].split("</ul>", 1)[0]
+    for required in ('href="/journal"', 'href="/decisions"',
+                     'href="/logs"', 'href="/raw"'):
+        assert required in dev_block, (
+            f"developer lane missing {required}"
+        )
+
+
 @pytest.mark.parametrize("name", [
     "overview", "journal", "decisions", "reports", "calibration",
     "strategies", "playbooks", "integrity", "raw",

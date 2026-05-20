@@ -152,6 +152,33 @@ code, pre, .tt-mono, .tt-number, time { font-family: var(--tt-mono); }
   justify-self: end;
 }
 
+.tt-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .35rem;
+}
+
+.tt-nav-lane {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tt-nav-divider {
+  display: inline-block;
+  width: 1px;
+  align-self: stretch;
+  min-height: 1.5rem;
+  background: rgba(35, 97, 77, .22);
+  margin: 0 .35rem;
+}
+
 .tt-nav ul {
   display: flex;
   flex-wrap: wrap;
