@@ -1211,4 +1211,31 @@ def register_memory_tools(registry: ToolRegistry) -> None:
             "projection (recall_count, last_recalled_at). Returns top-k "
             "with id, body, score, strategy_provenance, source_refs."
         ),
+        example_minimal={
+            "query": "risk management",
+            "context": {},
+            "strategies": ["bm25", "temporal", "graph"],
+            "k": 10,
+            "max_chars": 8000,
+            "compact": False,
+            "include_body": True,
+            "include_provenance": True,
+            "min_confidence": 0.0,
+            "node_types": ["reflection"],
+            "mode": "fused",
+            "as_of": "2025-01-01T00:00:00Z",
+        },
+        optional_keys=(
+            "context",
+            "strategies",
+            "k",
+            "max_chars",
+            "compact",
+            "include_body",
+            "include_provenance",
+            "min_confidence",
+            "node_types",
+            "mode",
+            "as_of",
+        ),
     )

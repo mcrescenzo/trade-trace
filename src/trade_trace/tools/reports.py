@@ -552,6 +552,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "truncated}. stale_threshold_days defaults to 7. No external "
             "fetching, no credibility scoring."
         ),
+        example_minimal={"stale_threshold_days": 7},
+        optional_keys=("stale_threshold_days",),
     )
     registry.register(
         "report.calibration_integrity",
@@ -576,6 +578,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "Mirrors signal.scan kind=unscored_forecast (trade-trace-2ry) "
             "but returns the rows for direct action."
         ),
+        example_minimal={"filter": {}},
+        optional_keys=("filter",),
     )
     registry.register(
         "report.decision_velocity",
@@ -687,6 +691,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "watch; mode='stale' returns watches older than "
             "stale_threshold_days (default 14)."
         ),
+        example_minimal={"filter": {}, "mode": "all", "stale_threshold_days": 14},
+        optional_keys=("filter", "mode", "stale_threshold_days"),
     )
     registry.register(
         "report.coach",
@@ -698,4 +704,6 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "trading recommendations. Output is enforced free of the "
             "forbidden trade-advice phrases (positive grep gate)."
         ),
+        example_minimal={"filter": {}, "stale_threshold_days": 14},
+        optional_keys=("filter", "stale_threshold_days"),
     )

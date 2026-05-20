@@ -113,3 +113,66 @@ def test_report_opportunity_schema_treats_defaulted_args_as_optional():
             f"{advertised!r} is a documented knob; advertise it in "
             "properties even though it's optional."
         )
+
+
+def test_agent_critical_read_report_playbook_tools_advertise_json_schemas():
+    for tool_name in (
+        "memory.recall",
+        "report.watchlist",
+        "report.source_quality",
+        "report.unscored_forecasts",
+        "report.coach",
+        "playbook.adherence",
+    ):
+        schema = _schema_for(tool_name)
+        assert schema["type"] == "object"
+        assert "properties" in schema
+
+
+def test_memory_recall_schema_matches_runtime_required_query_and_optional_knobs():
+    schema = _schema_for("memory.recall")
+
+    assert schema.get("required", []) == ["query"]
+    properties = schema.get("properties", {})
+    for optional in (
+        "context",
+        "strategies",
+        "k",
+        "max_chars",
+        "compact",
+        "include_body",
+        "include_provenance",
+        "min_confidence",
+        "node_types",
+        "mode",
+        "as_of",
+    ):
+        assert optional in properties
+        assert optional not in schema.get("required", [])
+
+
+def test_report_schemas_advertise_defaulted_args_as_optional():
+    expected_optional = {
+        "report.watchlist": ("filter", "mode", "stale_threshold_days"),
+        "report.source_quality": ("stale_threshold_days",),
+        "report.unscored_forecasts": ("filter",),
+        "report.coach": ("filter", "stale_threshold_days"),
+    }
+
+    for tool_name, optional_keys in expected_optional.items():
+        schema = _schema_for(tool_name)
+        required = schema.get("required", [])
+        properties = schema.get("properties", {})
+        for key in optional_keys:
+            assert key in properties
+            assert key not in required
+
+
+def test_playbook_adherence_schema_requires_playbook_id_only():
+    schema = _schema_for("playbook.adherence")
+
+    assert schema.get("required", []) == ["playbook_id"]
+    properties = schema.get("properties", {})
+    assert "playbook_id" in properties
+    assert "strategy_id" in properties
+    assert "strategy_id" not in schema.get("required", [])

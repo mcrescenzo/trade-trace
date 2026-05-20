@@ -250,6 +250,39 @@ def _playbook_list_versions(args: dict[str, Any], ctx: ToolContext) -> dict[str,
 # -- playbook.propose_version --------------------------------------
 
 
+_PLAYBOOK_PROPOSE_VERSION_ALLOWED_ARGS = frozenset({
+    "playbook_id",
+    "provenance_reflection_node_id",
+    "description",
+    "metadata_json",
+    "idempotency_key",
+    "parent_version_id",
+    "id",
+    # Transport/test controls consumed by the shared dispatcher/helpers.
+    "home",
+    "confirm",
+    "_confirm",
+    "_dry_run",
+    "_allow_no_idempotency",
+})
+
+
+def _reject_unknown_propose_version_args(args: dict[str, Any]) -> None:
+    unknown_fields = sorted(
+        key for key in args if key not in _PLAYBOOK_PROPOSE_VERSION_ALLOWED_ARGS
+    )
+    if unknown_fields:
+        details: dict[str, Any] = {"unknown_fields": unknown_fields}
+        if len(unknown_fields) == 1:
+            details["field"] = unknown_fields[0]
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "playbook.propose_version received unsupported field(s): "
+            + ", ".join(unknown_fields),
+            details=details,
+        )
+
+
 def _playbook_propose_version(
     args: dict[str, Any], ctx: ToolContext,
 ) -> dict[str, Any]:
@@ -259,6 +292,8 @@ def _playbook_propose_version(
     transaction; `parent_version_id` defaults to the prior version (if
     any) so the lineage chain stays explicit.
     """
+
+    _reject_unknown_propose_version_args(args)
 
     playbook_id = require(args, "playbook_id")
     reflection_node_id = require(args, "provenance_reflection_node_id")
@@ -620,6 +655,8 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
             "Optional strategy_id filter further narrows by decision "
             "strategy_id."
         ),
+        example_minimal={"playbook_id": "pb_example", "strategy_id": "strat_example"},
+        optional_keys=("strategy_id",),
     )
     registry.register(
         "decision.record_adherence",

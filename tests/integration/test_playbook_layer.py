@@ -163,6 +163,70 @@ def test_propose_version_rejects_non_reflection_node(home):
     assert env.error.details["field"] == "provenance_reflection_node_id"
 
 
+def test_propose_version_rejects_rules_json_without_creating_bare_version(home):
+    pb = _mcp(home, "playbook.create", {
+        "name": "PB-RulesJson", "idempotency_key": "00000000-0000-4000-8000-pb-rj-1",
+    }).data["id"]
+    ref = _seed_reflection(home, idem_suffix="rulesjson")
+
+    env = _mcp(home, "playbook.propose_version", {
+        "playbook_id": pb,
+        "provenance_reflection_node_id": ref,
+        "rules_json": [{"body": "Always verify liquidity before entry."}],
+        "idempotency_key": "00000000-0000-4000-8000-pb-rj-2",
+    })
+
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "rules_json"
+    assert env.error.details["unknown_fields"] == ["rules_json"]
+
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        count = db.connection.execute(
+            "SELECT COUNT(*) FROM playbook_versions WHERE playbook_id = ?",
+            (pb,),
+        ).fetchone()[0]
+    finally:
+        db.close()
+    assert count == 0
+
+
+def test_propose_version_rejects_unsupported_extra_fields(home):
+    env = _mcp(home, "playbook.propose_version", {
+        "playbook_id": "pbk_unused",
+        "provenance_reflection_node_id": "mem_unused",
+        "unsupported_extra": True,
+        "idempotency_key": "00000000-0000-4000-8000-pb-extra",
+    })
+
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "unsupported_extra"
+    assert env.error.details["unknown_fields"] == ["unsupported_extra"]
+
+
+def test_propose_version_allows_cli_confirm_transport_controls(home):
+    pb = _mcp(home, "playbook.create", {
+        "name": "PB-Confirm", "idempotency_key": "00000000-0000-4000-8000-pb-cf-1",
+    }).data["id"]
+    ref = _seed_reflection(home, idem_suffix="confirm")
+
+    env = _mcp(home, "playbook.propose_version", {
+        "playbook_id": pb,
+        "provenance_reflection_node_id": ref,
+        "confirm": True,
+        "_confirm": True,
+        "idempotency_key": "00000000-0000-4000-8000-pb-cf-2",
+    })
+
+    assert env.ok, env
+    assert env.data["playbook_id"] == pb
+    assert env.data["provenance_reflection_node_id"] == ref
+
+
 def test_propose_version_increments_and_links_parent(home):
     pb = _mcp(home, "playbook.create", {
         "name": "PB-Chain", "idempotency_key": "00000000-0000-4000-8000-pb-ch-01",
