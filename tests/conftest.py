@@ -102,3 +102,10 @@ def initialized_home(tmp_path):
     init = mcp_call("journal.init", {"home": str(h)})
     assert init.ok, init
     return h
+
+
+@pytest.fixture
+def home(initialized_home):
+    """Per-test isolated initialized home alias for exact duplicate tests."""
+
+    return initialized_home

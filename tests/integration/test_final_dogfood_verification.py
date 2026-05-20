@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from tests._mcp_helpers import mcp_default as _mcp
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
@@ -46,10 +47,6 @@ def fixture_home(tmp_path_factory):
     assert seed.ok, seed
     return h
 
-
-def _mcp(home: Path, tool: str, args: dict | None = None):
-    payload = {"home": str(home), **(args or {})}
-    return mcp_call(tool, payload, actor_id="agent:default")
 
 
 def _db_count(home: Path, sql: str) -> int:

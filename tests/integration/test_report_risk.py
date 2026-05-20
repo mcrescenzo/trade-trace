@@ -19,14 +19,6 @@ def _env(home: Path, tool: str, args: dict):
     )
 
 
-@pytest.fixture
-def home(initialized_home):
-    """Alias to the shared `initialized_home` fixture in
-    `tests/conftest.py` (trade-trace-qs5v / SIMP-008)."""
-
-    return initialized_home
-
-
 def _instrument(home: Path, title: str = "R") -> str:
     """Seed venue + instrument + thesis and return the instrument id.
     A thesis is needed because actual_enter decisions require thesis_id

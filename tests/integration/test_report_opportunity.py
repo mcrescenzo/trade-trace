@@ -19,14 +19,6 @@ def _env(home: Path, tool: str, args: dict):
     )
 
 
-@pytest.fixture
-def home(initialized_home):
-    """Alias to the shared `initialized_home` fixture in
-    `tests/conftest.py` (trade-trace-qs5v / SIMP-008)."""
-
-    return initialized_home
-
-
 def _instrument(home: Path, title: str) -> str:
     venue = _env(home, "venue.add", {"name": f"Venue-{title}", "kind": "prediction_market"})
     inst = _env(home, "instrument.add", {

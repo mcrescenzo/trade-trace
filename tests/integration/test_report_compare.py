@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import open_database
@@ -16,14 +14,6 @@ def _env(home: Path, tool: str, args: dict):
     return mcp_call(tool, {"home": str(home), **args}, actor_id="agent:default").model_dump(
         mode="json", exclude_none=True
     )
-
-
-@pytest.fixture
-def home(initialized_home):
-    """Alias to the shared `initialized_home` fixture in
-    `tests/conftest.py` (trade-trace-qs5v / SIMP-008)."""
-
-    return initialized_home
 
 
 def _seed_positions(home: Path) -> None:

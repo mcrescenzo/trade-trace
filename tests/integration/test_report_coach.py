@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
 from trade_trace.reports.coach import (
@@ -20,13 +21,6 @@ from trade_trace.reports.coach import (
     TradingAdvicePhraseError,
     _assert_no_trade_advice,
 )
-
-
-def _envelope(home: Path, tool: str, args: dict):
-    payload = {"home": str(home), **args}
-    return mcp_call(tool, payload, actor_id="agent:default").model_dump(
-        mode="json", exclude_none=True
-    )
 
 
 @pytest.fixture

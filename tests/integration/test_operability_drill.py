@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from trade_trace.mcp_server import mcp_call
+from tests._mcp_helpers import mcp_default as _mcp
 from trade_trace.projections import (
     rebuild_memory_node_stats,
     rebuild_positions,
@@ -28,11 +28,6 @@ from trade_trace.projections import (
 from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.migrations import MIGRATIONS
 from trade_trace.storage.paths import db_path
-
-
-def _mcp(home: Path, tool: str, args: dict | None = None):
-    payload = {"home": str(home), **(args or {})}
-    return mcp_call(tool, payload, actor_id="agent:default")
 
 
 def _populate(home: Path) -> dict[str, int]:

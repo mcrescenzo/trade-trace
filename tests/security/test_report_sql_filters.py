@@ -20,25 +20,9 @@ values as `?` parameters in SQL. The tests pin the contract end-to-end.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from trade_trace.mcp_server import mcp_call
-
-
-@pytest.fixture
-def home(initialized_home):
-    """Alias to the shared `initialized_home` fixture in
-    `tests/conftest.py` (trade-trace-qs5v / SIMP-008)."""
-
-    return initialized_home
-
-
-def _mcp(home: Path, tool: str, args: dict | None = None):
-    payload = {"home": str(home), **(args or {})}
-    return mcp_call(tool, payload, actor_id="agent:default")
-
+from tests._mcp_helpers import mcp_default as _mcp
 
 # -- 1. unknown filter field rejected (no silent widening) -------
 

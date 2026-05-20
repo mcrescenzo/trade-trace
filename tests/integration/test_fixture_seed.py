@@ -14,14 +14,6 @@ from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
 
 
-@pytest.fixture
-def home(initialized_home):
-    """Alias to the shared `initialized_home` fixture in
-    `tests/conftest.py` (trade-trace-qs5v / SIMP-008)."""
-
-    return initialized_home
-
-
 def _content_hash(home: Path) -> str:
     """Hash the *table content* (not the file) of the journal. Sorted
     rows from each append-only table → SHA-256."""

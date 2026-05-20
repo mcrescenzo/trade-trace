@@ -11,23 +11,8 @@ import json
 import sqlite3
 from pathlib import Path
 
-import pytest
-
-from trade_trace.mcp_server import mcp_call
+from tests._mcp_helpers import mcp_default as _mcp
 from trade_trace.storage.paths import db_path
-
-
-@pytest.fixture
-def home(initialized_home):
-    """Alias to the shared `initialized_home` fixture in
-    `tests/conftest.py` (trade-trace-qs5v / SIMP-008)."""
-
-    return initialized_home
-
-
-def _mcp(home: Path, tool: str, args: dict | None = None):
-    payload = {"home": str(home), **(args or {})}
-    return mcp_call(tool, payload, actor_id="agent:default")
 
 
 def _seed_node(home: Path, node_id: str, body: str, *, confidence: float = 1.0) -> str:

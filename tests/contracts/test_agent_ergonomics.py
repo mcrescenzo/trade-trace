@@ -26,6 +26,7 @@ from pathlib import Path
 
 import pytest
 
+from tests._mcp_helpers import mcp_default as _mcp
 from trade_trace.mcp_server import mcp_call
 
 # -- helpers ------------------------------------------------------------
@@ -38,10 +39,6 @@ def home(tmp_path):
     assert env.ok
     return h
 
-
-def _mcp(home: Path, tool: str, args: dict | None = None):
-    payload = {"home": str(home), **(args or {})}
-    return mcp_call(tool, payload, actor_id="agent:default")
 
 
 def _cli(home: Path, *argv: str, human: bool = False, dry_run: bool = False,
