@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% import "_dashboard_macros.html" as m %}
+{% block title %}Position {{ position.id }} · Trade Trace Console{% endblock %}
+{% block content %}
+<section class="tt-position-detail">
+  <div class="tt-page-heading">
+    <p class="tt-eyebrow">Reporting · Position audit</p>
+    <h1>{{ position.instrument_symbol or position.instrument_id }}
+      <small class="tt-muted">{{ position.kind }} · {{ position.side }} · {{ position.status }}</small>
+    </h1>
+  </div>
+
+  {{ m.caveats_banner(caveats) }}
+
+  <section class="tt-metric-grid" aria-label="Position lifecycle metrics">
+    {{ m.metric_tile("Realized P&L", position.realized_pnl if position.realized_pnl is not none else "—",
+                     tone="accent", metric_name="realized_pnl") }}
+    {{ m.metric_tile("Unrealized P&L", position.unrealized_pnl if position.unrealized_pnl is not none else "—",
+                     tone="neutral", metric_name="unrealized_pnl") }}
+    {{ m.metric_tile("Avg entry price", position.avg_entry_price if position.avg_entry_price is not none else "—",
+                     tone="neutral") }}
+    {{ m.metric_tile("Initial risk", position.initial_risk_amount if position.initial_risk_amount is not none else "—",
+                     tone="neutral", metric_name="r_multiple") }}
+  </section>
+
+  <section class="tt-position-meta" aria-label="Position metadata">
+    <dl>
+      <dt>Opened at</dt>
+      <dd><time data-ts="{{ position.opened_at }}">{{ position.opened_at }}</time></dd>
+      <dt>Closed at</dt>
+      <dd>{% if position.closed_at %}<time data-ts="{{ position.closed_at }}">{{ position.closed_at }}</time>{% else %}<span class="tt-muted">(open)</span>{% endif %}</dd>
+      <dt>Updated at</dt>
+      <dd><time data-ts="{{ position.updated_at }}">{{ position.updated_at }}</time></dd>
+      <dt>Opening decision</dt>
+      <dd>{% if position.opening_decision_id %}<a href="/decisions/{{ position.opening_decision_id }}"><code>{{ position.opening_decision_id }}</code></a>{% else %}<span class="tt-muted">—</span>{% endif %}</dd>
+      <dt>Strategy</dt>
+      <dd>{% if position.opening_strategy_id %}<code>{{ position.opening_strategy_id }}</code>{% else %}<span class="tt-muted">(no strategy)</span>{% endif %}</dd>
+      <dt>Playbook version</dt>
+      <dd>{% if position.opening_playbook_version_id %}<code>{{ position.opening_playbook_version_id }}</code>{% else %}<span class="tt-muted">(none)</span>{% endif %}</dd>
+    </dl>
+  </section>
+
+  <section class="tt-position-events" aria-label="Position event lineage">
+    <h2>Event lineage</h2>
+    <div class="tt-table-shell">
+      <table class="tt-table">
+        <thead>
+          <tr>
+            <th>event</th>
+            <th>type</th>
+            <th class="tt-number">qty Δ</th>
+            <th class="tt-number">price</th>
+            <th class="tt-number">fees</th>
+            <th>decision</th>
+            <th>recorded</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ev in events %}
+            <tr data-record-id="{{ ev.id }}">
+              <td><code>{{ ev.id }}</code></td>
+              <td><span class="tt-badge tt-badge--accent">{{ ev.event_type }}</span></td>
+              <td class="tt-number">{{ ev.quantity_delta if ev.quantity_delta is not none else "—" }}</td>
+              <td class="tt-number">{{ ev.price if ev.price is not none else "—" }}</td>
+              <td class="tt-number">{{ ev.fees if ev.fees is not none else "—" }}</td>
+              <td>{% if ev.decision_id %}<a href="/decisions/{{ ev.decision_id }}"><code>{{ ev.decision_id }}</code></a>{% else %}<span class="tt-muted">—</span>{% endif %}</td>
+              <td><time data-ts="{{ ev.created_at }}">{{ ev.created_at }}</time></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</section>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% import "_dashboard_macros.html" as m %}
+{% block title %}{{ dashboard_heading }} · Trade Trace Console{% endblock %}
+{% block content %}
+<section class="tt-dashboard" data-dashboard="{{ dashboard_slug }}">
+  <div class="tt-page-heading">
+    <p class="tt-eyebrow">Reporting · {{ dashboard_eyebrow }}</p>
+    <h1>{{ dashboard_heading }}</h1>
+    {{ m.page_explanation_accordion(page_explanation) }}
+  </div>
+
+  {{ m.sample_warning_banner(summary_sample_warning) }}
+  {{ m.caveats_banner(summary_caveats) }}
+
+  {# Per-dashboard tile selection is data-driven: the per-page context
+     builder picks which summary metric keys land in the top grid and
+     which appear in the groups table. #}
+  {% if highlighted_metrics %}
+    <section class="tt-metric-grid" aria-label="{{ dashboard_heading }} summary metrics">
+      {% for tile in highlighted_metrics %}
+        {{ m.metric_tile(tile.label,
+                         summary_metrics.get(tile.key, tile.fallback if tile.fallback is not none else "—"),
+                         unit=tile.unit,
+                         tone=tile.tone or "neutral",
+                         metric_name=tile.metric_name or tile.key) }}
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {{ m.groups_table(groups) }}
+
+  {% if chart_canvas_id and chart_config_json %}
+    <canvas id="{{ chart_canvas_id }}" class="tt-chart" aria-label="{{ dashboard_heading }} chart"></canvas>
+    <script type="application/json" data-chart="{{ chart_canvas_id }}">{{ chart_config_json|safe }}</script>
+    <script src="/static/js/chart-bootstrap.js" defer></script>
+  {% endif %}
+
+  {{ m.evidence_affordance(evidence) }}
+</section>
+{% endblock %}

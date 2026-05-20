@@ -165,6 +165,70 @@ def _build_app(home_path: str) -> Any:
             raise fastapi.HTTPException(status_code=404, detail=f"decision {decision_id} not found")
         return _render(request, "decision_detail.html", ctx)
 
+    @app.get("/positions/{position_id}", response_class=HTMLResponse)
+    def position_detail_html(request: _Request, position_id: str) -> Any:
+        """Per-position audit page per bead trade-trace-svp2.
+
+        Backed by `console.reporting.position_detail`. Renders the
+        lifecycle projection, full chronological position_events
+        lineage, and the named missing-data caveats (open_no_mark,
+        missing_risk_budget, no_strategy)."""
+
+        _, db = _open()
+        try:
+            ctx = pages.position_detail_context(db.connection, position_id=position_id)
+        finally:
+            db.close()
+        if ctx is None:
+            raise fastapi.HTTPException(status_code=404, detail=f"position {position_id} not found")
+        return _render(request, "position_detail.html", ctx)
+
+    def _render_dashboard(request: _Request, builder: Any, template: str = "dashboard.html") -> Any:
+        """Common error wrapper for the report-backed dashboards.
+        The adapter raises `ReportAdapterError` on validation failures
+        / unsupported tools / lazy-write attempts; the route surfaces
+        those as 400s rather than letting them bubble as 500s."""
+
+        from trade_trace.console.reporting import ReportAdapterError
+
+        home, db = _open()
+        try:
+            try:
+                ctx = builder(str(home))
+            except ReportAdapterError as exc:
+                raise fastapi.HTTPException(status_code=400, detail=str(exc)) from exc
+        finally:
+            db.close()
+        return _render(request, template, ctx)
+
+    @app.get("/reports/pnl", response_class=HTMLResponse)
+    def dashboard_pnl_html(request: _Request) -> Any:
+        return _render_dashboard(request, pages.dashboard_pnl_context)
+
+    @app.get("/reports/risk", response_class=HTMLResponse)
+    def dashboard_risk_html(request: _Request) -> Any:
+        return _render_dashboard(request, pages.dashboard_risk_context)
+
+    @app.get("/reports/performance", response_class=HTMLResponse)
+    def dashboard_performance_html(request: _Request) -> Any:
+        return _render_dashboard(request, pages.dashboard_performance_context)
+
+    @app.get("/reports/strategy", response_class=HTMLResponse)
+    def dashboard_strategy_html(request: _Request) -> Any:
+        return _render_dashboard(request, pages.dashboard_strategy_context)
+
+    @app.get("/reports/decisions", response_class=HTMLResponse)
+    def dashboard_decision_intelligence_html(request: _Request) -> Any:
+        return _render_dashboard(request, pages.dashboard_decision_intelligence_context)
+
+    @app.get("/reports/calibration", response_class=HTMLResponse)
+    def dashboard_calibration_full_html(request: _Request) -> Any:
+        return _render_dashboard(request, pages.dashboard_calibration_context)
+
+    @app.get("/evidence", response_class=HTMLResponse)
+    def dashboard_evidence_html(request: _Request) -> Any:
+        return _render_dashboard(request, pages.dashboard_evidence_context)
+
     @app.get("/trades", response_class=HTMLResponse)
     def trades_html(
         request: _Request,

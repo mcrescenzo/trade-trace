@@ -1,0 +1,138 @@
+{# Shared Jinja macros for report-backed reporting dashboards.
+
+These macros render the standard reporting chrome (page explanation
+accordion, summary tiles, groups table, evidence affordance, caveat
+banner) so every per-page dashboard stays consistent with
+reporting-product.md §6 (evidence contract) without duplicating
+markup. Per-page templates extend `base.html` and call the macros
+they need; tile content remains per-dashboard.
+
+Conventions:
+- All metric values are server-rendered (no client recomputation).
+- `record_ids` from the evidence block become deep links into the
+  corresponding detail pages where one exists.
+- A `caveat` block renders as both a banner and per-tile chips so a
+  user scanning the page can't miss it.
+#}
+
+{% macro page_explanation_accordion(explanation) %}
+  {% if explanation %}
+    <details class="tt-page-explanation" open>
+      <summary>What this page does · How to read it · What can mislead</summary>
+      <dl>
+        <dt>What this page does</dt>
+        <dd>{{ explanation.what }}</dd>
+        <dt>How to read it</dt>
+        <dd>{{ explanation.how_to_read }}</dd>
+        <dt>What can mislead</dt>
+        <dd>{{ explanation.what_can_mislead }}</dd>
+      </dl>
+    </details>
+  {% endif %}
+{% endmacro %}
+
+{% macro sample_warning_banner(warning) %}
+  {% if warning %}
+    <aside class="tt-sample-warning" role="note">
+      <strong>Sample warning:</strong>
+      <span data-sample-warning>{{ warning }}</span>
+    </aside>
+  {% endif %}
+{% endmacro %}
+
+{% macro caveats_banner(caveats) %}
+  {% if caveats %}
+    <aside class="tt-caveats-banner" role="note" aria-label="Data quality caveats">
+      <strong>Caveats:</strong>
+      <ul>
+        {% for caveat in caveats %}
+          <li><code>{{ caveat }}</code></li>
+        {% endfor %}
+      </ul>
+    </aside>
+  {% endif %}
+{% endmacro %}
+
+{% macro metric_tile(label, value, unit=None, tone="neutral", metric_name=None) %}
+  <article class="tt-metric-card tt-metric-card--{{ tone }}" {% if metric_name %}data-metric="{{ metric_name }}"{% endif %}>
+    <header>{{ label }}</header>
+    <p class="tt-metric-value" data-value>
+      {{ value }}{% if unit %}<span class="tt-metric-unit"> {{ unit }}</span>{% endif %}
+    </p>
+  </article>
+{% endmacro %}
+
+{% macro evidence_affordance(evidence) %}
+  {% if evidence %}
+    <details class="tt-evidence-affordance">
+      <summary>Evidence · drilldown record IDs · reproduce this call</summary>
+      <dl>
+        <dt>Tool</dt>
+        <dd><code>{{ evidence.tool }}</code></dd>
+        <dt>CLI invocation</dt>
+        <dd><code>{{ evidence.cli_invocation }}</code></dd>
+        <dt>Request ID</dt>
+        <dd><code>{{ evidence.request_id }}</code></dd>
+      </dl>
+      {% if evidence.record_ids %}
+        <h3>Contributing records</h3>
+        <ul>
+          {% for kind, ids in evidence.record_ids.items() %}
+            <li><strong>{{ kind }}:</strong>
+              <span class="tt-muted">{{ ids|length }} id(s)</span>
+              {% if kind == 'decisions' and ids %}
+                <ul class="tt-record-id-list">
+                  {% for rid in ids[:10] %}
+                    <li><a href="/decisions/{{ rid }}"><code>{{ rid }}</code></a></li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </details>
+  {% endif %}
+{% endmacro %}
+
+{% macro groups_table(groups, headers=None) %}
+  {% if groups %}
+    <div class="tt-table-shell">
+      <table class="tt-table" data-groups-table>
+        <thead>
+          <tr>
+            <th>group</th>
+            <th>sample</th>
+            <th>metrics</th>
+            <th>caveat</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for g in groups %}
+            <tr data-record-id="{{ g.key }}">
+              <td><strong>{{ g.label }}</strong><br><code class="tt-muted">{{ g.key }}</code></td>
+              <td class="tt-number">{{ g.sample_size }}</td>
+              <td>
+                <ul class="tt-metric-inline-list">
+                  {% for name, value in g.metrics.items() %}
+                    <li><code>{{ name }}</code>: <span data-value>{{ value }}</span></li>
+                  {% endfor %}
+                </ul>
+              </td>
+              <td>
+                {% if g.sample_warning %}
+                  <span class="tt-caveat-chip" data-caveat="sample_warning" title="{{ g.sample_warning }}">low sample</span>
+                {% endif %}
+                {% if g.truncated %}
+                  <span class="tt-caveat-chip" data-caveat="truncated">truncated</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="tt-empty-inline">No groups returned for the current filter.</p>
+  {% endif %}
+{% endmacro %}

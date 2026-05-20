@@ -15,6 +15,7 @@ table.
 
 from __future__ import annotations
 
+import json as _json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -155,6 +156,407 @@ def decisions_context(
         if not page.rows
         else None,
     }
+
+
+def position_detail_context(
+    conn: sqlite3.Connection, *, position_id: str,
+) -> dict[str, Any] | None:
+    """Context for the per-position audit page (trade-trace-svp2).
+
+    Returns `None` when the position is unknown — the route renders a
+    404 in that case. The context surfaces the lifecycle projection,
+    the full position_events lineage, the opening decision's
+    strategy/playbook for audit, and the caveat list for missing
+    marks / risk / strategy."""
+
+    from trade_trace.console.reporting import position_detail
+
+    detail = position_detail(conn, position_id)
+    if detail is None:
+        return None
+    return {
+        "page_title": f"Position {position_id}",
+        "generated_at": _iso_now(),
+        "position": {
+            "id": detail.position_id,
+            "instrument_id": detail.instrument_id,
+            "instrument_symbol": detail.instrument_symbol,
+            "instrument_title": detail.instrument_title,
+            "venue_id": detail.venue_id,
+            "venue_kind": detail.venue_kind,
+            "kind": detail.kind,
+            "side": detail.side,
+            "status": detail.status,
+            "opened_at": detail.opened_at,
+            "closed_at": detail.closed_at,
+            "realized_pnl": detail.realized_pnl,
+            "unrealized_pnl": detail.unrealized_pnl,
+            "avg_entry_price": detail.avg_entry_price,
+            "updated_at": detail.updated_at,
+            "initial_risk_amount": detail.initial_risk_amount,
+            "realized_r_multiple": detail.realized_r_multiple,
+            "unrealized_r_multiple": detail.unrealized_r_multiple,
+            "opening_decision_id": detail.opening_decision_id,
+            "opening_strategy_id": detail.opening_strategy_id,
+            "opening_playbook_version_id": detail.opening_playbook_version_id,
+        },
+        "events": [
+            {
+                "id": e.id,
+                "event_type": e.event_type,
+                "quantity_delta": e.quantity_delta,
+                "price": e.price,
+                "fees": e.fees,
+                "slippage": e.slippage,
+                "created_at": e.created_at,
+                "decision_id": e.decision_id,
+            }
+            for e in detail.events
+        ],
+        "caveats": list(detail.caveats),
+    }
+
+
+REPORTING_DASHBOARD_TILES: dict[str, list[dict[str, Any]]] = {
+    "pnl": [
+        {"key": "realized_pnl", "label": "Realized P&L", "tone": "accent"},
+        {"key": "unrealized_pnl", "label": "Unrealized P&L", "tone": "neutral"},
+        {"key": "open_position_count", "label": "Open positions",
+         "tone": "neutral", "fallback": 0},
+        {"key": "open_mark_coverage", "label": "Open-mark coverage",
+         "tone": "warn"},
+    ],
+    "risk": [
+        {"key": "mean_r", "label": "Mean R", "tone": "accent",
+         "metric_name": "r_multiple"},
+        {"key": "median_r", "label": "Median R", "tone": "neutral",
+         "metric_name": "r_multiple"},
+        {"key": "expectancy_r", "label": "Expectancy (R)", "tone": "accent",
+         "metric_name": "expectancy_r"},
+        {"key": "win_rate", "label": "Win rate", "tone": "neutral",
+         "metric_name": "win_rate"},
+        {"key": "payoff_ratio", "label": "Payoff ratio", "tone": "neutral",
+         "metric_name": "payoff_ratio"},
+        {"key": "n_pending_with_risk", "label": "Pending w/ risk",
+         "tone": "warn", "fallback": 0},
+    ],
+    "calibration": [
+        {"key": "brier", "label": "Brier", "tone": "accent",
+         "metric_name": "brier_score"},
+        {"key": "log_score", "label": "Log score", "tone": "neutral",
+         "metric_name": "log_score"},
+        {"key": "ece", "label": "ECE", "tone": "warn",
+         "metric_name": "ece"},
+        {"key": "sharpness", "label": "Sharpness", "tone": "neutral",
+         "metric_name": "sharpness"},
+        {"key": "baseline_brier", "label": "Baseline Brier",
+         "tone": "neutral", "metric_name": "baseline_brier"},
+    ],
+    "performance": [
+        {"key": "realized_pnl", "label": "Realized P&L", "tone": "accent",
+         "metric_name": "realized_pnl"},
+        {"key": "max_drawdown", "label": "Max drawdown", "tone": "warn",
+         "metric_name": "max_drawdown"},
+        {"key": "win_rate", "label": "Win rate", "tone": "neutral",
+         "metric_name": "win_rate"},
+    ],
+    "strategy": [
+        {"key": "realized_pnl", "label": "Realized P&L", "tone": "accent"},
+        {"key": "scored_forecast_count", "label": "Scored forecasts",
+         "tone": "neutral", "fallback": 0},
+    ],
+    "decision_intelligence": [
+        {"key": "watch_count", "label": "Watches", "tone": "neutral",
+         "fallback": 0},
+        {"key": "overdue_count", "label": "Overdue watches",
+         "tone": "warn", "fallback": 0, "metric_name": "overdue_count"},
+    ],
+    "evidence": [
+        {"key": "missing_sources_on_actual_enter",
+         "label": "Missing sources", "tone": "warn", "fallback": 0},
+        {"key": "stale_sources", "label": "Stale sources",
+         "tone": "warn", "fallback": 0},
+        {"key": "contradictory_sources", "label": "Contradictions",
+         "tone": "warn", "fallback": 0},
+    ],
+}
+
+
+def reporting_dashboard_context(
+    *,
+    home: str,
+    tool: str,
+    args: dict[str, Any] | None = None,
+    page_slug: str | None = None,
+    page_title: str | None = None,
+) -> dict[str, Any]:
+    """Generic dashboard context shared by the report-backed pages
+    (P&L, Risk, Performance, Strategy, Decision intelligence, etc.).
+
+    Calls the safe-report adapter (which enforces deny set +
+    allowlist), then projects the DashboardContext into a shape the
+    Jinja templates can iterate over. Per dashboard bead a per-page
+    template specializes the tile / chart layout; the context shape
+    stays consistent so the templates can share macros.
+
+    `tool` is a member of `console.reporting.adapter.SAFE_REPORT_TOOLS`;
+    invalid names raise the adapter's ReportAdapterError, which the
+    route handler surfaces as a typed error page.
+    """
+
+    from trade_trace.console.reporting import run_report
+    from trade_trace.console.reporting.metric_glossary import page_explanation
+
+    payload = args or {}
+    ctx = run_report(tool, payload, actor_id="agent:console", home=home)
+    return {
+        "page_title": page_title or tool,
+        "generated_at": _iso_now(),
+        "tool": ctx.tool,
+        "summary_metrics": ctx.summary_metrics,
+        "summary_sample_warning": ctx.summary_sample_warning,
+        "summary_filter": ctx.summary_filter,
+        "summary_caveats": ctx.summary_caveats,
+        "groups": [
+            {
+                "key": g.key,
+                "label": g.label,
+                "metrics": g.metrics,
+                "filter": g.filter,
+                "record_ids": g.record_ids,
+                "examples": g.examples,
+                "sample_size": g.sample_size,
+                "sample_warning": g.sample_warning,
+                "truncated": g.truncated,
+            }
+            for g in ctx.groups
+        ],
+        "drilldowns": ctx.drilldowns,
+        "as_of": ctx.as_of,
+        "truncated": ctx.truncated,
+        "next_cursor": ctx.next_cursor,
+        "evidence": {
+            "tool": ctx.evidence.tool,
+            "cli_invocation": ctx.evidence.cli_invocation,
+            "filter": ctx.evidence.filter,
+            "request_id": ctx.evidence.request_id,
+            "record_ids": ctx.evidence.record_ids,
+            "examples": ctx.evidence.examples,
+        },
+        "raw_envelope": ctx.raw_envelope,
+        "page_explanation": page_explanation(page_slug) if page_slug else None,
+    }
+
+
+def dashboard_pnl_context(home: str) -> dict[str, Any]:
+    """Per-page context for the P&L dashboard (trade-trace-a94a)."""
+
+    base = reporting_dashboard_context(
+        home=home, tool="report.pnl", args={"filter": {}},
+        page_slug="reports", page_title="P&L",
+    )
+    base.update({
+        "dashboard_slug": "pnl",
+        "dashboard_eyebrow": "P&L",
+        "dashboard_heading": "P&L dashboard",
+        "highlighted_metrics": REPORTING_DASHBOARD_TILES["pnl"],
+        "chart_canvas_id": "chart-pnl-by-group",
+        "chart_config_json": _dashboard_bar_chart_json(
+            label="Realized P&L",
+            groups=base["groups"], metric_key="realized_pnl",
+        ),
+    })
+    return base
+
+
+def dashboard_risk_context(home: str) -> dict[str, Any]:
+    """Per-page context for the Risk dashboard (trade-trace-1viz)."""
+
+    base = reporting_dashboard_context(
+        home=home, tool="report.risk", args={"filter": {}},
+        page_slug="reports", page_title="Risk",
+    )
+    base.update({
+        "dashboard_slug": "risk",
+        "dashboard_eyebrow": "Risk",
+        "dashboard_heading": "Risk dashboard (R-multiple)",
+        "highlighted_metrics": REPORTING_DASHBOARD_TILES["risk"],
+        "chart_canvas_id": "chart-risk-histogram",
+        "chart_config_json": _dashboard_bar_chart_json(
+            label="R distribution",
+            groups=base["groups"], metric_key="mean_r",
+        ),
+    })
+    return base
+
+
+def dashboard_calibration_context(home: str) -> dict[str, Any]:
+    """Per-page context for the full Calibration dashboard
+    (trade-trace-lv7n)."""
+
+    base = reporting_dashboard_context(
+        home=home, tool="report.calibration",
+        args={"filter": {}, "min_sample": 1},
+        page_slug="calibration", page_title="Calibration",
+    )
+    base.update({
+        "dashboard_slug": "calibration",
+        "dashboard_eyebrow": "Calibration",
+        "dashboard_heading": "Calibration + integrity",
+        "highlighted_metrics": REPORTING_DASHBOARD_TILES["calibration"],
+        "chart_canvas_id": "chart-calibration-reliability",
+        "chart_config_json": _dashboard_reliability_chart_json(
+            summary_metrics=base["summary_metrics"],
+        ),
+    })
+    return base
+
+
+def dashboard_performance_context(home: str) -> dict[str, Any]:
+    """Per-page context for the Performance dashboard
+    (trade-trace-ai45). Uses report.decision_velocity for the time
+    series until the dedicated equity curve / drawdown report ships."""
+
+    base = reporting_dashboard_context(
+        home=home, tool="report.decision_velocity",
+        args={"filter": {}, "bucket": "day"},
+        page_slug="reports", page_title="Performance",
+    )
+    base.update({
+        "dashboard_slug": "performance",
+        "dashboard_eyebrow": "Performance",
+        "dashboard_heading": "Performance — calendar, equity, drawdown",
+        "highlighted_metrics": REPORTING_DASHBOARD_TILES["performance"],
+        "chart_canvas_id": "chart-performance-decision-velocity",
+        "chart_config_json": _dashboard_bar_chart_json(
+            label="Decisions per day",
+            groups=base["groups"], metric_key="count",
+        ),
+    })
+    return base
+
+
+def dashboard_strategy_context(home: str) -> dict[str, Any]:
+    """Per-page context for the Strategy / Playbook performance
+    dashboard (trade-trace-avn7)."""
+
+    base = reporting_dashboard_context(
+        home=home, tool="report.strategy_performance",
+        args={"filter": {}},
+        page_slug="reports", page_title="Strategy performance",
+    )
+    base.update({
+        "dashboard_slug": "strategy",
+        "dashboard_eyebrow": "Strategy & Playbook",
+        "dashboard_heading": "Strategy performance",
+        "highlighted_metrics": REPORTING_DASHBOARD_TILES["strategy"],
+        "chart_canvas_id": "chart-strategy-pnl",
+        "chart_config_json": _dashboard_bar_chart_json(
+            label="Realized P&L per strategy",
+            groups=base["groups"], metric_key="realized_pnl",
+        ),
+    })
+    return base
+
+
+def dashboard_decision_intelligence_context(home: str) -> dict[str, Any]:
+    """Per-page context for the Decision intelligence dashboard
+    (trade-trace-nvkr). Uses report.watchlist for the dashboard
+    surface; mistakes / strengths land via the comparison builder
+    (sqtq)."""
+
+    base = reporting_dashboard_context(
+        home=home, tool="report.watchlist", args={"filter": {}},
+        page_slug="reports", page_title="Decision intelligence",
+    )
+    base.update({
+        "dashboard_slug": "decision_intelligence",
+        "dashboard_eyebrow": "Decision intelligence",
+        "dashboard_heading": "Mistakes · strengths · watches · forecast backlog",
+        "highlighted_metrics": REPORTING_DASHBOARD_TILES["decision_intelligence"],
+        "chart_canvas_id": "chart-decision-watch-overdue",
+        "chart_config_json": _dashboard_bar_chart_json(
+            label="Watch overdue", groups=base["groups"], metric_key="overdue",
+        ),
+    })
+    return base
+
+
+def dashboard_evidence_context(home: str) -> dict[str, Any]:
+    """Per-page context for the Evidence / provenance dashboard
+    (trade-trace-5own). Replaces the developer-lane integrity view
+    on the reporting side."""
+
+    base = reporting_dashboard_context(
+        home=home, tool="report.source_quality", args={},
+        page_slug="evidence", page_title="Evidence & provenance",
+    )
+    base.update({
+        "dashboard_slug": "evidence",
+        "dashboard_eyebrow": "Evidence",
+        "dashboard_heading": "Evidence & provenance analytics",
+        "highlighted_metrics": REPORTING_DASHBOARD_TILES["evidence"],
+        "chart_canvas_id": "chart-evidence-source-quality",
+        "chart_config_json": _dashboard_bar_chart_json(
+            label="Source diagnostics", groups=base["groups"], metric_key="count",
+        ),
+    })
+    return base
+
+
+def _dashboard_bar_chart_json(
+    *, label: str, groups: list[dict[str, Any]], metric_key: str,
+) -> str:
+    """Encode a minimal Chart.js bar-chart config for the dashboard.
+    Returns JSON the template injects into a
+    `<script type="application/json">` block; the chart bootstrap
+    consumes it via JSON.parse (no eval / no client math)."""
+
+    config = {
+        "type": "bar",
+        "data": {
+            "labels": [g["label"] for g in groups],
+            "datasets": [{
+                "label": label,
+                "data": [
+                    (g["metrics"].get(metric_key) or 0)
+                    if isinstance(g["metrics"], dict) else 0
+                    for g in groups
+                ],
+            }],
+        },
+        "options": {"responsive": True},
+    }
+    return _json.dumps(config)
+
+
+def _dashboard_reliability_chart_json(
+    *, summary_metrics: dict[str, Any],
+) -> str:
+    """Encode the calibration reliability diagram from
+    `summary_metrics.reliability_bins` (or its alternates), falling
+    back to an empty chart when the bins aren't present."""
+
+    bins = summary_metrics.get("reliability_bins") or []
+    config = {
+        "type": "line",
+        "data": {
+            "labels": [
+                f"{b.get('forecast_mid', i / 10):.1f}" if isinstance(b, dict)
+                else f"bin {i}"
+                for i, b in enumerate(bins)
+            ],
+            "datasets": [{
+                "label": "Empirical rate",
+                "data": [
+                    (b.get("empirical_rate") or 0) if isinstance(b, dict) else 0
+                    for b in bins
+                ],
+            }],
+        },
+        "options": {"responsive": True},
+    }
+    return _json.dumps(config)
 
 
 def trades_context(
