@@ -73,51 +73,50 @@ trading-decision types; "Decision" otherwise. Detail pages use the
 storage-canonical noun (a position-detail page says "position", not
 "trade").
 
-## 3. Page information architecture (locked)
+## 3. Page information architecture (shipped)
 
-The Console reporting product ships these pages. The "current"
-column shows what is wired today (per the q6wj gap map); the "target"
-column shows the post-overhaul state.
+The React Console route catalog is now the source of truth. Primary
+navigation contains the top-level routes below; nested `/reports/*`
+routes are reachable from the Reports page/direct URLs. Logs and Raw JSON
+are **not** primary-nav pages. Their audit role is covered by journal
+event detail, raw payload views, `/api/console/logs`, and
+`/api/console/raw/{event_id}`.
 
-| Section | Page | Current | Target |
-|---|---|---|---|
-| **Dashboard** | Overview (`/`) | DB meta + recent events | P&L / risk / performance roll-up dashboard (replaces DB-meta content). Headline metrics tiles, recent activity panel, alert/caveat strip. |
-| **Trades / Positions** | All Trades (`/trades`) | none | New page: filterable, sortable trades index (trade-trace-q2li). |
-| | Position Detail (`/positions/{id}`) | none | New page: position lifecycle, P&L attribution, related decisions/forecasts/outcomes (trade-trace-svp2). |
-| **Reports** | Report Browser (`/reports`) | Tool-name list | Browseable report catalog with sample/preview, plus comparison builder + read-only export packets (trade-trace-sqtq). |
-| | P&L (`/reports/pnl`) | none | Dashboard for `report.pnl` (trade-trace-a94a). |
-| | Risk (`/reports/risk`) | none | Dashboard for `report.risk` (trade-trace-1viz). |
-| | Performance (`/reports/performance`) | none | Calendar + equity curve + drawdown views (trade-trace-ai45). |
-| | Strategy / Playbook performance (`/reports/strategy`) | none | Wraps `report.strategy_performance` + `report.playbook_adherence` (trade-trace-avn7). |
-| | Decision intelligence (`/reports/decisions`) | none | Mistakes + strengths + watches + forecast backlog (trade-trace-nvkr). |
-| | Calibration & integrity (`/calibration`) | Counts only | Full `report.calibration` + `report.calibration_integrity` panels (trade-trace-lv7n; replaces current minimal page). |
-| | Evidence / Provenance (`/evidence`) | `/integrity` (counts only) | Source attachment analytics + drilldown (trade-trace-5own; supersedes `/integrity`'s reporting role — see §3.1). |
-| **Strategies** | Strategies (`/strategies`) | Paginated table | Keep. Linked from strategy performance dashboards. |
-| **Playbooks** | Playbooks (`/playbooks`) | Paginated table | Keep. Linked from playbook adherence dashboards. |
-| **Journal** | Journal (`/journal`) | Paginated events | Keep (developer/audit lane). |
-| | Decisions (`/decisions`) | Paginated decisions | Keep (developer/audit lane); reporting decisions surface them with richer chrome via the new dashboards. |
-| | Decision detail (`/decisions/{id}`) | Single decision | Keep. |
-| **Developer / Audit** | Logs (`/logs`) | Tail JSONL log | Keep. |
-| | Raw JSON (`/raw`) | Per-event viewer | Keep. |
+| Section | Page | Shipped behavior |
+|---|---|---|
+| **Dashboard** | Overview (`/`) | Local overview rollup over journal counts, P&L, risk, recent activity, and caveats. |
+| **Trades / Positions** | All Trades (`/trades`) | Filterable trade-typed decisions with caveats; position detail is opened from trade/position links, not a primary-nav item. |
+| **Reports** | Report Browser (`/reports`) | Safe report catalog with links into report pages and export packet affordances. |
+| | Period / Edge Review (`/review`) | Local review surface over existing aggregates; packet-style backend contracts are deferred to trade-trace-2vq5. |
+| | P&L (`/reports/pnl`) | Dashboard for `report.pnl`. |
+| | Risk (`/reports/risk`) | Dashboard for `report.risk`. |
+| | Performance (`/reports/performance`) | Decision velocity / performance timeline from current backend reports. |
+| | Strategy performance (`/reports/strategy`) | Wraps strategy/playbook report data where present. |
+| | Decision intelligence (`/reports/decisions`) | Watchlist / decision-intelligence surface using current report contracts. |
+| | Process analytics (`/process`) | Local process signals where backend-local data exists; richer process contracts are deferred to trade-trace-4exy. |
+| | Compare (`/reports/compare`) | Comparison report surface using `report.compare`. |
+| | Calibration (`/calibration`) | Calibration and integrity rendering from backend report payloads. |
+| | Evidence (`/evidence`) | Source quality / provenance analytics from backend report payloads. |
+| **Reference tables** | Strategies (`/strategies`) | Paginated local strategy table. |
+| | Playbooks (`/playbooks`) | Paginated local playbook table. |
+| **Audit / inspection** | Journal (`/journal`) | Journal timeline/replay with event detail, related records, and raw payload access. |
+| | Decisions (`/decisions`) | Paginated decision inspection. |
 
 ### 3.1 Reporting lane vs developer/audit lane (locked)
 
-The IA must separate the two reader audiences (trade-trace-i1ds):
+The IA separates the two reader audiences without making every audit
+endpoint a nav destination:
 
 - **Reporting lane**: Dashboard, Trades, Reports (P&L / Risk /
   Performance / Strategy / Decision intelligence / Calibration / Evidence).
   Optimized for the Tradervue-like reading experience.
-- **Developer / audit lane**: Journal, Decisions, Decision detail,
-  Logs, Raw JSON. Optimized for inspection and provenance.
+- **Developer / audit lane**: Journal, event detail/raw payload,
+  related-record drilldowns, Decisions, trade/position detail, and local
+  JSON endpoints for logs/raw. Optimized for inspection and provenance.
 
-The top navigation must visibly split the two lanes (visual separator,
-heading group, or a lane toggle). Strategies and Playbooks live in
-their own section and link from both lanes.
-
-`/integrity` keeps its current behavior as a developer-lane audit
-snapshot; the new `/evidence` page (trade-trace-5own) takes the
-reporting-lane role for source/provenance analytics. The two are
-linked but not merged.
+Top navigation lists shipped top-level pages from the shared route
+catalog. `/integrity`, `/logs`, and `/raw` are not current React routes;
+do not document them as primary pages unless the route catalog changes.
 
 ## 4. Metric glossary (locked)
 

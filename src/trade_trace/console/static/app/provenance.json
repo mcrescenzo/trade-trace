@@ -6,8 +6,8 @@
     "src/routeCatalog.ts": "b0bfaf7287f3f031b582996629e4f1b472a9ca3ca099debe44793ebcfabf9fcb",
     "src/routeCatalog.json": "8aad0b2bbf595ff21520554d1fa8a209c88ca55415028a5f98b73f07cbbfc019",
     "../../src/trade_trace/console/route_catalog.json": "8aad0b2bbf595ff21520554d1fa8a209c88ca55415028a5f98b73f07cbbfc019",
-    "package.json": "72ceb6853694b0392838b3d4c9517337a2d6a0808f9a64c6a6c3ed6aab19639e",
-    "package-lock.json": "f6c32d8591391c31e95b9cda2d7bbb8531bf39b8627adb7453a5dcee403854c9",
+    "package.json": "b0f6d6861947b765cec0189f125c6d54427a2dff2d7cb9dc33854a848e4c07d5",
+    "package-lock.json": "4d9f2071aae48a7b21d23a84d90257147650f631d3ff01fbd0b03670c91113b7",
     "vite.config.ts": "a935eb052e8d243db2979ae826bec092ede478cc137b0af532f2d623365f9d27"
   },
   "asset_hashes": {

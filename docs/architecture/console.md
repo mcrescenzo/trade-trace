@@ -54,6 +54,26 @@ The Console API is intentionally local and narrow:
 The report adapter is the only dispatch path for report tools. It keeps
 the closed safe-report allowlist and blocks lazy-write handlers.
 
+## Product Boundaries
+
+The Console is not a trading terminal, broker connector, live-market
+dashboard, SaaS collaboration product, or financial-advice surface. It
+does not support broker/exchange sync, execution/order management,
+credential entry, live quotes/news, cloud sharing, social/mentor review
+threads, telemetry, server-side comments/annotations/preferences, or
+saved filters. Competitor-inspired features that depend on fills,
+commissions, slippage, tax lots, intraday execution streams, account
+sync, or remote collaboration require explicit future local backend data
+contracts before any UI can claim them.
+
+Current React navigation intentionally excludes Logs and Raw JSON as
+primary pages. Auditability is still available through Journal event
+detail, related-record drilldowns, raw payload rendering, and the local
+JSON endpoints (`/api/console/logs`, `/api/console/raw/{event_id}`).
+Richer process analytics and period-review packets are deferred to their
+backend-contract beads (`trade-trace-4exy`, `trade-trace-2vq5`); until
+then sparse data is rendered as caveats/empty states.
+
 ## Frontend Stack
 
 The SPA uses:

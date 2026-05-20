@@ -20,20 +20,28 @@ def _sha256(path: Path) -> str:
 
 
 def test_frontend_workspace_declares_recommended_stack() -> None:
-    package_json = (FRONTEND_ROOT / "package.json").read_text(encoding="utf-8")
+    package_json = json.loads((FRONTEND_ROOT / "package.json").read_text(encoding="utf-8"))
+    declared_deps = set(package_json["dependencies"]) | set(package_json["devDependencies"])
+
     for dep in (
-        '"react"',
-        '"vite"',
-        '"@tanstack/react-router"',
-        '"@tanstack/react-query"',
-        '"@tanstack/react-table"',
-        '"@tanstack/react-virtual"',
-        '"echarts"',
-        '"@radix-ui/react-tabs"',
-        '"tailwindcss"',
-        '"lucide-react"',
+        "react",
+        "react-dom",
+        "vite",
+        "@tanstack/react-router",
+        "@tanstack/react-query",
+        "@tanstack/react-table",
+        "echarts",
+        "@radix-ui/react-tooltip",
+        "tailwindcss",
+        "lucide-react",
     ):
-        assert dep in package_json
+        assert dep in declared_deps
+
+    removed_deps = {
+        "@tanstack/" + "react-" + "virtual",
+        "@radix-ui/" + "react-" + "tabs",
+    }
+    assert declared_deps.isdisjoint(removed_deps)
 
 
 def test_spa_source_uses_router_and_accessible_landmarks() -> None:

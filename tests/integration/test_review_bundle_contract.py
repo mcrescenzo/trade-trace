@@ -35,6 +35,7 @@ from trade_trace.tools.review_bundle import (
     CONTRACT_VERSION,
     ReviewBundleInput,
     ReviewBundleOutput,
+    _bundle_hash,
 )
 
 
@@ -122,6 +123,38 @@ def test_hash_changes_when_max_records_excludes_a_decision(home):
     assert env_full.data["bundle_hash"] != env_capped.data["bundle_hash"]
     assert len(env_full.data["selected"]["decisions"]) == 2
     assert len(env_capped.data["selected"]["decisions"]) == 1
+
+
+def test_bundle_hash_uses_canonical_key_order_not_insertion_order(home):
+    """Pin the decomposition-sensitive hash contract: top-level output
+    keys have a stable presentation order, while the digest is computed
+    from canonical JSON (`sort_keys=True`) and excludes `bundle_hash`.
+    """
+
+    _seed_decision(home)
+    env = _mcp(home, "review.bundle", {"max_records": 5})
+    assert env.ok, env
+
+    expected_top_level_order = [
+        "filter",
+        "selected",
+        "sources",
+        "reflections",
+        "playbook_versions",
+        "report_summaries",
+        "caveats",
+        "suggested_prompts",
+        "contract_version",
+        "bundle_hash",
+    ]
+    assert list(env.data.keys()) == expected_top_level_order
+
+    body_without_hash = {
+        key: env.data[key]
+        for key in reversed(expected_top_level_order)
+        if key != "bundle_hash"
+    }
+    assert _bundle_hash(body_without_hash) == env.data["bundle_hash"]
 
 
 # -- §5.3 redaction ----------------------------------------------------
