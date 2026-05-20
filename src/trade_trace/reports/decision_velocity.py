@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 
 _VALID_BUCKETS = ("day", "week")
@@ -93,13 +94,11 @@ def report_decision_velocity(
         },
         "caveats": [],
     }
-    return {
-        "summary": summary,
-        "groups": groups,
-        "bucket": bucket,
-        "truncated": False,
-        "next_cursor": None,
-    }
+    return standard_report_result(
+        summary=summary,
+        groups=groups,
+        extra={"bucket": bucket},
+    )
 
 
 def _bucket_key(created_at: str, *, bucket: str) -> str:

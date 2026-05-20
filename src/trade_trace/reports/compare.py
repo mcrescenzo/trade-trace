@@ -15,6 +15,7 @@ from collections.abc import Iterable
 from typing import Any, cast
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import applied_filter_view, enforce_supported_filter
 from trade_trace.reports.calibration import (
     DEFAULT_MIN_SAMPLE,
@@ -153,8 +154,7 @@ def _compare_calibration(conn: sqlite3.Connection, *, group_by: str, raw_filter:
             "truncated": False,
         })
     total = sum(cast("int", g["sample_size"]) for g in groups)
-    return {
-        "summary": {
+    summary = {
             "base_report": "calibration",
             "group_by": group_by,
             "sample_size": total,
@@ -162,11 +162,8 @@ def _compare_calibration(conn: sqlite3.Connection, *, group_by: str, raw_filter:
             "filter": applied_filter_view(rf, report=CALIBRATION_REPORT_NAME),
             "metrics": {"group_count": len(groups), "min_sample": min_sample},
             "caveats": [],
-        },
-        "groups": groups,
-        "truncated": False,
-        "next_cursor": None,
     }
+    return standard_report_result(summary=summary, groups=groups)
 
 
 def _compare_pnl(conn: sqlite3.Connection, *, group_by: str, raw_filter: dict[str, Any] | None, min_sample: int) -> dict[str, Any]:
@@ -228,8 +225,7 @@ def _compare_pnl(conn: sqlite3.Connection, *, group_by: str, raw_filter: dict[st
             "sample_warning": warning,
             "truncated": False,
         })
-    return {
-        "summary": {
+    summary = {
             "base_report": "pnl",
             "group_by": group_by,
             "sample_size": sum(g["sample_size"] for g in groups),
@@ -237,11 +233,8 @@ def _compare_pnl(conn: sqlite3.Connection, *, group_by: str, raw_filter: dict[st
             "filter": applied_filter_view(rf, report="report.pnl") if rf.strategy.strategy_id is None else rf.model_dump(),
             "metrics": {"group_count": len(groups), "min_sample": min_sample},
             "caveats": [],
-        },
-        "groups": groups,
-        "truncated": False,
-        "next_cursor": None,
     }
+    return standard_report_result(summary=summary, groups=groups)
 
 
 def _load_grouped_scored_rows(conn: sqlite3.Connection, rf: ReportFilter, group_expr: str) -> Iterable[tuple[str, str, _ScoredRow]]:

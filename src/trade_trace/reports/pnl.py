@@ -12,6 +12,7 @@ import sqlite3
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 
 DEFAULT_PNL_MIN_SAMPLE = 5
@@ -103,9 +104,4 @@ def report_pnl(
         },
         "caveats": [],
     }
-    return {
-        "summary": summary,
-        "groups": groups,
-        "truncated": False,
-        "next_cursor": None,
-    }
+    return standard_report_result(summary=summary, groups=groups)

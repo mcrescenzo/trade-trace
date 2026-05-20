@@ -7,6 +7,7 @@ from statistics import median
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 
 DEFAULT_RISK_MIN_SAMPLE = 10
@@ -172,9 +173,7 @@ def report_risk(
         "pending_risk_count": len(pending_ids),
         "decisions_missing_risk_sample": missing_risk_ids[:10],
     }
-    return {
-        "summary": summary,
-        "groups": [{
+    groups = [{
             "key": "all",
             "label": "All closed positions with declared risk",
             "metrics": metrics,
@@ -188,10 +187,8 @@ def report_risk(
             "sample_size": sample_size,
             "sample_warning": sample_warning,
             "truncated": False,
-        }],
-        "truncated": False,
-        "next_cursor": None,
-    }
+        }]
+    return standard_report_result(summary=summary, groups=groups)
 
 
 __all__ = ["DEFAULT_RISK_MIN_SAMPLE", "report_risk"]

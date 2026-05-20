@@ -14,6 +14,7 @@ trade-trace-77z; the coach lands in trade-trace-2g2.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import ValidationError
@@ -198,6 +199,38 @@ def _propagate_report_meta(ctx: ToolContext, data: dict[str, Any]) -> None:
     # without parsing summary.
     if isinstance(summary.get("filter"), dict):
         ctx.meta_hints["normalized_filter"] = summary["filter"]
+
+
+def _run_report_data(
+    args: dict[str, Any],
+    ctx: ToolContext,
+    build: Callable[[Any], dict[str, Any]],
+) -> dict[str, Any]:
+    """Open/close the DB and propagate standard report meta for a tool call."""
+
+    db = open_db_for_args(args)
+    try:
+        data = build(db.connection)
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _call_filter_report(
+    fn: Callable[..., dict[str, Any]],
+    connection: Any,
+    *,
+    raw_filter: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Call a report and preserve shared filter-error translation."""
+
+    try:
+        return fn(connection, raw_filter=raw_filter)
+    except ValidationError as exc:
+        raise report_filter_validation_to_tool_error(exc) from exc
+    except UnsupportedFilterError as exc:
+        raise _unsupported_filter_to_tool_error(exc) from exc
 
 
 def _report_calibration(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -456,18 +489,13 @@ def _make_filter_only_report(fn):
     handler that validates and dispatches it."""
 
     def _handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        db = open_db_for_args(args)
-        try:
-            try:
-                data = fn(db.connection, raw_filter=args.get("filter"))
-            except ValidationError as exc:
-                raise report_filter_validation_to_tool_error(exc) from exc
-            except UnsupportedFilterError as exc:
-                raise _unsupported_filter_to_tool_error(exc) from exc
-        finally:
-            db.close()
-        _propagate_report_meta(ctx, data)
-        return data
+        return _run_report_data(
+            args,
+            ctx,
+            lambda connection: _call_filter_report(
+                fn, connection, raw_filter=args.get("filter"),
+            ),
+        )
 
     return _handler
 

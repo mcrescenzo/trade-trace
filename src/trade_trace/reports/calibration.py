@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
+from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import (
     applied_filter_view,
     enforce_supported_filter,
@@ -124,16 +125,15 @@ def report_calibration(
             "truncated": truncated,
         }
     ]
-    return {
-        "summary": summary,
-        "groups": groups,
-        "bin_policy": DEFAULT_BIN_POLICY,
+    return standard_report_result(
+        summary=summary,
+        groups=groups,
+        extra={"bin_policy": DEFAULT_BIN_POLICY},
         # Per bead trade-trace-zgz: top-level truncated must reflect any
         # truncated group so envelope meta.truncated does not under-report
         # capped data (the dispatcher copies this onto ctx.meta_hints).
-        "truncated": any(g.get("truncated") for g in groups),
-        "next_cursor": None,
-    }
+        truncated=any(g.get("truncated") for g in groups),
+    )
 
 
 # -- data loading --------------------------------------------------------
