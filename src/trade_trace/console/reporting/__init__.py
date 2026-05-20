@@ -31,6 +31,16 @@ from trade_trace.console.reporting.filter_state import (
     encode_filter,
     summarize_filter,
 )
+from trade_trace.console.reporting.metric_glossary import (
+    CAVEAT_GLOSSARY,
+    METRIC_GLOSSARY,
+    PAGE_EXPLANATIONS,
+    CaveatEntry,
+    MetricEntry,
+    caveat_copy,
+    metric_help,
+    page_explanation,
+)
 from trade_trace.console.reporting.position_rows import (
     CAVEAT_OPEN_NO_MARK,
     PositionDetail,
@@ -44,20 +54,28 @@ from trade_trace.console.reporting.trade_rows import (
 )
 
 __all__ = [
+    "CAVEAT_GLOSSARY",
     "CAVEAT_OPEN_NO_MARK",
+    "CaveatEntry",
     "DashboardContext",
     "DashboardGroup",
     "FILTER_QUERY_PARAM",
     "FilterStateError",
+    "METRIC_GLOSSARY",
+    "MetricEntry",
+    "PAGE_EXPLANATIONS",
     "PositionDetail",
     "PositionEvent",
     "ReportAdapterError",
     "SAFE_REPORT_TOOLS",
     "TradeRow",
     "WidgetEvidence",
+    "caveat_copy",
     "decode_filter",
     "encode_filter",
     "list_trades",
+    "metric_help",
+    "page_explanation",
     "position_detail",
     "run_report",
     "summarize_filter",
