@@ -12,6 +12,15 @@ bead: trade-trace-1kkv.1
 > Implementation beads under the trade-trace-1kkv epic depend on
 > this document; they should be opened only after the decisions
 > below are accepted.
+>
+> *Companion doc:* The reporting product overhaul (EPIC
+> [trade-trace-3o4a]) builds on top of this contract; its
+> architecture decisions, page IA, metric glossary, charting policy,
+> read model, and adapter shapes live in
+> [`reporting-product.md`](./reporting-product.md). When the two
+> documents disagree, the reporting-product doc takes precedence for
+> reporting pages and this doc takes precedence for the original
+> read-only Console MVP surface (Journal/Decisions/Strategies/etc.).
 
 ## Why this exists
 

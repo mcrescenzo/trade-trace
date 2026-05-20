@@ -346,46 +346,103 @@ If new deps appear during implementation, the bead introducing them
 MUST update PRD §2.4 (one-permitted-outbound-path framing) and
 re-run the dependency-safety verification gate (`qclv`).
 
-## 8. Read model + adapter contract (foundation beads)
+## 8. Read model + adapter contract (foundation beads — shipped)
 
-The foundation work resolves these specific shapes:
+The foundation wave is complete; this section now reflects what
+shipped. Implementations live under
+`src/trade_trace/console/reporting/` (read model, adapter, filter
+state) and `src/trade_trace/console/static/` (chart scaffold).
 
-1. **Trade / position read model** (trade-trace-bbww): a Pydantic +
-   SQL layer over `positions` + `position_events` that returns:
-   - `trades[]` — closed-position legs with entry/exit price, P&L,
-     R-multiple (when declared).
-   - `open_positions[]` — current exposure rows.
-   - `equity_curve[]` — daily MTM points.
-   - `drawdown_segments[]` — peak-to-trough segments.
-   Each row carries decision_id / instrument_id / strategy_id for
-   drilldown.
-2. **ReportResult-to-Console adapter** (trade-trace-8ine): a
-   `console.reporting` module that:
-   - Wraps `report.*` calls with the lazy-write deny set so coach /
-     signal.scan stay inaccessible from Console.
-   - Projects `ReportResult` into a typed `DashboardContext` Pydantic
-     shape consumed by Jinja templates.
-   - Handles pagination + truncation with the cursor contract from
-     [`console.md`](./console.md) §Decision 13.
-   - Carries an `evidence` block per widget exposing record_ids +
-     filter + tool name (§6).
+1. **Trade / position read model** (trade-trace-bbww — *shipped*):
+   `src/trade_trace/console/reporting/trade_rows.py` +
+   `position_rows.py`. Public surface:
+   - `list_trades(conn, *, cursor, limit, strategy_id, instrument_id,
+     decision_type) -> Page[TradeRow]` — paginated trades index
+     filtered to the trading decision types. Composite
+     `(created_at, id)` cursor so deterministic fixtures with shared
+     `created_at` paginate totally.
+   - `trade_detail(conn, decision_id) -> TradeRow | None` — single
+     trade by decision_id; returns `None` for unknown ids and for
+     non-trading decision types (the `watch`/`skip` lane never
+     surfaces here).
+   - `position_detail(conn, position_id) -> PositionDetail | None`
+     — lifecycle projection row joined to instrument/venue, plus
+     the chronological `position_events` lineage and the opening
+     decision's strategy/playbook for audit.
+   Named missing-data caveats (`missing_risk_budget`,
+   `missing_price`, `missing_quantity`, `no_strategy`, `no_thesis`,
+   `no_sources`, `open_no_mark`) replace silent zero-fills.
+   Test pin: `tests/integration/test_console_reporting_read_model.py`
+   (13 tests).
+2. **ReportResult-to-Console adapter** (trade-trace-8ine — *shipped*):
+   `src/trade_trace/console/reporting/adapter.py`. Public surface:
+   - `run_report(tool, args, *, actor_id, home) -> DashboardContext`
+     — dispatches via `trade_trace.core.dispatch`, enforces the
+     **closed** `SAFE_REPORT_TOOLS` allowlist (15 reports) and the
+     `LAZY_WRITE_DENY_SET` (`report.coach`, `signal.scan`), and
+     normalizes the envelope into the typed `DashboardContext` /
+     `DashboardGroup` / `WidgetEvidence` dataclasses.
+   - Preserves every §6 evidence contract field: `summary_metrics`,
+     `summary_filter`, `summary_sample_warning`, `summary_caveats`,
+     groups (with `metrics` / `filter` / `record_ids` / `examples` /
+     `sample_size` / `sample_warning` / `truncated`), `drilldowns`,
+     `as_of`, `truncated`, `next_cursor`, `raw_envelope`, plus a
+     `WidgetEvidence` aggregate (tool + CLI invocation + request_id
+     + aggregated record_ids/examples).
+   - Errors out-of-band: `ReportAdapterError` for deny-set / non-
+     allowlisted / VALIDATION_ERROR envelopes so Console handlers
+     can render typed user-facing copy.
+   - The lazy-write deny set is duplicated **verbatim** from
+     `console.endpoints.LAZY_WRITE_DENY_SET` so the AST-scan test
+     (`tests/contracts/test_console_endpoints.py
+     ::test_endpoints_do_not_dispatch_lazy_write_handlers`) catches
+     drift in both files.
+   Test pin: `tests/integration/test_console_reporting_adapter.py`
+   (7 tests).
 3. **Pagination + perf baseline** (trade-trace-mmbj — *shipped*):
-   reuse cursor pagination from existing endpoints; perf budget = first
-   page <1s wall-clock over a 100k-row population, 5× headroom required
-   for the dashboard suite. `tests/integration/test_console_perf_baseline.py`
-   pins the budget for the journal (events) AND the reporting read
-   model (`list_trades`); both have first-page + deep-cursor cases.
-   `list_trades` uses a composite `(created_at, id)` cursor so the walk
-   is total under the deterministic-fixture seed that emits many rows
-   sharing the same `created_at`.
-4. **Charting layer** (trade-trace-ycag): vendored Chart.js asset +
-   bootstrap script + CSP test per §7.1.
-5. **Fixtures** (trade-trace-dnwh): a richer fixture target (e.g.
-   `mvp-eval-rich`) exercising every caveat path in §4.6, including
-   low-N groups, missing marks, missing risk budgets, late forecasts,
-   stale watches, overdue watches, contradictory sources, and
-   `sparse` / `missing` opportunity coverage.
-6. **Global filter UI** (trade-trace-hayy): per §5.
+   reuse cursor pagination from existing endpoints; perf budget =
+   first page <1s wall-clock over a 100k-row population, 5×
+   headroom required for the dashboard suite.
+   `tests/integration/test_console_perf_baseline.py` pins the
+   budget for the journal (events) AND the reporting read model
+   (`list_trades`); both have first-page + deep-cursor cases.
+   No new SQLite indexes were needed — the existing
+   `decisions(created_at)` ordering meets budget under the composite
+   cursor.
+4. **Charting layer** (trade-trace-ycag — *scaffold shipped*; binary
+   install tracked as trade-trace-nfn4): vendored Chart.js v4.4.3
+   under `src/trade_trace/console/static/vendor/chartjs/`. The
+   bootstrap script
+   `src/trade_trace/console/static/js/chart-bootstrap.js` reads
+   `<script type="application/json" data-chart="<canvas-id>">` blocks
+   via `JSON.parse` (no `eval`, no `new Function` — CSP-clean),
+   constructs Chart.js instances on the matching canvases, and
+   renders a graceful "Chart asset not loaded" caveat when
+   `window.Chart` is undefined (e.g. before the operator has run
+   the curl in `vendor/chartjs/README.md`). Test pin:
+   `tests/contracts/test_console_chart_bootstrap.py` (5 tests).
+   The actual `chart.umd.min.js` download is the explicit operator
+   step in trade-trace-nfn4.
+5. **Fixtures** (trade-trace-dnwh — *shipped*): the new
+   `mvp-eval-rich` `journal.fixture_seed` target (in
+   `src/trade_trace/tools/fixture.py`) overlays `mvp-eval` with
+   5 closed positions (winners/losers/breakeven), 4 open positions
+   (2 marked via `snapshot.add`, 2 unmarked for the missing-mark
+   caveat), declared-risk on some decisions and not others, and a
+   `rich-only-N1` low-N strategy. Determinism pinned by
+   `tests/integration/test_fixture_seed.py
+   ::test_fixture_seed_mvp_eval_rich_is_deterministic`.
+6. **Global filter UI backend** (trade-trace-hayy — *shipped*):
+   `src/trade_trace/console/reporting/filter_state.py` provides
+   `encode_filter(rf) -> base64url`, `decode_filter(s) -> ReportFilter`,
+   `summarize_filter(rf) -> list[facet]`, and the
+   `FILTER_QUERY_PARAM='f'` constant. Round-trips losslessly (incl.
+   the `__none__` strategy sentinel), rejects unknown axes via
+   `ReportFilter.model_validate` (`extra="forbid"`), and emits a
+   compact `e30` payload for the no-filter case. The form / facet
+   rendering / live-URL JS land in dashboard UI beads. Test pin:
+   `tests/integration/test_console_reporting_filter_state.py` (14
+   tests).
 
 ## 9. What this document does NOT decide
 
