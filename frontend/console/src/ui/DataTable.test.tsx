@@ -17,6 +17,8 @@ describe('DataTable', () => {
     )
 
     expect(screen.getByText('Acme Corp')).toBeInTheDocument()
+    expect(screen.getByText('Missing declared risk')).toBeInTheDocument()
+    expect(screen.queryByText('missing_risk')).not.toBeInTheDocument()
     expect(screen.queryByText('n/a')).not.toBeInTheDocument()
   })
 

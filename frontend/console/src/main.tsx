@@ -31,6 +31,7 @@ import { createRoot } from 'react-dom/client'
 import { ChartPanel } from './ui/ChartPanel'
 import { DataTable } from './ui/DataTable'
 import { MetricCard } from './ui/MetricCard'
+import { CaveatChips, MetricHelp, PageExplainer } from './ui/help'
 import {
   CatalogPayload,
   EventRow,
@@ -485,6 +486,7 @@ function OverviewPage() {
   return (
     <>
       <PageHeader eyebrow="Dashboard" title="Journal intelligence at a glance" />
+      <PageExplainer answers="What is in this local journal and which headline report metrics are available." data="/api/console/status plus backend P&L and risk reports under the current URL filter." read="Counts are journal inventory; report cards are backend aggregates with definitions on metric labels." mislead="A count is not performance, and filtered or missing report inputs can make headline metrics unavailable." />
       <FilterBar filter={filter} onChange={setFilter} />
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Events" value={counts.events ?? 0} icon={Database} />
@@ -527,7 +529,7 @@ function ReportSummary({
       <div className="grid gap-3 sm:grid-cols-3">
         {values.map((metric) => (
           <div key={metric.name} className="rounded border border-border p-3">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{metric.name}</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground"><MetricHelp label={metric.name} /></p>
             <p className="mt-1 text-2xl font-semibold">{metric.value}</p>
           </div>
         ))}
@@ -541,6 +543,7 @@ function TradesPage() {
   return (
     <>
       <PageHeader eyebrow="Trades" title="Trade decisions and caveats" />
+      <PageExplainer answers="Which recorded trading decisions make up the trade history." data="/api/console/trades from journal decisions and position read models." read="Use filters to narrow rows; caveat chips explain missing risk, marks, sources, or other local limitations." mislead="Rows are journal-derived records, not broker statements; non-trading decisions are excluded here." />
       <FilterBar filter={filter} onChange={setFilter} />
       <PageTable<TradeRow>
         endpoint="/api/console/trades"
@@ -559,7 +562,7 @@ function TradesPage() {
           { key: 'side', header: 'Side' },
           { key: 'quantity', header: 'Qty' },
           { key: 'price', header: 'Price' },
-          { key: 'caveats', header: 'Caveats', cell: (value) => <ChipList value={value} /> }
+          { key: 'caveats', header: 'Caveats', cell: (value) => <CaveatChips value={value} /> }
         ]}
       />
     </>
@@ -587,6 +590,7 @@ function ReportPage({
   return (
     <>
       <PageHeader eyebrow="Report" title={title} />
+      <PageExplainer answers="What this backend report says for the selected local filter." data={`${tool} report output, summary metrics, groups, evidence, and raw report envelope.`} read="Metric labels include definitions where known; group rows show sample size and warnings." mislead="Low sample size, missing inputs, or comparisons across groups do not establish causality or advice." />
       <FilterBar filter={filter} onChange={setFilter} />
       {query.isLoading ? (
         <LoadingBlock />
@@ -607,7 +611,7 @@ function ReportPage({
             columns={[
               { key: 'label', header: 'Group' },
               { key: 'sample_size', header: 'Sample' },
-              { key: 'sample_warning', header: 'Warning' },
+              { key: 'sample_warning', header: 'Warning', cell: (value) => <CaveatChips value={value} /> },
               { key: 'metrics', header: 'Metrics' }
             ]}
             renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={query.data?.raw_envelope} />}
@@ -626,6 +630,7 @@ function CatalogPage() {
   return (
     <>
       <PageHeader eyebrow="Reports" title="Report catalog" />
+      <PageExplainer answers="Which safe read-only reports can be inspected from this Console." data="/api/console/catalog safe report tool list." read="Open a report page to see backend metrics, groups, evidence, and caveats." mislead="The catalog lists available local reports only; it is not a recommendation menu or signal scanner." />
       {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} /> : (
         <DataTable rows={(query.data?.report_tools ?? []).map((tool) => ({ tool }))} columns={[{ key: 'tool', header: 'Tool' }]} />
       )}
@@ -637,6 +642,7 @@ function EventsPage({ endpoint, title }: { endpoint: string; title: string }) {
   return (
     <>
       <PageHeader eyebrow="Audit" title={title} />
+      <PageExplainer answers="Which append-only journal events match this audit view." data={`${endpoint} plus per-event detail and raw payload endpoints.`} read="Expand rows for contextual raw payload access when needed for provenance." mislead="Events are low-level audit records; product metrics should be read from report pages with caveats." />
       <PageTable<EventRow>
         endpoint={endpoint}
         queryKey={endpoint}
@@ -658,6 +664,7 @@ function StrategiesPage() {
   return (
     <>
       <PageHeader eyebrow="Strategies" title="Strategy records" />
+      <PageExplainer answers="What named strategy records exist in this journal." data="/api/console/strategies metadata: id, name, slug, status, and created time." read="Treat strategy as a grouping label for review and filtering." mislead="Strategy status or presence is not performance certification and does not prove edge." />
       <PageTable<Record<string, unknown>>
         endpoint="/api/console/strategies"
         queryKey="strategies"
@@ -679,6 +686,7 @@ function PlaybooksPage() {
   return (
     <>
       <PageHeader eyebrow="Playbooks" title="Playbook records" />
+      <PageExplainer answers="What playbook records exist and how they are described." data="/api/console/playbooks metadata: id, name, description, status, and created time." read="Use these rows as process/adherence context for reports that support playbook data." mislead="A playbook record does not mean every decision has adherence scoring or outcome causality." />
       <PageTable<Record<string, unknown>>
         endpoint="/api/console/playbooks"
         queryKey="playbooks"
@@ -701,6 +709,7 @@ function DecisionsPage() {
   return (
     <>
       <PageHeader eyebrow="Decisions" title="Recorded decisions" />
+      <PageExplainer answers="Which trading and non-trading decisions are recorded under the current filter." data="/api/console/decisions journal decision rows." read="Decision type distinguishes entries, exits, watches, skips, and other actions where present." mislead="Not every decision is a trade; missing price or quantity can be valid for non-trading actions." />
       <FilterBar filter={filter} onChange={setFilter} supportsStrategy={false} />
       <PageTable<Record<string, unknown>>
         endpoint="/api/console/decisions"
@@ -731,6 +740,7 @@ function LogsPage() {
   return (
     <>
       <PageHeader eyebrow="Logs" title="Operational log tail" />
+      <PageExplainer answers="What local Console/server log lines may help debug this session." data="/api/console/logs tail endpoint." read="Use as secondary troubleshooting context, not as journal analytics." mislead="Logs may be redacted, partial, or unrelated to a selected report filter." />
       {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} /> : (
         <pre className="overflow-auto rounded border border-border bg-card p-4 text-xs">
           {JSON.stringify(query.data, null, 2)}

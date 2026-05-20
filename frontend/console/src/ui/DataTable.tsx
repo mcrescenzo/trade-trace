@@ -11,6 +11,8 @@ import {
   useReactTable
 } from '@tanstack/react-table'
 
+import { CaveatChips } from './help'
+
 export type Column<T extends Record<string, unknown> = Record<string, unknown>> = {
   key: string
   header: string
@@ -48,6 +50,7 @@ export function DataTable<T extends Record<string, unknown>>({
         accessorFn: (row) => (column.accessor ? column.accessor(row) : row[column.key]),
         cell: (ctx) => {
           const value = ctx.getValue()
+          if (!column.cell && /caveat|warning/i.test(column.key)) return <CaveatChips value={value} />
           return column.cell ? column.cell(value, ctx.row.original) : formatCell(value)
         }
       })),
