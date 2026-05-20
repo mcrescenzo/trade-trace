@@ -154,19 +154,39 @@ def _strategy_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             )
     finally:
         db.close()
-    return {
+    return _strategy_response({
         "id": strategy_id, "name": name, "slug": slug,
         "description": description, "hypothesis": hypothesis,
         "status": status, "created_at": created_at, "updated_at": created_at,
+    })
+
+
+def _strategy_response(data: dict[str, Any]) -> dict[str, Any]:
+    """Return the public strategy response shape.
+
+    This intentionally omits internal-only columns such as ``meta_json`` and
+    ``actor_id`` and preserves the stable response keys used by create, update,
+    list, show, and idempotent replay paths.
+    """
+
+    return {
+        "id": data["id"], "name": data["name"], "slug": data["slug"],
+        "description": data.get("description"),
+        "hypothesis": data.get("hypothesis"), "status": data["status"],
+        "created_at": data["created_at"], "updated_at": data["updated_at"],
     }
 
 
 def _strategy_row_to_dict(strategy_id: str, row: tuple) -> dict[str, Any]:
-    return {
+    return _strategy_response({
         "id": strategy_id, "name": row[0], "slug": row[1],
         "description": row[2], "hypothesis": row[3], "status": row[4],
         "created_at": row[5], "updated_at": row[6],
-    }
+    })
+
+
+def _strategy_full_row_to_dict(row: tuple) -> dict[str, Any]:
+    return _strategy_row_to_dict(row[0], row[1:])
 
 
 def _strategy_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -203,14 +223,7 @@ def _strategy_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         rows = db.connection.execute(sql, params).fetchall()
     finally:
         db.close()
-    items = [
-        {
-            "id": row[0], "name": row[1], "slug": row[2],
-            "description": row[3], "hypothesis": row[4], "status": row[5],
-            "created_at": row[6], "updated_at": row[7],
-        }
-        for row in rows
-    ]
+    items = [_strategy_full_row_to_dict(row) for row in rows]
     return {"items": items, "count": len(items), "truncated": len(items) == limit}
 
 
@@ -253,11 +266,7 @@ def _strategy_show(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 "strategy_id": strategy_id, "slug": slug,
             },
         )
-    return {
-        "id": row[0], "name": row[1], "slug": row[2],
-        "description": row[3], "hypothesis": row[4], "status": row[5],
-        "created_at": row[6], "updated_at": row[7],
-    }
+    return _strategy_full_row_to_dict(row)
 
 
 def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -352,15 +361,7 @@ def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     payload=payload, actor_id=ctx.actor_id,
                     idempotency_key=idempotency_key, ctx=ctx,
                 )
-                return {
-                    "id": replay["id"], "name": replay["name"],
-                    "slug": replay["slug"],
-                    "description": replay.get("description"),
-                    "hypothesis": replay.get("hypothesis"),
-                    "status": replay["status"],
-                    "created_at": replay["created_at"],
-                    "updated_at": replay["updated_at"],
-                }
+                return _strategy_response(replay)
 
             emit_event(
                 uow, event_type="strategy.updated",
@@ -377,20 +378,9 @@ def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 "WHERE id = ?",
                 tuple(params),
             )
-            updated_row = (
-                candidate_result["id"], candidate_result["name"],
-                candidate_result["slug"], candidate_result["description"],
-                candidate_result["hypothesis"], candidate_result["status"],
-                candidate_result["created_at"], candidate_result["updated_at"],
-            )
     finally:
         db.close()
-    return {
-        "id": updated_row[0], "name": updated_row[1], "slug": updated_row[2],
-        "description": updated_row[3], "hypothesis": updated_row[4],
-        "status": updated_row[5], "created_at": updated_row[6],
-        "updated_at": updated_row[7],
-    }
+    return _strategy_response(candidate_result)
 
 
 def register_strategy_tools(registry: ToolRegistry) -> None:
