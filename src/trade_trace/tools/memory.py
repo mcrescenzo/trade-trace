@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import struct
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Final
 
@@ -657,6 +658,22 @@ def _memory_link(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 # -- memory.recall --------------------------------------------------
 
 
+@dataclass(frozen=True)
+class RecallOptions:
+    query: str
+    limit_k: int
+    max_chars: int | None
+    compact: bool
+    include_body: bool
+    include_provenance: bool
+    min_confidence: float | None
+    node_types: list[str] | None
+    mode: str
+    as_of: str | None
+    requested_strategies: list[str]
+    context: dict[str, Any]
+
+
 def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """Rank memory nodes by RRF over BM25 + temporal + graph strategies,
     apply bi-temporal `as_of` filter, return top-k with provenance, and
@@ -664,236 +681,171 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     `memory_node_stats` projection consumes.
     """
 
-    query = require(args, "query")
-    limit_k = int(args.get("k", 10))
-    if limit_k < 1 or limit_k > 100:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "k must be an integer in [1, 100]",
-            details={"field": "k", "value": limit_k},
-        )
-    # Recall budget / provenance knobs per bead 5n4 acceptance:
-    #   - max_chars: cap aggregate body length across returned items
-    #   - compact: truncate each body to ~120 chars
-    #   - include_body / include_provenance: drop those fields on emit
-    #   - min_confidence: filter nodes with confidence_base < threshold
-    max_chars = args.get("max_chars")
-    if max_chars is not None and (not isinstance(max_chars, int) or max_chars < 1):
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "max_chars must be a positive integer when set",
-            details={"field": "max_chars", "value": max_chars},
-        )
-    compact = args.get("compact", False)
-    include_body = args.get("include_body", True)
-    include_provenance = args.get("include_provenance", True)
-    min_confidence = args.get("min_confidence")
-    if min_confidence is not None and (
-        not isinstance(min_confidence, (int, float))
-        or not (0.0 <= min_confidence <= 1.0)
-    ):
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "min_confidence must be a float in [0.0, 1.0]",
-            details={"field": "min_confidence", "value": min_confidence},
-        )
-    # `node_types` filter and `mode` per memory-layer.md §7.4 + bead 7v6
-    # docs alignment. `mode='per_strategy'` returns per-strategy ranked
-    # lists side-by-side so the agent can triangulate without seeing only
-    # the fused ranking.
-    node_types = args.get("node_types")
-    if node_types is not None:
-        if not isinstance(node_types, list) or not node_types:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                "node_types must be a non-empty list when set",
-                details={"field": "node_types", "value": node_types},
-            )
-        invalid_types = [t for t in node_types if t not in NODE_TYPES]
-        if invalid_types:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"node_types must be drawn from {NODE_TYPES}",
-                details={"field": "node_types", "invalid": invalid_types,
-                         "allowed": list(NODE_TYPES)},
-            )
-    mode = args.get("mode", "fused")
-    if mode not in ("fused", "per_strategy"):
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "mode must be 'fused' or 'per_strategy'",
-            details={"field": "mode", "value": mode,
-                     "allowed": ["fused", "per_strategy"]},
-        )
-    as_of = normalize_timestamp(args, "as_of")
-    requested_strategies = args.get("strategies") or ["bm25", "temporal", "graph"]
-    if not isinstance(requested_strategies, list) or not requested_strategies:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "strategies must be a non-empty list",
-            details={"field": "strategies", "value": requested_strategies},
-        )
-    valid_strategies = {"bm25", "temporal", "graph", "semantic"}
-    invalid = [s for s in requested_strategies if s not in valid_strategies]
-    if invalid:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            f"strategies must be drawn from {sorted(valid_strategies)}",
-            details={"field": "strategies", "invalid": invalid,
-                     "allowed": sorted(valid_strategies)},
-        )
-
-    context = args.get("context") or {}
+    options = _parse_recall_options(args)
     seg = common_metadata(args)
 
     db = open_db_for_args(args)
     try:
         provider = _embeddings_provider(db.connection)
-        if provider != "none" and "semantic" not in requested_strategies:
-            requested_strategies = [*requested_strategies, "semantic"]
-        in_scope_rows = _load_in_scope_nodes(db.connection, as_of=as_of)
-        # Apply node_types filter BEFORE ranking so each strategy only
-        # sees the eligible candidate set.
-        if node_types is not None:
+        if provider != "none" and "semantic" not in options.requested_strategies:
+            options = RecallOptions(
+                **{**options.__dict__, "requested_strategies": [*options.requested_strategies, "semantic"]}
+            )
+        in_scope_rows = _load_in_scope_nodes(db.connection, as_of=options.as_of)
+        if options.node_types is not None:
             in_scope_rows = {
                 nid: row for nid, row in in_scope_rows.items()
-                if row["node_type"] in node_types
+                if row["node_type"] in options.node_types
             }
-        rankings: dict[str, list[str]] = {}
-        if "bm25" in requested_strategies:
-            rankings["bm25"] = _bm25_rank(db.connection, query, in_scope_rows)
-        if "temporal" in requested_strategies:
-            rankings["temporal"] = _temporal_rank(in_scope_rows, as_of=as_of)
-        if "graph" in requested_strategies:
-            rankings["graph"] = _graph_rank(
-                db.connection, context=context, in_scope_rows=in_scope_rows,
-            )
-        if "semantic" in requested_strategies and provider != "none":
-            semantic_ranked = _semantic_rank(db.connection, query, provider, in_scope_rows)
-            if semantic_ranked:
-                rankings["semantic"] = semantic_ranked
-
-        combined = _rrf_combine(rankings)
-        # Apply importance + supersession adjustments.
-        superseded = _superseded_node_ids(db.connection)
-        scored: list[tuple[str, float, dict[str, list[int]]]] = []
-        for node_id, base_score, provenance in combined:
-            row = in_scope_rows.get(node_id)
-            if row is None:
-                continue
-            importance = row["importance"]
-            boost = 1.0 + (importance - 5) * IMPORTANCE_BOOST_SLOPE
-            if node_id in superseded:
-                boost *= SUPERSESSION_DISCOUNT
-            scored.append((node_id, base_score * boost, provenance))
-        scored.sort(key=lambda r: (-r[1], r[0]))
-        top = scored[:limit_k]
-
-        # Apply min_confidence + budget knobs.
-        filtered: list[tuple[str, float, dict[str, list[int]]]] = []
-        for node_id, score, provenance in top:
-            if min_confidence is not None:
-                conf = in_scope_rows[node_id].get("confidence_base", 1.0)
-                if conf is None or conf < min_confidence:
-                    continue
-            filtered.append((node_id, score, provenance))
-
-        items: list[dict[str, Any]] = []
-        chars_used = 0
-        for node_id, score, provenance in filtered:
-            row = in_scope_rows[node_id]
-            body = row["body"] or ""
-            if compact and len(body) > 120:
-                body = body[:117] + "..."
-            if max_chars is not None and chars_used + len(body) > max_chars:
-                # Hard budget hit — drop remaining items.
-                break
-            chars_used += len(body)
-            item: dict[str, Any] = {
-                "id": node_id,
-                "node_type": row["node_type"],
-                "title": row["title"],
-                "importance": row["importance"],
-                "score": round(score, 6),
-                "source_refs": _source_refs_for(db.connection, node_id),
-            }
-            if include_body:
-                item["body"] = body
-            if include_provenance:
-                item["strategy_provenance"] = provenance
-            items.append(item)
-
-        # Log the recall event; projection rebuild aggregates these.
-        recall_id = new_id("rcl")
-        created_at = now_iso()
-        node_ids_returned = [it["id"] for it in items]
-        db.connection.execute("BEGIN")
-        try:
-            db.connection.execute(
-                "INSERT INTO memory_recall_events(recall_id, query, "
-                "strategies_used, node_ids_returned, context_json, limit_k, "
-                "as_of, created_at, actor_id, agent_id, model_id, environment, "
-                "run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    recall_id, query,
-                    json.dumps(list(rankings.keys()), sort_keys=True),
-                    json.dumps(node_ids_returned, sort_keys=False),
-                    json.dumps(context, sort_keys=True),
-                    limit_k, as_of, created_at, ctx.actor_id,
-                    seg["agent_id"], seg["model_id"], seg["environment"],
-                    seg["run_id"],
-                ),
-            )
-            # Eagerly maintain stats projection in the same transaction.
-            for node_id in node_ids_returned:
-                db.connection.execute(
-                    "INSERT INTO memory_node_stats(node_id, recall_count, "
-                    "last_recalled_at) VALUES (?, 1, ?) "
-                    "ON CONFLICT(node_id) DO UPDATE SET "
-                    "recall_count = memory_node_stats.recall_count + 1, "
-                    "last_recalled_at = excluded.last_recalled_at",
-                    (node_id, created_at),
-                )
-            db.connection.execute("COMMIT")
-        except Exception:
-            db.connection.execute("ROLLBACK")
-            raise
+        rankings = _build_recall_rankings(db.connection, options, in_scope_rows, provider)
+        scored = _score_ranked_nodes(db.connection, rankings, in_scope_rows)
+        items, _chars_used = _shape_recall_items(
+            db.connection, scored[:options.limit_k], in_scope_rows, options,
+        )
+        recall_id, created_at = _write_recall_event_and_stats(
+            db.connection, items=items, rankings=rankings, options=options,
+            ctx=ctx, seg=seg,
+        )
     finally:
         db.close()
 
-    response: dict[str, Any] = {
-        "recall_id": recall_id,
-        "query": query,
-        "strategies_used": sorted(rankings.keys()),
-        "k": limit_k,
-        "as_of": as_of,
-        "mode": mode,
-        "items": items,
-        "total_in_scope": len(in_scope_rows),
-    }
-    if mode == "per_strategy":
-        # Surface the per-strategy ranked lists side-by-side per
-        # memory-layer.md §7.4. Each strategy's ranking is capped at k
-        # so the response stays bounded.
-        response["per_strategy"] = {
-            strategy: ranked[:limit_k]
-            for strategy, ranked in rankings.items()
-        }
+    response = _build_recall_response(
+        recall_id=recall_id, rankings=rankings, options=options,
+        items=items, in_scope_rows=in_scope_rows,
+    )
+    _set_recall_meta_hints(ctx, created_at=created_at, rankings=rankings, options=options)
+    return response
 
-    # Reproducibility surface per bead trade-trace-64q.
+
+def _parse_recall_options(args: dict[str, Any]) -> RecallOptions:
+    query = require(args, "query")
+    limit_k = int(args.get("k", 10))
+    if limit_k < 1 or limit_k > 100:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "k must be an integer in [1, 100]", details={"field": "k", "value": limit_k})
+    max_chars = args.get("max_chars")
+    if max_chars is not None and (not isinstance(max_chars, int) or max_chars < 1):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "max_chars must be a positive integer when set", details={"field": "max_chars", "value": max_chars})
+    compact = args.get("compact", False)
+    include_body = args.get("include_body", True)
+    include_provenance = args.get("include_provenance", True)
+    min_confidence = args.get("min_confidence")
+    if min_confidence is not None and (not isinstance(min_confidence, (int, float)) or not (0.0 <= min_confidence <= 1.0)):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "min_confidence must be a float in [0.0, 1.0]", details={"field": "min_confidence", "value": min_confidence})
+    node_types = args.get("node_types")
+    if node_types is not None:
+        if not isinstance(node_types, list) or not node_types:
+            raise ToolError(ErrorCode.VALIDATION_ERROR, "node_types must be a non-empty list when set", details={"field": "node_types", "value": node_types})
+        invalid_types = [t for t in node_types if t not in NODE_TYPES]
+        if invalid_types:
+            raise ToolError(ErrorCode.VALIDATION_ERROR, f"node_types must be drawn from {NODE_TYPES}", details={"field": "node_types", "invalid": invalid_types, "allowed": list(NODE_TYPES)})
+    mode = args.get("mode", "fused")
+    if mode not in ("fused", "per_strategy"):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "mode must be 'fused' or 'per_strategy'", details={"field": "mode", "value": mode, "allowed": ["fused", "per_strategy"]})
+    as_of = normalize_timestamp(args, "as_of")
+    requested_strategies = args.get("strategies") or ["bm25", "temporal", "graph"]
+    if not isinstance(requested_strategies, list) or not requested_strategies:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "strategies must be a non-empty list", details={"field": "strategies", "value": requested_strategies})
+    valid_strategies = {"bm25", "temporal", "graph", "semantic"}
+    invalid = [strategy for strategy in requested_strategies if strategy not in valid_strategies]
+    if invalid:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, f"strategies must be drawn from {sorted(valid_strategies)}", details={"field": "strategies", "invalid": invalid, "allowed": sorted(valid_strategies)})
+    context = args.get("context") or {}
+    return RecallOptions(query, limit_k, max_chars, compact, include_body, include_provenance, min_confidence, node_types, mode, as_of, requested_strategies, context)
+
+
+def _build_recall_rankings(conn: sqlite3.Connection, options: RecallOptions, in_scope_rows: dict[str, dict[str, Any]], provider: str) -> dict[str, list[str]]:
+    rankings: dict[str, list[str]] = {}
+    if "bm25" in options.requested_strategies:
+        rankings["bm25"] = _bm25_rank(conn, options.query, in_scope_rows)
+    if "temporal" in options.requested_strategies:
+        rankings["temporal"] = _temporal_rank(in_scope_rows, as_of=options.as_of)
+    if "graph" in options.requested_strategies:
+        rankings["graph"] = _graph_rank(conn, context=options.context, in_scope_rows=in_scope_rows)
+    if "semantic" in options.requested_strategies and provider != "none":
+        semantic_ranked = _semantic_rank(conn, options.query, provider, in_scope_rows)
+        if semantic_ranked:
+            rankings["semantic"] = semantic_ranked
+    return rankings
+
+
+def _score_ranked_nodes(conn: sqlite3.Connection, rankings: dict[str, list[str]], in_scope_rows: dict[str, dict[str, Any]]) -> list[tuple[str, float, dict[str, list[int]]]]:
+    combined = _rrf_combine(rankings)
+    superseded = _superseded_node_ids(conn)
+    scored: list[tuple[str, float, dict[str, list[int]]]] = []
+    for node_id, base_score, provenance in combined:
+        row = in_scope_rows.get(node_id)
+        if row is None:
+            continue
+        importance = row["importance"]
+        boost = 1.0 + (importance - 5) * IMPORTANCE_BOOST_SLOPE
+        if node_id in superseded:
+            boost *= SUPERSESSION_DISCOUNT
+        scored.append((node_id, base_score * boost, provenance))
+    scored.sort(key=lambda r: (-r[1], r[0]))
+    return scored
+
+
+def _shape_recall_items(conn: sqlite3.Connection, scored_top: list[tuple[str, float, dict[str, list[int]]]], in_scope_rows: dict[str, dict[str, Any]], options: RecallOptions) -> tuple[list[dict[str, Any]], int]:
+    filtered: list[tuple[str, float, dict[str, list[int]]]] = []
+    for node_id, score, provenance in scored_top:
+        if options.min_confidence is not None:
+            conf = in_scope_rows[node_id].get("confidence_base", 1.0)
+            if conf is None or conf < options.min_confidence:
+                continue
+        filtered.append((node_id, score, provenance))
+    items: list[dict[str, Any]] = []
+    chars_used = 0
+    for node_id, score, provenance in filtered:
+        row = in_scope_rows[node_id]
+        body = row["body"] or ""
+        if options.compact and len(body) > 120:
+            body = body[:117] + "..."
+        if options.max_chars is not None and chars_used + len(body) > options.max_chars:
+            break
+        chars_used += len(body)
+        item: dict[str, Any] = {"id": node_id, "node_type": row["node_type"], "title": row["title"], "importance": row["importance"], "score": round(score, 6), "source_refs": _source_refs_for(conn, node_id)}
+        if options.include_body:
+            item["body"] = body
+        if options.include_provenance:
+            item["strategy_provenance"] = provenance
+        items.append(item)
+    return items, chars_used
+
+
+def _write_recall_event_and_stats(conn: sqlite3.Connection, *, items: list[dict[str, Any]], rankings: dict[str, list[str]], options: RecallOptions, ctx: ToolContext, seg: dict[str, Any]) -> tuple[str, str]:
+    recall_id = new_id("rcl")
+    created_at = now_iso()
+    node_ids_returned = [it["id"] for it in items]
+    conn.execute("BEGIN")
+    try:
+        conn.execute(
+            "INSERT INTO memory_recall_events(recall_id, query, strategies_used, node_ids_returned, context_json, limit_k, as_of, created_at, actor_id, agent_id, model_id, environment, run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (recall_id, options.query, json.dumps(list(rankings.keys()), sort_keys=True), json.dumps(node_ids_returned, sort_keys=False), json.dumps(options.context, sort_keys=True), options.limit_k, options.as_of, created_at, ctx.actor_id, seg["agent_id"], seg["model_id"], seg["environment"], seg["run_id"]),
+        )
+        for node_id in node_ids_returned:
+            conn.execute(
+                "INSERT INTO memory_node_stats(node_id, recall_count, last_recalled_at) VALUES (?, 1, ?) ON CONFLICT(node_id) DO UPDATE SET recall_count = memory_node_stats.recall_count + 1, last_recalled_at = excluded.last_recalled_at",
+                (node_id, created_at),
+            )
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    return recall_id, created_at
+
+
+def _build_recall_response(*, recall_id: str, rankings: dict[str, list[str]], options: RecallOptions, items: list[dict[str, Any]], in_scope_rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    response: dict[str, Any] = {"recall_id": recall_id, "query": options.query, "strategies_used": sorted(rankings.keys()), "k": options.limit_k, "as_of": options.as_of, "mode": options.mode, "items": items, "total_in_scope": len(in_scope_rows)}
+    if options.mode == "per_strategy":
+        response["per_strategy"] = {strategy: ranked[:options.limit_k] for strategy, ranked in rankings.items()}
+    return response
+
+
+def _set_recall_meta_hints(ctx: ToolContext, *, created_at: str, rankings: dict[str, list[str]], options: RecallOptions) -> None:
     from trade_trace.version import __version__
-
     ctx.meta_hints["generated_at"] = created_at
     ctx.meta_hints["package_version"] = __version__
-    ctx.meta_hints["retrieval_strategy_metadata"] = {
-        "strategies_used": sorted(rankings.keys()),
-        "k": limit_k,
-        "max_chars": max_chars,
-        "k_rrf": K_RRF,
-        "importance_boost_slope": IMPORTANCE_BOOST_SLOPE,
-        "supersession_discount": SUPERSESSION_DISCOUNT,
-    }
-    return response
+    ctx.meta_hints["retrieval_strategy_metadata"] = {"strategies_used": sorted(rankings.keys()), "k": options.limit_k, "max_chars": options.max_chars, "k_rrf": K_RRF, "importance_boost_slope": IMPORTANCE_BOOST_SLOPE, "supersession_discount": SUPERSESSION_DISCOUNT}
 
 
 # -- ranking helpers -----------------------------------------------

@@ -7,11 +7,14 @@ asserts the documented effect.
 
 from __future__ import annotations
 
+import json
+import sqlite3
 from pathlib import Path
 
 import pytest
 
 from trade_trace.mcp_server import mcp_call
+from trade_trace.storage.paths import db_path
 
 
 @pytest.fixture
@@ -25,6 +28,30 @@ def home(initialized_home):
 def _mcp(home: Path, tool: str, args: dict | None = None):
     payload = {"home": str(home), **(args or {})}
     return mcp_call(tool, payload, actor_id="agent:default")
+
+
+def _seed_node(home: Path, node_id: str, body: str, *, confidence: float = 1.0) -> str:
+    return _mcp(home, "memory.retain", {
+        "id": node_id,
+        "node_type": "observation",
+        "body": body,
+        "confidence_base": confidence,
+        "idempotency_key": f"00000000-0000-4000-8000-{node_id[-12:]}",
+    }).data["id"]
+
+
+def _last_recall_node_ids(home: Path) -> list[str]:
+    with sqlite3.connect(db_path(home)) as conn:
+        row = conn.execute(
+            "SELECT node_ids_returned FROM memory_recall_events ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+    assert row is not None
+    return json.loads(row[0])
+
+
+def _stats_counts(home: Path) -> dict[str, int]:
+    with sqlite3.connect(db_path(home)) as conn:
+        return dict(conn.execute("SELECT node_id, recall_count FROM memory_node_stats").fetchall())
 
 
 def _seed_n_nodes(home: Path, n: int, *, body_prefix: str = "obs",
@@ -202,3 +229,85 @@ def test_mode_fused_default_omits_per_strategy_block(home):
     assert env.ok
     assert env.data["mode"] == "fused"
     assert "per_strategy" not in env.data
+
+
+# -- ordering characterizations for recall decomposition ------------
+
+def test_min_confidence_applies_after_top_k_selection(home):
+    _seed_node(home, "mem_pz23_conf_a", "alpha low confidence", confidence=0.1)
+    _seed_node(home, "mem_pz23_conf_b", "beta high confidence", confidence=0.9)
+
+    env = _mcp(home, "memory.recall", {
+        "query": "", "strategies": ["graph"], "k": 1, "min_confidence": 0.5,
+    })
+
+    assert env.ok
+    assert [it["id"] for it in env.data["items"]] == []
+
+
+def test_compact_applies_before_max_chars(home):
+    first = _seed_node(home, "mem_pz23_compact_a", "A" * 500)
+    _seed_node(home, "mem_pz23_compact_b", "B" * 10)
+
+    env = _mcp(home, "memory.recall", {
+        "query": "", "strategies": ["graph"], "k": 2, "compact": True, "max_chars": 120,
+    })
+
+    assert env.ok
+    assert [it["id"] for it in env.data["items"]] == [first]
+    assert len(env.data["items"][0]["body"]) == 120
+
+
+def test_max_chars_stops_at_first_overflow_without_skipping_later_smaller_items(home):
+    first = _seed_node(home, "mem_pz23_overflow_a", "A" * 10)
+    _seed_node(home, "mem_pz23_overflow_b", "B" * 500)
+    _seed_node(home, "mem_pz23_overflow_c", "C" * 10)
+
+    env = _mcp(home, "memory.recall", {
+        "query": "", "strategies": ["graph"], "k": 3, "max_chars": 20,
+    })
+
+    assert env.ok
+    assert [it["id"] for it in env.data["items"]] == [first]
+
+
+def test_max_chars_applies_even_when_include_body_false(home):
+    _seed_node(home, "mem_pz23_nobody_a", "A" * 500)
+    _seed_node(home, "mem_pz23_nobody_b", "B" * 10)
+
+    env = _mcp(home, "memory.recall", {
+        "query": "", "strategies": ["graph"], "k": 2,
+        "max_chars": 20, "include_body": False,
+    })
+
+    assert env.ok
+    assert env.data["items"] == []
+
+
+def test_per_strategy_lists_are_raw_and_not_confidence_or_budget_filtered(home):
+    low = _seed_node(home, "mem_pz23_raw_a", "A" * 500, confidence=0.1)
+    high = _seed_node(home, "mem_pz23_raw_b", "B" * 10, confidence=0.9)
+
+    env = _mcp(home, "memory.recall", {
+        "query": "", "strategies": ["graph"], "k": 2, "mode": "per_strategy",
+        "min_confidence": 0.5, "max_chars": 5,
+    })
+
+    assert env.ok
+    assert env.data["items"] == []
+    assert env.data["per_strategy"] == {"graph": [low, high]}
+
+
+def test_recall_events_and_stats_count_only_emitted_item_ids_after_filters(home):
+    kept = _seed_node(home, "mem_pz23_stats_a", "A" * 10, confidence=0.9)
+    _seed_node(home, "mem_pz23_stats_b", "B" * 500, confidence=0.9)
+    _seed_node(home, "mem_pz23_stats_c", "C" * 10, confidence=0.9)
+
+    env = _mcp(home, "memory.recall", {
+        "query": "", "strategies": ["graph"], "k": 3, "max_chars": 20,
+    })
+
+    assert env.ok
+    assert [it["id"] for it in env.data["items"]] == [kept]
+    assert _last_recall_node_ids(home) == [kept]
+    assert _stats_counts(home) == {kept: 1}
