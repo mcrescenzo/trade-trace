@@ -25,6 +25,17 @@ from urllib.parse import urlencode
 from trade_trace.console import endpoints
 
 
+def _filter_arg(filter: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return the report-args filter payload.
+
+    Dashboard builders remain directly callable by existing tests and
+    callers; omitted ``filter`` preserves the historical no-filter ``{}``
+    behavior while routes can pass decoded ReportFilter URL state.
+    """
+
+    return filter or {}
+
+
 def overview_context(
     conn: sqlite3.Connection,
     *,
@@ -362,7 +373,9 @@ def reporting_dashboard_context(
     }
 
 
-def dashboard_overview_context(home: str) -> dict[str, Any]:
+def dashboard_overview_context(
+    home: str, *, filter: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Per-bead trade-trace-w422 the Overview page upgrades from the
     DB-meta snapshot to a P&L / risk / performance roll-up dashboard.
 
@@ -376,9 +389,10 @@ def dashboard_overview_context(home: str) -> dict[str, Any]:
     from trade_trace.console.reporting import run_report
     from trade_trace.console.reporting.metric_glossary import page_explanation
 
-    pnl_ctx = run_report("report.pnl", {"filter": {}},
+    report_filter = _filter_arg(filter)
+    pnl_ctx = run_report("report.pnl", {"filter": report_filter},
                         actor_id="agent:console", home=home)
-    risk_ctx = run_report("report.risk", {"filter": {}},
+    risk_ctx = run_report("report.risk", {"filter": report_filter},
                          actor_id="agent:console", home=home)
 
     combined_metrics = {**pnl_ctx.summary_metrics, **risk_ctx.summary_metrics}
@@ -458,11 +472,13 @@ def dashboard_overview_context(home: str) -> dict[str, Any]:
     }
 
 
-def dashboard_pnl_context(home: str) -> dict[str, Any]:
+def dashboard_pnl_context(
+    home: str, *, filter: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Per-page context for the P&L dashboard (trade-trace-a94a)."""
 
     base = reporting_dashboard_context(
-        home=home, tool="report.pnl", args={"filter": {}},
+        home=home, tool="report.pnl", args={"filter": _filter_arg(filter)},
         page_slug="reports", page_title="P&L",
     )
     base.update({
@@ -479,11 +495,13 @@ def dashboard_pnl_context(home: str) -> dict[str, Any]:
     return base
 
 
-def dashboard_risk_context(home: str) -> dict[str, Any]:
+def dashboard_risk_context(
+    home: str, *, filter: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Per-page context for the Risk dashboard (trade-trace-1viz)."""
 
     base = reporting_dashboard_context(
-        home=home, tool="report.risk", args={"filter": {}},
+        home=home, tool="report.risk", args={"filter": _filter_arg(filter)},
         page_slug="reports", page_title="Risk",
     )
     base.update({
@@ -500,13 +518,15 @@ def dashboard_risk_context(home: str) -> dict[str, Any]:
     return base
 
 
-def dashboard_calibration_context(home: str) -> dict[str, Any]:
+def dashboard_calibration_context(
+    home: str, *, filter: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Per-page context for the full Calibration dashboard
     (trade-trace-lv7n)."""
 
     base = reporting_dashboard_context(
         home=home, tool="report.calibration",
-        args={"filter": {}, "min_sample": 1},
+        args={"filter": _filter_arg(filter), "min_sample": 1},
         page_slug="calibration", page_title="Calibration",
     )
     base.update({
@@ -522,14 +542,16 @@ def dashboard_calibration_context(home: str) -> dict[str, Any]:
     return base
 
 
-def dashboard_performance_context(home: str) -> dict[str, Any]:
+def dashboard_performance_context(
+    home: str, *, filter: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Per-page context for the Performance dashboard
     (trade-trace-ai45). Uses report.decision_velocity for the time
     series until the dedicated equity curve / drawdown report ships."""
 
     base = reporting_dashboard_context(
         home=home, tool="report.decision_velocity",
-        args={"filter": {}, "bucket": "day"},
+        args={"filter": _filter_arg(filter), "bucket": "day"},
         page_slug="reports", page_title="Performance",
     )
     base.update({
@@ -546,13 +568,15 @@ def dashboard_performance_context(home: str) -> dict[str, Any]:
     return base
 
 
-def dashboard_strategy_context(home: str) -> dict[str, Any]:
+def dashboard_strategy_context(
+    home: str, *, filter: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Per-page context for the Strategy / Playbook performance
     dashboard (trade-trace-avn7)."""
 
     base = reporting_dashboard_context(
         home=home, tool="report.strategy_performance",
-        args={"filter": {}},
+        args={"filter": _filter_arg(filter)},
         page_slug="reports", page_title="Strategy performance",
     )
     base.update({
@@ -569,14 +593,16 @@ def dashboard_strategy_context(home: str) -> dict[str, Any]:
     return base
 
 
-def dashboard_decision_intelligence_context(home: str) -> dict[str, Any]:
+def dashboard_decision_intelligence_context(
+    home: str, *, filter: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Per-page context for the Decision intelligence dashboard
     (trade-trace-nvkr). Uses report.watchlist for the dashboard
     surface; mistakes / strengths land via the comparison builder
     (sqtq)."""
 
     base = reporting_dashboard_context(
-        home=home, tool="report.watchlist", args={"filter": {}},
+        home=home, tool="report.watchlist", args={"filter": _filter_arg(filter)},
         page_slug="reports", page_title="Decision intelligence",
     )
     base.update({
@@ -596,6 +622,7 @@ def dashboard_compare_context(
     home: str, *,
     base_report: str = "calibration",
     group_by: str = "strategy_id",
+    filter: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Per-page context for the comparison builder (trade-trace-sqtq).
 
@@ -606,7 +633,11 @@ def dashboard_compare_context(
 
     base = reporting_dashboard_context(
         home=home, tool="report.compare",
-        args={"base_report": base_report, "group_by": group_by, "filter": {}},
+        args={
+            "base_report": base_report,
+            "group_by": group_by,
+            "filter": _filter_arg(filter),
+        },
         page_slug="reports", page_title="Compare",
     )
     base.update({
@@ -665,10 +696,28 @@ def report_export_packet(
     }
 
 
-def dashboard_evidence_context(home: str) -> dict[str, Any]:
+def dashboard_evidence_context(
+    home: str, *, filter: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Per-page context for the Evidence / provenance dashboard
     (trade-trace-5own). Replaces the developer-lane integrity view
-    on the reporting side."""
+    on the reporting side.
+
+    `report.source_quality` is intentionally journal-global (see
+    reports/source_quality.py) and does not accept ReportFilter facets.
+    The route still decodes `f` so malformed URL state is rejected, but
+    a non-empty valid filter is a typed 400 rather than a silent no-filter
+    fallback.
+    """
+
+    report_filter = _filter_arg(filter)
+    if report_filter:
+        from trade_trace.console.reporting import ReportAdapterError
+
+        raise ReportAdapterError(
+            "report.source_quality does not support ReportFilter; "
+            "Evidence is a journal-level provenance dashboard"
+        )
 
     base = reporting_dashboard_context(
         home=home, tool="report.source_quality", args={},

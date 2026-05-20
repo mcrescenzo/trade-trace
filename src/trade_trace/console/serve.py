@@ -125,10 +125,40 @@ def _build_app(home_path: str) -> Any:
     def _render(request: Any, template_name: str, context: dict[str, Any]) -> Any:
         return templates.TemplateResponse(request, template_name, context)
 
+    def _decoded_filter_arg(value: str | None) -> dict[str, Any]:
+        """Decode canonical ``f=<base64url-json>`` report URL state.
+
+        Malformed state is a client error. Return the compact
+        ReportFilter JSON shape expected by report tool args.
+        """
+
+        from trade_trace.console.reporting.filter_state import (
+            FilterStateError,
+            decode_filter,
+        )
+
+        try:
+            decoded = decode_filter(value)
+        except FilterStateError as exc:
+            # Do not echo the raw query value back in HTTP error details:
+            # the filter can contain user-controlled/high-cardinality state
+            # and malformed values are not useful to render verbatim.
+            details = dict(exc.details)
+            details.pop("raw", None)
+            raise fastapi.HTTPException(
+                status_code=400,
+                detail={
+                    "type": "filter_state_error",
+                    "message": str(exc),
+                    "details": details,
+                },
+            ) from exc
+        return decoded.model_dump(mode="json", exclude_defaults=True)
+
     # -- HTML pages --------------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
-    def overview_html(request: _Request) -> Any:
+    def overview_html(request: _Request, f: str | None = None) -> Any:
         """Reporting-lane Overview per trade-trace-w422.
 
         Replaces the legacy DB-meta snapshot with a P&L / risk roll-up
@@ -137,7 +167,7 @@ def _build_app(home_path: str) -> Any:
         pin its shape, but this route now serves the canonical reader
         view per reporting-product.md §3 (Reporting lane Overview)."""
 
-        return _render_dashboard(request, pages.dashboard_overview_context)
+        return _render_dashboard(request, pages.dashboard_overview_context, f=f)
 
     @app.get("/overview-legacy", response_class=HTMLResponse, include_in_schema=False)
     def overview_legacy_html(request: _Request) -> Any:
@@ -213,7 +243,12 @@ def _build_app(home_path: str) -> Any:
             raise fastapi.HTTPException(status_code=404, detail=f"position {position_id} not found")
         return _render(request, "position_detail.html", ctx)
 
-    def _render_dashboard(request: _Request, builder: Any, template: str = "dashboard.html") -> Any:
+    def _render_dashboard(
+        request: _Request,
+        builder: Any,
+        template: str = "dashboard.html",
+        f: str | None = None,
+    ) -> Any:
         """Common error wrapper for the report-backed dashboards.
         The adapter raises `ReportAdapterError` on validation failures
         / unsupported tools / lazy-write attempts; the route surfaces
@@ -222,10 +257,11 @@ def _build_app(home_path: str) -> Any:
         from trade_trace.console.reporting import ReportAdapterError
 
         home = resolve_home(home_path)
+        filter_arg = _decoded_filter_arg(f)
         _, db = _open()
         try:
             try:
-                ctx = builder(str(home))
+                ctx = builder(str(home), filter=filter_arg)
             except ReportAdapterError as exc:
                 raise fastapi.HTTPException(status_code=400, detail=str(exc)) from exc
         finally:
@@ -233,38 +269,39 @@ def _build_app(home_path: str) -> Any:
         return _render(request, template, ctx)
 
     @app.get("/reports/pnl", response_class=HTMLResponse)
-    def dashboard_pnl_html(request: _Request) -> Any:
-        return _render_dashboard(request, pages.dashboard_pnl_context)
+    def dashboard_pnl_html(request: _Request, f: str | None = None) -> Any:
+        return _render_dashboard(request, pages.dashboard_pnl_context, f=f)
 
     @app.get("/reports/risk", response_class=HTMLResponse)
-    def dashboard_risk_html(request: _Request) -> Any:
-        return _render_dashboard(request, pages.dashboard_risk_context)
+    def dashboard_risk_html(request: _Request, f: str | None = None) -> Any:
+        return _render_dashboard(request, pages.dashboard_risk_context, f=f)
 
     @app.get("/reports/performance", response_class=HTMLResponse)
-    def dashboard_performance_html(request: _Request) -> Any:
-        return _render_dashboard(request, pages.dashboard_performance_context)
+    def dashboard_performance_html(request: _Request, f: str | None = None) -> Any:
+        return _render_dashboard(request, pages.dashboard_performance_context, f=f)
 
     @app.get("/reports/strategy", response_class=HTMLResponse)
-    def dashboard_strategy_html(request: _Request) -> Any:
-        return _render_dashboard(request, pages.dashboard_strategy_context)
+    def dashboard_strategy_html(request: _Request, f: str | None = None) -> Any:
+        return _render_dashboard(request, pages.dashboard_strategy_context, f=f)
 
     @app.get("/reports/decisions", response_class=HTMLResponse)
-    def dashboard_decision_intelligence_html(request: _Request) -> Any:
-        return _render_dashboard(request, pages.dashboard_decision_intelligence_context)
+    def dashboard_decision_intelligence_html(request: _Request, f: str | None = None) -> Any:
+        return _render_dashboard(request, pages.dashboard_decision_intelligence_context, f=f)
 
     @app.get("/reports/calibration", response_class=HTMLResponse)
-    def dashboard_calibration_full_html(request: _Request) -> Any:
-        return _render_dashboard(request, pages.dashboard_calibration_context)
+    def dashboard_calibration_full_html(request: _Request, f: str | None = None) -> Any:
+        return _render_dashboard(request, pages.dashboard_calibration_context, f=f)
 
     @app.get("/evidence", response_class=HTMLResponse)
-    def dashboard_evidence_html(request: _Request) -> Any:
-        return _render_dashboard(request, pages.dashboard_evidence_context)
+    def dashboard_evidence_html(request: _Request, f: str | None = None) -> Any:
+        return _render_dashboard(request, pages.dashboard_evidence_context, f=f)
 
     @app.get("/reports/compare", response_class=HTMLResponse)
     def dashboard_compare_html(
         request: _Request,
         base_report: str = "calibration",
         group_by: str = "strategy_id",
+        f: str | None = None,
     ) -> Any:
         """Comparison builder per bead trade-trace-sqtq. Wraps
         report.compare(base_report, group_by, filter={}). Defaults
@@ -274,11 +311,13 @@ def _build_app(home_path: str) -> Any:
         from trade_trace.console.reporting import ReportAdapterError
 
         home = resolve_home(home_path)
+        filter_arg = _decoded_filter_arg(f)
         _, db = _open()
         try:
             try:
                 ctx = pages.dashboard_compare_context(
                     str(home), base_report=base_report, group_by=group_by,
+                    filter=filter_arg,
                 )
             except ReportAdapterError as exc:
                 raise fastapi.HTTPException(status_code=400, detail=str(exc)) from exc
@@ -287,7 +326,7 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "dashboard.html", ctx)
 
     @app.get("/reports/{tool}/export.json")
-    def report_export_json(tool: str) -> Any:
+    def report_export_json(tool: str, f: str | None = None) -> Any:
         """Read-only export packet per bead trade-trace-sqtq. Returns
         the report's full envelope + filter + request_id + as_of +
         record_ids + exported_at as JSON, with no credentials. The
@@ -299,10 +338,13 @@ def _build_app(home_path: str) -> Any:
         # The CLI invocation uses dots in tool names; the URL path
         # uses the same dotted name (e.g. `/reports/report.pnl/export.json`).
         home = resolve_home(home_path)
+        filter_arg = _decoded_filter_arg(f)
         _, db = _open()
         try:
             try:
-                packet = pages.report_export_packet(home=str(home), tool=tool)
+                packet = pages.report_export_packet(
+                    home=str(home), tool=tool, args={"filter": filter_arg},
+                )
             except ReportAdapterError as exc:
                 raise fastapi.HTTPException(status_code=400, detail=str(exc)) from exc
         finally:
