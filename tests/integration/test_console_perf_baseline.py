@@ -136,3 +136,120 @@ def test_deep_cursor_does_not_degrade(tmp_path: Path):
         f"deep journal page (100th) took {elapsed:.3f}s "
         f"(budget {BUDGET_SECONDS}s)"
     )
+
+
+# -- reporting read-model perf baseline (trade-trace-mmbj) ----------------
+
+
+TRADE_ROW_COUNT = 100_000
+"""Population for the list_trades perf baseline. Mirrors the events
+ROW_COUNT so the reporting and journal perf budgets stay comparable."""
+
+
+def _seed_trade_decisions(home: Path, count: int) -> None:
+    """Insert `count` paper_enter rows directly into decisions for a
+    single venue/instrument so list_trades can page across a realistic
+    population. Bypasses dispatch for speed — perf measures the read
+    path, not write throughput."""
+
+    path = db_path(home)
+    conn = sqlite3.connect(str(path), isolation_level=None)
+    try:
+        venue_id = "ven_perf_v1"
+        instrument_id = "ins_perf_i1"
+        conn.execute("BEGIN")
+        conn.execute(
+            "INSERT INTO venues(id, name, kind, metadata_json, created_at, actor_id) "
+            "VALUES (?, ?, 'exchange', '{}', '2026-05-19T00:00:00Z', 'agent:perf')",
+            (venue_id, "perf-venue"),
+        )
+        conn.execute(
+            "INSERT INTO instruments("
+            "id, venue_id, asset_class, title, symbol, created_at, actor_id) "
+            "VALUES (?, ?, 'equity', ?, ?, '2026-05-19T00:00:00Z', 'agent:perf')",
+            (instrument_id, venue_id, "perf-instrument", "PRF"),
+        )
+        conn.executemany(
+            "INSERT INTO decisions("
+            "id, instrument_id, type, side, quantity, price, "
+            "created_at, actor_id, metadata_json) "
+            "VALUES (?, ?, 'paper_enter', 'long', 100, 0.5, ?, "
+            "'agent:perf', '{}')",
+            [
+                (
+                    f"dec_perf_{i:08d}",
+                    instrument_id,
+                    # Stagger created_at so the cursor walk produces a
+                    # total order without colliding ids — mirrors how the
+                    # CLI normally writes.
+                    f"2026-05-19T{(i // 3600) % 24:02d}:"
+                    f"{(i // 60) % 60:02d}:{i % 60:02d}Z",
+                )
+                for i in range(count)
+            ],
+        )
+        conn.execute("COMMIT")
+    finally:
+        conn.close()
+
+
+def test_list_trades_first_page_under_budget_at_100k(tmp_path: Path) -> None:
+    """`list_trades` must serve the first page in under the cursor
+    pagination budget against a 100k-decision population."""
+
+    from trade_trace.console.reporting import list_trades
+    from trade_trace.storage.database import open_database_readonly
+
+    home = tmp_path / "perf-trades"
+    init = mcp_call("journal.init", {"home": str(home)})
+    assert init.ok
+    _seed_trade_decisions(home, TRADE_ROW_COUNT)
+
+    db = open_database_readonly(db_path(home))
+    try:
+        start = time.perf_counter()
+        page = list_trades(db.connection, limit=50)
+        elapsed = time.perf_counter() - start
+    finally:
+        db.close()
+
+    assert len(page.rows) == 50
+    assert page.next_cursor is not None
+    assert elapsed < BUDGET_SECONDS, (
+        f"list_trades first page took {elapsed:.3f}s "
+        f"(budget {BUDGET_SECONDS}s, row count {TRADE_ROW_COUNT})"
+    )
+
+
+def test_list_trades_deep_cursor_walk_does_not_degrade(tmp_path: Path) -> None:
+    """`list_trades`'s composite (created_at, id) cursor must keep
+    deep pages constant-time. The 100th page must fit the same budget
+    as the first."""
+
+    from trade_trace.console.reporting import list_trades
+    from trade_trace.storage.database import open_database_readonly
+
+    home = tmp_path / "perf-trades-deep"
+    init = mcp_call("journal.init", {"home": str(home)})
+    assert init.ok
+    _seed_trade_decisions(home, TRADE_ROW_COUNT)
+
+    db = open_database_readonly(db_path(home))
+    try:
+        cursor: str | None = None
+        for _ in range(100):
+            page = list_trades(db.connection, limit=50, cursor=cursor)
+            cursor = page.next_cursor
+            assert cursor is not None, "cursor exhausted before reaching deep page"
+
+        start = time.perf_counter()
+        deep_page = list_trades(db.connection, limit=50, cursor=cursor)
+        elapsed = time.perf_counter() - start
+    finally:
+        db.close()
+
+    assert len(deep_page.rows) == 50
+    assert elapsed < BUDGET_SECONDS, (
+        f"list_trades deep page (100th) took {elapsed:.3f}s "
+        f"(budget {BUDGET_SECONDS}s, row count {TRADE_ROW_COUNT})"
+    )

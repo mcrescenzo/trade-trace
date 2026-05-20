@@ -369,10 +369,15 @@ The foundation work resolves these specific shapes:
      [`console.md`](./console.md) §Decision 13.
    - Carries an `evidence` block per widget exposing record_ids +
      filter + tool name (§6).
-3. **Pagination + perf baseline** (trade-trace-mmbj): reuse cursor
-   pagination from existing endpoints; perf budget = first dashboard
-   render <1s P95 over a 100k-event journal, 5× headroom required
-   for the dashboard suite (extends `test_console_perf_baseline.py`).
+3. **Pagination + perf baseline** (trade-trace-mmbj — *shipped*):
+   reuse cursor pagination from existing endpoints; perf budget = first
+   page <1s wall-clock over a 100k-row population, 5× headroom required
+   for the dashboard suite. `tests/integration/test_console_perf_baseline.py`
+   pins the budget for the journal (events) AND the reporting read
+   model (`list_trades`); both have first-page + deep-cursor cases.
+   `list_trades` uses a composite `(created_at, id)` cursor so the walk
+   is total under the deterministic-fixture seed that emits many rows
+   sharing the same `created_at`.
 4. **Charting layer** (trade-trace-ycag): vendored Chart.js asset +
    bootstrap script + CSP test per §7.1.
 5. **Fixtures** (trade-trace-dnwh): a richer fixture target (e.g.
