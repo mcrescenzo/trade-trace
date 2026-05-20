@@ -7,6 +7,7 @@
   { "path": "/reports/performance", "label": "Performance timeline", "icon": "BarChart3", "component": "report", "tool": "report.decision_velocity", "title": "Performance timeline" },
   { "path": "/reports/strategy", "label": "Strategy performance", "icon": "BarChart3", "component": "report", "tool": "report.strategy_performance", "title": "Strategy performance" },
   { "path": "/reports/decisions", "label": "Decision intelligence", "icon": "BarChart3", "component": "report", "tool": "report.watchlist", "title": "Decision intelligence" },
+  { "path": "/process", "label": "Process analytics", "icon": "Activity", "component": "process", "title": "Process analytics" },
   { "path": "/reports/compare", "label": "Compare", "icon": "BarChart3", "component": "report", "tool": "report.compare", "title": "Compare", "args": { "base_report": "calibration", "group_by": "strategy_id", "filter": {} } },
   { "path": "/calibration", "label": "Calibration", "icon": "Activity", "component": "report", "tool": "report.calibration", "title": "Calibration and integrity" },
   { "path": "/evidence", "label": "Evidence", "icon": "ShieldCheck", "component": "report", "tool": "report.source_quality", "title": "Evidence and provenance" },

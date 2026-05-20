@@ -5,6 +5,7 @@ export type ConsoleRouteComponent =
   | 'trades'
   | 'catalog'
   | 'report'
+  | 'process'
   | 'strategies'
   | 'playbooks'
   | 'events'

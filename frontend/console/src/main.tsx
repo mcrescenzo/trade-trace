@@ -830,6 +830,89 @@ function ReportPage({
   )
 }
 
+function reportGroups(report: ReportPayload | undefined) {
+  return (report?.groups ?? []) as Array<Record<string, unknown> & { metrics?: Record<string, unknown>; record_ids?: Record<string, string[]> }>
+}
+
+function ProcessReportError({ title, query }: { title: string; query: ReturnType<typeof useReport> }) {
+  if (!query.isError) return null
+  return <UnsupportedPanel title={`${title} unavailable`} message={`The local ${title} report did not return a supported envelope: ${query.error instanceof Error ? query.error.message : 'unknown error'}. This panel is deferred instead of simulated.`} />
+}
+
+function decisionVelocityFilter(filter: ConsoleFilter): ConsoleFilter {
+  return stripEmptyFilter({ decision: filter.decision })
+}
+
+function ProcessAnalyticsPage() {
+  const [filter, setFilter] = useConsoleFilter()
+  const emptyReportArgs = React.useMemo(() => ({ filter: {} }), [])
+  const staleWatchArgs = React.useMemo(() => ({ filter: {}, mode: 'stale' }), [])
+  const velocityArgs = React.useMemo(() => ({ filter: decisionVelocityFilter(filter), bucket: 'week' }), [filter])
+  const mistakes = useReport('report.mistakes', emptyReportArgs)
+  const strengths = useReport('report.strengths', emptyReportArgs)
+  const watchlist = useReport('report.watchlist', staleWatchArgs)
+  const unscored = useReport('report.unscored_forecasts', emptyReportArgs)
+  const velocity = useReport('report.decision_velocity', velocityArgs)
+  const loading = [mistakes, strengths, watchlist, unscored, velocity].some((query) => query.isLoading)
+  const tagRows = (label: string, report: ReportPayload | undefined) => reportGroups(report).map((row) => ({
+    ...row,
+    panel: label,
+    tag: row.key,
+    decision_count: metricValue(row.metrics, 'decision_count'),
+    scored_forecast_count: metricValue(row.metrics, 'scored_forecast_count'),
+    mean_brier: metricValue(row.metrics, 'mean_brier')
+  }))
+  const watchRows = reportGroups(watchlist.data).map((row) => ({ ...row, age_days: metricValue(row.metrics, 'age_days'), review_by: metricValue(row.metrics, 'review_by'), overdue: metricValue(row.metrics, 'overdue') }))
+  const unscoredRows = reportGroups(unscored.data).map((group) => ({
+    ...group,
+    examples_count: Array.isArray(group.examples) ? group.examples.length : 0,
+    forecast_record_count: recordCount(group, 'forecasts')
+  }))
+  const velocityRows = reportGroups(velocity.data).map((row) => ({ ...row, key: String(row.key ?? ''), count: metricValue(row.metrics, 'count'), by_type: row.metrics?.by_type ?? {} }))
+  return (
+    <>
+      <PageHeader eyebrow="Process" title="Supported local process analytics" />
+      <PageExplainer answers="What existing local reports observe about recurring tags, stale watches, unscored forecast backlog, and decision-count velocity." data="report.mistakes, report.strengths, report.watchlist(mode=stale), report.unscored_forecasts, and report.decision_velocity envelopes with examples, record IDs, warnings, and caveats. Process subreports differ in filter support: mistake, strength, watchlist, and unscored backlog panels are intentionally run with empty filters; only decision velocity receives the supported decision-type slice of the URL filter." read="Rows use language such as associated with and observed in local records. Brier/tag rows are associations over scored forecasts, not causes. Backlog panels show only fields supplied by local report models." mislead="This page does not infer psychology, causality, coaching advice, broker/live market data, community benchmarks, or unsupported cost metrics." />
+      <FilterBar filter={filter} onChange={setFilter} />
+      <section className="mb-4 rounded border border-border bg-card p-4">
+        <h3 className="mb-2 font-semibold">Process filter support</h3>
+        <p className="text-sm text-muted-foreground">The selector is URL-backed for navigation consistency, but these local process reports do not share one filter contract. Mistakes, strengths, stale watchlist, and unscored forecasts are requested with empty filters because their backend contracts reject non-empty filter leaves. Decision velocity is requested only with the supported decision_type filter; instrument and strategy selections are not applied to process report calls.</p>
+      </section>
+      {loading ? <LoadingBlock label="Loading supported process reports" /> : (
+        <div className="space-y-4">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard label="Mistake tags observed" value={metricValue(mistakes.data?.summary_metrics, 'tag_count')} icon={Activity} href="#process-tags" />
+            <MetricCard label="Strength tags observed" value={metricValue(strengths.data?.summary_metrics, 'tag_count')} icon={ShieldCheck} href="#process-tags" />
+            <MetricCard label="Stale watches" value={metricValue(watchlist.data?.summary_metrics, 'watch_count')} icon={ListFilter} href="#process-watch" />
+            <MetricCard label="Unscored forecasts" value={metricValue(unscored.data?.summary_metrics, 'unscored_count')} icon={Database} href="#process-unscored" />
+            <MetricCard label="Decisions counted" value={metricValue(velocity.data?.summary_metrics, 'total_decisions')} icon={BarChart3} href="#process-velocity" />
+          </section>
+          {[mistakes, strengths, watchlist, unscored, velocity].map((query, index) => <ProcessReportError key={index} title={['mistakes', 'strengths', 'watchlist', 'unscored forecasts', 'decision velocity'][index]} query={query} />)}
+          <section id="process-tags" className="space-y-3">
+            <h3 className="text-lg font-semibold">Recurring tag associations observed in local records</h3>
+            <p className="text-sm text-muted-foreground">Mistake and strength reports rank decision tags by backend mean Brier where scored forecasts exist. These are associated with calibration outcomes in local records; they are not caused-by claims.</p>
+            <DataTable rows={[...tagRows('mistake association', mistakes.data), ...tagRows('strength association', strengths.data)]} emptyMessage="No supported mistake/strength tag groups were returned." columns={[{ key: 'panel', header: 'Report' }, { key: 'tag', header: 'Tag' }, { key: 'decision_count', header: 'Decisions' }, { key: 'scored_forecast_count', header: 'Scored forecasts' }, { key: 'mean_brier', header: 'Mean Brier' }, { key: 'sample_warning', header: 'Warning', cell: (value) => <CaveatChips value={value} /> }]} renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={row.panel === 'mistake association' ? mistakes.data?.raw_envelope : strengths.data?.raw_envelope} />} />
+          </section>
+          <section id="process-watch" className="space-y-3">
+            <h3 className="text-lg font-semibold">Stale watchlist backlog observed in local records</h3>
+            <DataTable rows={watchRows} emptyMessage="No stale watch decisions were returned by report.watchlist." columns={[{ key: 'label', header: 'Watch' }, { key: 'age_days', header: 'Age days' }, { key: 'review_by', header: 'Review by' }, { key: 'overdue', header: 'Overdue' }]} renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={watchlist.data?.raw_envelope} />} />
+          </section>
+          <section id="process-unscored" className="space-y-3">
+            <h3 className="text-lg font-semibold">Unscored forecast backlog observed in local records</h3>
+            <DataTable rows={unscoredRows} emptyMessage="No unscored forecast backlog was returned by report.unscored_forecasts." columns={[{ key: 'label', header: 'Backlog group' }, { key: 'sample_size', header: 'Forecasts' }, { key: 'examples_count', header: 'Examples' }, { key: 'forecast_record_count', header: 'Record IDs' }, { key: 'sample_warning', header: 'Warning', cell: (value) => <CaveatChips value={value} /> }]} renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={unscored.data?.raw_envelope} />} />
+          </section>
+          <section id="process-velocity" className="space-y-3">
+            <h3 className="text-lg font-semibold">Decision velocity/count buckets observed in local records</h3>
+            <ChartPanel title="Weekly decision counts" rows={velocityRows.map((row) => ({ name: String(row.key), value: Number(row.metrics?.count ?? 0) }))} />
+            <DataTable rows={velocityRows} emptyMessage="No decision velocity buckets were returned by report.decision_velocity." columns={[{ key: 'label', header: 'Bucket' }, { key: 'count', header: 'Decision count' }, { key: 'by_type', header: 'By type' }]} renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={velocity.data?.raw_envelope} />} />
+          </section>
+          <UnsupportedPanel title="Deferred unsupported process features" message="Psychology scoring, mentor/community comparisons, prescriptive coaching, tag co-occurrence, and cost/frequency/example panels beyond fields returned by these local reports need an explicit backend data contract. Follow-up candidate: add a read-only process analytics contract that supplies supported co-occurrence and cost fields with caveats and examples." />
+        </div>
+      )}
+    </>
+  )
+}
+
 function rawData(report: ReportPayload | undefined): Record<string, unknown> {
   const envelope = report?.raw_envelope
   return envelope && typeof envelope === 'object' && 'data' in envelope && typeof (envelope as { data?: unknown }).data === 'object'
@@ -1262,6 +1345,8 @@ function routeComponent(definition: ConsoleRouteDefinition) {
       return CatalogPage
     case 'report':
       return () => <ReportPage tool={definition.tool!} title={definition.title!} args={definition.args} />
+    case 'process':
+      return ProcessAnalyticsPage
     case 'strategies':
       return StrategiesPage
     case 'playbooks':
