@@ -29,13 +29,11 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME#v}"
-          PYPROJECT_VERSION=$(python -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
           MODULE_VERSION=$(python -c "import re, pathlib; m = re.search(r'__version__\s*=\s*[\x27\x22]([^\x27\x22]+)[\x27\x22]', pathlib.Path('src/trade_trace/version.py').read_text()); print(m.group(1))")
           echo "git tag (stripped) : $TAG"
-          echo "pyproject.toml     : $PYPROJECT_VERSION"
           echo "version.py         : $MODULE_VERSION"
-          if [ "$TAG" != "$PYPROJECT_VERSION" ] || [ "$TAG" != "$MODULE_VERSION" ]; then
-            echo "::error::Version mismatch — tag, pyproject.toml, and src/trade_trace/version.py must all match before publishing"
+          if [ "$TAG" != "$MODULE_VERSION" ]; then
+            echo "::error::Version mismatch — tag and src/trade_trace/version.py must match before publishing"
             exit 1
           fi
 

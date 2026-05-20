@@ -144,3 +144,23 @@ def test_pyproject_declares_version_dynamically():
     assert re.search(r'__version__\s*=\s*[\'"]([^\'"]+)[\'"]', module), (
         "src/trade_trace/version.py must still expose __version__"
     )
+
+
+def test_publish_workflow_uses_dynamic_version_source():
+    """The PyPI publish tag check must not read [project].version.
+
+    pyproject.toml declares the package version dynamically, so there is
+    no pyproject [project] version key to compare. The workflow should
+    compare the v* tag only against src/trade_trace/version.py, the same
+    source configured for setuptools dynamic versioning.
+    """
+
+    workflow = (ROOT / ".github" / "workflows" / "workflow.yml").read_text(
+        encoding="utf-8",
+    )
+    assert "['project']['version']" not in workflow
+    assert '["project"]["version"]' not in workflow
+    assert "pyproject.toml     :" not in workflow
+    assert "src/trade_trace/version.py" in workflow
+    assert "MODULE_VERSION=" in workflow
+    assert 'if [ "$TAG" != "$MODULE_VERSION" ]; then' in workflow
