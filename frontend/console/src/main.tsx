@@ -181,6 +181,94 @@ function ErrorBlock({ error }: { error: unknown }) {
   )
 }
 
+function CopyId({ value }: { value: unknown }) {
+  const text = String(value ?? '')
+  return (
+    <button
+      type="button"
+      className="font-mono text-xs underline decoration-dotted underline-offset-2"
+      title="Copy ID"
+      onClick={() => navigator.clipboard?.writeText(text)}
+    >
+      {text || 'n/a'}
+    </button>
+  )
+}
+
+function ChipList({ value }: { value: unknown }) {
+  const values = Array.isArray(value) ? value : value == null || value === '' ? [] : [value]
+  if (values.length === 0) return <span className="text-muted-foreground">n/a</span>
+  return (
+    <span className="flex flex-wrap gap-1">
+      {values.map((item) => (
+        <span key={String(item)} className="rounded border border-border px-1.5 py-0.5 text-xs">
+          {String(item)}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+function PageTable<T extends Record<string, unknown>>({
+  endpoint,
+  queryKey,
+  columns,
+  emptyMessage
+}: {
+  endpoint: string
+  queryKey: string
+  columns: Parameters<typeof DataTable<T>>[0]['columns']
+  emptyMessage: string
+}) {
+  const [cursor, setCursor] = React.useState<string | null>(null)
+  const [history, setHistory] = React.useState<string[]>([])
+  const limit = 100
+  const query = useQuery({
+    queryKey: [queryKey, cursor],
+    queryFn: () => fetchJson<Page<T>>(pageQuery(endpoint, { limit, cursor }))
+  })
+  const nextCursor = query.data?.next_cursor ?? null
+  return query.isLoading ? (
+    <LoadingBlock />
+  ) : query.isError ? (
+    <ErrorBlock error={query.error} />
+  ) : (
+    <div className="space-y-3">
+      <DataTable rows={query.data?.rows ?? []} columns={columns} emptyMessage={emptyMessage} />
+      <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+        <span>
+          Showing up to {query.data?.limit ?? limit} rows{nextCursor ? '; more rows available' : ''}.
+        </span>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="rounded border border-border px-3 py-1 disabled:opacity-50"
+            disabled={history.length === 0}
+            onClick={() => {
+              const previous = history.at(-1) ?? null
+              setHistory((items) => items.slice(0, -1))
+              setCursor(previous === '' ? null : previous)
+            }}
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            className="rounded border border-border px-3 py-1 disabled:opacity-50"
+            disabled={!nextCursor}
+            onClick={() => {
+              setHistory((items) => [...items, cursor ?? ''])
+              setCursor(nextCursor)
+            }}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function OverviewPage() {
   const status = useStatus()
   const pnl = useReport('report.pnl')
@@ -244,31 +332,27 @@ function ReportSummary({
 }
 
 function TradesPage() {
-  const query = useQuery({
-    queryKey: ['trades'],
-    queryFn: () => fetchJson<Page<TradeRow>>('/api/console/trades?limit=100')
-  })
   return (
     <>
       <PageHeader eyebrow="Trades" title="Trade decisions and caveats" />
-      {query.isLoading ? (
-        <LoadingBlock />
-      ) : query.isError ? (
-        <ErrorBlock error={query.error} />
-      ) : (
-        <DataTable
-          rows={query.data?.rows ?? []}
-          columns={[
-            { key: 'decision_id', header: 'Decision' },
-            { key: 'decision_type', header: 'Type' },
-            { key: 'instrument_symbol', header: 'Instrument' },
-            { key: 'side', header: 'Side' },
-            { key: 'quantity', header: 'Qty' },
-            { key: 'price', header: 'Price' },
-            { key: 'caveats', header: 'Caveats' }
-          ]}
-        />
-      )}
+      <PageTable<TradeRow>
+        endpoint="/api/console/trades"
+        queryKey="trades"
+        emptyMessage="No matching trades for the selected view."
+        columns={[
+          { key: 'decision_id', header: 'Decision', cell: (value) => <CopyId value={value} /> },
+          { key: 'decision_type', header: 'Type', cell: (value) => <ChipList value={value} /> },
+          {
+            key: 'instrument',
+            header: 'Instrument',
+            accessor: (row) => row.instrument_symbol ?? row.instrument_title ?? row.instrument_id
+          },
+          { key: 'side', header: 'Side' },
+          { key: 'quantity', header: 'Qty' },
+          { key: 'price', header: 'Price' },
+          { key: 'caveats', header: 'Caveats', cell: (value) => <ChipList value={value} /> }
+        ]}
+      />
     </>
   )
 }
@@ -337,25 +421,84 @@ function CatalogPage() {
 }
 
 function EventsPage({ endpoint, title }: { endpoint: string; title: string }) {
-  const query = useQuery({
-    queryKey: [endpoint],
-    queryFn: () => fetchJson<Page<EventRow>>(pageQuery(endpoint, { limit: 100 }))
-  })
   return (
     <>
       <PageHeader eyebrow="Audit" title={title} />
-      {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} /> : (
-        <DataTable
-          rows={query.data?.rows ?? []}
-          columns={[
-            { key: 'id', header: 'ID' },
-            { key: 'event_type', header: 'Type' },
-            { key: 'subject_kind', header: 'Subject' },
-            { key: 'actor_id', header: 'Actor' },
-            { key: 'created_at', header: 'Created' }
-          ]}
-        />
-      )}
+      <PageTable<EventRow>
+        endpoint={endpoint}
+        queryKey={endpoint}
+        emptyMessage="No audit rows match this view."
+        columns={[
+          { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
+          { key: 'event_type', header: 'Type', cell: (value) => <ChipList value={value} /> },
+          { key: 'subject_kind', header: 'Subject' },
+          { key: 'actor_id', header: 'Actor' },
+          { key: 'created_at', header: 'Created' }
+        ]}
+      />
+    </>
+  )
+}
+
+function StrategiesPage() {
+  return (
+    <>
+      <PageHeader eyebrow="Strategies" title="Strategy records" />
+      <PageTable<Record<string, unknown>>
+        endpoint="/api/console/strategies"
+        queryKey="strategies"
+        emptyMessage="No strategy records exist in this journal."
+        columns={[
+          { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
+          { key: 'name', header: 'Name' },
+          { key: 'slug', header: 'Slug' },
+          { key: 'status', header: 'Status', cell: (value) => <ChipList value={value} /> },
+          { key: 'created_at', header: 'Created' }
+        ]}
+      />
+    </>
+  )
+}
+
+function PlaybooksPage() {
+  return (
+    <>
+      <PageHeader eyebrow="Playbooks" title="Playbook records" />
+      <PageTable<Record<string, unknown>>
+        endpoint="/api/console/playbooks"
+        queryKey="playbooks"
+        emptyMessage="No playbook records exist in this journal."
+        columns={[
+          { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
+          { key: 'name', header: 'Name' },
+          { key: 'description', header: 'Description' },
+          { key: 'status', header: 'Status', cell: (value) => <ChipList value={value} /> },
+          { key: 'created_at', header: 'Created' }
+        ]}
+      />
+    </>
+  )
+}
+
+function DecisionsPage() {
+  return (
+    <>
+      <PageHeader eyebrow="Decisions" title="Recorded decisions" />
+      <PageTable<Record<string, unknown>>
+        endpoint="/api/console/decisions"
+        queryKey="decisions"
+        emptyMessage="No matching decisions for this view."
+        columns={[
+          { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
+          { key: 'type', header: 'Type', cell: (value) => <ChipList value={value} /> },
+          { key: 'instrument_id', header: 'Instrument' },
+          { key: 'thesis_id', header: 'Thesis' },
+          { key: 'side', header: 'Side' },
+          { key: 'quantity', header: 'Qty' },
+          { key: 'price', header: 'Price' },
+          { key: 'created_at', header: 'Created' }
+        ]}
+      />
     </>
   )
 }
@@ -399,10 +542,10 @@ const compareRoute = createRoute({
 })
 const calibrationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/calibration', component: () => <ReportPage tool="report.calibration" title="Calibration and integrity" /> })
 const evidenceRoute = createRoute({ getParentRoute: () => rootRoute, path: '/evidence', component: () => <ReportPage tool="report.source_quality" title="Evidence and provenance" /> })
-const strategiesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/strategies', component: () => <EventsPage endpoint="/api/console/strategies" title="Strategies" /> })
-const playbooksRoute = createRoute({ getParentRoute: () => rootRoute, path: '/playbooks', component: () => <EventsPage endpoint="/api/console/playbooks" title="Playbooks" /> })
+const strategiesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/strategies', component: StrategiesPage })
+const playbooksRoute = createRoute({ getParentRoute: () => rootRoute, path: '/playbooks', component: PlaybooksPage })
 const journalRoute = createRoute({ getParentRoute: () => rootRoute, path: '/journal', component: () => <EventsPage endpoint="/api/console/events" title="Journal events" /> })
-const decisionsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/decisions', component: () => <EventsPage endpoint="/api/console/decisions" title="Decisions" /> })
+const decisionsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/decisions', component: DecisionsPage })
 const logsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/logs', component: LogsPage })
 const rawRoute = createRoute({ getParentRoute: () => rootRoute, path: '/raw', component: () => <EventsPage endpoint="/api/console/events" title="Raw events" /> })
 
