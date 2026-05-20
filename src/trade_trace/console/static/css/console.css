@@ -816,3 +816,164 @@ h2 {
     min-width: 680px;
   }
 }
+
+/* Responsive visual polish for the reporting overhaul (trade-trace-bxhu).
+   The dashboards (P&L / Risk / Performance / Strategy / Calibration /
+   Evidence / Compare / Overview) share the same chrome built from the
+   _dashboard_macros.html helpers; these rules sit alongside the existing
+   responsive breakpoints so a new dashboard auto-inherits the polish. */
+
+.tt-page-explanation {
+  background: rgba(255, 253, 250, .82);
+  border: 1px solid rgba(221, 214, 201, .85);
+  border-radius: 14px;
+  padding: .85rem 1.1rem;
+  margin-bottom: 1rem;
+}
+.tt-page-explanation summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.tt-page-explanation dl {
+  margin-top: .6rem;
+  display: grid;
+  gap: .35rem .8rem;
+  grid-template-columns: max-content 1fr;
+}
+.tt-page-explanation dt {
+  font-weight: 650;
+  color: #0d332b;
+}
+.tt-page-explanation dd {
+  margin: 0;
+}
+
+.tt-sample-warning,
+.tt-caveats-banner {
+  border-left: 4px solid #c08a00;
+  background: rgba(255, 244, 200, .55);
+  padding: .65rem .85rem;
+  border-radius: 6px;
+  margin: .6rem 0;
+}
+.tt-caveats-banner ul {
+  margin: .3rem 0 0 .4rem;
+  padding: 0;
+  list-style: disc inside;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .65rem;
+}
+
+.tt-caveat-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(192, 138, 0, .12);
+  color: #5b4500;
+  font-size: 11px;
+  font-weight: 600;
+  padding: .15rem .55rem;
+  margin-right: .25rem;
+}
+
+.tt-evidence-affordance {
+  margin-top: 1.2rem;
+  background: rgba(255, 253, 250, .92);
+  border: 1px dashed rgba(35, 97, 77, .35);
+  border-radius: 14px;
+  padding: .85rem 1.1rem;
+}
+.tt-evidence-affordance summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.tt-evidence-affordance dl {
+  margin-top: .6rem;
+  display: grid;
+  gap: .35rem .8rem;
+  grid-template-columns: max-content 1fr;
+}
+.tt-evidence-affordance dl dt { font-weight: 650; }
+.tt-evidence-affordance dl dd { margin: 0; }
+.tt-record-id-list {
+  margin: .25rem 0 .4rem 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: .15rem;
+}
+
+.tt-chart {
+  width: 100%;
+  max-width: 920px;
+  height: 320px;
+  margin: 1.2rem auto;
+  display: block;
+}
+
+.tt-chart-missing-asset-caveat,
+.tt-chart-parse-error {
+  border-left: 4px solid #c08a00;
+  background: rgba(255, 244, 200, .55);
+  padding: .85rem 1rem;
+  border-radius: 6px;
+  margin: 1rem 0;
+  display: block;
+}
+
+.tt-metric-inline-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+  font-size: 12px;
+}
+.tt-metric-inline-list code {
+  color: #5b4500;
+}
+
+.tt-muted {
+  color: #7c7468;
+}
+
+.tt-empty-inline {
+  font-style: italic;
+  color: #7c7468;
+  padding: .6rem 0;
+}
+
+.tt-position-meta dl {
+  display: grid;
+  gap: .35rem .8rem;
+  grid-template-columns: max-content 1fr;
+  margin: .5rem 0;
+}
+.tt-position-meta dt {
+  font-weight: 650;
+}
+.tt-position-meta dd {
+  margin: 0;
+}
+
+@media (max-width: 1050px) {
+  .tt-chart {
+    height: 260px;
+  }
+  .tt-page-explanation dl,
+  .tt-evidence-affordance dl,
+  .tt-position-meta dl {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .tt-chart {
+    height: 220px;
+  }
+  .tt-metric-inline-list {
+    flex-direction: column;
+    gap: .25rem;
+  }
+}
