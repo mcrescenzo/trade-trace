@@ -44,6 +44,108 @@ import {
 
 type RecordEvent = EventRow & { payload_json?: string | null }
 
+type ConsoleFilter = {
+  strategy?: { strategy_id?: string | null }
+  instrument?: { instrument_id?: string[] }
+  decision?: { decision_type?: string[] }
+}
+
+const TRADE_DECISION_TYPES = ['actual_enter', 'paper_enter', 'add', 'reduce', 'actual_exit', 'paper_exit']
+
+function stripEmptyFilter(filter: ConsoleFilter): ConsoleFilter {
+  const next: ConsoleFilter = {}
+  if (filter.strategy?.strategy_id) next.strategy = { strategy_id: filter.strategy.strategy_id }
+  if (filter.instrument?.instrument_id?.length) next.instrument = { instrument_id: filter.instrument.instrument_id }
+  if (filter.decision?.decision_type?.length) next.decision = { decision_type: filter.decision.decision_type }
+  return next
+}
+
+function encodeFilter(filter: ConsoleFilter) {
+  const json = JSON.stringify(stripEmptyFilter(filter))
+  const bytes = new TextEncoder().encode(json)
+  let binary = ''
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte) })
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+}
+
+function decodeFilter(value: string | null): ConsoleFilter {
+  if (!value) return {}
+  try {
+    const padded = value.replaceAll('-', '+').replaceAll('_', '/') + '='.repeat((4 - (value.length % 4)) % 4)
+    const binary = atob(padded)
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+    const parsed = JSON.parse(new TextDecoder().decode(bytes)) as ConsoleFilter
+    return stripEmptyFilter({
+      strategy: parsed.strategy?.strategy_id ? { strategy_id: parsed.strategy.strategy_id } : undefined,
+      instrument: parsed.instrument?.instrument_id?.[0] ? { instrument_id: [String(parsed.instrument.instrument_id[0])] } : undefined,
+      decision: parsed.decision?.decision_type?.length
+        ? { decision_type: parsed.decision.decision_type.map(String).filter((item) => TRADE_DECISION_TYPES.includes(item)) }
+        : undefined
+    })
+  } catch {
+    return {}
+  }
+}
+
+function useConsoleFilter() {
+  const read = React.useCallback(() => decodeFilter(new URLSearchParams(window.location.search).get('f')), [])
+  const [filter, setFilterState] = React.useState<ConsoleFilter>(read)
+  React.useEffect(() => {
+    const onPop = () => setFilterState(read())
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [read])
+  const setFilter = React.useCallback((next: ConsoleFilter) => {
+    const stripped = stripEmptyFilter(next)
+    setFilterState(stripped)
+    const url = new URL(window.location.href)
+    if (Object.keys(stripped).length === 0) url.searchParams.delete('f')
+    else url.searchParams.set('f', encodeFilter(stripped))
+    window.history.pushState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [])
+  return [filter, setFilter] as const
+}
+
+function tableFilterParams(filter: ConsoleFilter, supported: Array<'strategy_id' | 'instrument_id' | 'decision_type'>) {
+  return {
+    strategy_id: supported.includes('strategy_id') ? filter.strategy?.strategy_id : undefined,
+    instrument_id: supported.includes('instrument_id') ? filter.instrument?.instrument_id?.[0] : undefined,
+    decision_type: supported.includes('decision_type') ? filter.decision?.decision_type?.[0] : undefined
+  }
+}
+
+function FilterBar({ filter, onChange, supportsStrategy = true }: { filter: ConsoleFilter; onChange: (filter: ConsoleFilter) => void; supportsStrategy?: boolean }) {
+  const decisionType = filter.decision?.decision_type?.[0] ?? ''
+  const instrumentId = filter.instrument?.instrument_id?.[0] ?? ''
+  const strategyId = filter.strategy?.strategy_id ?? ''
+  const update = (patch: ConsoleFilter) => onChange(stripEmptyFilter({ ...filter, ...patch }))
+  return (
+    <section className="mb-4 rounded border border-border bg-card p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold">Supported filters</h3>
+          <p className="text-xs text-muted-foreground">URL-backed local fields: decision type, instrument ID, and strategy ID where supported.</p>
+        </div>
+        <button type="button" className="rounded border border-border px-3 py-1 text-sm" onClick={() => onChange({})}>Clear filters</button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <label className="text-sm">Decision type
+          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={decisionType} onChange={(event) => update({ decision: { decision_type: event.target.value ? [event.target.value] : [] } })}>
+            <option value="">Any supported trade type</option>
+            {TRADE_DECISION_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        <label className="text-sm">Instrument ID
+          <input className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={instrumentId} placeholder="Exact local instrument_id" onChange={(event) => update({ instrument: { instrument_id: event.target.value.trim() ? [event.target.value.trim()] : [] } })} />
+        </label>
+        {supportsStrategy ? <label className="text-sm">Strategy ID
+          <input className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={strategyId} placeholder="Exact strategy_id or __none__" onChange={(event) => update({ strategy: { strategy_id: event.target.value.trim() || null } })} />
+        </label> : null}
+      </div>
+    </section>
+  )
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -305,20 +407,22 @@ function PageTable<T extends Record<string, unknown>>({
   queryKey,
   columns,
   emptyMessage,
-  subjectKind
+  subjectKind,
+  filters = {}
 }: {
   endpoint: string
   queryKey: string
   columns: Parameters<typeof DataTable<T>>[0]['columns']
   emptyMessage: string
   subjectKind?: string
+  filters?: Record<string, string | number | null | undefined>
 }) {
   const [cursor, setCursor] = React.useState<string | null>(null)
   const [history, setHistory] = React.useState<string[]>([])
   const limit = 100
   const query = useQuery({
-    queryKey: [queryKey, cursor],
-    queryFn: () => fetchJson<Page<T>>(pageQuery(endpoint, { limit, cursor }))
+    queryKey: [queryKey, cursor, filters],
+    queryFn: () => fetchJson<Page<T>>(pageQuery(endpoint, { limit, cursor, ...filters }))
   })
   const nextCursor = query.data?.next_cursor ?? null
   return query.isLoading ? (
@@ -368,9 +472,11 @@ function PageTable<T extends Record<string, unknown>>({
 }
 
 function OverviewPage() {
+  const [filter, setFilter] = useConsoleFilter()
+  const reportArgs = React.useMemo(() => ({ filter: stripEmptyFilter(filter) }), [filter])
   const status = useStatus()
-  const pnl = useReport('report.pnl')
-  const risk = useReport('report.risk')
+  const pnl = useReport('report.pnl', reportArgs)
+  const risk = useReport('report.risk', reportArgs)
 
   if (status.isLoading) return <LoadingBlock />
   if (status.isError) return <ErrorBlock error={status.error} />
@@ -379,6 +485,7 @@ function OverviewPage() {
   return (
     <>
       <PageHeader eyebrow="Dashboard" title="Journal intelligence at a glance" />
+      <FilterBar filter={filter} onChange={setFilter} />
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Events" value={counts.events ?? 0} icon={Database} />
         <MetricCard label="Decisions" value={counts.decisions ?? 0} icon={ListFilter} />
@@ -430,12 +537,15 @@ function ReportSummary({
 }
 
 function TradesPage() {
+  const [filter, setFilter] = useConsoleFilter()
   return (
     <>
       <PageHeader eyebrow="Trades" title="Trade decisions and caveats" />
+      <FilterBar filter={filter} onChange={setFilter} />
       <PageTable<TradeRow>
         endpoint="/api/console/trades"
         queryKey="trades"
+        filters={tableFilterParams(filter, ['strategy_id', 'instrument_id', 'decision_type'])}
         subjectKind="decision"
         emptyMessage="No matching trades for the selected view."
         columns={[
@@ -459,13 +569,15 @@ function TradesPage() {
 function ReportPage({
   tool,
   title,
-  args = { filter: {} }
+  args
 }: {
   tool: string
   title: string
   args?: Record<string, unknown>
 }) {
-  const query = useReport(tool, args)
+  const [filter, setFilter] = useConsoleFilter()
+  const reportArgs = React.useMemo(() => ({ ...(args ?? {}), filter: stripEmptyFilter(filter) }), [args, filter])
+  const query = useReport(tool, reportArgs)
   const metrics = query.data?.summary_metrics ?? {}
   const chartRows = Object.entries(metrics)
     .filter(([, value]) => typeof value === 'number')
@@ -475,6 +587,7 @@ function ReportPage({
   return (
     <>
       <PageHeader eyebrow="Report" title={title} />
+      <FilterBar filter={filter} onChange={setFilter} />
       {query.isLoading ? (
         <LoadingBlock />
       ) : query.isError ? (
@@ -584,12 +697,15 @@ function PlaybooksPage() {
 }
 
 function DecisionsPage() {
+  const [filter, setFilter] = useConsoleFilter()
   return (
     <>
       <PageHeader eyebrow="Decisions" title="Recorded decisions" />
+      <FilterBar filter={filter} onChange={setFilter} supportsStrategy={false} />
       <PageTable<Record<string, unknown>>
         endpoint="/api/console/decisions"
         queryKey="decisions"
+        filters={tableFilterParams(filter, ['instrument_id', 'decision_type'])}
         subjectKind="decision"
         emptyMessage="No matching decisions for this view."
         columns={[
