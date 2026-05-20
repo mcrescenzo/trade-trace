@@ -2,7 +2,7 @@
 
 > Superseded by the clean-break React Console architecture.
 
-Historical Jinja/htmx review notes are no longer authoritative. Use:
+Historical server-rendered Console review notes are no longer authoritative. Use:
 
 - `docs/architecture/console.md` for the current implementation contract;
 - `docs/architecture/console-release-gate.md` for release checks;

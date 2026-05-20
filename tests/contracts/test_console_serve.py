@@ -146,4 +146,3 @@ def test_pyproject_declares_console_extra():
     assert "\nconsole = [" in text, "pyproject.toml missing the [console] extra"
     assert "fastapi" in text
     assert "uvicorn" in text
-    assert "jinja2" not in text

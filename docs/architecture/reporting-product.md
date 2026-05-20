@@ -20,7 +20,7 @@ These constraints are inherited from PRD §2.4, §7 and VISION
 beads do not have to relitigate them:
 
 1. **Local-first, package-shipped, read-only.** The product is a
-   FastAPI/Jinja Console served on `127.0.0.1` (or a user-supplied
+   FastAPI-served React Console on `127.0.0.1` (or a user-supplied
    loopback host). It opens with the user's local journal — there is
    no remote mode, no multi-tenant mode, no auth surface.
 2. **No broker, no execution.** Trade Trace never sends an order, a
@@ -383,7 +383,7 @@ state) and `src/trade_trace/console/static/` (chart scaffold).
 4. **Charting layer**: ECharts is bundled by Vite into the shipped SPA
    assets. There is no runtime chart download, no CDN fallback, and no
    operator-installed chart binary. Test pin:
-   `tests/contracts/test_console_chart_bootstrap.py`.
+   `tests/contracts/test_console_charting.py`.
 5. **Fixtures** (trade-trace-dnwh — *shipped*): the new
    `mvp-eval-rich` `journal.fixture_seed` target (in
    `src/trade_trace/tools/fixture.py`) overlays `mvp-eval` with

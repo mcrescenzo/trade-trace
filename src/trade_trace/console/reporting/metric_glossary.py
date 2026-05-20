@@ -2,8 +2,8 @@
 
 The reporting product surfaces aggregate metrics across many pages
 (P&L, risk, calibration, decision intelligence, etc.). Each metric
-gets one definition in this module — the dashboard templates render
-help affordances by looking up the metric's `MetricEntry` here.
+gets one definition in this module — the React dashboard renders help
+affordances by looking up the metric's `MetricEntry` here.
 A single source of truth keeps explanations consistent across pages
 and prevents copy drift when the underlying report changes.
 

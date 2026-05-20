@@ -6,12 +6,12 @@ The Console reads the operational log files defined in
 `<home>/logs/trade-trace.log` (or `$TRADE_TRACE_LOG_DIR`),
 rotated by `RotatingFileHandler` to `*.1`, `*.2`, …
 
-This module exposes a `logs_context()` page handler that:
+This module exposes a `logs_context()` read helper that:
 
 - Tolerates missing log directory / empty / malformed lines.
 - Applies the same secret-pattern redaction the logging module
-  uses on write — defense in depth, since templates already
-  HTML-escape strings.
+  uses on write — defense in depth before the React app renders
+  API data.
 - Never writes to the log file path.
 """
 

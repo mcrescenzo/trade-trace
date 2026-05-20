@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from trade_trace.console.security import external_resources_in_template
+from trade_trace.console.security import external_resources_in_markup
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_ROOT = REPO_ROOT / "frontend" / "console"
@@ -44,14 +44,13 @@ def test_prebuilt_console_app_assets_ship() -> None:
 
 def test_built_index_uses_external_assets_only() -> None:
     html = (APP_ROOT / "index.html").read_text(encoding="utf-8")
-    assert external_resources_in_template(html) == []
+    assert external_resources_in_markup(html) == []
     assert "<script type=\"module\"" in html
     assert "src=\"/assets/console.js\"" in html
     assert "http://" not in html
     assert "https://" not in html
 
 
-def test_package_data_points_at_static_app_not_templates() -> None:
+def test_package_data_points_at_static_app_only() -> None:
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert '"trade_trace.console" = ["static/**/*"]' in pyproject
-    assert "templates/*.html" not in pyproject

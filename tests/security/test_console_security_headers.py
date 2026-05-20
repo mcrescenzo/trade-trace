@@ -16,7 +16,7 @@ from trade_trace.console.security import (
     OutboundConnectionAttempted,
     apply_security_headers,
     csp_forbids,
-    external_resources_in_template,
+    external_resources_in_markup,
     is_loopback_address,
 )
 
@@ -77,26 +77,26 @@ def test_security_headers_set_is_stable_and_minimal():
     assert set(SECURITY_HEADERS) == expected
 
 
-def test_external_resource_detection_in_templates():
-    template = """
+def test_external_resource_detection_in_markup():
+    markup = """
     <html>
       <link href="https://cdn.example.com/main.css">
       <img src="//other.example/foo.png">
     </html>
     """
-    findings = external_resources_in_template(template)
+    findings = external_resources_in_markup(markup)
     assert any("cdn.example.com" in f for f in findings)
     assert any("//other.example" in f for f in findings)
 
 
 def test_self_relative_paths_are_not_flagged():
-    template = """
+    markup = """
     <html>
-      <link href="/static/css/console.css">
-      <script src="/static/htmx.min.js"></script>
+      <link rel="icon" href="/static/favicon.svg">
+      <script src="/assets/console.js"></script>
     </html>
     """
-    assert external_resources_in_template(template) == []
+    assert external_resources_in_markup(markup) == []
 
 
 def test_console_static_app_has_no_external_resources():
@@ -108,7 +108,7 @@ def test_console_static_app_has_no_external_resources():
     for asset in root.rglob("*"):
         if asset.suffix not in {".html", ".css"}:
             continue
-        findings = external_resources_in_template(asset.read_text(encoding="utf-8"))
+        findings = external_resources_in_markup(asset.read_text(encoding="utf-8"))
         if findings:
             bad.append((asset.relative_to(root), findings))
     assert not bad, f"SPA assets with external resources: {bad}"

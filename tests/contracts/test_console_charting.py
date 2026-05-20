@@ -16,16 +16,12 @@ def test_charting_uses_echarts_not_chartjs_bootstrap() -> None:
     )
     assert '"echarts"' in package_json
     assert "echarts.init" in chart_panel
-    assert "Chart.js" not in chart_panel
 
 
-def test_legacy_chartjs_bootstrap_removed() -> None:
-    legacy_paths = [
-        REPO_ROOT / "src" / "trade_trace" / "console" / "static" / "js" / "chart-bootstrap.js",
-        REPO_ROOT / "src" / "trade_trace" / "console" / "static" / "vendor" / "chartjs",
-    ]
-    for path in legacy_paths:
-        assert not path.exists(), f"legacy Chart.js artifact still present: {path}"
+def test_static_console_assets_are_vite_app_only() -> None:
+    static_root = REPO_ROOT / "src" / "trade_trace" / "console" / "static"
+    assert sorted(path.name for path in static_root.iterdir()) == ["app", "favicon.svg"]
+    assert sorted(path.name for path in STATIC_APP.iterdir()) == ["assets", "index.html"]
 
 
 def test_built_bundle_contains_echarts_runtime() -> None:

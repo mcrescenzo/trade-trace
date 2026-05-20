@@ -76,28 +76,29 @@ def csp_forbids(directive: str, expression: str) -> bool:
     return True
 
 
-def external_resources_in_template(template_text: str) -> list[str]:
-    """Return a list of external URLs referenced from a template
-    body. The Console template renderer rejects any page that
-    references a non-relative URL — the CSP would block it
-    anyway, but this gives a faster feedback loop during
-    development."""
+def external_resources_in_markup(markup: str) -> list[str]:
+    """Return external URLs referenced from built markup or CSS.
+
+    The shipped Console must be fully self-contained. The CSP would
+    block remote loads anyway, but this gives a faster feedback loop
+    during development and release checks.
+    """
 
     findings: list[str] = []
     for prefix in ("http://", "https://", "//"):
         idx = 0
         while True:
-            idx = template_text.find(prefix, idx)
+            idx = markup.find(prefix, idx)
             if idx == -1:
                 break
             # Slice a reasonable chunk so the test output is
             # actionable (paths get truncated to whitespace).
             end = idx
-            while end < len(template_text) and template_text[end] not in (
+            while end < len(markup) and markup[end] not in (
                 " ", "\"", "'", "<", ">", "\n",
             ):
                 end += 1
-            findings.append(template_text[idx:end])
+            findings.append(markup[idx:end])
             idx = end
     return findings
 

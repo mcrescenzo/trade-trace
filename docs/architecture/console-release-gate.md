@@ -6,7 +6,7 @@
 
 | Gate | Evidence |
 |---|---|
-| `[console]` extra installs server runtime only. | `pyproject.toml` contains FastAPI/Uvicorn and omits Jinja2. |
+| `[console]` extra installs server runtime only. | `pyproject.toml` contains FastAPI/Uvicorn. |
 | `tt console serve` contract remains stable. | `tests/contracts/test_console_serve.py`. |
 | SPA routes serve the prebuilt app shell. | `tests/contracts/test_console_http_routes.py`. |
 | `/api/console/*` endpoints return typed JSON. | HTTP route tests plus endpoint/read-model tests. |
@@ -26,7 +26,7 @@ npm --prefix frontend/console run test
 npm --prefix frontend/console run build
 pytest tests/contracts/test_console_serve.py tests/contracts/test_console_http_routes.py
 pytest tests/contracts/test_console_shell.py tests/contracts/test_console_dashboard_a11y.py
-pytest tests/contracts/test_console_chart_bootstrap.py
+pytest tests/contracts/test_console_charting.py
 pytest tests/security/test_console_security_headers.py
 pytest tests/console_browser/
 ```

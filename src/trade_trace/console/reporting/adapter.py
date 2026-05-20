@@ -1,10 +1,10 @@
 """ReportResult-to-Console adapter (trade-trace-8ine).
 
 The adapter wraps the read-only `report.*` tools and projects their
-canonical `ReportResult` shape into a `DashboardContext` that the
-Jinja templates consume. It also enforces the lazy-write deny set so
-side-effect-risky handlers (`report.coach`, `signal.scan`) cannot run
-from any Console path.
+canonical `ReportResult` shape into the JSON-friendly
+`DashboardContext` consumed by the React Console API. It also enforces
+the lazy-write deny set so side-effect-risky handlers (`report.coach`,
+`signal.scan`) cannot run from any Console path.
 
 See [`docs/architecture/reporting-product.md`](../../../../docs/architecture/reporting-product.md)
 §6 (report evidence / drilldown contract) for the contract this
@@ -81,7 +81,7 @@ class WidgetEvidence:
 @dataclass(frozen=True)
 class DashboardGroup:
     """One `groups[]` entry from a `ReportResult`, projected into the
-    shape Jinja consumes."""
+    shape the Console API returns."""
 
     key: str
     label: str
@@ -96,7 +96,7 @@ class DashboardGroup:
 
 @dataclass(frozen=True)
 class DashboardContext:
-    """Normalized projection of a `ReportResult` for Jinja. Carries
+    """Normalized projection of a `ReportResult` for the React API. Carries
     every preservation requirement from the 8ine acceptance:
     ReportFilter, sample_warning, caveats, groups, examples,
     record_ids, truncation metadata, plus a per-widget `evidence`
