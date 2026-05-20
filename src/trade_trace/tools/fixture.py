@@ -18,7 +18,11 @@ The seed surface is `journal.fixture_seed`; the CLI maps it to
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from types import TracebackType
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
@@ -35,6 +39,45 @@ FIXTURE_TARGETS = ("mvp-eval", "mvp-eval-rich")
 # Anchor timestamp used as the deterministic clock during seeding.
 _ANCHOR = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
 
+_FixtureCounts = dict[str, int]
+
+
+@dataclass(frozen=True)
+class _FixtureSeedContext:
+    """Immutable runtime context shared by all fixture builders."""
+
+    home: str | None
+    registry: Any
+
+
+@dataclass(frozen=True)
+class _FixtureBuilderProfile:
+    """A public fixture target as an ordered list of deterministic builders."""
+
+    target: str
+    builders: Sequence[Callable[[_FixtureSeedContext, _FixtureCounts], _FixtureCounts]]
+
+
+class _FrozenFixtureClock(AbstractContextManager[None]):
+    """Freeze all fixture builders to the shared deterministic anchor."""
+
+    def __enter__(self) -> None:
+        self._token = CLOCK_OVERRIDE.set(_ANCHOR)
+        reset_deterministic_id_counter()
+        from trade_trace.core import _reset_deterministic_request_id_counter
+
+        _reset_deterministic_request_id_counter()
+        return None
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool:
+        CLOCK_OVERRIDE.reset(self._token)
+        return False
+
 
 def _journal_fixture_seed(
     args: dict[str, Any], ctx: ToolContext,
@@ -42,8 +85,7 @@ def _journal_fixture_seed(
     """Populate a fresh journal with the deterministic mvp-eval fixture.
 
     Args:
-      target: required; must be 'mvp-eval' in MVP. Extending the surface
-        to more fixture profiles is a follow-up.
+      target: optional; must be one of the supported fixture profiles.
       home: optional override for $TRADE_TRACE_HOME.
 
     Output: a summary of created entity counts so the caller can branch
@@ -61,26 +103,26 @@ def _journal_fixture_seed(
         )
     home = args.get("home")
 
-    token = CLOCK_OVERRIDE.set(_ANCHOR)
-    reset_deterministic_id_counter()
-    from trade_trace.core import _reset_deterministic_request_id_counter
-
-    _reset_deterministic_request_id_counter()
-    try:
-        registry = ctx.raw_args.get(
-            "_registry") if isinstance(ctx.raw_args, dict) else None
-        counts = _seed_mvp_eval(home=home, registry=registry)
-        if target == "mvp-eval-rich":
-            counts = _seed_mvp_eval_rich_overlay(
-                home=home, registry=registry, counts=counts,
-            )
-    finally:
-        CLOCK_OVERRIDE.reset(token)
+    registry = ctx.raw_args.get(
+        "_registry") if isinstance(ctx.raw_args, dict) else None
+    seed_ctx = _FixtureSeedContext(home=home, registry=registry)
+    with _FrozenFixtureClock():
+        counts = _run_fixture_profile(target, seed_ctx)
     return {
         "target": target,
         "counts": counts,
         "anchor": _ANCHOR.isoformat(),
     }
+
+
+def _run_fixture_profile(target: str, ctx: _FixtureSeedContext) -> _FixtureCounts:
+    """Execute a public fixture target's builders in declared order."""
+
+    profile = FIXTURE_PROFILES[target]
+    counts: _FixtureCounts = {}
+    for builder in profile.builders:
+        counts = builder(ctx, counts)
+    return counts
 
 
 _ID_PREFIX_BY_TOOL: dict[str, str] = {
@@ -663,6 +705,51 @@ def _seed_mvp_eval_rich_overlay(
     return counts
 
 
+def _build_mvp_eval_base_journal(
+    ctx: _FixtureSeedContext,
+    counts: _FixtureCounts,
+) -> _FixtureCounts:
+    """Base deterministic journal primitives and diagnostic overlays.
+
+    This preserves the historical mvp-eval row order and IDs by delegating to
+    the original builder body as one ordered profile step. Smaller extraction
+    can now happen behind this profile boundary without changing the public
+    target contract.
+    """
+
+    if counts:
+        raise RuntimeError("mvp-eval base builder must start from empty counts")
+    return _seed_mvp_eval(home=ctx.home, registry=ctx.registry)
+
+
+def _build_mvp_eval_rich_reporting_overlay(
+    ctx: _FixtureSeedContext,
+    counts: _FixtureCounts,
+) -> _FixtureCounts:
+    """Reporting/position overlay for mvp-eval-rich."""
+
+    return _seed_mvp_eval_rich_overlay(
+        home=ctx.home,
+        registry=ctx.registry,
+        counts=counts,
+    )
+
+
+FIXTURE_PROFILES: dict[str, _FixtureBuilderProfile] = {
+    "mvp-eval": _FixtureBuilderProfile(
+        target="mvp-eval",
+        builders=(_build_mvp_eval_base_journal,),
+    ),
+    "mvp-eval-rich": _FixtureBuilderProfile(
+        target="mvp-eval-rich",
+        builders=(
+            _build_mvp_eval_base_journal,
+            _build_mvp_eval_rich_reporting_overlay,
+        ),
+    ),
+}
+
+
 def register_fixture_tools(registry: ToolRegistry) -> None:
     from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 
@@ -679,8 +766,8 @@ def register_fixture_tools(registry: ToolRegistry) -> None:
         **_examples_for("journal.fixture_seed"),
         description=(
             "Populate the journal with a deterministic fixture for the "
-            "MVP eval harness (bead trade-trace-8dv). Required arg "
-            "target='mvp-eval' (only profile in MVP). The seed runs "
+            "MVP eval harness (bead trade-trace-8dv). Optional arg "
+            "target selects one of the supported fixture profiles. The seed runs "
             "under a frozen clock so three invocations on a fresh home "
             "produce byte-identical content."
         ),
