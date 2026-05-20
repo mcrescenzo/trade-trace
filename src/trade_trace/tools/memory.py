@@ -76,6 +76,42 @@ VALID_MEMORY_ENDPOINTS: Final[tuple[str, ...]] = (
 constraint; `memory.link` validates the target row exists before writing."""
 
 
+def _parse_memory_meta_json_object(
+    value: Any,
+    *,
+    include_value_type_detail: bool = True,
+) -> dict[str, Any]:
+    """Normalize memory-node ``meta_json`` to an object.
+
+    This helper is intentionally memory-local: strategy/playbook surfaces
+    have distinct ``metadata_json`` behavior and must not share this path.
+    ``include_value_type_detail`` preserves legacy caller-specific error
+    details for non-object values.
+    """
+
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "meta_json must be valid JSON when supplied as a string",
+                details={"field": "meta_json", "reason": "invalid_json"},
+            ) from exc
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        details = {"field": "meta_json"}
+        if include_value_type_detail:
+            details["value_type"] = type(value).__name__
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "meta_json must decode to an object",
+            details=details,
+        )
+    return value
+
+
 _MEMORY_REFLECT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -203,24 +239,7 @@ def _memory_retain_in_uow(
     # already enforces this, but the raw retain path used to `json.dumps`
     # whatever was passed, so a list/scalar would persist and confuse
     # downstream consumers that assume object-shaped metadata.
-    meta_input = args.get("meta_json")
-    if isinstance(meta_input, str):
-        try:
-            meta_input = json.loads(meta_input)
-        except json.JSONDecodeError as exc:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                "meta_json must be valid JSON when supplied as a string",
-                details={"field": "meta_json", "reason": "invalid_json"},
-            ) from exc
-    if meta_input is None:
-        meta_input = {}
-    if not isinstance(meta_input, dict):
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "meta_json must decode to an object",
-            details={"field": "meta_json", "value_type": type(meta_input).__name__},
-        )
+    meta_input = _parse_memory_meta_json_object(args.get("meta_json"))
     meta_json = json.dumps(meta_input, sort_keys=True)
     title = args.get("title")
     parent_node_id = args.get("parent_node_id")
@@ -401,24 +420,10 @@ def _normalize_reflect_input(args: dict[str, Any]) -> dict[str, Any]:
         # metadata_json) for memory_nodes; per-bead memory-layer.md §10
         # the strength/weakness tags are persisted there as
         # meta_json.tags.
-        meta_obj = normalized.get("meta_json")
-        if isinstance(meta_obj, str):
-            try:
-                meta_obj = json.loads(meta_obj)
-            except json.JSONDecodeError as exc:
-                raise ToolError(
-                    ErrorCode.VALIDATION_ERROR,
-                    "meta_json must be valid JSON when supplied as a string",
-                    details={"field": "meta_json", "reason": "invalid_json"},
-                ) from exc
-        if meta_obj is None:
-            meta_obj = {}
-        if not isinstance(meta_obj, dict):
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                "meta_json must decode to an object",
-                details={"field": "meta_json"},
-            )
+        meta_obj = _parse_memory_meta_json_object(
+            normalized.get("meta_json"),
+            include_value_type_detail=False,
+        )
         tags = list(meta_obj.get("tags") or [])
         for value, kind in (
             (strength_tags, "strength_tags"),

@@ -14,6 +14,7 @@ Covers acceptance criteria:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -216,6 +217,78 @@ def test_memory_reflect_strength_tags_must_be_list_of_strings(home):
     })
     assert env.ok is False
     assert env.error.code.value == "VALIDATION_ERROR"
+
+
+def test_memory_reflect_accepts_meta_json_string_with_tag_folding(home):
+    seeds = _seed_decision(home)
+    env = _mcp(home, "memory.reflect", {
+        "target": {"kind": "decision", "id": seeds["decision"]},
+        "insight": "string meta with tags",
+        "meta_json": '{"tags": ["existing"], "source": "test"}',
+        "strength_tags": ["strong"],
+        "weakness_tags": ["weak"],
+    })
+    assert env.ok, env
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            "SELECT meta_json FROM memory_nodes WHERE id = ?",
+            (env.data["id"],),
+        ).fetchone()
+    finally:
+        db.close()
+    meta = json.loads(row[0])
+    assert meta["source"] == "test"
+    assert meta["tags"] == ["existing", "strong", "weak"]
+
+
+def test_memory_reflect_accepts_meta_json_object_with_tag_folding(home):
+    seeds = _seed_decision(home)
+    env = _mcp(home, "memory.reflect", {
+        "target": {"kind": "decision", "id": seeds["decision"]},
+        "insight": "object meta with tags",
+        "meta_json": {"source": "object"},
+        "strength_tags": ["strong"],
+    })
+    assert env.ok, env
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            "SELECT meta_json FROM memory_nodes WHERE id = ?",
+            (env.data["id"],),
+        ).fetchone()
+    finally:
+        db.close()
+    meta = json.loads(row[0])
+    assert meta == {"source": "object", "tags": ["strong"]}
+
+
+def test_memory_reflect_rejects_scalar_meta_json_with_tags(home):
+    seeds = _seed_decision(home)
+    env = _mcp(home, "memory.reflect", {
+        "target": {"kind": "decision", "id": seeds["decision"]},
+        "insight": "scalar meta rejected",
+        "meta_json": 42,
+        "strength_tags": ["strong"],
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details == {"field": "meta_json"}
+
+
+def test_memory_reflect_rejects_invalid_meta_json_string(home):
+    seeds = _seed_decision(home)
+    env = _mcp(home, "memory.reflect", {
+        "target": {"kind": "decision", "id": seeds["decision"]},
+        "insight": "invalid JSON meta rejected",
+        "meta_json": "{not-json}",
+        "strength_tags": ["strong"],
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details == {"field": "meta_json", "reason": "invalid_json"}
 
 
 def test_memory_reflect_deferred_edge_sugar_returns_unsupported(home):
@@ -675,6 +748,38 @@ def test_memory_retain_accepts_object_meta_json(home):
         "idempotency_key": "arcx-object",
     })
     assert env.ok, env
+
+
+def test_memory_retain_accepts_string_object_meta_json(home):
+    env = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "with string meta",
+        "meta_json": '{"tags": ["foo"], "confidence_note": "high"}',
+        "idempotency_key": "9gp0-string-object",
+    })
+    assert env.ok, env
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            "SELECT meta_json FROM memory_nodes WHERE id = ?",
+            (env.data["id"],),
+        ).fetchone()
+    finally:
+        db.close()
+    assert json.loads(row[0]) == {"confidence_note": "high", "tags": ["foo"]}
+
+
+def test_memory_retain_rejects_invalid_meta_json_string(home):
+    env = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "with invalid meta",
+        "meta_json": "{not-json}",
+        "idempotency_key": "9gp0-invalid-json",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details == {"field": "meta_json", "reason": "invalid_json"}
 
 
 def test_memory_retain_treats_omitted_meta_json_as_empty_object(home):

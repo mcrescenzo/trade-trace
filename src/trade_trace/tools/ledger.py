@@ -1465,15 +1465,41 @@ def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) 
             "created_at": created_at}
 
 
-_ATTACH_TARGET_TABLES: dict[str, str] = {
-    "thesis": "theses",
-    "decision": "decisions",
-    "forecast": "forecasts",
-    "memory_node": "memory_nodes",
+_SOURCE_ATTACH_TARGETS: dict[str, dict[str, Any]] = {
+    "thesis": {
+        "table": "theses",
+        "tool": "source.attach_to_thesis",
+        "json_schema": None,
+        "example_key": "source.attach_to_thesis",
+    },
+    "decision": {
+        "table": "decisions",
+        "tool": "source.attach_to_decision",
+        "json_schema": None,
+        "example_key": "source.attach_to_decision",
+    },
+    "forecast": {
+        "table": "forecasts",
+        "tool": "source.attach_to_forecast",
+        "json_schema": None,
+        "example_key": "source.attach_to_forecast",
+    },
+    "memory_node": {
+        "table": "memory_nodes",
+        "tool": "source.attach_to_memory_node",
+        "json_schema": None,
+        "example_key": "source.attach_to_memory_node",
+    },
 }
-"""Per bead trade-trace-l9q: source.attach_to_<target> validates the
+"""Single source of truth for public source.attach_to_* target metadata.
+
+Per bead trade-trace-l9q, each source.attach_to_<target> validates the
 target row exists before writing the edge. The memory_node attacher
-became functional with M3 (bead e86 + bead s3f)."""
+became functional with M3 (bead e86 + bead s3f). Bead trade-trace-4v31
+keeps the public tool names separate while driving both validation and
+registration from this mapping; no generic public source.attach endpoint
+is registered.
+"""
 
 
 def _make_source_attacher(target_kind: str):
@@ -1503,17 +1529,18 @@ def _make_source_attacher(target_kind: str):
             # a source to a row that does not exist. Without this guard the
             # edge would point to a phantom id and the agent would see a
             # successful write that produced an orphan edge.
-            target_table = _ATTACH_TARGET_TABLES.get(target_kind)
-            if target_table is None:
+            target_meta = _SOURCE_ATTACH_TARGETS.get(target_kind)
+            if target_meta is None:
                 raise ToolError(
                     ErrorCode.VALIDATION_ERROR,
                     f"unsupported target_kind {target_kind!r}",
                     details={
                         "field": "target_kind",
                         "value": target_kind,
-                        "allowed": sorted(_ATTACH_TARGET_TABLES),
+                        "allowed": sorted(_SOURCE_ATTACH_TARGETS),
                     },
                 )
+            target_table = target_meta["table"]
             target_row = db.connection.execute(
                 f"SELECT 1 FROM {target_table} WHERE id = ?", (target_id,)
             ).fetchone()
@@ -2092,14 +2119,18 @@ def register_ledger_tools(registry: ToolRegistry) -> None:
     registry.register("resolve.record", _outcome_add, is_write=True, **_examples_for("outcome.add"))
     registry.register("resolve.pending", _resolve_pending)
     registry.register("source.add", _source_add, is_write=True, json_schema=_SOURCE_ADD_SCHEMA, **_examples_for("source.add"))
-    registry.register("source.attach_to_thesis", _make_source_attacher("thesis"), is_write=True, **_examples_for("source.attach_to_thesis"))
-    registry.register("source.attach_to_decision", _make_source_attacher("decision"), is_write=True, **_examples_for("source.attach_to_decision"))
-    registry.register("source.attach_to_forecast", _make_source_attacher("forecast"), is_write=True, **_examples_for("source.attach_to_forecast"))
-    # M3 memory layer landed (bead e86); source.attach_to_memory_node uses
-    # the shared attacher factory now that `memory_nodes` exists.
-    registry.register(
-        "source.attach_to_memory_node",
-        _make_source_attacher("memory_node"),
-        is_write=True,
-        **_examples_for("source.attach_to_memory_node"),
-    )
+    for target_kind, target_meta in _SOURCE_ATTACH_TARGETS.items():
+        tool_name = target_meta["tool"]
+        example_key = target_meta["example_key"]
+        json_schema = target_meta["json_schema"]
+        register_kwargs = {
+            "is_write": True,
+            **_examples_for(example_key),
+        }
+        if json_schema is not None:
+            register_kwargs["json_schema"] = json_schema
+        registry.register(
+            tool_name,
+            _make_source_attacher(target_kind),
+            **register_kwargs,
+        )

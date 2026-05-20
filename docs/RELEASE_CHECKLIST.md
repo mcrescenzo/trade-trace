@@ -23,7 +23,7 @@ and `src/trade_trace/version.py`.
 ```bash
 ruff check src tests
 mypy src
-pytest -q                       # 1059 passed expected
+pytest -q                       # record the fresh current-HEAD result
 python -m build                 # no warnings; SPDX license + classifiers
 python -m twine check dist/*    # PASSED on both wheel and sdist
 ```
@@ -38,9 +38,20 @@ python -m venv /tmp/rc-smoke
 /tmp/rc-smoke/bin/pip check
 ```
 
-Scan refs intended for publication for leftover Beads/audit artifacts,
-personal info, or secret-shaped strings (see trade-trace-piav,
-trade-trace-ox5c).
+Scan refs intended for publication for leftover private/raw
+Beads/audit artifacts, personal info, or secret-shaped strings (see
+trade-trace-piav, trade-trace-ox5c):
+
+```bash
+git ls-files | grep -E '^(\.beads/|audits/)'  # must be empty
+git ls-files | grep -E '^docs/audits/'         # intentionally non-empty:
+                                                # curated repo-public audit docs
+```
+
+Do not treat dated pytest counts in older release proof documents as
+current proof. Rerun `pytest -q` for the current HEAD and record the
+fresh result, or explicitly label any reused count as historical
+snapshot evidence.
 
 ## Cut a release
 
