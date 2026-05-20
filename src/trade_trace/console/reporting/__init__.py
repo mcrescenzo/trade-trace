@@ -24,6 +24,13 @@ from trade_trace.console.reporting.adapter import (
     WidgetEvidence,
     run_report,
 )
+from trade_trace.console.reporting.filter_state import (
+    FILTER_QUERY_PARAM,
+    FilterStateError,
+    decode_filter,
+    encode_filter,
+    summarize_filter,
+)
 from trade_trace.console.reporting.position_rows import (
     CAVEAT_OPEN_NO_MARK,
     PositionDetail,
@@ -40,14 +47,19 @@ __all__ = [
     "CAVEAT_OPEN_NO_MARK",
     "DashboardContext",
     "DashboardGroup",
+    "FILTER_QUERY_PARAM",
+    "FilterStateError",
     "PositionDetail",
     "PositionEvent",
     "ReportAdapterError",
     "SAFE_REPORT_TOOLS",
     "TradeRow",
     "WidgetEvidence",
+    "decode_filter",
+    "encode_filter",
     "list_trades",
     "position_detail",
     "run_report",
+    "summarize_filter",
     "trade_detail",
 ]
