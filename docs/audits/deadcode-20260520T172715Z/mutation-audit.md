@@ -165,3 +165,8 @@ CYCLES
 
 ## Command log
 Saved at `mutation-command-log.json`.
+
+## Closeout persistence
+- Source artifact commit `a0a9fc3` pushed to `origin/main`.
+- `bd dolt push` was attempted per repo closeout policy; Beads reported no remote configured and skipped remote sync. Local Beads readback remains the persistence proof.
+- Post-push status saved at `post-push-status.txt`.

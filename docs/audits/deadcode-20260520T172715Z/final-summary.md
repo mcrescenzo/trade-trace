@@ -42,7 +42,12 @@ Verification:
 - Navigation/readback: `bd dep list trade-trace-frd0` shows the four candidates plus final gate via `relates-to`; `bd dep list trade-trace-4hr9` shows the four candidates as blocking dependencies.
 - Body-integrity readback: passed for all four materialized candidates plus final gate; merged docs note verified on `trade-trace-r1mt`.
 - Candidate matrix disposition check: materialized IDs and merged-existing IDs recorded in `candidate-matrix.json` and `materialized-id-map.json`.
-- Beads persistence: local Beads DB readback passed. No remote Beads/Dolt push was requested or attempted.
+- Beads persistence: local Beads DB readback passed. `bd dolt push` was run because this repo's closeout policy lists it; Beads reported no remote configured and skipped remote sync.
+
+Git / artifact persistence:
+- Artifact commit: `a0a9fc3` pushed to `origin/main`.
+- Post-push status artifact: `post-push-status.txt`.
+- Final live git status after push: `## main...origin/main` with no short-status entries.
 
 Artifacts:
 - Run directory: `docs/audits/deadcode-20260520T172715Z/`.
