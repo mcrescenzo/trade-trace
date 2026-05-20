@@ -1,0 +1,118 @@
+HEAD/STATUS
+73aee82
+## main...origin/main
+
+Unused frontend deps
+frontend/console/package.json:13:    "@radix-ui/react-tabs": "^1.1.13",
+frontend/console/package.json:18:    "@tanstack/react-virtual": "^3.13.12",
+
+to_jsonl_line refs
+src/trade_trace/events/log.py:81:    def to_jsonl_line(self) -> dict[str, Any]:
+tests/integration/test_idempotency.py:251:    """An EventRecord's to_jsonl_line() carries the imports.md §2.1 superset
+tests/integration/test_idempotency.py:266:        line = record.to_jsonl_line()
+
+delete_api_key refs
+src/trade_trace/security/keyring.py:118:def delete_api_key(service: str) -> None:
+tests/security/test_embeddings_api_keyring.py:64:    tt_keyring.delete_api_key(SERVICE)
+
+trade_detail refs
+docs/architecture/reporting-product.md:335:   - `trade_detail(conn, decision_id) -> TradeRow | None` — single
+src/trade_trace/console/reporting/__init__.py:53:    trade_detail,
+src/trade_trace/console/reporting/__init__.py:82:    "trade_detail",
+src/trade_trace/console/reporting/trade_rows.py:254:def trade_detail(conn: sqlite3.Connection, decision_id: str) -> TradeRow | None:
+tests/integration/test_console_reporting_read_model.py:21:    trade_detail,
+tests/integration/test_console_reporting_read_model.py:147:# -- trade_detail ----------------------------------------------------
+tests/integration/test_console_reporting_read_model.py:150:def test_trade_detail_returns_named_decision(rich_home: Path) -> None:
+tests/integration/test_console_reporting_read_model.py:155:        detail = trade_detail(db.connection, target.decision_id)
+tests/integration/test_console_reporting_read_model.py:162:def test_trade_detail_returns_none_for_unknown_id(rich_home: Path) -> None:
+tests/integration/test_console_reporting_read_model.py:165:        assert trade_detail(db.connection, "dec_does_not_exist") is None
+tests/integration/test_console_reporting_read_model.py:170:def test_trade_detail_returns_none_for_non_trading_decision(rich_home: Path) -> None:
+tests/integration/test_console_reporting_read_model.py:179:        assert trade_detail(db.connection, watch_id) is None
+
+Stale config docs
+docs/PRD.md:60:- **Opt-in via explicit config.** The agent or operator runs `tt journal config_set embeddings.provider local` to authorize the one-time model download. The download targets only the local model's host (no telemetry, no metrics, no API key submission). (An earlier proposal documented `journal.init --enable-embeddings` as a one-shot alternative; the live registry does not expose that flag — `config_set` is the canonical surface, per trade-trace-mehh.)
+docs/PRD.md:62:- **Disableable.** `tt journal config_set embeddings.provider none` removes the SEMANTIC strategy entirely. Air-gapped installs may pre-stage the model with `tt model import <path>` instead.
+docs/architecture/memory-layer.md:24:2. **Zero-config first run, no surprise network.** `pip install trade-trace && tt journal init && trade-trace-mcp` works without flags or API keys. Vectors are **off** by MVP default; `journal.init` makes zero outbound calls. The SEMANTIC strategy is opt-in via explicit config (`tt journal config_set embeddings.provider local` or `tt model import <path>`); this preserves the absolute air-gap promise from VISION §safety on first run.
+docs/architecture/memory-layer.md:177:**Implementation status (agent-ready epic):** the SEMANTIC strategy and its enabling config surfaces (`tt journal config_set embeddings.provider local|openai|none`, `tt model import <path>`, `tt model warm`, `tt memory reindex --confirm`) now ship behind explicit opt-in. Fresh journals still default to BM25 + TEMPORAL + GRAPH only; `memory.recall` runs with zero network unless an embedding provider is configured. `journal.status` reports `embeddings_provider = "none"` on every fresh init. The off-by-default contract is verified end-to-end in `tests/security/test_no_network_default.py`.
+docs/architecture/memory-layer.md:180:  - `tt journal config_set embeddings.provider local` — authorizes one-time download of `BAAI/bge-small-en-v1.5` (~130MB) into `$TRADE_TRACE_HOME/models/`. Subsequent recall calls use it transparently.
+docs/architecture/memory-layer.md:182:  - `tt journal config_set embeddings.provider openai` (or other API provider) — opt-in remote embedding; see §8.3.
+docs/architecture/memory-layer.md:247:- **Online opt-in**: `tt journal config_set embeddings.provider local` authorizes a one-time download of `BAAI/bge-small-en-v1.5` (~130MB, 384-dim, English-only, sufficient for trading content). The next recall call (or `tt model warm`) triggers the download into `$TRADE_TRACE_HOME/models/`. The download target is the model's host only; no telemetry, no metrics, no journal data transmitted. After download, the system runs fully air-gapped.
+docs/architecture/memory-layer.md:250:`tt journal config_set embeddings.provider none` (the default state) removes the SEMANTIC strategy. `memory.recall` runs with BM25 + temporal (+ graph if requested) and returns valid results.
+docs/architecture/memory-layer.md:257:tt journal config_set embeddings.provider openai --model text-embedding-3-small
+docs/architecture/memory-layer.md:262:This path sends memory text outside the machine. The CLI emits an explicit warning on `tt journal config_set embeddings.provider <api>` describing what data leaves and where. It is opt-in, requires the API key prompt, and does not become default in any future MVP path.
+docs/architecture/memory-layer.md:283:`tt journal config_set embeddings.provider none` removes the SEMANTIC strategy from the default-enabled set. Recall continues to work via BM25 + temporal. The setting is persisted in the config table.
+
+Stale restore docs
+docs/architecture/operability.md:273:Restore is `tt journal restore --from <path>`. The command:
+
+config_set help
+usage: tt [global options] journal config_set [tool options]
+
+Tool: journal.config_set
+Persist a key=value pair into the config table. The embeddings.provider key is validated against the closed enum {none, local, api:openai}. 'none' disables semantic embeddings, 'local' enables local/stub semantic ranking, and 'api:openai' stores a required API key only in a validated secure OS keyring. A raw key argument is accepted only for MCP/CLI noninteractive setup, is never returned, and is not persisted by the app. memory.recall currently resolves that key as a gate but uses the local/stub query embedding path; no OpenAI network call is implemented here.
+
+global options:
+  -h, --help  show this help message and exit
+  --human  emit a one-line prose hint to stderr
+  --actor-id  actor identity for the call (default "cli:default")
+  --request-id  override the server-generated request_id
+  --allow-no-idempotency  opt into at-least-once semantics for retryable writes; the server skips idempotency_key validation and sets meta.idempotency_disabled=true
+  --dry-run  validate input and compute the would-be event payload + would-be IDs without writing anything; sets meta.dry_run=true (bead trade-trace-268)
+  --confirm  required by mutating admin tools (journal.restore, journal.backup, journal.repair, journal.config_set) — without it the tool returns meta.preview_only=true (bead trade-trace-2z7)
+
+tool options from schema:
+  --idempotency-key <string>  required
+  --key <string>  required
+  --value <string>  required
+  ---confirm <boolean>  optional
+
+JSON convention: for object/array values, pass JSON with the schema field flag (for example --metadata-json '{...}' or --tags '[...]'). Repeating a flag accumulates values into a list.
+
+restore help
+usage: tt [global options] journal restore [tool options]
+
+Tool: journal.restore
+Restore from <src> back into $TRADE_TRACE_HOME, verifying every file's SHA-256 against the manifest before copying. Requires --confirm; without it returns meta.preview_only=true. Mismatched SHA-256 aborts the restore with INVARIANT_VIOLATION.
+
+global options:
+  -h, --help  show this help message and exit
+  --human  emit a one-line prose hint to stderr
+  --actor-id  actor identity for the call (default "cli:default")
+  --request-id  override the server-generated request_id
+  --allow-no-idempotency  opt into at-least-once semantics for retryable writes; the server skips idempotency_key validation and sets meta.idempotency_disabled=true
+  --dry-run  validate input and compute the would-be event payload + would-be IDs without writing anything; sets meta.dry_run=true (bead trade-trace-268)
+  --confirm  required by mutating admin tools (journal.restore, journal.backup, journal.repair, journal.config_set) — without it the tool returns meta.preview_only=true (bead trade-trace-2z7)
+
+tool options from schema:
+  --idempotency-key <string>  required
+  --src <string>  required
+  ---confirm <boolean>  optional
+
+JSON convention: for object/array values, pass JSON with the schema field flag (for example --metadata-json '{...}' or --tags '[...]'). Repeating a flag accumulates values into a list.
+
+model import help
+usage: tt [global options] model import [tool options]
+
+Tool: model.import
+Copy a pre-staged BAAI/bge-small-en-v1.5 model directory under $TRADE_TRACE_HOME/models/bge-small-en-v1.5 for air-gap SEMANTIC recall. Requires --confirm to write; verifies every file's SHA-256 and size against Trade Trace-pinned lock data and performs zero outbound network calls.
+
+global options:
+  -h, --help  show this help message and exit
+  --human  emit a one-line prose hint to stderr
+  --actor-id  actor identity for the call (default "cli:default")
+  --request-id  override the server-generated request_id
+  --allow-no-idempotency  opt into at-least-once semantics for retryable writes; the server skips idempotency_key validation and sets meta.idempotency_disabled=true
+  --dry-run  validate input and compute the would-be event payload + would-be IDs without writing anything; sets meta.dry_run=true (bead trade-trace-268)
+  --confirm  required by mutating admin tools (journal.restore, journal.backup, journal.repair, journal.config_set) — without it the tool returns meta.preview_only=true (bead trade-trace-2z7)
+
+tool options from schema:
+  --idempotency-key <string>  required
+  --src <string>  required
+
+JSON convention: for object/array values, pass JSON with the schema field flag (for example --metadata-json '{...}' or --tags '[...]'). Repeating a flag accumulates values into a list.
+
+stale config_set positional probe
+{"error": {"code": "VALIDATION_ERROR", "details": {"field": "argv", "stray_positional_args": ["embeddings.provider", "local"], "tool": "journal.config_set"}, "message": "unrecognized positional argument(s) after command: ['embeddings.provider', 'local']; use `--key value` (or `--flag`) for every option"}, "meta": {"actor_id": "cli:default", "contract_version": "1.0", "request_id": "da8738c0aa0246018321cad47c7d9d9e", "tool": "journal.config_set"}, "ok": false}
+
+stale restore from probe
+{"error": {"code": "VALIDATION_ERROR", "details": {"field": "src"}, "message": "src is required"}, "meta": {"actor_id": "cli:default", "contract_version": "1.0", "request_id": "f804c1adf835407da8984fb18939cead", "tool": "journal.restore"}, "ok": false}

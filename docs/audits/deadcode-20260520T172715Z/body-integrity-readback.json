@@ -1,0 +1,37 @@
+[
+  {
+    "id": "trade-trace-hdlx",
+    "kind": "candidate",
+    "missing": [],
+    "ok": true
+  },
+  {
+    "id": "trade-trace-0apb",
+    "kind": "candidate",
+    "missing": [],
+    "ok": true
+  },
+  {
+    "id": "trade-trace-kq8y",
+    "kind": "candidate",
+    "missing": [],
+    "ok": true
+  },
+  {
+    "id": "trade-trace-bh7q",
+    "kind": "candidate",
+    "missing": [],
+    "ok": true
+  },
+  {
+    "id": "trade-trace-4hr9",
+    "kind": "final_gate",
+    "missing": [],
+    "ok": true
+  },
+  {
+    "id": "trade-trace-r1mt",
+    "kind": "merged_existing",
+    "has_deadcode_note": true
+  }
+]
