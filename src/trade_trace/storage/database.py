@@ -11,13 +11,13 @@ journal.init tool wraps this to provide the user-facing idempotent setup.
 
 from __future__ import annotations
 
-import os
 import sqlite3
-import stat
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+
+from trade_trace._permissions import chmod_user_only_dir, chmod_user_only_file
 
 BUSY_TIMEOUT_MS = 5000
 
@@ -48,33 +48,6 @@ def load_sqlite_vec_extension(conn: sqlite3.Connection) -> None:  # pragma: no c
         conn.enable_load_extension(False)
 
 
-def _set_user_only_permissions(path: Path) -> None:
-    """Best-effort `chmod 0600` on platforms where it's supported. Silently
-    skipped on platforms where stat permissions aren't meaningful (e.g. Windows
-    NTFS without POSIX support)."""
-
-    if os.name != "posix":
-        return
-    try:
-        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-    except (OSError, PermissionError):
-        # The file is created with whatever permissions umask allowed; we
-        # warn at the journal-init layer if the result is world-readable.
-        pass
-
-
-def _set_user_only_dir_permissions(path: Path) -> None:
-    """Best-effort `chmod 0700` on a directory. Same skip rules as
-    `_set_user_only_permissions`."""
-
-    if os.name != "posix":
-        return
-    try:
-        path.chmod(stat.S_IRWXU)
-    except (OSError, PermissionError):
-        pass
-
-
 def _chmod_wal_shm_siblings(db_path_: Path) -> None:
     """Best-effort `chmod 0600` on the SQLite WAL and SHM neighbor files
     if they exist. WAL mode creates `<db>-wal` and `<db>-shm` lazily
@@ -85,7 +58,7 @@ def _chmod_wal_shm_siblings(db_path_: Path) -> None:
     for suffix in ("-wal", "-shm"):
         candidate = db_path_.with_name(db_path_.name + suffix)
         if candidate.exists():
-            _set_user_only_permissions(candidate)
+            chmod_user_only_file(candidate)
 
 
 @dataclass
@@ -110,7 +83,7 @@ class Database:
         repeatedly; missing siblings are no-ops.
         """
 
-        _set_user_only_permissions(self.path)
+        chmod_user_only_file(self.path)
         _chmod_wal_shm_siblings(self.path)
 
     @contextmanager
@@ -219,12 +192,12 @@ def open_database(path: Path, *, create_parent: bool = True) -> Database:
 
     if create_parent:
         path.parent.mkdir(parents=True, exist_ok=True)
-        _set_user_only_dir_permissions(path.parent)
+        chmod_user_only_dir(path.parent)
 
     newly_created = not path.exists()
     conn = sqlite3.connect(str(path), isolation_level=None, check_same_thread=False)
     if newly_created:
-        _set_user_only_permissions(path)
+        chmod_user_only_file(path)
     # WAL/SHM siblings can persist between sessions; pin their perms
     # if they already exist when we open the DB. New ones get pinned
     # on close() (per Database.close).

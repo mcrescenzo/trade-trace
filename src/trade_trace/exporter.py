@@ -25,6 +25,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from trade_trace._permissions import chmod_user_only_dirs, chmod_user_only_file
+
 RESERVED_TRANSPORT_KEYS = frozenset(
     {"_event_id", "_event_type", "_actor_id", "_created_at", "_contract_version"}
 )
@@ -153,8 +155,6 @@ def write_event_atomic(
     The importer reads `tool` + `args` directly and ignores transport keys.
     """
 
-    import stat as _stat
-
     final = jsonl_path(home, event_type, event_id, created_at)
     tmp = final.parent / (final.name + ".tmp")
     args = {k: v for k, v in payload.items() if not k.startswith("_")}
@@ -194,18 +194,10 @@ def write_event_atomic(
     # tightens the contract on platforms that emulate replace by copy
     # (some filesystems) and re-asserts the bit if a future change
     # widens the tmp creation default.
-    try:
-        final.chmod(_stat.S_IRUSR | _stat.S_IWUSR)
-    except (OSError, NotImplementedError):  # pragma: no cover — Windows
-        pass
+    chmod_user_only_file(final)
     # Tighten the date-bucketed parent dirs (export/jsonl/YYYY/MM/DD)
     # so `ls` cannot leak event filenames.
-    try:
-        for parent in (final.parent, final.parent.parent,
-                       final.parent.parent.parent):
-            parent.chmod(_stat.S_IRWXU)
-    except (OSError, NotImplementedError):  # pragma: no cover — Windows
-        pass
+    chmod_user_only_dirs((final.parent, final.parent.parent, final.parent.parent.parent))
     return final
 
 

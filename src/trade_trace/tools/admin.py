@@ -28,14 +28,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import sqlite3
-import stat
 import urllib.request
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
+from trade_trace._permissions import chmod_user_only_dir, chmod_user_only_file
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
@@ -44,30 +43,6 @@ from trade_trace.storage.paths import db_path
 from trade_trace.tools._helpers import now_iso, require
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.memory import _embeddings_provider, _float32_blob, _query_embedding
-
-
-def _tighten_file(path: Path) -> None:
-    """Best-effort `chmod 0600` on `path`. POSIX only; no-op on Windows
-    (bead trade-trace-ljl9 / DEBT-040)."""
-
-    if os.name != "posix":
-        return
-    try:
-        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-    except (OSError, PermissionError):
-        pass
-
-
-def _tighten_dir(path: Path) -> None:
-    """Best-effort `chmod 0700` on a directory. POSIX only; no-op on
-    Windows."""
-
-    if os.name != "posix":
-        return
-    try:
-        path.chmod(stat.S_IRWXU)
-    except (OSError, PermissionError):
-        pass
 
 OPENAI_EMBEDDINGS_KEYRING_SERVICE = "trade-trace:embeddings:openai"
 EMBEDDINGS_API_KEY_ARG = "api_key"
@@ -242,7 +217,7 @@ def _model_files_present(home: Path) -> bool:
 
 def _atomic_replace_dir(src: Path, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    _tighten_dir(dest.parent)
+    chmod_user_only_dir(dest.parent)
     staging = dest.parent / f".{dest.name}.staging"
     if staging.exists():
         shutil.rmtree(staging)
@@ -258,7 +233,7 @@ def _atomic_replace_dir(src: Path, dest: Path) -> None:
     if dest.exists():
         shutil.rmtree(dest)
     staging.replace(dest)
-    _tighten_dir(dest)
+    chmod_user_only_dir(dest)
 
 
 def _download_bge_small_model(home: Path) -> dict[str, Any]:
@@ -381,7 +356,7 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             },
         }
     dest_path.mkdir(parents=True, exist_ok=True)
-    _tighten_dir(dest_path)
+    chmod_user_only_dir(dest_path)
     # Copy DB; checkpoint WAL first by opening a connection in
     # read-only mode would be ideal but SQLite's backup API is what's
     # really needed. For MVP we issue PRAGMA wal_checkpoint to flush
@@ -393,7 +368,7 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         db.close()
     out_db = dest_path / src_db.name
     shutil.copy2(src_db, out_db)
-    _tighten_file(out_db)
+    chmod_user_only_file(out_db)
     db_hash = hashlib.sha256(out_db.read_bytes()).hexdigest()
     files_manifest = [{"path": src_db.name, "sha256": db_hash,
                        "size": out_db.stat().st_size}]
@@ -412,9 +387,9 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             for parent in out_file.parents:
                 if parent == dest_path:
                     break
-                _tighten_dir(parent)
+                chmod_user_only_dir(parent)
             shutil.copy2(src_file, out_file)
-            _tighten_file(out_file)
+            chmod_user_only_file(out_file)
             files_manifest.append({
                 "path": str(rel),
                 "sha256": hashlib.sha256(out_file.read_bytes()).hexdigest(),
@@ -429,7 +404,7 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     }
     manifest_path = dest_path / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2))
-    _tighten_file(manifest_path)
+    chmod_user_only_file(manifest_path)
     return {
         "preview_only": False,
         "dest": str(dest_path),
