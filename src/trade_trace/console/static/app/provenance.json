@@ -2,17 +2,17 @@
   "schema": 1,
   "generated_by": "npm --prefix frontend/console run build",
   "source_hashes": {
-    "src/main.tsx": "6ae5f9e143123baa15c6a316832b265986c53f5081bc8ab9d1966369dd1bcb1c",
-    "src/routeCatalog.ts": "fdd6a04b78ddfd9fed2d8f1d5ed7827a8bbd79d7d4d8e288efe4eac9177cb7a2",
-    "src/routeCatalog.json": "6f5c10910b7b6eb75466b0edbf30f54463884f920fb27c311f34a8020388e0b5",
-    "../../src/trade_trace/console/route_catalog.json": "6f5c10910b7b6eb75466b0edbf30f54463884f920fb27c311f34a8020388e0b5",
+    "src/main.tsx": "8fc8831c89ceebc26317ecaaa91215c86d3b47a80e58c551c1c2e8d97b96f2f3",
+    "src/routeCatalog.ts": "6a9fbcd514077ddeee4e29a494e6334e86d6e06f2d3b62f1bb2839f5ef28555f",
+    "src/routeCatalog.json": "31e184bd8e6d4b9b32d3cdfe3fbe3ed6cf3cd72dbae65a6351b2ade656a1a578",
+    "../../src/trade_trace/console/route_catalog.json": "31e184bd8e6d4b9b32d3cdfe3fbe3ed6cf3cd72dbae65a6351b2ade656a1a578",
     "package.json": "72ceb6853694b0392838b3d4c9517337a2d6a0808f9a64c6a6c3ed6aab19639e",
     "package-lock.json": "f6c32d8591391c31e95b9cda2d7bbb8531bf39b8627adb7453a5dcee403854c9",
     "vite.config.ts": "a935eb052e8d243db2979ae826bec092ede478cc137b0af532f2d623365f9d27"
   },
   "asset_hashes": {
-    "assets/console.js": "c2b9e0015abffb1ca7b0a7f155b594f162180fe86ed33ef32431d1dbbfb597c3",
-    "assets/index.css": "2fbedcf6ea5ad487d9ad4886def3a0439fdffbb15576de1dd9de8585d862fc71",
+    "assets/console.js": "71a8e0c4c1727390812d75f56c8689e5b652d61c1b0022f472c118016af78954",
+    "assets/index.css": "1aeffa6bee5994fd4f4a5f46ecb83f6e295c7625aa75b3c847ffaf647d7f976f",
     "index.html": "c331864adf235d51f91e1b43d7cf358f5c50652c2895c623d7d4669d9a265100"
   }
 }

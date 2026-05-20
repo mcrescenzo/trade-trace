@@ -12,12 +12,10 @@ import {
 } from '@tanstack/react-router'
 import {
   Activity,
-  AlertTriangle,
   BarChart3,
   BookOpen,
   Boxes,
   Database,
-  FileJson,
   Gauge,
   ListFilter,
   NotebookText,
@@ -45,6 +43,22 @@ import {
 } from './api'
 
 type RecordEvent = EventRow & { payload_json?: string | null }
+
+type JournalFilter = {
+  request_id: string
+  actor_id: string
+  subject_kind: string
+  subject_id: string
+  event_type: string
+}
+
+type EventRelated = {
+  decision?: Record<string, unknown> | null
+  forecasts?: Array<Record<string, unknown>>
+  outcomes?: Array<Record<string, unknown>>
+  sources?: Array<Record<string, unknown>>
+  subject_events?: RecordEvent[]
+}
 
 type ConsoleFilter = {
   strategy?: { strategy_id?: string | null }
@@ -160,11 +174,9 @@ const queryClient = new QueryClient({
 
 const ICONS = {
   Activity,
-  AlertTriangle,
   BarChart3,
   BookOpen,
   Boxes,
-  FileJson,
   Gauge,
   ListFilter,
   NotebookText,
@@ -645,24 +657,153 @@ function CatalogPage() {
   )
 }
 
+function payloadPreview(value: unknown) {
+  if (value == null || value === '') return 'No payload stored'
+  const text = typeof value === 'string' ? value : JSON.stringify(value)
+  return text.length > 240 ? `${text.slice(0, 240)}…` : text
+}
+
+function EventAuditDetail({ event }: { event: EventRow }) {
+  const detail = useQuery({
+    queryKey: ['event-detail', event.id],
+    queryFn: () => fetchJson<RecordEvent>(`/api/console/events/${event.id}`)
+  })
+  const related = useQuery({
+    queryKey: ['event-related', event.id],
+    queryFn: () => fetchJson<EventRelated>(`/api/console/events/${event.id}/related`)
+  })
+  const row = detail.data ?? event
+  return (
+    <div className="space-y-3">
+      {detail.isError ? <ErrorBlock error={detail.error} /> : null}
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          ['Subject ID', row.subject_id],
+          ['Request ID', row.request_id],
+          ['Idempotency key', row.idempotency_key],
+          ['Actor', row.actor_id],
+          ['Agent', row.agent_id],
+          ['Model', row.model_id],
+          ['Environment', row.environment],
+          ['Run', row.run_id],
+          ['Timestamp', row.created_at]
+        ].map(([label, value]) => (
+          <div key={String(label)} className="rounded border border-border p-2">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{String(label)}</p>
+            <p className="break-all font-mono text-xs">{String(value ?? 'n/a')}</p>
+          </div>
+        ))}
+      </div>
+      <div>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Payload preview</p>
+        <pre className="overflow-auto rounded border border-border bg-card p-3 text-xs">{payloadPreview(row.payload_json)}</pre>
+      </div>
+      <details className="rounded border border-border p-3">
+        <summary className="cursor-pointer text-sm font-medium">Raw payload access</summary>
+        <div className="mt-2 space-y-2">
+          <a className="text-sm underline" href={`/api/console/raw/${event.id}`} target="_blank" rel="noreferrer">Open raw payload endpoint</a>
+          <JsonBlock value={row.payload_json ?? row} />
+        </div>
+      </details>
+      <div>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Related local records</p>
+        {related.isLoading ? <p className="text-sm text-muted-foreground">Loading local relationships…</p> : related.isError ? <ErrorBlock error={related.error} /> : <JsonBlock value={related.data ?? {}} />}
+      </div>
+    </div>
+  )
+}
+
+function JournalFilterPanel({ filter, onChange }: { filter: JournalFilter; onChange: (filter: JournalFilter) => void }) {
+  const set = (key: keyof JournalFilter, value: string) => onChange({ ...filter, [key]: value.trim() })
+  return (
+    <section className="mb-4 rounded border border-border bg-card p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold">Timeline grouping filters</h3>
+          <p className="text-xs text-muted-foreground">Exact local fields only: request/session, subject, actor, and event type.</p>
+        </div>
+        <button type="button" className="rounded border border-border px-3 py-1 text-sm" onClick={() => onChange({ request_id: '', actor_id: '', subject_kind: '', subject_id: '', event_type: '' })}>Clear filters</button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-5">
+        {(Object.keys(filter) as Array<keyof JournalFilter>).map((key) => (
+          <label key={key} className="text-sm">{key.replaceAll('_', ' ')}
+            <input className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={filter[key]} onChange={(event) => set(key, event.target.value)} />
+          </label>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function EventsPage({ endpoint, title }: { endpoint: string; title: string }) {
+  const [cursor, setCursor] = React.useState<string | null>(null)
+  const [history, setHistory] = React.useState<string[]>([])
+  const [replayIndex, setReplayIndex] = React.useState(0)
+  const [filter, setFilter] = React.useState<JournalFilter>({ request_id: '', actor_id: '', subject_kind: '', subject_id: '', event_type: '' })
+  const limit = 100
+  const filters = React.useMemo(() => Object.fromEntries(Object.entries(filter).filter(([, value]) => value)), [filter])
+  const query = useQuery({
+    queryKey: ['journal-timeline', cursor, filters],
+    queryFn: () => fetchJson<Page<EventRow>>(pageQuery(endpoint, { limit, cursor, ...filters }))
+  })
+  const rows = query.data?.rows ?? []
+  const groups = React.useMemo(() => {
+    const grouped = new Map<string, EventRow[]>()
+    for (const row of rows) {
+      const subjectKey = row.subject_id || row.subject_kind ? `${row.subject_kind ?? 'subject'}:${row.subject_id ?? 'none'}` : ''
+      const key = String(row.request_id || row.run_id || subjectKey || row.actor_id || 'ungrouped')
+      grouped.set(key, [...(grouped.get(key) ?? []), row])
+    }
+    return Array.from(grouped.entries())
+  }, [rows])
+  const replayEvent = rows[replayIndex] ?? null
   return (
     <>
       <PageHeader eyebrow="Audit" title={title} />
-      <PageExplainer answers="Which append-only journal events match this audit view." data={`${endpoint} plus per-event detail and raw payload endpoints.`} read="Expand rows for contextual raw payload access when needed for provenance." mislead="Events are low-level audit records; product metrics should be read from report pages with caveats." />
-      <PageTable<EventRow>
-        endpoint={endpoint}
-        queryKey={endpoint}
-        subjectKind="event"
-        emptyMessage="No audit rows match this view."
-        columns={[
-          { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
-          { key: 'event_type', header: 'Type', cell: (value) => <ChipList value={value} /> },
-          { key: 'subject_kind', header: 'Subject' },
-          { key: 'actor_id', header: 'Actor' },
-          { key: 'created_at', header: 'Created' }
-        ]}
-      />
+      <PageExplainer answers="Which append-only journal events match this local audit/replay view." data={`${endpoint} with exact local filters plus per-event detail, related local records, and raw payload endpoints.`} read="Groups prefer request/session IDs, then available subject fields, then actor, then ungrouped. Replay steps through stored journal events only." mislead="This is not market replay, broker data, advice, or writeback annotation; only locally stored event evidence is shown." />
+      <JournalFilterPanel filter={filter} onChange={(next) => { setFilter(next); setCursor(null); setHistory([]); setReplayIndex(0) }} />
+      {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} /> : (
+        <div className="space-y-4">
+          <section className="rounded border border-border bg-card p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-semibold">Local replay</h3>
+                <p className="text-sm text-muted-foreground">Step {rows.length === 0 ? 0 : replayIndex + 1} of {rows.length}; journal events only.</p>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" className="rounded border border-border px-3 py-1 text-sm disabled:opacity-50" disabled={replayIndex <= 0} onClick={() => setReplayIndex((index) => Math.max(0, index - 1))}>Previous event</button>
+                <button type="button" className="rounded border border-border px-3 py-1 text-sm disabled:opacity-50" disabled={replayIndex >= rows.length - 1} onClick={() => setReplayIndex((index) => Math.min(rows.length - 1, index + 1))}>Next event</button>
+              </div>
+            </div>
+            {replayEvent ? <EventAuditDetail event={replayEvent} /> : <p className="text-sm text-muted-foreground">No events to replay for this filter.</p>}
+          </section>
+          <div className="space-y-3">
+            {groups.map(([group, groupRows]) => (
+              <details key={group} open className="rounded border border-border bg-card p-3">
+                <summary className="cursor-pointer font-medium">Group {group} · {groupRows.length} event(s)</summary>
+                <div className="mt-3">
+                  <DataTable rows={groupRows} emptyMessage="No audit rows match this view." columns={[
+                    { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
+                    { key: 'event_type', header: 'Type', cell: (value) => <ChipList value={value} /> },
+                    { key: 'subject_kind', header: 'Subject' },
+                    { key: 'subject_id', header: 'Subject ID', cell: (value) => <CopyId value={value} /> },
+                    { key: 'request_id', header: 'Request', cell: (value) => <CopyId value={value} /> },
+                    { key: 'actor_id', header: 'Actor' },
+                    { key: 'created_at', header: 'Created' }
+                  ]} renderDetail={(row) => <EventAuditDetail event={row} />} />
+                </div>
+              </details>
+            ))}
+          </div>
+          <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+            <span>Showing up to {query.data?.limit ?? limit} rows{query.data?.next_cursor ? '; more rows available' : ''}.</span>
+            <div className="flex gap-2">
+              <button type="button" className="rounded border border-border px-3 py-1 disabled:opacity-50" disabled={history.length === 0} onClick={() => { const previous = history.at(-1) ?? null; setHistory((items) => items.slice(0, -1)); setCursor(previous === '' ? null : previous); setReplayIndex(0) }}>Previous page</button>
+              <button type="button" className="rounded border border-border px-3 py-1 disabled:opacity-50" disabled={!query.data?.next_cursor} onClick={() => { setHistory((items) => [...items, cursor ?? '']); setCursor(query.data?.next_cursor ?? null); setReplayIndex(0) }}>Next page</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -739,24 +880,6 @@ function DecisionsPage() {
   )
 }
 
-function LogsPage() {
-  const query = useQuery({
-    queryKey: ['logs'],
-    queryFn: () => fetchJson<Record<string, unknown>>('/api/console/logs?tail=200')
-  })
-  return (
-    <>
-      <PageHeader eyebrow="Logs" title="Operational log tail" />
-      <PageExplainer answers="What local Console/server log lines may help debug this session." data="/api/console/logs tail endpoint." read="Use as secondary troubleshooting context, not as journal analytics." mislead="Logs may be redacted, partial, or unrelated to a selected report filter." />
-      {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} /> : (
-        <pre className="overflow-auto rounded border border-border bg-card p-4 text-xs">
-          {JSON.stringify(query.data, null, 2)}
-        </pre>
-      )}
-    </>
-  )
-}
-
 function routeComponent(definition: ConsoleRouteDefinition) {
   switch (definition.component) {
     case 'overview':
@@ -775,8 +898,6 @@ function routeComponent(definition: ConsoleRouteDefinition) {
       return () => <EventsPage endpoint={definition.endpoint!} title={definition.title!} />
     case 'decisions':
       return DecisionsPage
-    case 'logs':
-      return LogsPage
   }
 }
 

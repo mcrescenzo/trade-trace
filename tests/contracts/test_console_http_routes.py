@@ -69,8 +69,6 @@ SPA_ROUTES = [
     "/playbooks",
     "/journal",
     "/decisions",
-    "/logs",
-    "/raw",
 ]
 
 
@@ -120,6 +118,30 @@ def test_catalog_endpoint_exposes_spa_routes_and_report_allowlist(client: TestCl
     assert "/trades" in body["routes"]
     assert "report.pnl" in body["report_tools"]
     assert "report.coach" in body["lazy_write_handlers_blocked"]
+    assert "/logs" not in body["routes"]
+    assert "/raw" not in body["routes"]
+
+
+def test_journal_events_support_local_audit_filters_and_related_context(rich_client: TestClient) -> None:
+    first_page = rich_client.get("/api/console/events?limit=10")
+    assert first_page.status_code == 200, first_page.text[:300]
+    first_rows = first_page.json()["rows"]
+    assert first_rows
+    actor_id = first_rows[0]["actor_id"]
+
+    page = rich_client.get(f"/api/console/events?limit=10&actor_id={actor_id}")
+    assert page.status_code == 200, page.text[:300]
+    rows = page.json()["rows"]
+    assert rows
+    assert all(row["actor_id"] == actor_id for row in rows)
+    assert "subject_id" in rows[0]
+    assert "idempotency_key" in rows[0]
+
+    related = rich_client.get(f"/api/console/events/{rows[0]['id']}/related")
+    assert related.status_code == 200, related.text[:300]
+    body = related.json()
+    assert body["event_id"] == rows[0]["id"]
+    assert "subject_events" in body
 
 
 def test_static_favicon_and_built_assets_are_served(client: TestClient) -> None:

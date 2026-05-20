@@ -105,16 +105,133 @@ def _table_page(
     return page
 
 
-def journal_events(conn: sqlite3.Connection, *, cursor: str | None, limit: int) -> Page:
-    return _table_page(
+def journal_events(
+    conn: sqlite3.Connection,
+    *,
+    cursor: str | None,
+    limit: int,
+    request_id: str | None = None,
+    actor_id: str | None = None,
+    subject_kind: str | None = None,
+    subject_id: str | None = None,
+    event_type: str | None = None,
+) -> Page:
+    """Return a locally-filtered journal timeline page.
+
+    Filters are exact-match fields already present in the append-only local
+    `events` table. This powers audit grouping/replay without network calls,
+    market-data replay, or writeback annotations.
+    """
+
+    columns = (
+        "id", "event_type", "subject_kind", "subject_id", "actor_id",
+        "created_at", "request_id", "idempotency_key", "agent_id", "model_id",
+        "environment", "run_id",
+    )
+    clauses: list[str] = []
+    params: list[Any] = []
+    for column, value in (
+        ("request_id", request_id),
+        ("actor_id", actor_id),
+        ("subject_kind", subject_kind),
+        ("subject_id", subject_id),
+        ("event_type", event_type),
+    ):
+        if value:
+            clauses.append(f"{column} = ?")
+            params.append(value)
+    where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = f"SELECT {', '.join(columns)} FROM events{where}"
+    page = paginate_created_at_id_query(
         conn,
-        columns=("id", "event_type", "subject_kind", "subject_id",
-                 "actor_id", "created_at", "request_id"),
-        table="events",
-        order_by="id DESC",
+        sql=sql,
         cursor=cursor,
         limit=limit,
+        params=tuple(params),
+        id_index=0,
+        created_at_index=5,
     )
+    page.rows = [dict(zip(columns, row, strict=True)) for row in page.rows]
+    return page
+
+
+def event_related_records(conn: sqlite3.Connection, *, event_id: int) -> dict[str, Any] | None:
+    """Collect local read-model rows that can be tied to an event subject.
+
+    This is intentionally conservative: it follows only IDs already stored in
+    local tables/payload JSON and returns projections for audit context, not
+    computed advice or live market replay.
+    """
+
+    event = event_detail(conn, event_id=event_id)
+    if event is None:
+        return None
+    subject_kind = str(event.get("subject_kind") or "")
+    subject_id = str(event.get("subject_id") or "")
+    payload = _parse_payload_json(event.get("payload_json"))
+    ids = _collect_payload_ids(payload)
+    if subject_kind and subject_id:
+        ids.setdefault(subject_kind, set()).add(subject_id)
+
+    return {
+        "event_id": event_id,
+        "decision": _lookup_one(conn, "decisions", subject_id) if subject_kind == "decision" else None,
+        "forecasts": _lookup_many(conn, "forecasts", ids.get("forecast", set())),
+        "outcomes": _lookup_many(conn, "outcomes", ids.get("outcome", set())),
+        "sources": _lookup_many(conn, "sources", ids.get("source", set())),
+        "subject_events": record_events(
+            conn,
+            subject_kind=subject_kind,
+            subject_id=subject_id,
+            limit=20,
+        ) if subject_kind and subject_id else [],
+    }
+
+
+def _parse_payload_json(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    try:
+        import json
+
+        return json.loads(value)
+    except Exception:
+        return value
+
+
+def _collect_payload_ids(value: Any) -> dict[str, set[str]]:
+    found: dict[str, set[str]] = {"forecast": set(), "outcome": set(), "source": set()}
+    if isinstance(value, dict):
+        for key, child in value.items():
+            key_s = str(key)
+            if key_s in {"forecast_id", "outcome_id", "source_id"} and child:
+                found[key_s.removesuffix("_id")].add(str(child))
+            elif key_s in {"forecast_ids", "outcome_ids", "source_ids"} and isinstance(child, list):
+                found[key_s.removesuffix("_ids")].update(str(item) for item in child if item)
+            for kind, ids in _collect_payload_ids(child).items():
+                found[kind].update(ids)
+    elif isinstance(value, list):
+        for child in value:
+            for kind, ids in _collect_payload_ids(child).items():
+                found[kind].update(ids)
+    return found
+
+
+def _lookup_one(conn: sqlite3.Connection, table: str, row_id: str) -> dict[str, Any] | None:
+    rows = _lookup_many(conn, table, {row_id})
+    return rows[0] if rows else None
+
+
+def _lookup_many(conn: sqlite3.Connection, table: str, ids: set[str]) -> list[dict[str, Any]]:
+    if not ids:
+        return []
+    rows: list[dict[str, Any]] = []
+    for row_id in sorted(ids):
+        cursor = conn.execute(f"SELECT * FROM {table} WHERE id = ?", (row_id,))
+        row = cursor.fetchone()
+        if row is not None:
+            rows.append(dict(zip([col[0] for col in cursor.description], row, strict=True)))
+    return rows
 
 
 def event_detail(conn: sqlite3.Connection, *, event_id: int) -> dict[str, Any] | None:

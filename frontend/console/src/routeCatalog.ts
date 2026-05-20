@@ -9,15 +9,12 @@ export type ConsoleRouteComponent =
   | 'playbooks'
   | 'events'
   | 'decisions'
-  | 'logs'
 
 export type ConsoleIconName =
   | 'Activity'
-  | 'AlertTriangle'
   | 'BarChart3'
   | 'BookOpen'
   | 'Boxes'
-  | 'FileJson'
   | 'Gauge'
   | 'ListFilter'
   | 'NotebookText'

@@ -229,7 +229,32 @@ def _build_app(home_path: str) -> Any:
 
         _handler.__name__ = fn.__name__
 
-    _bind_list("/api/console/events", endpoints.journal_events)
+    @app.get("/api/console/events")
+    def journal_events(
+        cursor: str | None = None,
+        limit: int = 50,
+        request_id: str | None = None,
+        actor_id: str | None = None,
+        subject_kind: str | None = None,
+        subject_id: str | None = None,
+        event_type: str | None = None,
+    ) -> dict[str, Any]:
+        _, db = _open()
+        try:
+            page = endpoints.journal_events(
+                db.connection,
+                cursor=cursor,
+                limit=limit,
+                request_id=request_id,
+                actor_id=actor_id,
+                subject_kind=subject_kind,
+                subject_id=subject_id,
+                event_type=event_type,
+            )
+            return _page_to_dict(page)
+        finally:
+            db.close()
+
     _bind_list("/api/console/memory-nodes", endpoints.memory_nodes_list)
     _bind_list("/api/console/strategies", endpoints.strategies_list)
     _bind_list("/api/console/playbooks", endpoints.playbooks_list)
@@ -301,6 +326,17 @@ def _build_app(home_path: str) -> Any:
         if event is None:
             raise fastapi.HTTPException(status_code=404, detail=f"event {event_id} not found")
         return event
+
+    @app.get("/api/console/events/{event_id}/related")
+    def event_related(event_id: int) -> dict[str, Any]:
+        _, db = _open()
+        try:
+            related = endpoints.event_related_records(db.connection, event_id=event_id)
+        finally:
+            db.close()
+        if related is None:
+            raise fastapi.HTTPException(status_code=404, detail=f"event {event_id} not found")
+        return related
 
     @app.get("/api/console/record-events")
     def record_events(subject_kind: str, subject_id: str, limit: int = 20) -> list[dict[str, Any]]:

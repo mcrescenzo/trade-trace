@@ -12,8 +12,6 @@
   { "path": "/evidence", "label": "Evidence", "icon": "ShieldCheck", "component": "report", "tool": "report.source_quality", "title": "Evidence and provenance" },
   { "path": "/strategies", "label": "Strategies", "icon": "Boxes", "component": "strategies" },
   { "path": "/playbooks", "label": "Playbooks", "icon": "BookOpen", "component": "playbooks" },
-  { "path": "/journal", "label": "Journal", "icon": "NotebookText", "component": "events", "endpoint": "/api/console/events", "title": "Journal events" },
-  { "path": "/decisions", "label": "Decisions", "icon": "ListFilter", "component": "decisions" },
-  { "path": "/logs", "label": "Logs", "icon": "AlertTriangle", "component": "logs" },
-  { "path": "/raw", "label": "Raw JSON", "icon": "FileJson", "component": "events", "endpoint": "/api/console/events", "title": "Raw events" }
+  { "path": "/journal", "label": "Journal", "icon": "NotebookText", "component": "events", "endpoint": "/api/console/events", "title": "Journal timeline and replay" },
+  { "path": "/decisions", "label": "Decisions", "icon": "ListFilter", "component": "decisions" }
 ]
