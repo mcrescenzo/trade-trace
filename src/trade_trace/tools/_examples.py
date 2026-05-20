@@ -20,6 +20,22 @@ _IDEM = "00000000-0000-4000-8000-000000000000"
 
 
 WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
+    "idea.capture": {
+        "minimal": {
+            "thought": "Rough market idea to investigate later; needs venue, instrument, snapshot, thesis, and forecast enrichment.",
+            "idempotency_key": _IDEM,
+        },
+        "rich": {
+            "title": "Draft CPI surprise idea",
+            "thought": "Investigate whether CPI surprise could move short-dated rate-cut prediction markets; no decision yet.",
+            "captured_at": "2026-05-20T14:00:00Z",
+            "tags": ["macro", "draft", "needs_enrichment"],
+            "importance": 6,
+            "confidence_base": 0.4,
+            "metadata_json": {"user_context": "quick capture before research"},
+            "idempotency_key": _IDEM,
+        },
+    },
     "venue.add": {
         "minimal": {
             "name": "Kalshi",

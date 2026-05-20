@@ -1369,6 +1369,17 @@ def derive_scoring_state(conn, forecast_id: str) -> str:
 # -- source.add + source.attach_to_* ---------------------------------------
 
 def _source_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    db = open_db_for_args(args)
+    try:
+        with UnitOfWork(db.connection) as uow:
+            return _source_add_in_uow(args, ctx, uow)
+    finally:
+        db.close()
+
+
+def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) -> dict[str, Any]:
+    """Create a source row using an existing transaction."""
+
     kind = require(args, "kind")
     reject_if_contains_secrets(args.get("title"), field="title")
     reject_if_contains_secrets(args.get("note"), field="note")
@@ -1405,56 +1416,51 @@ def _source_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "metadata_json": metadata_json,
         }
 
-    db = open_db_for_args(args)
-    try:
-        with UnitOfWork(db.connection) as uow:
-            replay = check_idempotency_replay(
-                uow, event_type="source.added",
-                actor_id=ctx.actor_id, idempotency_key=idempotency_key,
-            )
-            if replay is not None:
-                source_id = replay["id"]
-                emit_event(
-                    uow, event_type="source.added",
-                    subject_kind="source", subject_id=source_id,
-                    payload=_payload(source_id),
-                    actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
-                )
-                row = uow.conn.execute(
-                    "SELECT created_at FROM sources WHERE id = ?", (source_id,)
-                ).fetchone()
-                return {"id": source_id, "kind": kind, "stance": stance,
-                        "created_at": row[0]}
+    replay = check_idempotency_replay(
+        uow, event_type="source.added",
+        actor_id=ctx.actor_id, idempotency_key=idempotency_key,
+    )
+    if replay is not None:
+        source_id = replay["id"]
+        emit_event(
+            uow, event_type="source.added",
+            subject_kind="source", subject_id=source_id,
+            payload=_payload(source_id),
+            actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
+        )
+        row = uow.conn.execute(
+            "SELECT created_at FROM sources WHERE id = ?", (source_id,)
+        ).fetchone()
+        return {"id": source_id, "kind": kind, "stance": stance,
+                "created_at": row[0]}
 
-            source_id = args.get("id") or new_id("src")
-            created_at = now_iso()
-            uow.execute(
-                "INSERT INTO sources(id, kind, ref, title, note, stance, freshness_at, "
-                "content_hash, captured_at, uri, media_type, storage_kind, retrieved_at, "
-                "source_author, publisher, excerpt, extracted_text, summary, "
-                "hash_algorithm, redaction_status, license_or_terms_note, metadata_json, "
-                "created_at, actor_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    source_id, kind, args.get("ref"), args.get("title"),
-                    args.get("note"), stance, freshness_at,
-                    args.get("content_hash"), captured_at, args.get("uri"),
-                    args.get("media_type"), storage_kind, retrieved_at,
-                    args.get("source_author"), args.get("publisher"),
-                    args.get("excerpt"), args.get("extracted_text"),
-                    args.get("summary"), args.get("hash_algorithm"),
-                    redaction_status, args.get("license_or_terms_note"),
-                    metadata_json, created_at, ctx.actor_id,
-                ),
-            )
-            emit_event(
-                uow, event_type="source.added",
-                subject_kind="source", subject_id=source_id,
-                payload=_payload(source_id),
-                actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
-            )
-    finally:
-        db.close()
+    source_id = args.get("id") or new_id("src")
+    created_at = now_iso()
+    uow.execute(
+        "INSERT INTO sources(id, kind, ref, title, note, stance, freshness_at, "
+        "content_hash, captured_at, uri, media_type, storage_kind, retrieved_at, "
+        "source_author, publisher, excerpt, extracted_text, summary, "
+        "hash_algorithm, redaction_status, license_or_terms_note, metadata_json, "
+        "created_at, actor_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            source_id, kind, args.get("ref"), args.get("title"),
+            args.get("note"), stance, freshness_at,
+            args.get("content_hash"), captured_at, args.get("uri"),
+            args.get("media_type"), storage_kind, retrieved_at,
+            args.get("source_author"), args.get("publisher"),
+            args.get("excerpt"), args.get("extracted_text"),
+            args.get("summary"), args.get("hash_algorithm"),
+            redaction_status, args.get("license_or_terms_note"),
+            metadata_json, created_at, ctx.actor_id,
+        ),
+    )
+    emit_event(
+        uow, event_type="source.added",
+        subject_kind="source", subject_id=source_id,
+        payload=_payload(source_id),
+        actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
+    )
     return {"id": source_id, "kind": kind, "stance": stance,
             "created_at": created_at}
 
@@ -1573,6 +1579,78 @@ def _make_source_attacher(target_kind: str):
                 "target_id": target_id, "edge_type": edge_type, "created_at": created_at}
 
     return _handler
+
+
+def _source_attach_to_memory_node_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) -> dict[str, Any]:
+    """Attach a source to a memory_node using an existing transaction."""
+
+    source_id = require(args, "source_id")
+    target_id = require(args, "target_id")
+    idempotency_key = args.get("idempotency_key")
+    metadata_json = _store_metadata_json(args)
+    stance_row = uow.conn.execute(
+        "SELECT stance FROM sources WHERE id = ?", (source_id,),
+    ).fetchone()
+    if stance_row is None:
+        raise ToolError(
+            ErrorCode.NOT_FOUND,
+            f"source {source_id!r} not found",
+            details={"entity_kind": "source", "source_id": source_id},
+        )
+    target_row = uow.conn.execute(
+        "SELECT 1 FROM memory_nodes WHERE id = ?", (target_id,),
+    ).fetchone()
+    if target_row is None:
+        raise ToolError(
+            ErrorCode.NOT_FOUND,
+            f"memory_node {target_id!r} not found",
+            details={"entity_kind": "memory_node", "target_id": target_id},
+        )
+    stance = stance_row[0]
+    edge_type = stance if stance in ("supports", "contradicts") else "about"
+    replay = check_idempotency_replay(
+        uow, event_type="source.attached",
+        actor_id=ctx.actor_id, idempotency_key=idempotency_key,
+    )
+    if replay is not None:
+        edge_id = replay["id"]
+        emit_event(
+            uow, event_type="source.attached",
+            subject_kind="edge", subject_id=edge_id,
+            payload={
+                "id": edge_id, "source_id": source_id,
+                "target_kind": "memory_node", "target_id": target_id,
+                "edge_type": edge_type,
+            },
+            actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
+        )
+        row = uow.conn.execute(
+            "SELECT created_at FROM edges WHERE id = ?", (edge_id,),
+        ).fetchone()
+        return {"id": edge_id, "source_id": source_id, "target_kind": "memory_node",
+                "target_id": target_id, "edge_type": edge_type, "created_at": row[0]}
+
+    edge_id = args.get("id") or new_id("edg")
+    created_at = now_iso()
+    uow.execute(
+        "INSERT INTO edges(id, source_kind, source_id, target_kind, target_id, "
+        "edge_type, metadata_json, created_at, actor_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (edge_id, "source", source_id, "memory_node", target_id, edge_type,
+         metadata_json, created_at, ctx.actor_id),
+    )
+    emit_event(
+        uow, event_type="source.attached",
+        subject_kind="edge", subject_id=edge_id,
+        payload={
+            "id": edge_id, "source_id": source_id,
+            "target_kind": "memory_node", "target_id": target_id,
+            "edge_type": edge_type,
+        },
+        actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
+    )
+    return {"id": edge_id, "source_id": source_id, "target_kind": "memory_node",
+            "target_id": target_id, "edge_type": edge_type, "created_at": created_at}
 
 
 # -- resolve.pending ---------------------------------------------------------

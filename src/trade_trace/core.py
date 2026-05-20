@@ -30,6 +30,7 @@ from trade_trace.tools.admin import register_admin_tools
 from trade_trace.tools.csv_import import register_csv_import
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.fixture import register_fixture_tools
+from trade_trace.tools.ideas import register_idea_tools
 from trade_trace.tools.imports import register_import_stubs
 from trade_trace.tools.journal import register_journal_tools
 from trade_trace.tools.ledger import register_ledger_tools
@@ -53,6 +54,7 @@ def build_registry() -> ToolRegistry:
     registry = ToolRegistry()
     register_admin_tools(registry)
     register_fixture_tools(registry)
+    register_idea_tools(registry)
     register_journal_tools(registry)
     register_ledger_tools(registry)
     register_memory_tools(registry)
