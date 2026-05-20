@@ -1976,6 +1976,11 @@ def register_ledger_tools(registry: ToolRegistry) -> None:
             ". Per-type required/optional/forbidden fields are exposed in "
             "tool.schema json_schema.x-decision-matrix."
         ),
+        usage_summary="Record a trade decision against an instrument; choose type and include only fields allowed by the decision matrix.",
+        examples=("tt decision add --instrument-id inst_... --type enter --side long --thesis-id th_... --idempotency-key <uuid>",),
+        enum_notes={"type": "Allowed values and per-type field requirements live in json_schema.x-decision-matrix.", "side": "Use long/short only for directional decision types."},
+        common_failures=("Missing a field required by the selected decision type.", "Providing a forbidden field for the selected decision type."),
+        next_actions=("Inspect `tt tool schema --tool decision.add` before retrying validation failures.",),
         **_examples_for("decision.add"),
     )
     registry.register("outcome.add", _outcome_add, is_write=True, **_examples_for("outcome.add"))

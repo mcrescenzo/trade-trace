@@ -732,7 +732,11 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
             "number auto-increments; parent_version_id defaults to the "
             "prior head. Emits playbook.proposed_version event."
         ),
-        json_schema=_PLAYBOOK_PROPOSE_VERSION_SCHEMA
+        json_schema=_PLAYBOOK_PROPOSE_VERSION_SCHEMA,
+        usage_summary="Append the next playbook version using a reflection node as provenance; parent defaults to current head.",
+        examples=("tt playbook propose_version --playbook-id pb_... --provenance-reflection-node-id mem_... --idempotency-key <uuid>",),
+        common_failures=("provenance_reflection_node_id must reference an existing reflection memory node.",),
+        next_actions=("Run playbook.show or playbook.list_versions to inspect lineage before proposing another version.",),
     )
     registry.register(
         "playbook.adherence",

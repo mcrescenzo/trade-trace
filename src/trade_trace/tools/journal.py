@@ -266,6 +266,7 @@ def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     "is_write": reg.is_write,
                     "has_example": reg.example_minimal is not None,
                     "json_schema": reg.json_schema,
+                    "metadata": reg.metadata(),
                 }
                 for reg in sorted(registry.by_name.values(), key=lambda r: r.name)
             ],
@@ -299,6 +300,7 @@ def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "allow_no_idempotency_mcp": "_allow_no_idempotency",
         },
         "json_schema": reg.json_schema,
+        "metadata": reg.metadata(),
     }
 
 

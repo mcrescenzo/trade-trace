@@ -108,6 +108,27 @@ class ToolRegistration:
     example_minimal: dict[str, Any] | None = None
     example_rich: dict[str, Any] | None = None
     json_schema: dict[str, Any] | None = None
+    usage_summary: str = ""
+    examples: list[str] = field(default_factory=list)
+    enum_notes: dict[str, str] = field(default_factory=dict)
+    common_failures: list[str] = field(default_factory=list)
+    next_actions: list[str] = field(default_factory=list)
+
+    def metadata(self) -> dict[str, Any]:
+        """Self-describing metadata shared by CLI help, tool.schema, and MCP."""
+
+        out: dict[str, Any] = {}
+        if self.usage_summary:
+            out["usage_summary"] = self.usage_summary
+        if self.examples:
+            out["examples"] = list(self.examples)
+        if self.enum_notes:
+            out["enum_notes"] = dict(self.enum_notes)
+        if self.common_failures:
+            out["common_failures"] = list(self.common_failures)
+        if self.next_actions:
+            out["next_actions"] = list(self.next_actions)
+        return out
 
 
 @dataclass
@@ -130,6 +151,11 @@ class ToolRegistry:
         example_rich: dict[str, Any] | None = None,
         json_schema: dict[str, Any] | None = None,
         optional_keys: tuple[str, ...] | list[str] | None = None,
+        usage_summary: str = "",
+        examples: list[str] | tuple[str, ...] | None = None,
+        enum_notes: dict[str, str] | None = None,
+        common_failures: list[str] | tuple[str, ...] | None = None,
+        next_actions: list[str] | tuple[str, ...] | None = None,
     ) -> None:
         if name in self.by_name:
             raise CLINameCollisionError(
@@ -155,6 +181,11 @@ class ToolRegistry:
             example_minimal=example_minimal,
             example_rich=example_rich,
             json_schema=effective_json_schema,
+            usage_summary=usage_summary,
+            examples=list(examples or ()),
+            enum_notes=dict(enum_notes or {}),
+            common_failures=list(common_failures or ()),
+            next_actions=list(next_actions or ()),
         )
         self.by_cli[invocation] = name
 

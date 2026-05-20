@@ -788,7 +788,12 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "emitted; summary.sample_warning is set when any group is low-N."
         ),
         example_minimal={"base_report": "calibration", "group_by": "strategy_id", "filter": {}},
-        json_schema=_REPORT_SCHEMAS["report.compare"]
+        json_schema=_REPORT_SCHEMAS["report.compare"],
+        usage_summary="Compare calibration or pnl metrics across one allowlisted dimension using optional shared report filters.",
+        examples=("tt report compare --base-report calibration --group-by strategy_id --filter-json '{}'",),
+        enum_notes={"base_report": "calibration or pnl", "group_by": "Allowed values depend on base_report and are validated by the report schema."},
+        common_failures=("group_by is not allowed for the selected base_report.",),
+        next_actions=("Use report.filter_schema to build the filter object before calling report.compare.",),
     )
     registry.register(
         "report.strategy_performance",

@@ -195,6 +195,28 @@ def _print_command_help(parser: argparse.ArgumentParser, tool_name: str, registr
     if reg.description:
         print(reg.description, file=sys.stdout)
         print("", file=sys.stdout)
+    metadata = reg.metadata()
+    if metadata:
+        if metadata.get("usage_summary"):
+            print("usage summary:", file=sys.stdout)
+            print(f"  {metadata['usage_summary']}", file=sys.stdout)
+        if metadata.get("examples"):
+            print("examples:", file=sys.stdout)
+            for example in metadata["examples"]:
+                print(f"  {example}", file=sys.stdout)
+        if metadata.get("enum_notes"):
+            print("enum notes:", file=sys.stdout)
+            for key, value in metadata["enum_notes"].items():
+                print(f"  {key}: {value}", file=sys.stdout)
+        if metadata.get("common_failures"):
+            print("common failures:", file=sys.stdout)
+            for failure in metadata["common_failures"]:
+                print(f"  - {failure}", file=sys.stdout)
+        if metadata.get("next_actions"):
+            print("next actions:", file=sys.stdout)
+            for action in metadata["next_actions"]:
+                print(f"  - {action}", file=sys.stdout)
+        print("", file=sys.stdout)
     print("global options:", file=sys.stdout)
     for action in parser._actions:
         if not action.option_strings:
@@ -337,6 +359,11 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
                 "entity_kind": "tool",
                 "tokens": exc.tokens,
                 "known_invocations": exc.known,
+                "next_actions": [
+                    "Run `tt --help` for global options.",
+                    "Run `tt tool schema --tool <tool.name>` to inspect a tool contract.",
+                    "Use space-separated CLI invocations such as `tt decision add` for tool name `decision.add`.",
+                ],
             },
         )
     if args.help:

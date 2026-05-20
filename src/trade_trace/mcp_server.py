@@ -53,11 +53,18 @@ def mcp_tool_specs(registry: ToolRegistry | None = None) -> list[dict[str, Any]]
     specs: list[dict[str, Any]] = []
     for name in reg.names():
         registration = reg.get(name)
+        metadata = registration.metadata()
+        description = registration.description
+        if metadata.get("usage_summary"):
+            description = f"{description} Usage: {metadata['usage_summary']}" if description else metadata["usage_summary"]
+        if metadata.get("examples"):
+            description = f"{description} Example: {metadata['examples'][0]}" if description else f"Example: {metadata['examples'][0]}"
         spec = {
             "name": registration.name,
-            "description": registration.description,
+            "description": description,
             "input_schema": registration.json_schema or {},
             "is_write": registration.is_write,
+            "metadata": metadata,
         }
         _assert_no_secret_transport_hints(spec)
         specs.append(spec)

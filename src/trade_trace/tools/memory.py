@@ -1228,6 +1228,10 @@ def register_memory_tools(registry: ToolRegistry) -> None:
             "target_kind/target_id/body and README sugar target/insight."
         ),
         json_schema=_MEMORY_REFLECT_SCHEMA,
+        usage_summary="Create one reflection memory node about an existing ledger or memory target and atomically attach the about-edge.",
+        examples=("tt memory reflect --target-kind decision --target-id dec_... --body 'What changed?' --idempotency-key <uuid>",),
+        common_failures=("target_kind/target_id must identify an existing row.",),
+        next_actions=("Use memory.recall to find relevant prior nodes before writing reflections.",),
     )
     registry.register(
         "memory.link",
