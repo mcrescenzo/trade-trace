@@ -255,6 +255,10 @@ _PLAYBOOK_PROPOSE_VERSION_ALLOWED_ARGS = frozenset({
     "provenance_reflection_node_id",
     "description",
     "metadata_json",
+    # Internal replay support for journal import/export. The public tool
+    # schema does not advertise this; live callers normally let the runtime
+    # auto-increment the version number.
+    "version",
     "idempotency_key",
     "parent_version_id",
     "id",
@@ -372,12 +376,30 @@ def _playbook_propose_version(
                 "WHERE playbook_id = ? ORDER BY version DESC LIMIT 1",
                 (playbook_id,),
             ).fetchone()
-            if max_row is None:
+            if args.get("version") is not None:
+                try:
+                    next_version = int(args["version"])
+                except (TypeError, ValueError):
+                    raise ToolError(
+                        ErrorCode.VALIDATION_ERROR,
+                        "version must be an integer when provided",
+                        details={"field": "version", "value": args.get("version")},
+                    )
+                if next_version < 1:
+                    raise ToolError(
+                        ErrorCode.VALIDATION_ERROR,
+                        "version must be >= 1 when provided",
+                        details={"field": "version", "value": args.get("version")},
+                    )
+            elif max_row is None:
                 next_version = 1
                 parent_version_id = args.get("parent_version_id")
             else:
                 next_version = max_row[1] + 1
                 parent_version_id = args.get("parent_version_id") or max_row[0]
+
+            if args.get("version") is not None:
+                parent_version_id = args.get("parent_version_id") or (max_row[0] if max_row is not None else None)
 
             version_id = args.get("id") or new_id("pbv")
             created_at = now_iso()

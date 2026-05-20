@@ -253,7 +253,7 @@ def _seed_playbook_version(home: Path) -> str:
     assert refl.ok, refl
     pv = _mcp(home, "playbook.propose_version", {
         "playbook_id": pb.data["id"],
-        "rules_json": '[{"text": "r1"}]',
+        "description": "fixture version",
         "provenance_reflection_node_id": refl.data["id"],
         "idempotency_key": "40dz-pv",
     })

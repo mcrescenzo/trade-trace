@@ -496,7 +496,7 @@ def test_journal_export_replays_playbook_writes_into_fresh_home(tmp_path: Path):
     pb_id = pb["data"]["id"]
     mem = _call("memory.retain", {"home": str(source), "node_type": "reflection", "body": "rationale", "idempotency_key": "qtfs-pb-mem"})
     assert mem["ok"], mem
-    pv = _call("playbook.propose_version", {"home": str(source), "playbook_id": pb_id, "provenance_reflection_node_id": mem["data"]["id"], "rules_json": [{"id": "r1", "trigger": "if x", "action": "do y"}], "idempotency_key": "qtfs-pb-version"})
+    pv = _call("playbook.propose_version", {"home": str(source), "playbook_id": pb_id, "provenance_reflection_node_id": mem["data"]["id"], "description": "round-trip version", "idempotency_key": "qtfs-pb-version"})
     assert pv["ok"], pv
 
     from trade_trace.exporter import drain_outbox, iter_jsonl_files
