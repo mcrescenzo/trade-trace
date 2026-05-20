@@ -1,0 +1,412 @@
+# Reporting product architecture
+
+> Status: **decision document for trade-trace-gtep**
+
+This document locks the executable architecture for the Console
+reporting product overhaul (EPIC [trade-trace-3o4a]). Every defaulted
+decision listed below is **resolved** — downstream foundation and UI
+beads proceed from these decisions without further product input.
+
+The audit it builds on lives at
+`docs/audits/console-reporting-gap-map-20260520T033700Z.md`
+(trade-trace-q6wj). Cross-link: the existing Console serve / read-only
+threat model is in [`console.md`](./console.md); the report tool
+catalog is in [`reports.md`](./reports.md).
+
+## 1. Product boundary (locked, non-negotiable)
+
+These constraints are inherited from PRD §2.4, §7 and VISION
+"What this is NOT". They are restated here so dashboard / foundation
+beads do not have to relitigate them:
+
+1. **Local-first, package-shipped, read-only.** The product is a
+   FastAPI/Jinja Console served on `127.0.0.1` (or a user-supplied
+   loopback host). It opens with the user's local journal — there is
+   no remote mode, no multi-tenant mode, no auth surface.
+2. **No broker, no execution.** Trade Trace never sends an order, a
+   webhook, a broker API request, or any outbound credentialed request.
+   This includes the reporting product.
+3. **No market-data fetching.** The reporting product reads only the
+   local journal projections + snapshots already in the database.
+   It never queries an external venue, price feed, or news source.
+4. **No outbound network from the Console process.** The single
+   permitted outbound path (optional local embedding-model weight
+   download, PRD §2.4) does NOT run from Console. Reporting must
+   inherit the loopback-only socket guard from
+   [`console.md`](./console.md) §Threat model. The CSP must remain
+   `'self'` only — no CDN, no Google Fonts, no analytics, no remote
+   chart bundles.
+5. **No trade advice / no financial recommendations.** Per PRD §4.2
+   and [`reports.md`](./reports.md), Console dashboards must not
+   render synthesized "you should do X" copy. The `report.coach`
+   forbidden-phrase gate (`tests/integration/test_report_coach.py`)
+   stays in force; any Console rendering of coach output must inherit
+   the gate's allowlist or skip the rendering.
+6. **No frontend-only financial math.** Backend reports (`report.*`
+   tools + `src/trade_trace/reports/*.py`) are the canonical source of
+   every aggregate metric. The frontend renders server-provided numbers
+   and never computes P&L, R-multiples, win rate, ECE, or any other
+   finance/calibration aggregate in JavaScript. This rules out
+   client-side filtering that changes a displayed metric — facets
+   re-issue the report call, they do not recompute locally.
+
+## 2. Canonical terminology (locked)
+
+Beads, code, and Console copy must use these terms consistently.
+Aliases that exist in the journal are listed for translation only.
+
+| Term | Definition | Storage source | NOT to be confused with |
+|---|---|---|---|
+| **Decision** | An agent action recorded against an instrument (`actual_enter`, `paper_enter`, `add`, `reduce`, `actual_exit`, `paper_exit`, `watch`, `skip`, `hold`, `invalidate_thesis`, `update_thesis`, `resolved`, `review`). Append-only. | `decisions` table | Trades. A `watch`/`skip` is a decision but not a trade. |
+| **Trade** | A decision with a non-zero quantity that opens, adds to, reduces, or closes a position (`actual_enter`, `paper_enter`, `add`, `reduce`, `actual_exit`, `paper_exit`). | `decisions` table filtered to trading-decision types | Decisions. `watch` is never a trade. |
+| **Position** | The rebuildable projection of a (instrument, kind, side) cumulative exposure over time. | `positions` (projection) + `position_events` (source) | Decisions. A position is built from trades. |
+| **Forecast** | A probability distribution attached to a thesis (binary, categorical, scalar). | `forecasts` table | Decisions. A decision may or may not be backed by a forecast. |
+| **Outcome** | The realized result for an instrument at a resolution time (`resolved_final`, `resolved_provisional`, `void`, `cancelled`, `ambiguous`, `disputed`). | `outcomes` table | Forecast scores. The outcome is the truth; scores compare forecasts to it. |
+| **Strategy** | A named, mutable-but-audited grouping of decisions/forecasts. Orthogonal to playbooks and tags; one strategy per decision (MVP). | `strategies` table + `strategy_id` on `decisions` | Tags. Strategies are first-class with their own slug/status; tags are free-form. |
+| **Playbook version** | A specific revision of a procedural ruleset. Append-only. | `playbook_versions` + `decision_playbook_rules` for adherence | Strategies. A playbook is a procedure; a strategy is a thesis family. |
+| **Thesis** | A narrative claim about an instrument that motivates one or more decisions/forecasts. | `theses` table | Decision reason. The reason is per-decision; the thesis is shared. |
+| **Reflection** | An agent-authored memory node (typically `node_type='reflection'`) tied to a decision/forecast/outcome. | `memory_nodes` + edges | Sources. Reflection is the agent's hindsight; source is the supporting evidence. |
+| **Source** | An external citation (article, document, dataset) attached to a thesis/decision/forecast/memory node. | `sources` + `source_*_attachments` | Reflections. |
+
+Dashboard copy SHOULD prefer "Trade" when the row is restricted to
+trading-decision types; "Decision" otherwise. Detail pages use the
+storage-canonical noun (a position-detail page says "position", not
+"trade").
+
+## 3. Page information architecture (locked)
+
+The Console reporting product ships these pages. The "current"
+column shows what is wired today (per the q6wj gap map); the "target"
+column shows the post-overhaul state.
+
+| Section | Page | Current | Target |
+|---|---|---|---|
+| **Dashboard** | Overview (`/`) | DB meta + recent events | P&L / risk / performance roll-up dashboard (replaces DB-meta content). Headline metrics tiles, recent activity panel, alert/caveat strip. |
+| **Trades / Positions** | All Trades (`/trades`) | none | New page: filterable, sortable trades index (trade-trace-q2li). |
+| | Position Detail (`/positions/{id}`) | none | New page: position lifecycle, P&L attribution, related decisions/forecasts/outcomes (trade-trace-svp2). |
+| **Reports** | Report Browser (`/reports`) | Tool-name list | Browseable report catalog with sample/preview, plus comparison builder + read-only export packets (trade-trace-sqtq). |
+| | P&L (`/reports/pnl`) | none | Dashboard for `report.pnl` (trade-trace-a94a). |
+| | Risk (`/reports/risk`) | none | Dashboard for `report.risk` (trade-trace-1viz). |
+| | Performance (`/reports/performance`) | none | Calendar + equity curve + drawdown views (trade-trace-ai45). |
+| | Strategy / Playbook performance (`/reports/strategy`) | none | Wraps `report.strategy_performance` + `report.playbook_adherence` (trade-trace-avn7). |
+| | Decision intelligence (`/reports/decisions`) | none | Mistakes + strengths + watches + forecast backlog (trade-trace-nvkr). |
+| | Calibration & integrity (`/calibration`) | Counts only | Full `report.calibration` + `report.calibration_integrity` panels (trade-trace-lv7n; replaces current minimal page). |
+| | Evidence / Provenance (`/evidence`) | `/integrity` (counts only) | Source attachment analytics + drilldown (trade-trace-5own; supersedes `/integrity`'s reporting role — see §3.1). |
+| **Strategies** | Strategies (`/strategies`) | Paginated table | Keep. Linked from strategy performance dashboards. |
+| **Playbooks** | Playbooks (`/playbooks`) | Paginated table | Keep. Linked from playbook adherence dashboards. |
+| **Journal** | Journal (`/journal`) | Paginated events | Keep (developer/audit lane). |
+| | Decisions (`/decisions`) | Paginated decisions | Keep (developer/audit lane); reporting decisions surface them with richer chrome via the new dashboards. |
+| | Decision detail (`/decisions/{id}`) | Single decision | Keep. |
+| **Developer / Audit** | Logs (`/logs`) | Tail JSONL log | Keep. |
+| | Raw JSON (`/raw`) | Per-event viewer | Keep. |
+
+### 3.1 Reporting lane vs developer/audit lane (locked)
+
+The IA must separate the two reader audiences (trade-trace-i1ds):
+
+- **Reporting lane**: Dashboard, Trades, Reports (P&L / Risk /
+  Performance / Strategy / Decision intelligence / Calibration / Evidence).
+  Optimized for the Tradervue-like reading experience.
+- **Developer / audit lane**: Journal, Decisions, Decision detail,
+  Logs, Raw JSON. Optimized for inspection and provenance.
+
+The top navigation must visibly split the two lanes (visual separator,
+heading group, or a lane toggle). Strategies and Playbooks live in
+their own section and link from both lanes.
+
+`/integrity` keeps its current behavior as a developer-lane audit
+snapshot; the new `/evidence` page (trade-trace-5own) takes the
+reporting-lane role for source/provenance analytics. The two are
+linked but not merged.
+
+## 4. Metric glossary (locked)
+
+Each Console dashboard MUST surface metrics by name from this
+glossary; the help/explanation system (trade-trace-4nux) renders
+copy keyed off these names. Definitions are pinned to the
+implementations under `src/trade_trace/reports/`.
+
+### 4.1 Trade / P&L metrics (`report.pnl`)
+
+- **Realized P&L** — Closed-position cash result: Σ over closed
+  position legs of `(exit_price − entry_price) × signed_quantity − fees`.
+  Source: `positions.realized_pnl` (rebuilt projection).
+- **Unrealized P&L** — Open-position mark-to-market: Σ over open
+  positions with a current snapshot of `(mark_price − entry_price) ×
+  signed_quantity`. Source: `positions.unrealized_pnl` (set during
+  mark events).
+- **Mark-to-market (MTM) P&L** — Realized + unrealized.
+- **Open mark coverage** — Open positions with a current mark /
+  total open positions. Surfaced in summary; <100% triggers a
+  missing-mark caveat (see §6).
+- **Closed position count / Open position count** — Cardinality
+  per group.
+
+### 4.2 Risk metrics (`report.risk`)
+
+- **R-multiple (R)** — Per-decision realized return divided by the
+  declared risk amount: `(exit_value − entry_value) / declared_risk_amount`.
+  Source: risk-units.md §3.2. Decisions without `declared_risk_amount`
+  are excluded from the aggregate and counted in caveats.
+- **Mean / median R** — Aggregate over included decisions.
+- **Expectancy in R** — `win_rate × avg_win_R + loss_rate × avg_loss_R`.
+- **Win rate / Loss rate / Breakeven count** — Cardinality bands of
+  the R distribution (`R > 0` / `R < 0` / `R == 0` within a tolerance).
+- **Payoff ratio** — `avg_win_R / |avg_loss_R|` when both exist.
+- **Best / Worst R** — Extremes of the R distribution.
+- **Pending count (n_pending_with_risk)** — Decisions with declared
+  risk but no close. Surfaced separately so a high pending count does
+  not depress the aggregate silently.
+- **R histogram** — Bins for the distribution chart.
+
+### 4.3 Performance metrics (`bbww` read model + `ai45` page)
+
+- **Equity curve** — Cumulative MTM P&L by time bucket (day default).
+  Sourced from the canonical trade/position read model (trade-trace-bbww).
+- **Drawdown** — Peak-to-trough decline of the equity curve; max
+  drawdown and current drawdown surfaced.
+- **Performance calendar** — Per-day realized + MTM P&L heatmap.
+- **Bucket alignment** — All time buckets are UTC-aligned per
+  `report.decision_velocity` precedent.
+
+### 4.4 Calibration metrics (`report.calibration` + `report.calibration_integrity`)
+
+- **Brier score** — `(p − outcome)²` averaged across scored binary
+  forecasts. Lower is better.
+- **Log score** — `−log(p)` if outcome=1 else `−log(1−p)`. Lower is
+  better.
+- **Expected Calibration Error (ECE)** — Equal-width 10-bin
+  reliability gap, weighted by bin count.
+- **Sharpness** — `Var(p)`; how confidently the agent forecasts.
+- **Baseline / Skill** — Brier vs the base rate; positive = skilled.
+- **Reliability bins** — 10 equal-width bins of forecasted probability
+  vs realized rate, for the reliability diagram chart.
+- **Integrity diagnostics** (six rates from `report.calibration_integrity`):
+  `forecast_coverage`, `unsupported_rate`, `ambiguous_rate`,
+  `disputed_rate`, `void_cancelled_rate`, `suspicious_late_rate`.
+  Each surfaces as a caveat tile.
+
+### 4.5 Decision intelligence metrics
+
+- **Mistakes** — Tag-aggregated patterns ranked by mean Brier
+  (worst first); from `report.mistakes`.
+- **Strengths** — Mirror of mistakes (best first); from
+  `report.strengths`.
+- **Stale watches** — `watch` decisions older than
+  `stale_threshold_days` (default 14); from `report.watchlist`
+  mode `stale`.
+- **Overdue watches** — `watch` decisions with `review_by <= now`;
+  from `report.watchlist` (trade-trace-gbtj added the contract).
+- **Unscored forecasts** — Forecasts past `resolution_at` with no
+  resolved-final outcome; from `report.unscored_forecasts`.
+
+### 4.6 Sample / data-quality caveats (locked)
+
+A metric is **caveated** when any of the following is true; the
+caveat system (trade-trace-oafl) MUST surface it as a first-class UI
+element, not a footnote:
+
+- `summary.sample_warning` is set (n < min_sample, default 20).
+- A group's `groups[].sample_warning` is set.
+- An integrity diagnostic above its alert threshold (calibration
+  integrity rates default to 0.1).
+- Open mark coverage <100%.
+- Risk aggregate excludes decisions due to missing
+  `declared_risk_amount`.
+- Forecast scoring excludes late-recorded entries.
+- The opportunity report's `data_coverage` flag is `sparse` or
+  `missing`.
+
+## 5. ReportFilter / global query-state contract (locked)
+
+The global filter UI (trade-trace-hayy) MUST round-trip to canonical
+`ReportFilter` JSON. Specifically:
+
+1. **Single source of truth**: `ReportFilter`
+   (`src/trade_trace/contracts/report_filter.py`) is the schema; the
+   Console form MUST NOT add filter axes the server does not validate.
+   New axes are added by extending `ReportFilter` first, then surfacing
+   the field in the UI.
+2. **URL state**: every dashboard URL encodes the active filter via a
+   single query parameter `f=<base64url-json>` (base64url of the
+   `ReportFilter` JSON; `{}` means no filter, omitted means default
+   = no filter). The URL is the canonical share/bookmark surface; no
+   server-side saved-filter feature ships in MVP.
+3. **Empty payload semantics**: empty arrays / `null` / omitted fields
+   mean "no filter on that axis"; the server is the source of truth
+   for this per `ReportFilter` validation (`extra="forbid"`).
+4. **Round-trip pin**: when the user opens a URL with `f=...`, the
+   form renders the filter exactly; when the user changes the form,
+   the URL updates to the new filter without dropping any field.
+5. **Per-dashboard filter projection**: dashboards may restrict the
+   surface they expose (e.g., a Calibration page omits irrelevant
+   facets), but the URL state must remain valid `ReportFilter` JSON
+   so the same URL works in other dashboards.
+6. **No client-side recomputation**: filter changes always re-issue the
+   relevant `report.*` call (per §1.6). Loading state must be visible.
+7. **Filter facets ARE the available sub-filters**:
+   `time_window`, `actors` (`actor_id`/`agent_id`/`model_id`/
+   `environment`/`run_id`), `strategy` (`strategy_id` with the
+   `__none__` sentinel; `playbook_id`; `playbook_version_id`),
+   `instrument` (`venue_id`/`venue_kind`/`instrument_id`/`asset_class`/
+   `symbol`), `decision` (`decision_type`/`side`/`tags_*`/`has_*`),
+   `market_context` (`spread_bucket`/`liquidity_bucket`/`volume_bucket`/
+   `market_regime_tag`), `outcome`
+   (`resolution_status`/`scoring_state`/`score_*`/`include_late_recorded`),
+   `source` (`source_kind`/`source_stance`/`source_freshness_before_decision`).
+
+## 6. Report evidence / drilldown contract (locked)
+
+Every aggregate metric rendered in the Console MUST link to evidence.
+This rules out "trust me" tiles.
+
+1. **Numbers come from `ReportResult`.** Every dashboard widget
+   carries the originating `report.*` tool, the filter that produced
+   the number, and the request_id. The widget renders an "Evidence"
+   affordance that opens:
+   - The raw `ReportResult.summary.metrics` and `groups[].metrics`
+     as a table.
+   - The `groups[].record_ids` lists (decisions, forecasts, outcomes,
+     sources) as deep links into the corresponding detail pages.
+   - The originating `tool.schema` info (tool name, CLI invocation,
+     description), so the user can reproduce the call.
+2. **No metric without record_ids.** Per
+   [`reports.md`](./reports.md) §3.1 the report tools already supply
+   `groups[].record_ids`. The Console MUST refuse to render an
+   aggregate that lacks them; this is a schema constraint, not a
+   render-time toggle.
+3. **Examples are mandatory.** `groups[].examples` (kind + id +
+   summary) drives the row-level drilldown context in dashboards. A
+   group with `examples=[]` MUST be rendered with an explicit "no
+   examples available" affordance instead of being silently empty.
+4. **Truncation surfaces.** When `truncated=True`, the widget renders
+   a visible "showing first N — call the report tool directly for the
+   full set" affordance, including the next-cursor when present.
+5. **Sample warnings render as chrome, not labels.** When
+   `summary.sample_warning` or `groups[].sample_warning` is set, the
+   widget renders a caveat banner consistent with §4.6; the metric
+   tile gets a small caveat icon linked to the banner.
+6. **Read-only export packets** (trade-trace-sqtq) bundle the
+   `ReportResult` JSON + the originating filter + the rendered HTML
+   snapshot. They never include credentials, request_ids that could
+   leak across users, or any source-side identifiers not already in
+   the journal.
+
+## 7. Dependency policy (locked)
+
+### 7.1 Charting
+
+Vendored **Chart.js**, pinned, served from
+`trade_trace/console/static/vendor/chartjs/`.
+This is the resolved default from the gtep bead.
+
+Rules:
+
+- **Pin** the version in `pyproject.toml` constraints + the static
+  asset filename (e.g. `chart-4.4.3.min.js`); upgrading the asset is
+  a deliberate PR that bumps the pinned filename, not a silent
+  refresh.
+- **Local-only.** No CDN fallback, no `integrity` hash that gates
+  network loading. The file is served from the `[console]` extra's
+  bundled static assets.
+- **CSP compatible.** No inline `<script>` execution; chart configs
+  are emitted as `<script type="application/json">` blocks read by
+  a small bootstrap script under `static/js/`. CSP `script-src` stays
+  `'self'`.
+- **No npm build pipeline.** The vendored file is downloaded once
+  during the trade-trace-ycag implementation and committed as a
+  static asset. A `tests/security/test_console_security_headers.py`
+  case must assert the asset's SHA matches the pinned value.
+- **No frontend math.** Chart series are pre-computed by the report
+  tool and shipped as JSON to the page. Tooltips show the
+  server-provided metric verbatim — no client-side rounding,
+  bucketing, or aggregation.
+
+Rejected alternatives (recorded for context):
+
+- **Server-rendered SVG**: rejected for MVP because interactive
+  hover/click affordances (essential for drilldowns) would require a
+  client-side library anyway, defeating the simplification.
+- **uPlot**: smaller and faster but covers fewer chart kinds; would
+  need a supplementary library for histograms/calendar heatmaps.
+- **D3**: too low-level for the MVP timeline; deferred.
+- **External chart service / CDN**: rejected per §1.4.
+
+### 7.2 Frontend stack
+
+Unchanged: FastAPI + Jinja + vanilla DOM + htmx (per
+[`console.md`](./console.md) §Decision 4). No React, no Vue, no Svelte,
+no npm build, no bundler.
+
+### 7.3 Python dependencies
+
+No new runtime Python dependencies for the reporting product. All
+report computations live in the existing reports/contracts modules.
+If new deps appear during implementation, the bead introducing them
+MUST update PRD §2.4 (one-permitted-outbound-path framing) and
+re-run the dependency-safety verification gate (`qclv`).
+
+## 8. Read model + adapter contract (foundation beads)
+
+The foundation work resolves these specific shapes:
+
+1. **Trade / position read model** (trade-trace-bbww): a Pydantic +
+   SQL layer over `positions` + `position_events` that returns:
+   - `trades[]` — closed-position legs with entry/exit price, P&L,
+     R-multiple (when declared).
+   - `open_positions[]` — current exposure rows.
+   - `equity_curve[]` — daily MTM points.
+   - `drawdown_segments[]` — peak-to-trough segments.
+   Each row carries decision_id / instrument_id / strategy_id for
+   drilldown.
+2. **ReportResult-to-Console adapter** (trade-trace-8ine): a
+   `console.reporting` module that:
+   - Wraps `report.*` calls with the lazy-write deny set so coach /
+     signal.scan stay inaccessible from Console.
+   - Projects `ReportResult` into a typed `DashboardContext` Pydantic
+     shape consumed by Jinja templates.
+   - Handles pagination + truncation with the cursor contract from
+     [`console.md`](./console.md) §Decision 13.
+   - Carries an `evidence` block per widget exposing record_ids +
+     filter + tool name (§6).
+3. **Pagination + perf baseline** (trade-trace-mmbj): reuse cursor
+   pagination from existing endpoints; perf budget = first dashboard
+   render <1s P95 over a 100k-event journal, 5× headroom required
+   for the dashboard suite (extends `test_console_perf_baseline.py`).
+4. **Charting layer** (trade-trace-ycag): vendored Chart.js asset +
+   bootstrap script + CSP test per §7.1.
+5. **Fixtures** (trade-trace-dnwh): a richer fixture target (e.g.
+   `mvp-eval-rich`) exercising every caveat path in §4.6, including
+   low-N groups, missing marks, missing risk budgets, late forecasts,
+   stale watches, overdue watches, contradictory sources, and
+   `sparse` / `missing` opportunity coverage.
+6. **Global filter UI** (trade-trace-hayy): per §5.
+
+## 9. What this document does NOT decide
+
+Out of scope (deferred to dedicated beads):
+
+- Specific Chart.js color palette / branding / theming.
+- Per-page wireframes (UI beads own those).
+- Visual polish + responsive breakpoints (trade-trace-bxhu).
+- Browser/a11y QA (trade-trace-0d3p).
+- User-facing copy edits beyond the metric glossary (trade-trace-4nux).
+- Server-side saved filter presets (rejected for MVP; revisit when
+  there is demand).
+- Annotations / comments / journal writes from the dashboards
+  (forbidden by §1.1).
+- Cross-user / cross-account features.
+
+## 10. Acceptance
+
+This document satisfies trade-trace-gtep when:
+
+- A foundation bead (`8ine`, `bbww`, `dnwh`, `hayy`, `mmbj`, `ycag`)
+  can be picked up and implemented without asking Michael for
+  product or dependency decisions. Each foundation bead references
+  this doc's relevant section.
+- The 12 UI dashboard beads (after the `xkdd` readiness gate) can
+  consume the metric glossary in §4 and the IA in §3 directly.
+- The QC + security beads (`pgem`, `qclv`, `rnje`, `xjld`, `0d3p`)
+  have a written contract to verify against (the constraints in §1,
+  §6, and §7).
