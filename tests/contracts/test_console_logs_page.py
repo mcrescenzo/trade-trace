@@ -164,8 +164,22 @@ def test_logs_context_tail_keeps_live_entries_when_rotated_exceeds_tail(tmp_path
     assert messages == ["rotated-6", "rotated-7", "rotated-8", "rotated-9", "current"]
 
 
-def test_base_template_includes_logs_nav_entry():
-    source = Path(__file__).resolve().parents[2] / "frontend" / "console" / "src" / "main.tsx"
-    text = source.read_text(encoding="utf-8")
-    assert "to: '/logs'" in text
-    assert "Logs page deferred" not in text
+def test_react_shell_omits_logs_and_raw_json_from_top_level_navigation():
+    repo_root = Path(__file__).resolve().parents[2]
+    frontend_root = repo_root / "frontend" / "console"
+    main_text = (frontend_root / "src" / "main.tsx").read_text(encoding="utf-8")
+    route_catalog_text = (frontend_root / "src" / "routeCatalog.ts").read_text(encoding="utf-8")
+    frontend_catalog = json.loads((frontend_root / "src" / "routeCatalog.json").read_text(encoding="utf-8"))
+    python_catalog = json.loads(
+        (repo_root / "src" / "trade_trace" / "console" / "route_catalog.json").read_text(encoding="utf-8")
+    )
+
+    assert "primaryNavRoutes" in main_text
+    assert "consoleRouteCatalog.filter" in route_catalog_text
+
+    catalog_paths = {route["path"] for route in frontend_catalog}
+    assert catalog_paths == {route["path"] for route in python_catalog}
+    assert "/logs" not in catalog_paths
+    assert "/raw" not in catalog_paths
+    assert "to: '/logs'" not in main_text
+    assert "to: '/raw'" not in main_text

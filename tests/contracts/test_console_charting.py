@@ -21,7 +21,7 @@ def test_charting_uses_echarts_not_chartjs_bootstrap() -> None:
 def test_static_console_assets_are_vite_app_only() -> None:
     static_root = REPO_ROOT / "src" / "trade_trace" / "console" / "static"
     assert sorted(path.name for path in static_root.iterdir()) == ["app", "favicon.svg"]
-    assert sorted(path.name for path in STATIC_APP.iterdir()) == ["assets", "index.html"]
+    assert sorted(path.name for path in STATIC_APP.iterdir()) == ["assets", "index.html", "provenance.json"]
 
 
 def test_built_bundle_contains_echarts_runtime() -> None:
