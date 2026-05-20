@@ -65,6 +65,7 @@ A minimal agent loop is ordered so every later record can point back to the evid
 ## 3. Patterns
 
 - Idempotency keys: provide `idempotency_key` on every write. A retry with the same semantic payload replays safely; a retry with the same key but different payload returns `IDEMPOTENCY_CONFLICT`. Use stable keys such as `<run-id>:<tool>:<external-market-id>:<version>`.
+- Free-text fields and replays: certain long-form fields are explicitly *free-text* per `semantic-key-policy.md` §3 and are ignored when comparing payloads under the same idempotency key. The notable one is `decision.reason` (per bead trade-trace-uu0b): retrying `decision.add` with the same key and a rephrased `reason` returns the original row with `meta.idempotent_replay=true`, NOT `IDEMPOTENCY_CONFLICT`. This is the contract — LLM agents that regenerate rationale on retry stay replay-safe. See `SEMANTIC_KEYS['decision.created'].free_text_fields` for the canonical list.
 - `_dry_run`: set `"_dry_run": true` on supported write calls to validate and preview without committing. The envelope echoes meta dry_run.
 - `_confirm`: use `"_confirm": true` only when a schema or tool description requires explicit confirmation for a risky path. If absent from a tool schema, do not invent it.
 - Envelope handling: success has `data` plus `meta`; errors have code, message, details, and `meta`. See [contracts.md](./architecture/contracts.md) for the canonical shape.
@@ -101,5 +102,7 @@ Use `tool.schema` for self-discovery instead of relying on stale examples. Omit 
 ```json
 {"tool":"tool.schema","args":{"tool":"forecast.add"}}
 ```
+
+Per bead trade-trace-dgdq, catalog mode mirrors MCP `list_tools`: each row carries `name`, `cli_invocation`, `is_write`, `has_example`, and `json_schema` (None when no example/explicit schema). Agents can discover the full call shape for every tool in one round-trip without N drilldowns. Per-tool drilldown still adds `description`, `example_minimal`, `example_rich`, and `required_metadata`.
 
 For validation, compare the loop against PRD §10 dogfood criteria: the agent should create a complete journal trail, resolve outcomes, review reports, write reflections, update a playbook when warranted, and recall those lessons before the next decision.

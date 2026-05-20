@@ -273,6 +273,41 @@ def test_decision_add_unknown_type_rejected(home):
     assert env["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_decision_add_replay_tolerates_rephrased_reason(home):
+    """Per bead trade-trace-uu0b: `decision.reason` is a free-text
+    field per semantic-key-policy §3 and `SEMANTIC_KEYS['decision.created']`.
+    Replaying `decision.add` with the same idempotency_key and only a
+    rephrased `reason` MUST return the original decision id with
+    `meta.idempotent_replay=true`, NOT IDEMPOTENCY_CONFLICT.
+
+    This pins the product contract: LLM agents that regenerate prose
+    on retry stay replay-safe. Promoting `reason` to structural would
+    be a backwards-incompatible contract change (semantic-key-policy.md
+    §3 + §5).
+    """
+
+    inst_id, _ = _setup_thesis(home)
+    key = "00000000-0000-4000-8000-decadebeef01"
+    first = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "type": "skip",
+        "reason": "spread too wide",
+        "idempotency_key": key,
+    })
+    assert first["ok"], first
+    original_id = first["data"]["id"]
+
+    replay = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "type": "skip",
+        "reason": "the spread was wider than the expected edge",
+        "idempotency_key": key,
+    })
+    assert replay["ok"], replay
+    assert replay["data"]["id"] == original_id
+    assert replay["meta"].get("idempotent_replay") is True
+
+
 # -- outcome.add / resolve.record alias ----------------------------------
 
 

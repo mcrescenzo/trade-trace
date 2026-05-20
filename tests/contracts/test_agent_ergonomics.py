@@ -112,6 +112,52 @@ def test_tool_schema_catalog_lists_every_registered_tool(home):
         assert required in names
 
 
+def test_tool_schema_catalog_includes_json_schema_for_mcp_parity(home):
+    """Per bead trade-trace-dgdq: CLI catalog mode mirrors MCP
+    list-tools by including each tool's `json_schema` so agents can
+    discover the full call shape in one round-trip. Tools without an
+    example/explicit schema (read-only with no required args) still
+    surface a `json_schema` key — set to `None` — so the contract is
+    homogeneous.
+    """
+
+    env = _mcp(home, "tool.schema", {})
+    assert env.ok, env
+
+    catalog = env.data["tools"]
+    # Every catalog row carries `json_schema` (None if the tool has no
+    # example/explicit schema).
+    missing_key = [t["name"] for t in catalog if "json_schema" not in t]
+    assert missing_key == [], (
+        f"catalog rows missing `json_schema` key: {missing_key!r}. "
+        "Per dgdq the catalog must mirror MCP list-tools and expose "
+        "each tool's schema (None for tools without one)."
+    )
+
+    # Every write tool's catalog row carries a non-None json_schema —
+    # write tools without a schema would force agents to drill down N
+    # times before they can safely call.
+    write_without_schema = [
+        t["name"] for t in catalog if t["is_write"] and t.get("json_schema") is None
+    ]
+    assert write_without_schema == [], (
+        f"write tools without `json_schema` in catalog: "
+        f"{write_without_schema!r}. Add example_minimal in "
+        "tools/_examples.py and wire via `**_examples_for(...)`."
+    )
+
+    # Spot-check: the catalog row's json_schema matches per-tool
+    # drilldown output (no drift between the two surfaces).
+    for sample in ("decision.add", "venue.add", "playbook.propose_version"):
+        row = next(t for t in catalog if t["name"] == sample)
+        drill = _mcp(home, "tool.schema", {"tool": sample})
+        assert drill.ok, drill
+        assert row["json_schema"] == drill.data["json_schema"], (
+            f"catalog `json_schema` for {sample!r} diverged from "
+            "per-tool drilldown — both must read from the same registry."
+        )
+
+
 # -- 2. dry-run no-write -----------------------------------------------
 
 

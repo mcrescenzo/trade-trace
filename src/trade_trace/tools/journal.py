@@ -253,6 +253,11 @@ def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     registry = default_registry()
     wanted = args.get("tool")
     if wanted is None:
+        # Per bead trade-trace-dgdq: catalog mode mirrors MCP list-tools
+        # by exposing each tool's `json_schema` so agents can discover
+        # the full call shape in one round-trip. `json_schema=None`
+        # for tools without an example/explicit schema (typically
+        # read-only with no required args) keeps the shape homogeneous.
         return {
             "tools": [
                 {
@@ -260,6 +265,7 @@ def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     "cli_invocation": "tt " + " ".join(reg.cli_invocation),
                     "is_write": reg.is_write,
                     "has_example": reg.example_minimal is not None,
+                    "json_schema": reg.json_schema,
                 }
                 for reg in sorted(registry.by_name.values(), key=lambda r: r.name)
             ],
