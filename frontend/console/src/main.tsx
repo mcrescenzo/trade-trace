@@ -422,6 +422,100 @@ function ReportGroupDetail({ row, rawEnvelope }: { row: Record<string, unknown>;
   )
 }
 
+function metricValue(metrics: Record<string, unknown> | undefined, key: string) {
+  const value = metrics?.[key]
+  if (value == null || value === '') return 'n/a'
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
+  return String(value)
+}
+
+function recordCount(row: { record_ids?: Record<string, unknown> }, key: string) {
+  const value = row.record_ids?.[key]
+  return Array.isArray(value) ? value.length : 0
+}
+
+function ReportCaveatPanel({ title, query, children }: { title: string; query: ReturnType<typeof useReport>; children?: React.ReactNode }) {
+  const caveats = [query.data?.summary_sample_warning, ...(query.data?.summary_caveats ?? [])].filter(Boolean)
+  return (
+    <section className="rounded border border-border bg-card p-4">
+      <h3 className="mb-2 font-semibold">{title}</h3>
+      {children ? <p className="mb-2 text-sm text-muted-foreground">{children}</p> : null}
+      {caveats.length ? <CaveatChips value={caveats} /> : <p className="text-sm text-muted-foreground">No summary caveats were returned by this local report.</p>}
+    </section>
+  )
+}
+
+function StrategyReviewSection() {
+  const performance = useReport('report.strategy_performance', { filter: {} })
+  const calibration = useReport('report.compare', { base_report: 'calibration', group_by: 'strategy_id', filter: {} })
+  const calibrationByKey = React.useMemo(() => new Map((calibration.data?.groups ?? []).map((row) => [row.key, row])), [calibration.data?.groups])
+  const rows = (performance.data?.groups ?? []).map((row) => {
+    const calibrationRow = calibrationByKey.get(row.key)
+    return {
+      ...row,
+      calibration_metrics: calibrationRow?.metrics ?? {},
+      calibration_sample_size: calibrationRow?.sample_size ?? 0,
+      calibration_warning: calibrationRow?.sample_warning ?? null,
+      calibration_record_ids: calibrationRow?.record_ids ?? {},
+    }
+  })
+  return (
+    <section className="space-y-3">
+      <h3 className="text-lg font-semibold">Supported strategy process/performance comparison</h3>
+      {performance.isLoading || calibration.isLoading ? <LoadingBlock label="Loading strategy review" /> : performance.isError ? <ErrorBlock error={performance.error} /> : calibration.isError ? <ErrorBlock error={calibration.error} /> : (
+        <div className="space-y-4">
+          <ReportCaveatPanel title="Comparison caveats" query={performance}>P&L/performance associations come from the strategy performance report. Calibration is joined only where the local calibration compare report has scored forecasts for the same strategy key.</ReportCaveatPanel>
+          <DataTable
+            rows={rows}
+            emptyMessage="No strategy performance groups were returned by the local report."
+            columns={[
+              { key: 'label', header: 'Strategy group' },
+              { key: 'sample_size', header: 'Trades' },
+              { key: 'realized_pnl', header: 'Realized P&L', accessor: (row) => metricValue(row.metrics, 'realized_pnl') },
+              { key: 'calibration_sample_size', header: 'Scored forecasts' },
+              { key: 'brier', header: 'Brier', accessor: (row) => metricValue(row.calibration_metrics as Record<string, unknown>, 'brier') },
+              { key: 'decision_evidence', header: 'Evidence', accessor: (row) => `${recordCount(row, 'decisions')} decisions / ${recordCount(row, 'positions')} positions` },
+              { key: 'sample_warning', header: 'Caveats', cell: (value) => <CaveatChips value={value} /> }
+            ]}
+            renderDetail={(row) => <ReportGroupDetail row={{ ...row, record_ids: { ...(row.record_ids ?? {}), calibration_forecasts: (row.calibration_record_ids as Record<string, string[]>).forecasts ?? [] } }} rawEnvelope={{ performance: performance.data?.raw_envelope, calibration: calibration.data?.raw_envelope }} />}
+          />
+        </div>
+      )}
+    </section>
+  )
+}
+
+function PlaybookReviewSection() {
+  const adherence = useReport('report.playbook_adherence', { filter: {} })
+  const rows = adherence.data?.groups ?? []
+  const totalRows = numberValue(adherence.data?.summary_metrics.total_adherence_rows) ?? 0
+  return (
+    <section className="space-y-3">
+      <h3 className="text-lg font-semibold">Supported playbook rule-adherence review</h3>
+      {adherence.isLoading ? <LoadingBlock label="Loading playbook adherence" /> : adherence.isError ? <ErrorBlock error={adherence.error} /> : (
+        <div className="space-y-4">
+          <ReportCaveatPanel title="Adherence coverage" query={adherence}>{totalRows > 0 ? 'Rule states are shown because local decision_playbook_rules rows exist. Statuses are journaled process states, not advice or outcome causality.' : 'No local adherence rows were found; rule followed/violated/unknown states are not fabricated.'}</ReportCaveatPanel>
+          {totalRows > 0 ? <DataTable
+            rows={rows}
+            emptyMessage="No playbook-version adherence groups were returned by the local report."
+            columns={[
+              { key: 'label', header: 'Playbook/version' },
+              { key: 'sample_size', header: 'Decisions' },
+              { key: 'followed', header: 'Followed', accessor: (row) => metricValue(row.metrics, 'followed') },
+              { key: 'overridden', header: 'Violated/overridden', accessor: (row) => metricValue(row.metrics, 'overridden') },
+              { key: 'considered', header: 'Considered/unknown', accessor: (row) => metricValue(row.metrics, 'considered') },
+              { key: 'not_applicable', header: 'Not applicable', accessor: (row) => metricValue(row.metrics, 'not_applicable') },
+              { key: 'total_adherence_rows', header: 'Rule rows', accessor: (row) => metricValue(row.metrics, 'total_adherence_rows') },
+              { key: 'sample_warning', header: 'Caveats', cell: (value) => <CaveatChips value={value} /> }
+            ]}
+            renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={adherence.data?.raw_envelope} />}
+          /> : null}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function PageTable<T extends Record<string, unknown>>({
   endpoint,
   queryKey,
@@ -937,21 +1031,25 @@ function EventsPage({ endpoint, title }: { endpoint: string; title: string }) {
 function StrategiesPage() {
   return (
     <>
-      <PageHeader eyebrow="Strategies" title="Strategy records" />
-      <PageExplainer answers="What named strategy records exist in this journal." data="/api/console/strategies metadata: id, name, slug, status, and created time." read="Treat strategy as a grouping label for review and filtering." mislead="Strategy status or presence is not performance certification and does not prove edge." />
-      <PageTable<Record<string, unknown>>
-        endpoint="/api/console/strategies"
-        queryKey="strategies"
-        subjectKind="strategy"
-        emptyMessage="No strategy records exist in this journal."
-        columns={[
-          { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
-          { key: 'name', header: 'Name' },
-          { key: 'slug', header: 'Slug' },
-          { key: 'status', header: 'Status', cell: (value) => <ChipList value={value} /> },
-          { key: 'created_at', header: 'Created' }
-        ]}
-      />
+      <PageHeader eyebrow="Strategies" title="Strategy performance and process review" />
+      <PageExplainer answers="What named strategy records exist and what supported local reports associate with them." data="/api/console/strategies plus read-only report.strategy_performance and report.compare(calibration by strategy_id)." read="Compare supported counts, P&L/performance, calibration coverage, caveats, and drilldown evidence as associations for review." mislead="Strategy rows, performance differences, or calibration gaps do not prove edge, causality, or advice." />
+      <StrategyReviewSection />
+      <section className="mt-5">
+        <h3 className="mb-3 text-lg font-semibold">Strategy inventory</h3>
+        <PageTable<Record<string, unknown>>
+          endpoint="/api/console/strategies"
+          queryKey="strategies"
+          subjectKind="strategy"
+          emptyMessage="No strategy records exist in this journal."
+          columns={[
+            { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
+            { key: 'name', header: 'Name' },
+            { key: 'slug', header: 'Slug' },
+            { key: 'status', header: 'Status', cell: (value) => <ChipList value={value} /> },
+            { key: 'created_at', header: 'Created' }
+          ]}
+        />
+      </section>
     </>
   )
 }
@@ -959,21 +1057,25 @@ function StrategiesPage() {
 function PlaybooksPage() {
   return (
     <>
-      <PageHeader eyebrow="Playbooks" title="Playbook records" />
-      <PageExplainer answers="What playbook records exist and how they are described." data="/api/console/playbooks metadata: id, name, description, status, and created time." read="Use these rows as process/adherence context for reports that support playbook data." mislead="A playbook record does not mean every decision has adherence scoring or outcome causality." />
-      <PageTable<Record<string, unknown>>
-        endpoint="/api/console/playbooks"
-        queryKey="playbooks"
-        subjectKind="playbook"
-        emptyMessage="No playbook records exist in this journal."
-        columns={[
-          { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
-          { key: 'name', header: 'Name' },
-          { key: 'description', header: 'Description' },
-          { key: 'status', header: 'Status', cell: (value) => <ChipList value={value} /> },
-          { key: 'created_at', header: 'Created' }
-        ]}
-      />
+      <PageHeader eyebrow="Playbooks" title="Playbook rule-adherence review" />
+      <PageExplainer answers="What playbook records exist and which local rule-adherence evidence is available." data="/api/console/playbooks plus read-only report.playbook_adherence groups, rule-state counts, caveats, examples, and contributing decision/rule IDs." read="Use followed, overridden/violated, considered/unknown, and not-applicable states only where local adherence rows exist." mislead="Adherence state is process evidence, not a recommendation, rule edit, optimization, or proof that a playbook caused outcomes." />
+      <PlaybookReviewSection />
+      <section className="mt-5">
+        <h3 className="mb-3 text-lg font-semibold">Playbook inventory</h3>
+        <PageTable<Record<string, unknown>>
+          endpoint="/api/console/playbooks"
+          queryKey="playbooks"
+          subjectKind="playbook"
+          emptyMessage="No playbook records exist in this journal."
+          columns={[
+            { key: 'id', header: 'ID', cell: (value) => <CopyId value={value} /> },
+            { key: 'name', header: 'Name' },
+            { key: 'description', header: 'Description' },
+            { key: 'status', header: 'Status', cell: (value) => <ChipList value={value} /> },
+            { key: 'created_at', header: 'Created' }
+          ]}
+        />
+      </section>
     </>
   )
 }
