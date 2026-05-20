@@ -797,6 +797,65 @@ def test_forecast_supersede_auto_scores_against_existing_resolved_final(home):
     assert score.get("late_recorded") is True, score
 
 
+def test_forecast_supersede_event_order_with_late_auto_score(home):
+    """Pin supersede event ordering including optional late forecast.scored."""
+
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+
+    inst_id, thesis_id = _setup_thesis(home)
+    first = _envelope(home, "forecast.add", {
+        "thesis_id": thesis_id,
+        "kind": "binary",
+        "outcomes": [
+            {"outcome_label": "YES", "probability": 0.5},
+            {"outcome_label": "NO", "probability": 0.5},
+        ],
+    })
+    _envelope(home, "outcome.add", {
+        "instrument_id": inst_id,
+        "resolved_at": "2026-06-30T00:00:00Z",
+        "outcome_label": "YES",
+        "status": "resolved_final",
+    })
+
+    sup = _envelope(home, "forecast.supersede", {
+        "prior_forecast_id": first["data"]["id"],
+        "kind": "binary",
+        "yes_label": "YES",
+        "outcomes": [
+            {"outcome_label": "YES", "probability": 0.8},
+            {"outcome_label": "NO", "probability": 0.2},
+        ],
+    })
+    assert sup["ok"] is True, sup
+    assert "auto_scored" in sup["data"], sup
+    replacement_id = sup["data"]["id"]
+
+    db = open_database(db_path(home))
+    try:
+        rows = db.connection.execute(
+            """
+            SELECT event_type
+            FROM events
+            WHERE subject_id = ?
+               OR (event_type = 'edge.created'
+                   AND json_extract(payload_json, '$.source_id') = ?)
+            ORDER BY id
+            """,
+            (replacement_id, replacement_id),
+        ).fetchall()
+    finally:
+        db.close()
+
+    assert [row[0] for row in rows] == [
+        "forecast.created",
+        "edge.created",
+        "forecast.superseded",
+        "forecast.scored",
+    ]
+
+
 def test_source_add_tool_schema_example_succeeds(home):
     """Per trade-trace-2ya5: `tool.schema --tool source.add` advertises
     an example payload that must succeed against the actual handler.

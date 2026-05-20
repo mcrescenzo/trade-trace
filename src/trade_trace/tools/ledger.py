@@ -569,6 +569,73 @@ def _validate_scalar_forecast(outcomes: list[dict[str, Any]]) -> None:
         raise ToolError(ErrorCode.INVARIANT_VIOLATION, f"scalar point estimate {point} out of [0,1]", details={"field": "probability", "value": point})
 
 
+def _insert_forecast_in_transaction(
+    uow: UnitOfWork,
+    *,
+    args: dict[str, Any],
+    ctx: ToolContext,
+    thesis_id: str,
+    forecast_id: str,
+    kind: str,
+    outcomes: list[dict[str, Any]],
+    yes_label: str | None,
+    resolution_at: str | None,
+    scoring_support: str,
+    seg: dict[str, Any],
+    metadata_json: str,
+    created_at: str,
+) -> dict[str, Any]:
+    """Insert a forecast row and its outcome rows using an active UoW.
+
+    This helper intentionally does not open a database connection, start a
+    transaction, commit, emit events, or perform idempotency replay checks.
+    Callers own event ordering and any surrounding lineage/scoring writes.
+    """
+
+    uow.execute(
+        "INSERT INTO forecasts(id, thesis_id, kind, resolution_at, yes_label, "
+        "resolution_rule_text, scoring_support, scoring_state, valid_from, valid_to, "
+        "agent_id, model_id, environment, run_id, metadata_json, created_at, actor_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            forecast_id, thesis_id, kind, resolution_at, yes_label,
+            args.get("resolution_rule_text"), scoring_support,
+            normalize_timestamp(args, "valid_from") or created_at,
+            normalize_timestamp(args, "valid_to"),
+            seg["agent_id"], seg["model_id"], seg["environment"], seg["run_id"],
+            metadata_json, created_at, ctx.actor_id,
+        ),
+    )
+    for o in outcomes:
+        label = o.get("outcome_label") or o.get("label")
+        uow.execute(
+            "INSERT INTO forecast_outcomes(id, forecast_id, outcome_label, "
+            "probability, lower_bound, upper_bound) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                new_id("fo"), forecast_id, str(label),
+                float(o["probability"]),
+                o.get("lower_bound"), o.get("upper_bound"),
+            ),
+        )
+    return {
+        "id": forecast_id,
+        "thesis_id": thesis_id,
+        "kind": kind,
+        "resolution_at": resolution_at,
+        "yes_label": yes_label,
+        "resolution_rule_text": args.get("resolution_rule_text"),
+        "outcomes": [
+            {
+                "outcome_label": str(o.get("outcome_label") or o.get("label")),
+                "probability": float(o["probability"]),
+                "lower_bound": o.get("lower_bound"),
+                "upper_bound": o.get("upper_bound"),
+            }
+            for o in outcomes
+        ],
+    }
+
+
 def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     thesis_id = require(args, "thesis_id")
     kind = args.get("kind", "binary")
@@ -671,35 +738,25 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             forecast_metadata = _maybe_inject_late_flag(
                 args, late_recorded=late_recorded
             )
-            uow.execute(
-                "INSERT INTO forecasts(id, thesis_id, kind, resolution_at, yes_label, "
-                "resolution_rule_text, scoring_support, scoring_state, valid_from, valid_to, "
-                "agent_id, model_id, environment, run_id, metadata_json, created_at, actor_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    forecast_id, thesis_id, kind, resolution_at, yes_label,
-                    args.get("resolution_rule_text"), scoring_support,
-                    normalize_timestamp(args, "valid_from") or created_at,
-                    normalize_timestamp(args, "valid_to"),
-                    seg["agent_id"], seg["model_id"], seg["environment"], seg["run_id"],
-                    forecast_metadata, created_at, ctx.actor_id,
-                ),
+            forecast_payload = _insert_forecast_in_transaction(
+                uow,
+                args=args,
+                ctx=ctx,
+                thesis_id=thesis_id,
+                forecast_id=forecast_id,
+                kind=kind,
+                outcomes=outcomes,
+                yes_label=yes_label,
+                resolution_at=resolution_at,
+                scoring_support=scoring_support,
+                seg=seg,
+                metadata_json=forecast_metadata,
+                created_at=created_at,
             )
-            for o in outcomes:
-                label = o.get("outcome_label") or o.get("label")
-                uow.execute(
-                    "INSERT INTO forecast_outcomes(id, forecast_id, outcome_label, "
-                    "probability, lower_bound, upper_bound) VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        new_id("fo"), forecast_id, str(label),
-                        float(o["probability"]),
-                        o.get("lower_bound"), o.get("upper_bound"),
-                    ),
-                )
             emit_event(
                 uow, event_type="forecast.created",
                 subject_kind="forecast", subject_id=forecast_id,
-                payload=_forecast_payload(forecast_id),
+                payload=forecast_payload,
                 actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
             )
             # Late-forecast trigger #2 per scoring.md §6.
@@ -1577,18 +1634,16 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
     failure between the two transactions left an orphan replacement
     forecast without the lineage edge, corrupting the forecast chain.
 
-    The supersede path now inlines the forecast row insert, the
-    forecast_outcomes inserts, the `forecast.created` event, the
-    supersedes edge insert, and the `edge.created` + `forecast.superseded`
-    events. A failure at any point rolls every row back together.
+    The supersede path now inserts the replacement forecast row,
+    forecast_outcomes, `forecast.created`, the supersedes edge, and the
+    `edge.created` + `forecast.superseded` events in one transaction. A
+    failure at any point rolls every row back together.
 
-    Auto-scoring (the `late_recorded` head-outcome auto-score from
-    `_forecast_add`) is intentionally NOT replicated here — superseding
-    a forecast against an already-resolved instrument is rare and the
-    score row, if missing, can be repaired by `journal.rescan_scoring`.
-    The atomicity contract from this bead is about the supersedes edge
-    pairing with the new forecast row, not about the auto-score side
-    effect.
+    Late auto-scoring is also performed in this same UnitOfWork when a
+    `resolved_final` head outcome already exists for the thesis instrument;
+    the `forecast.scored` event is emitted after the supersede events. The
+    replacement forecast-row metadata keeps the historical supersede behavior
+    of not pre-injecting `late_recorded` even when the score row records it.
     """
 
     prior_id = require(args, "prior_forecast_id")
@@ -1675,50 +1730,21 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
 
             metadata_json = _maybe_inject_late_flag(args, late_recorded=False)
 
-            uow.execute(
-                "INSERT INTO forecasts(id, thesis_id, kind, resolution_at, "
-                "yes_label, resolution_rule_text, scoring_support, "
-                "scoring_state, valid_from, valid_to, agent_id, model_id, "
-                "environment, run_id, metadata_json, created_at, actor_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    new_forecast_id, thesis_id, kind, resolution_at, yes_label,
-                    args.get("resolution_rule_text"), scoring_support,
-                    normalize_timestamp(args, "valid_from") or created_at,
-                    normalize_timestamp(args, "valid_to"),
-                    seg["agent_id"], seg["model_id"], seg["environment"],
-                    seg["run_id"], metadata_json, created_at, ctx.actor_id,
-                ),
+            forecast_payload = _insert_forecast_in_transaction(
+                uow,
+                args=args,
+                ctx=ctx,
+                thesis_id=thesis_id,
+                forecast_id=new_forecast_id,
+                kind=kind,
+                outcomes=outcomes,
+                yes_label=yes_label,
+                resolution_at=resolution_at,
+                scoring_support=scoring_support,
+                seg=seg,
+                metadata_json=metadata_json,
+                created_at=created_at,
             )
-            for o in outcomes:
-                label = o.get("outcome_label") or o.get("label")
-                uow.execute(
-                    "INSERT INTO forecast_outcomes(id, forecast_id, "
-                    "outcome_label, probability, lower_bound, upper_bound) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        new_id("fo"), new_forecast_id, str(label),
-                        float(o["probability"]),
-                        o.get("lower_bound"), o.get("upper_bound"),
-                    ),
-                )
-            forecast_payload = {
-                "id": new_forecast_id,
-                "thesis_id": thesis_id,
-                "kind": kind,
-                "resolution_at": resolution_at,
-                "yes_label": yes_label,
-                "resolution_rule_text": args.get("resolution_rule_text"),
-                "outcomes": [
-                    {
-                        "outcome_label": str(o.get("outcome_label") or o.get("label")),
-                        "probability": float(o["probability"]),
-                        "lower_bound": o.get("lower_bound"),
-                        "upper_bound": o.get("upper_bound"),
-                    }
-                    for o in outcomes
-                ],
-            }
             emit_event(
                 uow, event_type="forecast.created",
                 subject_kind="forecast", subject_id=new_forecast_id,
