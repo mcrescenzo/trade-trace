@@ -28,6 +28,7 @@ import {
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 
+import { consoleRouteCatalog, primaryNavRoutes, type ConsoleRouteDefinition } from './routeCatalog'
 import { ChartPanel } from './ui/ChartPanel'
 import { DataTable } from './ui/DataTable'
 import { MetricCard } from './ui/MetricCard'
@@ -157,6 +158,20 @@ const queryClient = new QueryClient({
   }
 })
 
+const ICONS = {
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  BookOpen,
+  Boxes,
+  FileJson,
+  Gauge,
+  ListFilter,
+  NotebookText,
+  ShieldCheck,
+  TableProperties
+}
+
 function useStatus() {
   return useQuery({
     queryKey: ['status'],
@@ -179,19 +194,11 @@ function useReport(tool: string, args: Record<string, unknown> = { filter: {} })
 
 function Shell() {
   const status = useStatus()
-  const nav = [
-    { to: '/', label: 'Overview', icon: Gauge },
-    { to: '/trades', label: 'Trades', icon: TableProperties },
-    { to: '/reports', label: 'Reports', icon: BarChart3 },
-    { to: '/calibration', label: 'Calibration', icon: Activity },
-    { to: '/evidence', label: 'Evidence', icon: ShieldCheck },
-    { to: '/strategies', label: 'Strategies', icon: Boxes },
-    { to: '/playbooks', label: 'Playbooks', icon: BookOpen },
-    { to: '/journal', label: 'Journal', icon: NotebookText },
-    { to: '/decisions', label: 'Decisions', icon: ListFilter },
-    { to: '/logs', label: 'Logs', icon: AlertTriangle },
-    { to: '/raw', label: 'Raw JSON', icon: FileJson }
-  ]
+  const nav = primaryNavRoutes.map((route) => ({
+    to: route.path,
+    label: route.label,
+    icon: ICONS[route.icon]
+  }))
 
   return (
     <Tooltip.Provider>
@@ -750,54 +757,37 @@ function LogsPage() {
   )
 }
 
-const rootRoute = createRootRoute({ component: Shell })
-const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: OverviewPage })
-const tradesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/trades', component: TradesPage })
-const reportsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/reports', component: CatalogPage })
-const pnlRoute = createRoute({ getParentRoute: () => rootRoute, path: '/reports/pnl', component: () => <ReportPage tool="report.pnl" title="P&L analytics" /> })
-const riskRoute = createRoute({ getParentRoute: () => rootRoute, path: '/reports/risk', component: () => <ReportPage tool="report.risk" title="Risk analytics" /> })
-const performanceRoute = createRoute({ getParentRoute: () => rootRoute, path: '/reports/performance', component: () => <ReportPage tool="report.decision_velocity" title="Performance timeline" /> })
-const strategyRoute = createRoute({ getParentRoute: () => rootRoute, path: '/reports/strategy', component: () => <ReportPage tool="report.strategy_performance" title="Strategy performance" /> })
-const decisionIntelRoute = createRoute({ getParentRoute: () => rootRoute, path: '/reports/decisions', component: () => <ReportPage tool="report.watchlist" title="Decision intelligence" /> })
-const compareRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/reports/compare',
-  component: () => (
-    <ReportPage
-      tool="report.compare"
-      title="Compare"
-      args={{ base_report: 'calibration', group_by: 'strategy_id', filter: {} }}
-    />
-  )
-})
-const calibrationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/calibration', component: () => <ReportPage tool="report.calibration" title="Calibration and integrity" /> })
-const evidenceRoute = createRoute({ getParentRoute: () => rootRoute, path: '/evidence', component: () => <ReportPage tool="report.source_quality" title="Evidence and provenance" /> })
-const strategiesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/strategies', component: StrategiesPage })
-const playbooksRoute = createRoute({ getParentRoute: () => rootRoute, path: '/playbooks', component: PlaybooksPage })
-const journalRoute = createRoute({ getParentRoute: () => rootRoute, path: '/journal', component: () => <EventsPage endpoint="/api/console/events" title="Journal events" /> })
-const decisionsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/decisions', component: DecisionsPage })
-const logsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/logs', component: LogsPage })
-const rawRoute = createRoute({ getParentRoute: () => rootRoute, path: '/raw', component: () => <EventsPage endpoint="/api/console/events" title="Raw events" /> })
+function routeComponent(definition: ConsoleRouteDefinition) {
+  switch (definition.component) {
+    case 'overview':
+      return OverviewPage
+    case 'trades':
+      return TradesPage
+    case 'catalog':
+      return CatalogPage
+    case 'report':
+      return () => <ReportPage tool={definition.tool!} title={definition.title!} args={definition.args} />
+    case 'strategies':
+      return StrategiesPage
+    case 'playbooks':
+      return PlaybooksPage
+    case 'events':
+      return () => <EventsPage endpoint={definition.endpoint!} title={definition.title!} />
+    case 'decisions':
+      return DecisionsPage
+    case 'logs':
+      return LogsPage
+  }
+}
 
-const routeTree = rootRoute.addChildren([
-  indexRoute,
-  tradesRoute,
-  reportsRoute,
-  pnlRoute,
-  riskRoute,
-  performanceRoute,
-  strategyRoute,
-  decisionIntelRoute,
-  compareRoute,
-  calibrationRoute,
-  evidenceRoute,
-  strategiesRoute,
-  playbooksRoute,
-  journalRoute,
-  decisionsRoute,
-  logsRoute,
-  rawRoute
-])
+const rootRoute = createRootRoute({ component: Shell })
+const routeTree = rootRoute.addChildren(
+  consoleRouteCatalog.map((definition) => createRoute({
+    getParentRoute: () => rootRoute,
+    path: definition.path,
+    component: routeComponent(definition)
+  }))
+)
 
 const router = createRouter({ routeTree })
 

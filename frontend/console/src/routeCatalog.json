@@ -1,0 +1,19 @@
+[
+  { "path": "/", "label": "Overview", "icon": "Gauge", "component": "overview" },
+  { "path": "/trades", "label": "Trades", "icon": "TableProperties", "component": "trades" },
+  { "path": "/reports", "label": "Reports", "icon": "BarChart3", "component": "catalog" },
+  { "path": "/reports/pnl", "label": "P&L analytics", "icon": "BarChart3", "component": "report", "tool": "report.pnl", "title": "P&L analytics" },
+  { "path": "/reports/risk", "label": "Risk analytics", "icon": "BarChart3", "component": "report", "tool": "report.risk", "title": "Risk analytics" },
+  { "path": "/reports/performance", "label": "Performance timeline", "icon": "BarChart3", "component": "report", "tool": "report.decision_velocity", "title": "Performance timeline" },
+  { "path": "/reports/strategy", "label": "Strategy performance", "icon": "BarChart3", "component": "report", "tool": "report.strategy_performance", "title": "Strategy performance" },
+  { "path": "/reports/decisions", "label": "Decision intelligence", "icon": "BarChart3", "component": "report", "tool": "report.watchlist", "title": "Decision intelligence" },
+  { "path": "/reports/compare", "label": "Compare", "icon": "BarChart3", "component": "report", "tool": "report.compare", "title": "Compare", "args": { "base_report": "calibration", "group_by": "strategy_id", "filter": {} } },
+  { "path": "/calibration", "label": "Calibration", "icon": "Activity", "component": "report", "tool": "report.calibration", "title": "Calibration and integrity" },
+  { "path": "/evidence", "label": "Evidence", "icon": "ShieldCheck", "component": "report", "tool": "report.source_quality", "title": "Evidence and provenance" },
+  { "path": "/strategies", "label": "Strategies", "icon": "Boxes", "component": "strategies" },
+  { "path": "/playbooks", "label": "Playbooks", "icon": "BookOpen", "component": "playbooks" },
+  { "path": "/journal", "label": "Journal", "icon": "NotebookText", "component": "events", "endpoint": "/api/console/events", "title": "Journal events" },
+  { "path": "/decisions", "label": "Decisions", "icon": "ListFilter", "component": "decisions" },
+  { "path": "/logs", "label": "Logs", "icon": "AlertTriangle", "component": "logs" },
+  { "path": "/raw", "label": "Raw JSON", "icon": "FileJson", "component": "events", "endpoint": "/api/console/events", "title": "Raw events" }
+]

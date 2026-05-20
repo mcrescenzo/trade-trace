@@ -19,6 +19,7 @@ Per `docs/architecture/console.md`:
 from __future__ import annotations
 
 import errno
+import json
 import socket
 import sys
 from dataclasses import asdict, is_dataclass
@@ -208,13 +209,11 @@ def _build_app(home_path: str) -> Any:
 
     @app.get("/api/console/catalog")
     def catalog() -> dict[str, Any]:
+        route_catalog = json.loads(
+            (Path(__file__).resolve().parent / "route_catalog.json").read_text(encoding="utf-8")
+        )
         return {
-            "routes": [
-                "/", "/trades", "/reports", "/reports/pnl", "/reports/risk",
-                "/reports/performance", "/reports/strategy", "/reports/decisions",
-                "/reports/compare", "/calibration", "/evidence", "/strategies",
-                "/playbooks", "/journal", "/decisions", "/logs", "/raw",
-            ],
+            "routes": [route["path"] for route in route_catalog],
             "report_tools": list(SAFE_REPORT_TOOLS),
             "lazy_write_handlers_blocked": list(endpoints.LAZY_WRITE_DENY_SET),
         }

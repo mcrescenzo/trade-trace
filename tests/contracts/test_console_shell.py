@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 from trade_trace.console.security import external_resources_in_markup
@@ -9,6 +11,12 @@ from trade_trace.console.security import external_resources_in_markup
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_ROOT = REPO_ROOT / "frontend" / "console"
 APP_ROOT = REPO_ROOT / "src" / "trade_trace" / "console" / "static" / "app"
+PY_ROUTE_CATALOG = REPO_ROOT / "src" / "trade_trace" / "console" / "route_catalog.json"
+FRONTEND_ROUTE_CATALOG = FRONTEND_ROOT / "src" / "routeCatalog.json"
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def test_frontend_workspace_declares_recommended_stack() -> None:
@@ -53,4 +61,30 @@ def test_built_index_uses_external_assets_only() -> None:
 
 def test_package_data_points_at_static_app_only() -> None:
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert '"trade_trace.console" = ["static/**/*"]' in pyproject
+    assert '"trade_trace.console" = ["static/**/*", "route_catalog.json"]' in pyproject
+
+
+def test_console_route_catalogs_stay_aligned() -> None:
+    assert json.loads(PY_ROUTE_CATALOG.read_text(encoding="utf-8")) == json.loads(
+        FRONTEND_ROUTE_CATALOG.read_text(encoding="utf-8")
+    )
+
+
+def test_packaged_static_assets_match_build_provenance() -> None:
+    manifest_path = APP_ROOT / "provenance.json"
+    assert manifest_path.is_file(), "run npm --prefix frontend/console run build to refresh provenance"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["generated_by"] == "npm --prefix frontend/console run build"
+
+    for rel_path, expected_hash in manifest["source_hashes"].items():
+        assert _sha256(FRONTEND_ROOT / rel_path) == expected_hash, f"stale Console source provenance for {rel_path}"
+
+    actual_asset_paths = {
+        path.relative_to(APP_ROOT).as_posix()
+        for path in APP_ROOT.rglob("*")
+        if path.is_file() and path.name != "provenance.json"
+    }
+    assert actual_asset_paths == set(manifest["asset_hashes"]), "packaged Console assets differ from provenance manifest"
+
+    for rel_path, expected_hash in manifest["asset_hashes"].items():
+        assert _sha256(APP_ROOT / rel_path) == expected_hash, f"packaged Console asset drift for {rel_path}"

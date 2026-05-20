@@ -93,7 +93,7 @@ where = ["src"]
 # Console ships the prebuilt React/Vite app as package data.
 # Operators install `trade-trace[console]` to get the FastAPI/Uvicorn
 # runtime; the app assets are present in every wheel.
-"trade_trace.console" = ["static/**/*"]
+"trade_trace.console" = ["static/**/*", "route_catalog.json"]
 
 [tool.ruff]
 line-length = 100

@@ -100,6 +100,7 @@ R-multiples, win rate, ECE, scoring, or other report math in JavaScript.
 npm --prefix frontend/console ci
 npm --prefix frontend/console run test
 npm --prefix frontend/console run build
+./.venv/bin/python -m pytest tests/contracts/test_console_shell.py
 python -m build
 ```
 
@@ -119,6 +120,15 @@ pytest tests/contracts/test_console_charting.py
 pytest tests/security/test_console_security_headers.py
 pytest tests/console_browser/
 ```
+
+`npm --prefix frontend/console run build` writes
+`src/trade_trace/console/static/app/provenance.json` with SHA-256 hashes
+for the route catalog/source inputs and emitted static assets. The shell
+contract test recomputes those hashes so a release gate fails when source
+changes are not rebuilt into packaged assets, or when packaged assets are
+edited without regenerating provenance. The Python and frontend route
+catalog JSON files are also compared byte-for-byte as data so the backend
+catalog endpoint and visible SPA routes stay aligned.
 
 Agentic visual QA is tracked in
 `docs/architecture/console-visual-review.md`. A release review should
