@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { AlertTriangle, HelpCircle } from 'lucide-react'
 
 export const METRIC_DEFINITIONS: Record<string, string> = {
-  pnl: 'P&L is profit and loss recorded in the journal/read models for the selected review filter. It is not broker reconciliation.',
+  pnl: 'P&L is profit and loss recorded in the journal/read models. P&L rollups are local aggregate reports and are not scoped by the global filter today. It is not broker reconciliation.',
   realized_pnl: 'Realized P&L from recorded closes/reductions where the backend can match quantities and prices.',
   unrealized_pnl: 'Open-position P&L using recorded marks when available. Missing marks reduce coverage.',
   mtm_pnl: 'Mark-to-market P&L combines realized amounts with backend-valued open exposure where marks exist.',

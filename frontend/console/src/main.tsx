@@ -588,9 +588,13 @@ function PageTable<T extends Record<string, unknown>>({
 function OverviewPage() {
   const [filter, setFilter] = useConsoleFilter()
   const reportArgs = React.useMemo(() => ({ filter: stripEmptyFilter(filter) }), [filter])
+  const aggregateReportArgs = React.useMemo(() => ({}), [])
   const status = useStatus()
-  const pnl = useReport('report.pnl', reportArgs)
-  const risk = useReport('report.risk', reportArgs)
+  const pnl = useReport('report.pnl', aggregateReportArgs)
+  const risk = useReport('report.risk', aggregateReportArgs)
+  const strategy = useReport('report.strategy_performance', reportArgs)
+  const calibration = useReport('report.calibration', reportArgs)
+  const evidence = useReport('report.source_quality', {})
 
   if (status.isLoading) return <LoadingBlock />
   if (status.isError) return <ErrorBlock error={status.error} />
@@ -599,17 +603,29 @@ function OverviewPage() {
   return (
     <>
       <PageHeader eyebrow="Dashboard" title="Journal intelligence at a glance" />
-      <PageExplainer answers="What is in this local journal and which headline report metrics are available." data="/api/console/status plus backend P&L and risk reports under the current URL filter." read="Counts are journal inventory; report cards are backend aggregates with definitions on metric labels." mislead="A count is not performance, and filtered or missing report inputs can make headline metrics unavailable." />
+      <PageExplainer answers="What is in this local journal and which headline report metrics are available." data="/api/console/status plus backend aggregate reports. Strategy performance and calibration honor supported URL filters; P&L and risk rollups are local aggregate reports and are not scoped by the global filter today." read="Counts are journal inventory; report cards are backend aggregates with definitions on metric labels." mislead="A count is not performance, and filtered or missing report inputs can make headline metrics unavailable." />
       <FilterBar filter={filter} onChange={setFilter} />
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Events" value={counts.events ?? 0} icon={Database} />
-        <MetricCard label="Decisions" value={counts.decisions ?? 0} icon={ListFilter} />
-        <MetricCard label="Strategies" value={counts.strategies ?? 0} icon={Boxes} />
+        <MetricCard label="Events" value={counts.events ?? 0} icon={Database} href="/journal" />
+        <MetricCard label="Decisions" value={counts.decisions ?? 0} icon={ListFilter} href="/decisions" />
+        <MetricCard label="Strategies" value={counts.strategies ?? 0} icon={Boxes} href="/strategies" />
         <MetricCard label="Schema" value={status.data?.schema_version ?? 'n/a'} icon={ShieldCheck} />
       </section>
       <section className="mt-5 grid gap-4 xl:grid-cols-2">
-        <ReportSummary title="P&L rollup" query={pnl} metricKeys={['realized_pnl', 'unrealized_pnl', 'mtm_pnl']} />
-        <ReportSummary title="Risk rollup" query={risk} metricKeys={['mean_r', 'expectancy_r', 'win_rate']} />
+        <ReportSummary title="P&L rollup" query={pnl} metricKeys={['realized_pnl', 'unrealized_pnl', 'mark_to_market_pnl']} href="/reports/pnl" />
+        <ReportSummary title="Risk rollup" query={risk} metricKeys={['mean_r', 'expectancy_r', 'win_rate']} href="/reports/risk" />
+        <ReportSummary title="Strategy performance" query={strategy} metricKeys={['total_trades', 'realized_pnl', 'win_rate']} href="/reports/strategy" />
+        <ReportSummary title="Calibration" query={calibration} metricKeys={['sample_size', 'brier', 'ece']} href="/calibration" />
+      </section>
+      <section className="mt-5 grid gap-4 xl:grid-cols-2">
+        <OverviewReportGroups title="P&L contributors" query={pnl} href="/reports/pnl" metricKeys={['realized_pnl', 'unrealized_pnl', 'mark_to_market_pnl']} />
+        <OverviewReportGroups title="Risk contributors" query={risk} href="/reports/risk" metricKeys={['mean_r', 'expectancy_r', 'win_rate']} />
+        <OverviewReportGroups title="Strategy contributors" query={strategy} href="/reports/strategy" metricKeys={['realized_pnl', 'closed_count', 'open_count']} />
+        <OverviewReportGroups title="Calibration contributors" query={calibration} href="/calibration" metricKeys={['brier', 'ece', 'sample_size']} />
+      </section>
+      <section className="mt-5 grid gap-4 xl:grid-cols-2">
+        <ReportCaveatPanel title="Evidence/provenance coverage" query={evidence}>Source-quality is a local journal-level diagnostic. Open Evidence to inspect contributing samples and raw envelopes.</ReportCaveatPanel>
+        <UnsupportedPanel title="Trend, calendar, and equity-style views" message="Supported report envelopes in this Console do not provide period buckets or equity time series. The dashboard does not invent trend/calendar/equity metrics from frontend-only math." />
       </section>
     </>
   )
@@ -618,11 +634,13 @@ function OverviewPage() {
 function ReportSummary({
   title,
   query,
-  metricKeys
+  metricKeys,
+  href
 }: {
   title: string
   query: ReturnType<typeof useReport>
   metricKeys: string[]
+  href?: string
 }) {
   if (query.isLoading) return <LoadingBlock label={`Loading ${title}`} />
   if (query.isError) return <ErrorBlock error={query.error} />
@@ -638,6 +656,7 @@ function ReportSummary({
           <h3 className="text-lg font-semibold">{title}</h3>
           <p className="text-sm text-muted-foreground">{query.data?.evidence.cli_invocation}</p>
         </div>
+        {href ? <a className="text-sm underline" href={href}>Open table</a> : null}
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         {values.map((metric) => (
@@ -648,6 +667,65 @@ function ReportSummary({
         ))}
       </div>
     </article>
+  )
+}
+
+
+function UnsupportedPanel({ title, message }: { title: string; message: string }) {
+  return <section className="rounded border border-border bg-card p-4"><h3 className="mb-2 font-semibold">{title}</h3><p className="text-sm text-muted-foreground">{message}</p></section>
+}
+
+function OverviewReportGroups({ title, query, href, metricKeys }: { title: string; query: ReturnType<typeof useReport>; href: string; metricKeys: string[] }) {
+  if (query.isLoading) return <LoadingBlock label={`Loading ${title}`} />
+  if (query.isError) return <ErrorBlock error={query.error} />
+  const rows = (query.data?.groups ?? []).slice(0, 5)
+  const chartRows = rows.map((row) => ({ name: row.label || row.key, value: numberValue(row.metrics?.[metricKeys[0]]) ?? row.sample_size ?? 0 }))
+  const columns = [
+    { key: 'label', header: 'Group' },
+    { key: 'sample_size', header: 'Sample' },
+    ...metricKeys.map((key) => ({ key, header: key.replaceAll('_', ' '), accessor: (row: Record<string, unknown>) => metricValue(row.metrics as Record<string, unknown>, key) })),
+    { key: 'sample_warning', header: 'Caveats', cell: (value: unknown) => <CaveatChips value={value} /> }
+  ]
+  return (
+    <section className="rounded border border-border bg-card p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div><h3 className="font-semibold">{title}</h3><p className="text-sm text-muted-foreground">Top local report groups; open the full dashboard for contributing examples and record IDs.</p></div>
+        <a className="shrink-0 text-sm underline" href={href}>Open details</a>
+      </div>
+      {rows.length ? <ChartPanel title={`${title} chart`} rows={chartRows} /> : <p className="text-sm text-muted-foreground">No supported groups were returned by this report.</p>}
+      <div className="mt-3"><DataTable rows={rows} emptyMessage="No supported contributors." columns={columns} renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={query.data?.raw_envelope} />} /></div>
+    </section>
+  )
+}
+
+function PnlDashboardPage() {
+  const reportArgs = React.useMemo(() => ({}), [])
+  const query = useReport('report.pnl', reportArgs)
+  const metrics = query.data?.summary_metrics ?? {}
+  const groups = query.data?.groups ?? []
+  const pnlBreakdown = ['realized_pnl', 'unrealized_pnl', 'mark_to_market_pnl'].map((key) => ({ name: key.replaceAll('_', ' '), value: numberValue(metrics[key]) ?? 0 }))
+  const positionBreakdown = ['closed_position_count', 'open_position_count'].map((key) => ({ name: key.replaceAll('_', ' '), value: numberValue(metrics[key]) ?? 0 }))
+  const groupRows = groups.map((row) => ({ ...row, realized_pnl: metricValue(row.metrics, 'realized_pnl'), unrealized_pnl: metricValue(row.metrics, 'unrealized_pnl'), mark_to_market_pnl: metricValue(row.metrics, 'mark_to_market_pnl'), closed_count: metricValue(row.metrics, 'closed_count'), open_count: metricValue(row.metrics, 'open_count') }))
+  return (
+    <>
+      <PageHeader eyebrow="P&L" title="Realized, unrealized, and grouped performance" />
+      <PageExplainer answers="What supported local position reports say about realized/unrealized P&L and open/closed counts." data="report.pnl summary metrics, groups, examples, record IDs, and raw report envelope. This local aggregate report is not scoped by the global filter today." read="Realized/unrealized totals and group rows are backend report outputs; expand rows for contributing position IDs." mislead="This is not broker reconciliation, live marking, frontend P&L math, or trading advice." />
+      {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} /> : (
+        <div className="space-y-4">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label="Realized P&L" value={metricValue(metrics, 'realized_pnl')} icon={BarChart3} href="#pnl-groups" />
+            <MetricCard label="Unrealized P&L" value={metricValue(metrics, 'unrealized_pnl')} icon={BarChart3} href="#pnl-groups" />
+            <MetricCard label="Total P&L" value={metricValue(metrics, 'mark_to_market_pnl')} icon={BarChart3} href="#pnl-groups" />
+            <MetricCard label="Open mark coverage" value={metricValue(metrics, 'open_mark_coverage')} icon={ShieldCheck} href="#pnl-evidence" />
+          </section>
+          <section className="grid gap-4 xl:grid-cols-2"><ChartPanel title="P&L breakdown" rows={pnlBreakdown} /><ChartPanel title="Position state counts" rows={positionBreakdown} /></section>
+          <ReportCaveatPanel title="P&L caveats" query={query}>Totals come from the backend report over local positions. Missing open marks reduce coverage; no frontend-only pricing is performed.</ReportCaveatPanel>
+          <section id="pnl-groups" className="space-y-3"><h3 className="text-lg font-semibold">Grouped performance and examples</h3><DataTable rows={groupRows} emptyMessage="No P&L groups were returned by the local report." columns={[{ key: 'label', header: 'Group' }, { key: 'sample_size', header: 'Positions' }, { key: 'realized_pnl', header: 'Realized P&L' }, { key: 'unrealized_pnl', header: 'Unrealized P&L' }, { key: 'mark_to_market_pnl', header: 'Total P&L' }, { key: 'closed_count', header: 'Closed' }, { key: 'open_count', header: 'Open' }, { key: 'sample_warning', header: 'Caveats', cell: (value) => <CaveatChips value={value} /> }]} renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={query.data?.raw_envelope} />} /></section>
+          <UnsupportedPanel title="Trend/calendar/equity-like visualizations" message="report.pnl currently returns aggregate/grouped position metrics, not period buckets or an equity curve. This Console intentionally shows an unsupported state rather than deriving a time series in the frontend." />
+          <details id="pnl-evidence" className="rounded border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Report evidence and raw envelope</summary><div className="mt-2"><JsonBlock value={{ evidence: query.data?.evidence, raw_envelope: query.data?.raw_envelope }} /></div></details>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -692,16 +770,21 @@ function ReportPage({
   args?: Record<string, unknown>
 }) {
   const [filter, setFilter] = useConsoleFilter()
+  const supportsGlobalFilter = tool !== 'report.risk'
   const reportArgs = React.useMemo(() => {
     if (tool === 'report.source_quality') return { ...(args ?? {}) }
+    if (!supportsGlobalFilter) return { ...(args ?? {}) }
     return { ...(args ?? {}), filter: stripEmptyFilter(filter) }
-  }, [args, filter, tool])
+  }, [args, filter, supportsGlobalFilter, tool])
   const query = useReport(tool, reportArgs)
   if (tool === 'report.calibration') {
     return <CalibrationPage query={query} filter={filter} setFilter={setFilter} />
   }
   if (tool === 'report.source_quality') {
     return <EvidencePage query={query} />
+  }
+  if (tool === 'report.pnl') {
+    return <PnlDashboardPage />
   }
   const metrics = query.data?.summary_metrics ?? {}
   const chartRows = Object.entries(metrics)
@@ -712,8 +795,8 @@ function ReportPage({
   return (
     <>
       <PageHeader eyebrow="Report" title={title} />
-      <PageExplainer answers="What this backend report says for the selected local filter." data={`${tool} report output, summary metrics, groups, evidence, and raw report envelope.`} read="Metric labels include definitions where known; group rows show sample size and warnings." mislead="Low sample size, missing inputs, or comparisons across groups do not establish causality or advice." />
-      <FilterBar filter={filter} onChange={setFilter} />
+      <PageExplainer answers={supportsGlobalFilter ? "What this backend report says for the selected local filter." : "What this backend aggregate report says for the local journal."} data={`${tool} report output, summary metrics, groups, evidence, and raw report envelope.${supportsGlobalFilter ? '' : ' This local aggregate report is not scoped by the global filter today.'}`} read="Metric labels include definitions where known; group rows show sample size and warnings." mislead="Low sample size, missing inputs, or comparisons across groups do not establish causality or advice." />
+      {supportsGlobalFilter ? <FilterBar filter={filter} onChange={setFilter} /> : null}
       {query.isLoading ? (
         <LoadingBlock />
       ) : query.isError ? (
