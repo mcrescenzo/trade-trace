@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.tools.errors import ToolError
@@ -37,6 +37,24 @@ class RebuildResult:
     dropped_rows: int
     rebuilt_rows: int
     skipped_corrupt_rows: int = 0
+
+
+class PositionEventRow(NamedTuple):
+    """Named shape used while replaying `position_events` into `positions`."""
+
+    position_id: str
+    instrument_id: str
+    event_type: str
+    quantity_delta: float | None
+    price: float | None
+    fees: float | None
+    slippage: float | None
+    initial_risk_amount: float | None
+    realized_r_multiple: float | None
+    unrealized_r_multiple: float | None
+    created_at: str
+    id: str
+    decision_id: str | None
 
 
 def rebuild_positions(conn: sqlite3.Connection) -> RebuildResult:
@@ -108,9 +126,10 @@ def rebuild_positions(conn: sqlite3.Connection) -> RebuildResult:
         """
     ).fetchall()
 
-    by_position: dict[str, list[tuple]] = {}
+    by_position: dict[str, list[PositionEventRow]] = {}
     for row in groups:
-        by_position.setdefault(row[0], []).append(row)
+        event = PositionEventRow(*row)
+        by_position.setdefault(event.position_id, []).append(event)
 
     rebuilt = 0
     for position_id, events in by_position.items():
@@ -155,7 +174,9 @@ _ACTUAL_DECISION_TYPES = frozenset(
 )
 
 
-def _derive_kind_and_side(conn: sqlite3.Connection, events: list[tuple]) -> tuple[str, str]:
+def _derive_kind_and_side(
+    conn: sqlite3.Connection, events: list[PositionEventRow]
+) -> tuple[str, str]:
     """Pull kind/side from the opening event's decision when present.
 
     Defaults to `simulation` / `long` so a direct position_events fixture
@@ -165,7 +186,7 @@ def _derive_kind_and_side(conn: sqlite3.Connection, events: list[tuple]) -> tupl
     kind = "simulation"
     side = "long"
     for row in events:
-        decision_id = row[12]
+        decision_id = row.decision_id
         if decision_id is None:
             continue
         decision = conn.execute(
@@ -187,7 +208,7 @@ def _derive_kind_and_side(conn: sqlite3.Connection, events: list[tuple]) -> tupl
 def _accumulate_position(
     conn: sqlite3.Connection,
     position_id: str,
-    events: list[tuple],
+    events: list[PositionEventRow],
 ) -> dict[str, Any] | None:
     """Walk one position_id's event sequence and return the projection
     row. Returns None when the sequence is empty (defensive — the SQL
@@ -196,9 +217,9 @@ def _accumulate_position(
     if not events:
         return None
 
-    instrument_id = events[0][1]
-    opened_at = events[0][10]
-    updated_at = events[-1][10]
+    instrument_id = events[0].instrument_id
+    opened_at = events[0].created_at
+    updated_at = events[-1].created_at
     closed_at: str | None = None
 
     qty = 0.0
@@ -212,17 +233,17 @@ def _accumulate_position(
     avg_entry_price: float | None = None
 
     for row in events:
-        event_type = row[2]
-        qty_delta = row[3] or 0.0
-        price = row[4]
-        fees = row[5] or 0.0
-        slippage = row[6] or 0.0
-        if row[7] is not None:
-            initial_risk_amount = float(row[7])
-        if row[8] is not None:
-            realized_r_multiple = float(row[8])
-        if row[9] is not None:
-            unrealized_r_multiple = float(row[9])
+        event_type = row.event_type
+        qty_delta = row.quantity_delta or 0.0
+        price = row.price
+        fees = row.fees or 0.0
+        slippage = row.slippage or 0.0
+        if row.initial_risk_amount is not None:
+            initial_risk_amount = float(row.initial_risk_amount)
+        if row.realized_r_multiple is not None:
+            realized_r_multiple = float(row.realized_r_multiple)
+        if row.unrealized_r_multiple is not None:
+            unrealized_r_multiple = float(row.unrealized_r_multiple)
 
         is_entry = event_type in {"open", "add"}
         is_exit = event_type in {"reduce", "close", "expire", "assigned"}
@@ -250,7 +271,7 @@ def _accumulate_position(
                         "position exit quantity_delta does not reduce current exposure",
                         details={
                             "position_id": position_id,
-                            "event_id": row[11],
+                            "event_id": row.id,
                             "event_type": event_type,
                             "current_quantity": qty,
                             "quantity_delta": qty_delta,
@@ -262,7 +283,7 @@ def _accumulate_position(
                         "position exit quantity exceeds current exposure; split reversal fills into close plus open/add events",
                         details={
                             "position_id": position_id,
-                            "event_id": row[11],
+                            "event_id": row.id,
                             "event_type": event_type,
                             "current_quantity": qty,
                             "quantity_delta": qty_delta,
@@ -285,7 +306,7 @@ def _accumulate_position(
 
         qty += qty_delta
         if event_type in {"close", "expire", "assigned"} or _approx_zero(qty):
-            closed_at = row[10]
+            closed_at = row.created_at
 
     status = "closed" if _approx_zero(qty) else "open"
 
