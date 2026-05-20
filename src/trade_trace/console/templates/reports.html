@@ -2,17 +2,20 @@
 {% block title %}Reports · Trade Trace Console{% endblock %}
 {% block content %}
 <section class="tt-reports">
-  <h1>Reports</h1>
-  <p class="tt-muted">
-    Read-only deterministic reports. The Console invokes each via its
-    MCP/CLI handler; output is not persisted.
-  </p>
-  <ul class="tt-report-list">
+  <div class="tt-page-heading">
+    <p class="tt-eyebrow">Deterministic read models</p>
+    <h1>Reports</h1>
+    <p class="tt-lede">Browse pure-read report surfaces available to the console. Blocked handlers stay visible so the safety boundary is inspectable.</p>
+  </div>
+  <ul class="tt-report-list" aria-label="Available reports">
     {% for tool in report_tools %}
-      <li><code>{{ tool }}</code></li>
+      <li>
+        <code>{{ tool }}</code>
+        <span>Read-only</span>
+      </li>
     {% endfor %}
   </ul>
-  <p class="tt-warn" data-deny-set>
+  <p class="tt-warn tt-callout" data-deny-set>
     Side-effect-risky handlers blocked from the Console:
     {% for name in lazy_write_handlers_blocked %}<code>{{ name }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
   </p>

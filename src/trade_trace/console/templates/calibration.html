@@ -2,7 +2,11 @@
 {% block title %}Calibration · Trade Trace Console{% endblock %}
 {% block content %}
 <section class="tt-calibration">
-  <h1>Calibration</h1>
+  <div class="tt-page-heading">
+    <p class="tt-eyebrow">Forecast reliability</p>
+    <h1>Calibration</h1>
+    <p class="tt-lede">Track how much of the forecast surface has scored outcomes and where deeper calibration reports should start.</p>
+  </div>
   {% if empty_state %}
     <article class="tt-empty-state" data-empty-state="calibration">
       <h2>{{ empty_state.title }}</h2>
@@ -13,11 +17,11 @@
       </ol>
     </article>
   {% else %}
-    <dl class="tt-stats">
-      <div><dt>Forecasts total</dt><dd>{{ forecasts_total }}</dd></div>
-      <div><dt>Forecasts scored</dt><dd>{{ forecasts_scored }}</dd></div>
+    <dl class="tt-stats tt-metric-grid">
+      <div class="tt-metric-card"><dt>Forecasts total</dt><dd>{{ forecasts_total }}</dd><small>all recorded probabilities</small></div>
+      <div class="tt-metric-card"><dt>Forecasts scored</dt><dd>{{ forecasts_scored }}</dd><small>outcomes attached</small></div>
     </dl>
-    <p class="tt-muted">
+    <p class="tt-muted tt-callout">
       Drill into <a href="/raw">Raw JSON</a> for per-event payload, or
       <code>tt report calibration</code> for the full reliability
       diagram.

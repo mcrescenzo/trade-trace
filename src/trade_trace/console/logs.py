@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -102,6 +103,7 @@ def logs_context(
     if not log_paths:
         return {
             "page_title": "Logs",
+            "generated_at": _iso_now(),
             "rows": [],
             "log_dir": str(dir_path),
             "empty_state": {
@@ -138,6 +140,7 @@ def logs_context(
     redacted = [_redact_record(r) for r in records]
     return {
         "page_title": "Logs",
+        "generated_at": _iso_now(),
         "rows": redacted,
         "log_dir": str(dir_path),
         "tail": tail,
@@ -153,3 +156,7 @@ def logs_context(
             else None
         ),
     }
+
+
+def _iso_now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")

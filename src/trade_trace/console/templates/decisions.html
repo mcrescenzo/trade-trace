@@ -2,11 +2,15 @@
 {% block title %}Decisions · Trade Trace Console{% endblock %}
 {% block content %}
 <section class="tt-decisions">
-  <h1>Decisions</h1>
-  <form data-filter-form>
-    <label>Type <input type="text" name="decision_type" value="{{ filters.decision_type|default('') }}"></label>
-    <label>Instrument <input type="text" name="instrument_id" value="{{ filters.instrument_id|default('') }}"></label>
-    <button type="submit">Apply</button>
+  <div class="tt-page-heading">
+    <p class="tt-eyebrow">Recorded commitments</p>
+    <h1>Decisions</h1>
+    <p class="tt-lede">Review entry, watch, skip, and hold decisions with their price, size, instrument, and source trail.</p>
+  </div>
+  <form class="tt-filter-form" data-filter-form>
+    <label>Type <input type="text" name="decision_type" value="{{ filters.decision_type|default('') }}" placeholder="paper_enter"></label>
+    <label>Instrument <input type="text" name="instrument_id" value="{{ filters.instrument_id|default('') }}" placeholder="ins_..."></label>
+    <button type="submit">Apply filters</button>
   </form>
   {% if empty_state %}
     <article class="tt-empty-state" data-empty-state="decisions">
@@ -18,32 +22,34 @@
       </ol>
     </article>
   {% else %}
-    <table class="tt-table">
-      <thead>
-        <tr>
-          <th>id</th>
-          <th>type</th>
-          <th>instrument</th>
-          <th>side</th>
-          <th>qty</th>
-          <th>price</th>
-          <th>created_at</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-          <tr data-record-id="{{ row.id }}">
-            <td><a href="/decisions/{{ row.id }}"><code>{{ row.id }}</code></a></td>
-            <td><code>{{ row.type }}</code></td>
-            <td><code>{{ row.instrument_id }}</code></td>
-            <td>{{ row.side or "—" }}</td>
-            <td>{{ row.quantity if row.quantity is not none else "—" }}</td>
-            <td>{{ row.price if row.price is not none else "—" }}</td>
-            <td><time data-ts="{{ row.created_at }}">{{ row.created_at }}</time></td>
+    <div class="tt-table-shell">
+      <table class="tt-table">
+        <thead>
+          <tr>
+            <th>id</th>
+            <th>type</th>
+            <th>instrument</th>
+            <th>side</th>
+            <th>qty</th>
+            <th>price</th>
+            <th>created</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr data-record-id="{{ row.id }}">
+              <td><a href="/decisions/{{ row.id }}"><code>{{ row.id }}</code></a></td>
+              <td><span class="tt-badge tt-badge--accent">{{ row.type }}</span></td>
+              <td><code>{{ row.instrument_id }}</code></td>
+              <td>{{ row.side or "—" }}</td>
+              <td class="tt-number">{{ row.quantity if row.quantity is not none else "—" }}</td>
+              <td class="tt-number">{{ row.price if row.price is not none else "—" }}</td>
+              <td><time data-ts="{{ row.created_at }}">{{ row.created_at }}</time></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% if next_cursor %}
       <p class="tt-pagination"><a href="?cursor={{ next_cursor }}&amp;limit={{ limit }}" rel="next">Next page →</a></p>
     {% endif %}

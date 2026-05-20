@@ -47,6 +47,43 @@
     document.documentElement.setAttribute("data-tz", tz);
   }
 
+  function currentRoute() {
+    return window.location.pathname || "/";
+  }
+
+  function syncActiveNav() {
+    var route = currentRoute();
+    var links = document.querySelectorAll("[data-nav-route]");
+    for (var i = 0; i < links.length; i++) {
+      var link = links[i];
+      var target = link.getAttribute("data-nav-route") || "/";
+      var active = target === "/" ? route === "/" : route.indexOf(target) === 0;
+      if (active) {
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    }
+    document.body.setAttribute("data-route", route);
+  }
+
+  function setupMobileNav() {
+    var toggle = document.querySelector("[data-nav-toggle]");
+    var nav = document.querySelector(".tt-nav");
+    if (!toggle || !nav) return;
+    toggle.addEventListener("click", function () {
+      var open = nav.getAttribute("data-open") !== "true";
+      nav.setAttribute("data-open", open ? "true" : "false");
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    nav.addEventListener("click", function (ev) {
+      if (ev.target && ev.target.tagName === "A") {
+        nav.setAttribute("data-open", "false");
+        toggle.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
   function syncTzToggle() {
     var tz = readTzPreference();
     var radios = document.querySelectorAll("input[name='tt-tz']");
@@ -61,11 +98,14 @@
   }
 
   function refreshNow() {
-    /* htmx is loaded with `defer`, so dispatch a synthetic event
-       so any element with `hx-trigger="manual"` refreshes. Falls
-       back to a full reload if htmx didn't load. */
-    if (window.htmx) {
-      window.htmx.trigger(document.body, "tt:refresh");
+    /* htmx is loaded with `defer`; prefer a main-region refresh
+       so global controls and preferences stay stable. */
+    if (window.htmx && document.querySelector("#tt-main")) {
+      window.htmx.ajax("GET", window.location.pathname + window.location.search, {
+        target: "#tt-main",
+        select: "#tt-main > *",
+        swap: "innerHTML"
+      });
     } else {
       window.location.reload();
     }
@@ -128,6 +168,8 @@
         var input = form.querySelector("[name='" + key + "']");
         if (input) input.value = state[key];
       }
+      if (form.getAttribute("data-filter-bound") === "true") continue;
+      form.setAttribute("data-filter-bound", "true");
       form.addEventListener("submit", function (ev) {
         ev.preventDefault();
         var data = new FormData(ev.target);
@@ -141,10 +183,39 @@
     }
   }
 
+  function setupCopyButtons() {
+    document.addEventListener("click", function (ev) {
+      var btn = ev.target && ev.target.closest && ev.target.closest("[data-copy-target]");
+      if (!btn) return;
+      var id = btn.getAttribute("data-copy-target");
+      var target = id ? document.getElementById(id) : null;
+      if (!target || !navigator.clipboard) return;
+      navigator.clipboard.writeText(target.textContent || "").then(function () {
+        var old = btn.textContent;
+        btn.textContent = "Copied";
+        window.setTimeout(function () { btn.textContent = old; }, 1200);
+      }).catch(function () {});
+    });
+  }
+
+  function afterContentSwap() {
+    applyTzToAllTimestamps(readTzPreference());
+    setupFilterState();
+    syncActiveNav();
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    syncActiveNav();
+    setupMobileNav();
     syncTzToggle();
     setupRefreshButton();
     setupPollControl();
     setupFilterState();
+    setupCopyButtons();
+  });
+
+  document.addEventListener("htmx:afterSwap", afterContentSwap);
+  window.addEventListener("popstate", function () {
+    window.setTimeout(syncActiveNav, 0);
   });
 })();

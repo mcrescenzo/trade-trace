@@ -30,6 +30,17 @@ def overview_context(
 ) -> dict[str, Any]:
     status = endpoints.status(conn, db_path=db_path)
     is_empty = status["row_counts"].get("events", 0) == 0
+    recent_events = conn.execute(
+        "SELECT id, event_type, subject_kind, subject_id, actor_id, created_at "
+        "FROM events ORDER BY id DESC LIMIT 8",
+    ).fetchall()
+    decisions_total = status["row_counts"].get("decisions", 0) or 0
+    sources_total = status["row_counts"].get("sources", 0) or 0
+    forecasts_total = status["row_counts"].get("forecasts", 0) or 0
+    scored_forecasts = conn.execute("SELECT COUNT(*) FROM forecast_scores").fetchone()[0]
+    attached_decisions = conn.execute(
+        "SELECT COUNT(*) FROM edges WHERE target_kind = 'decision' AND source_kind = 'source'",
+    ).fetchone()[0]
     return {
         "page_title": "Overview",
         "generated_at": _iso_now(),
@@ -37,6 +48,47 @@ def overview_context(
         "schema_version": status["schema_version"],
         "last_event_at": status["last_event_at"],
         "row_counts": status["row_counts"],
+        "headline_metrics": [
+            {
+                "label": "Journal events",
+                "value": status["row_counts"].get("events", 0),
+                "tone": "neutral",
+                "href": "/journal",
+                "detail": "append-only audit trail",
+            },
+            {
+                "label": "Decisions",
+                "value": decisions_total,
+                "tone": "accent",
+                "href": "/decisions",
+                "detail": "paper and actual entries",
+            },
+            {
+                "label": "Forecasts scored",
+                "value": f"{scored_forecasts}/{forecasts_total}",
+                "tone": "neutral",
+                "href": "/calibration",
+                "detail": "calibration coverage",
+            },
+            {
+                "label": "Evidence links",
+                "value": f"{attached_decisions}/{decisions_total}",
+                "tone": "neutral" if attached_decisions >= decisions_total else "warn",
+                "href": "/integrity",
+                "detail": f"{sources_total} source records",
+            },
+        ],
+        "recent_events": [
+            {
+                "id": row[0],
+                "event_type": row[1],
+                "subject_kind": row[2],
+                "subject_id": row[3],
+                "actor_id": row[4],
+                "created_at": row[5],
+            }
+            for row in recent_events
+        ],
         "lazy_write_handlers_blocked": status["lazy_write_handlers_blocked"],
         "logs_deferred": True,
         "empty_state": {
