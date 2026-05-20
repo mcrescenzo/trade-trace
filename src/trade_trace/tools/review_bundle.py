@@ -431,7 +431,9 @@ def _bundle_hash(payload: dict[str, Any]) -> str:
 # -- main handler ------------------------------------------------------
 
 
-def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+def _prepare_bundle_filter(
+    args: dict[str, Any],
+) -> tuple[ReviewBundleInput, ReportFilter, dict[str, Any]]:
     try:
         parsed = ReviewBundleInput.model_validate(args)
     except ValidationError as exc:
@@ -452,50 +454,77 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
         raise unsupported_filter_to_tool_error(exc) from exc
     filter_view = applied_filter_view(rf, report=REVIEW_BUNDLE_REPORT)
 
-    db = open_db_for_args(args)
-    try:
-        conn = db.connection
-        decision_ids = _select_decision_ids(
-            conn, rf, max_records=parsed.max_records,
+    return parsed, rf, filter_view
+
+
+def _gather_selected_context(
+    conn: sqlite3.Connection, rf: ReportFilter, *, max_records: int,
+) -> tuple[list[str], dict[str, list[dict[str, Any]]], dict[str, list[str]]]:
+    decision_ids = _select_decision_ids(
+        conn, rf, max_records=max_records,
+    )
+    decisions = _decision_rows(conn, decision_ids)
+    selected = _related_record_rows(conn, decisions)
+
+    target_kinds = {
+        "decision": [d["id"] for d in selected["decisions"]],
+        "thesis": [t["id"] for t in selected["theses"]],
+        "forecast": [f["id"] for f in selected["forecasts"]],
+        "outcome": [o["id"] for o in selected["outcomes"]],
+    }
+
+    return decision_ids, selected, target_kinds
+
+
+def _gather_optional_attachments(
+    conn: sqlite3.Connection,
+    parsed: ReviewBundleInput,
+    *,
+    decision_ids: list[str],
+    target_kinds: dict[str, list[str]],
+) -> tuple[list[dict[str, Any]], int, int,
+           list[dict[str, Any]], list[dict[str, Any]]]:
+    sources: list[dict[str, Any]] = []
+    omitted_sensitive = 0
+    redacted_sources = 0
+    if parsed.include_sources:
+        sources, omitted_sensitive, redacted_sources = (
+            _gather_attached_sources(conn, target_kinds=target_kinds)
         )
-        decisions = _decision_rows(conn, decision_ids)
-        selected = _related_record_rows(conn, decisions)
 
-        target_kinds = {
-            "decision": [d["id"] for d in selected["decisions"]],
-            "thesis": [t["id"] for t in selected["theses"]],
-            "forecast": [f["id"] for f in selected["forecasts"]],
-            "outcome": [o["id"] for o in selected["outcomes"]],
-        }
+    reflections: list[dict[str, Any]] = []
+    if parsed.include_reflections:
+        reflections = _gather_reflections(conn, target_kinds=target_kinds)
 
-        sources: list[dict[str, Any]] = []
-        omitted_sensitive = 0
-        redacted_sources = 0
-        if parsed.include_sources:
-            sources, omitted_sensitive, redacted_sources = (
-                _gather_attached_sources(conn, target_kinds=target_kinds)
-            )
+    playbook_versions: list[dict[str, Any]] = []
+    if parsed.include_playbook:
+        playbook_versions = _gather_playbook_versions(
+            conn, decision_ids=decision_ids,
+        )
 
-        reflections: list[dict[str, Any]] = []
-        if parsed.include_reflections:
-            reflections = _gather_reflections(conn, target_kinds=target_kinds)
+    return (sources, omitted_sensitive, redacted_sources, reflections,
+            playbook_versions)
 
-        playbook_versions: list[dict[str, Any]] = []
-        if parsed.include_playbook:
-            playbook_versions = _gather_playbook_versions(
-                conn, decision_ids=decision_ids,
-            )
 
-        try:
-            calibration = report_calibration(conn, raw_filter=filter_view)
-            calibration_summary = calibration["summary"]
-        except Exception:  # noqa: BLE001 - bundle continues with empty summary
-            calibration_summary = {"sample_size": 0, "sample_warning": None}
+def _report_summaries(
+    conn: sqlite3.Connection, *, filter_view: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    try:
+        calibration = report_calibration(conn, raw_filter=filter_view)
+        calibration_summary = calibration["summary"]
+    except Exception:  # noqa: BLE001 - bundle continues with empty summary
+        calibration_summary = {"sample_size": 0, "sample_warning": None}
 
-        report_summaries = {"calibration": calibration_summary}
-    finally:
-        db.close()
+    report_summaries = {"calibration": calibration_summary}
+    return report_summaries, calibration_summary
 
+
+def _build_caveats(
+    *,
+    calibration_summary: dict[str, Any],
+    omitted_sensitive: int,
+    redacted_sources: int,
+) -> list[str]:
     caveats: list[str] = []
     sample_warning = (calibration_summary or {}).get("sample_warning")
     if sample_warning:
@@ -509,7 +538,18 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             f"{redacted_sources} source(s) included with content stripped "
             f"(redaction_status=redacted)"
         )
+    return caveats
 
+
+def _apply_redaction_sweep(
+    *,
+    selected: dict[str, list[dict[str, Any]]],
+    sources: list[dict[str, Any]],
+    reflections: list[dict[str, Any]],
+    playbook_versions: list[dict[str, Any]],
+    caveats: list[str],
+) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]],
+           list[dict[str, Any]], list[dict[str, Any]]]:
     secret_counter = {"replacements": 0}
     selected = _redact_strings_in_place(selected, counter=secret_counter)
     sources = _redact_strings_in_place(sources, counter=secret_counter)
@@ -523,6 +563,19 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             f"replaced with REDACTED-* tokens (security.md §8)"
         )
 
+    return selected, sources, reflections, playbook_versions
+
+
+def _assemble_bundle(
+    *,
+    filter_view: dict[str, Any],
+    selected: dict[str, list[dict[str, Any]]],
+    sources: list[dict[str, Any]],
+    reflections: list[dict[str, Any]],
+    playbook_versions: list[dict[str, Any]],
+    report_summaries: dict[str, Any],
+    caveats: list[str],
+) -> dict[str, Any]:
     data: dict[str, Any] = {
         "filter": filter_view,
         "selected": selected,
@@ -535,6 +588,49 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
         "contract_version": CONTRACT_VERSION,
     }
     data["bundle_hash"] = _bundle_hash(data)
+    return data
+
+
+def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    parsed, rf, filter_view = _prepare_bundle_filter(args)
+
+    db = open_db_for_args(args)
+    try:
+        conn = db.connection
+        decision_ids, selected, target_kinds = _gather_selected_context(
+            conn, rf, max_records=parsed.max_records,
+        )
+        (sources, omitted_sensitive, redacted_sources, reflections,
+         playbook_versions) = _gather_optional_attachments(
+            conn, parsed, decision_ids=decision_ids, target_kinds=target_kinds,
+        )
+        report_summaries, calibration_summary = _report_summaries(
+            conn, filter_view=filter_view,
+        )
+    finally:
+        db.close()
+
+    caveats = _build_caveats(
+        calibration_summary=calibration_summary,
+        omitted_sensitive=omitted_sensitive,
+        redacted_sources=redacted_sources,
+    )
+    selected, sources, reflections, playbook_versions = _apply_redaction_sweep(
+        selected=selected,
+        sources=sources,
+        reflections=reflections,
+        playbook_versions=playbook_versions,
+        caveats=caveats,
+    )
+    data = _assemble_bundle(
+        filter_view=filter_view,
+        selected=selected,
+        sources=sources,
+        reflections=reflections,
+        playbook_versions=playbook_versions,
+        report_summaries=report_summaries,
+        caveats=caveats,
+    )
 
     ctx.meta_hints["bundle_hash"] = data["bundle_hash"]
     ctx.meta_hints["contract_version"] = CONTRACT_VERSION
