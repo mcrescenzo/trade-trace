@@ -598,8 +598,17 @@ function ReportPage({
   args?: Record<string, unknown>
 }) {
   const [filter, setFilter] = useConsoleFilter()
-  const reportArgs = React.useMemo(() => ({ ...(args ?? {}), filter: stripEmptyFilter(filter) }), [args, filter])
+  const reportArgs = React.useMemo(() => {
+    if (tool === 'report.source_quality') return { ...(args ?? {}) }
+    return { ...(args ?? {}), filter: stripEmptyFilter(filter) }
+  }, [args, filter, tool])
   const query = useReport(tool, reportArgs)
+  if (tool === 'report.calibration') {
+    return <CalibrationPage query={query} filter={filter} setFilter={setFilter} />
+  }
+  if (tool === 'report.source_quality') {
+    return <EvidencePage query={query} />
+  }
   const metrics = query.data?.summary_metrics ?? {}
   const chartRows = Object.entries(metrics)
     .filter(([, value]) => typeof value === 'number')
@@ -635,6 +644,123 @@ function ReportPage({
             ]}
             renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={query.data?.raw_envelope} />}
           />
+        </div>
+      )}
+    </>
+  )
+}
+
+function rawData(report: ReportPayload | undefined): Record<string, unknown> {
+  const envelope = report?.raw_envelope
+  return envelope && typeof envelope === 'object' && 'data' in envelope && typeof (envelope as { data?: unknown }).data === 'object'
+    ? ((envelope as { data: Record<string, unknown> }).data ?? {})
+    : {}
+}
+
+function numberValue(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function realRecordId(value: unknown) {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function CalibrationPage({ query, filter, setFilter }: { query: ReturnType<typeof useReport>; filter: ConsoleFilter; setFilter: (filter: ConsoleFilter) => void }) {
+  const metrics = query.data?.summary_metrics ?? {}
+  const bins = Array.isArray(metrics.reliability_bins) ? metrics.reliability_bins as Array<Record<string, unknown>> : []
+  const scored = numberValue(metrics.sample_size) ?? query.data?.groups?.[0]?.sample_size ?? 0
+  const lateExcluded = numberValue(metrics.late_recorded_excluded) ?? 0
+  const examples = query.data?.evidence.examples ?? []
+  const integrity = rawData(query.data).integrity_diagnostics
+  const integrityDiagnostics = integrity && typeof integrity === 'object' ? Object.entries(integrity as Record<string, unknown>) : []
+  const scoredIds = query.data?.evidence.record_ids.forecasts ?? []
+  return (
+    <>
+      <PageHeader eyebrow="Calibration" title="Forecast reliability and scoring integrity" />
+      <PageExplainer answers="Whether locally scored probability forecasts were calibrated against recorded outcomes." data="report.calibration summary metrics, reliability bins, scored forecast examples, record IDs, and calibration-integrity diagnostics when included." read="Brier/log score are loss metrics where lower is better; ECE is average calibration gap; sharpness is confidence dispersion; reliability bins compare forecast probability to observed frequency." mislead="Low-N bins are noisy, unscored or late-recorded forecasts are caveats, and this page is diagnostic only — not trading advice or a new scoring formula." />
+      <FilterBar filter={filter} onChange={setFilter} />
+      {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} /> : (
+        <div className="space-y-4">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label="Scored forecasts" value={String(scored)} icon={Activity} />
+            <MetricCard label="Brier score" value={String(metrics.brier ?? 'n/a')} icon={BarChart3} />
+            <MetricCard label="ECE" value={String(metrics.ece ?? 'n/a')} icon={BarChart3} />
+            <MetricCard label="Late excluded" value={String(lateExcluded)} icon={ShieldCheck} />
+          </section>
+          <section className="rounded border border-border bg-card p-4">
+            <h3 className="mb-2 font-semibold">Scoring caveats</h3>
+            <CaveatChips value={[query.data?.summary_sample_warning, ...(query.data?.summary_caveats ?? [])].filter(Boolean)} />
+            <p className="mt-2 text-sm text-muted-foreground">Only forecasts with supported local score/outcome records are included. Empty bins are intentionally omitted from charts and shown as zero-count rows below.</p>
+          </section>
+          <DataTable
+            rows={bins}
+            emptyMessage="No reliability bins were returned by the local calibration report."
+            columns={[
+              { key: 'bin_index', header: 'Bin' },
+              { key: 'range', header: 'Probability range', accessor: (row) => `${row.lower ?? '?'}–${row.upper ?? '?'}` },
+              { key: 'count', header: 'N' },
+              { key: 'mean_probability', header: 'Mean p' },
+              { key: 'observed_frequency', header: 'Observed' },
+              { key: 'gap', header: 'Gap' }
+            ]}
+            renderDetail={(row) => <JsonBlock value={row} />}
+          />
+          <ChartPanel title="Observed frequency by non-empty bin" rows={bins.filter((row) => Number(row.count ?? 0) > 0).map((row) => ({ name: `${row.lower}–${row.upper}`, value: Number(row.observed_frequency ?? 0) }))} />
+          <DataTable
+            rows={examples}
+            emptyMessage="No example forecasts were returned by the local calibration report."
+            columns={[{ key: 'kind', header: 'Kind' }, { key: 'id', header: 'Forecast', cell: (value) => <CopyId value={value} /> }, { key: 'summary', header: 'Score summary' }]}
+            renderDetail={(row) => {
+              const forecastId = realRecordId(row.id)
+              return <ReportGroupDetail row={forecastId ? { ...row, record_ids: { forecasts: [forecastId] } } : row} rawEnvelope={query.data?.raw_envelope} />
+            }}
+          />
+          {integrityDiagnostics.length ? <DataTable rows={integrityDiagnostics.map(([key, value]) => ({ diagnostic: key, ...(typeof value === 'object' && value ? value as Record<string, unknown> : { value }) }))} columns={[{ key: 'diagnostic', header: 'Integrity diagnostic' }, { key: 'count', header: 'Count' }, { key: 'sample_warning', header: 'Warning', cell: (value) => <CaveatChips value={value} /> }]} renderDetail={(row) => <JsonBlock value={row} />} /> : null}
+          <details className="rounded border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Scored forecast record IDs ({scoredIds.length}) and raw report envelope</summary><div className="mt-2"><JsonBlock value={{ record_ids: query.data?.evidence.record_ids, raw_envelope: query.data?.raw_envelope }} /></div></details>
+        </div>
+      )}
+    </>
+  )
+}
+
+function EvidencePage({ query }: { query: ReturnType<typeof useReport> }) {
+  const data = rawData(query.data)
+  const summary = data.summary && typeof data.summary === 'object' ? data.summary as Record<string, unknown> : {}
+  const diagnostics = data.diagnostics && typeof data.diagnostics === 'object' ? Object.values(data.diagnostics as Record<string, unknown>) as Array<Record<string, unknown>> : []
+  return (
+    <>
+      <PageHeader eyebrow="Evidence" title="Source coverage and provenance diagnostics" />
+      <PageExplainer answers="Which local source/provenance hygiene diagnostics the backend source-quality report supports." data="report.source_quality summary and diagnostics: missing sources on entries, stale sources, contradictory sources, duplicates, sensitive-source flags, sample IDs, and raw local samples where present." read="Counts are coverage/hygiene diagnostics; expand rows to inspect sample decisions, sources, theses, and contextual raw report payloads." mislead="This does not validate external truth, fetch sources, rank signals, or provide trading advice; unsupported diagnostics are not fabricated." />
+      {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} /> : (
+        <div className="space-y-4">
+          <section className="rounded border border-border bg-card p-4">
+            <h3 className="mb-2 font-semibold">Journal-level diagnostics</h3>
+            <p className="text-sm text-muted-foreground">Source-quality diagnostics are local journal-level provenance health checks. They are intentionally global and are not scoped by Console strategy, instrument, or decision filters.</p>
+          </section>
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label="Sources" value={String(summary.total_sources ?? 'n/a')} icon={Database} />
+            <MetricCard label="Attachments" value={String(summary.total_source_attachments ?? 'n/a')} icon={Boxes} />
+            <MetricCard label="Stale threshold days" value={String(summary.stale_threshold_days ?? 'n/a')} icon={Activity} />
+            <MetricCard label="Diagnostics" value={String(diagnostics.length)} icon={ShieldCheck} />
+          </section>
+          <section className="rounded border border-border bg-card p-4">
+            <h3 className="mb-2 font-semibold">Coverage limits</h3>
+            <p className="text-sm text-muted-foreground">Diagnostics appear only when the local report returns them. Missing or zero-count rows mean no supported local evidence was found for that diagnostic, not that an external source is true or complete.</p>
+          </section>
+          <DataTable
+            rows={diagnostics}
+            emptyMessage="The local source-quality report returned no diagnostics."
+            columns={[
+              { key: 'diagnostic', header: 'Diagnostic', cell: (value) => <ChipList value={value} /> },
+              { key: 'count', header: 'Count' },
+              { key: 'sample_ids', header: 'Sample IDs' },
+              { key: 'truncated', header: 'Truncated' }
+            ]}
+            renderDetail={(row) => <ReportGroupDetail row={{ ...row, record_ids: row.sample_ids as Record<string, string[]> ?? {} }} rawEnvelope={query.data?.raw_envelope} />}
+          />
+          <details className="rounded border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Raw source-quality report envelope</summary><div className="mt-2"><JsonBlock value={query.data?.raw_envelope} /></div></details>
         </div>
       )}
     </>

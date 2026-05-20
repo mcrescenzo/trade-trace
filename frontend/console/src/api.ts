@@ -40,6 +40,7 @@ export type ReportPayload = {
     cli_invocation: string
     request_id: string
     record_ids: Record<string, string[]>
+    examples?: Array<Record<string, unknown>>
   }
   as_of?: string | null
   raw_envelope: unknown
