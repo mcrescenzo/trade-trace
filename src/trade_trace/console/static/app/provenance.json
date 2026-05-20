@@ -2,17 +2,17 @@
   "schema": 1,
   "generated_by": "npm --prefix frontend/console run build",
   "source_hashes": {
-    "src/main.tsx": "5926d07ed6f70ee3f52838a562a054b457b391765c5ca052f5f9159c225f5333",
-    "src/routeCatalog.ts": "8960952378512bf7a8ce03184a9d39c326e537644d29952b3f406e7d383da605",
-    "src/routeCatalog.json": "4cb31cc2adca0db4467d91a3f8f45dbaafaaec6f8d94fe6008f25d51f15ef966",
-    "../../src/trade_trace/console/route_catalog.json": "4cb31cc2adca0db4467d91a3f8f45dbaafaaec6f8d94fe6008f25d51f15ef966",
+    "src/main.tsx": "a006a0147cadb813738f55b85f5f1b189c2b80c37c6608fe99b8435a27773548",
+    "src/routeCatalog.ts": "b0bfaf7287f3f031b582996629e4f1b472a9ca3ca099debe44793ebcfabf9fcb",
+    "src/routeCatalog.json": "8aad0b2bbf595ff21520554d1fa8a209c88ca55415028a5f98b73f07cbbfc019",
+    "../../src/trade_trace/console/route_catalog.json": "8aad0b2bbf595ff21520554d1fa8a209c88ca55415028a5f98b73f07cbbfc019",
     "package.json": "72ceb6853694b0392838b3d4c9517337a2d6a0808f9a64c6a6c3ed6aab19639e",
     "package-lock.json": "f6c32d8591391c31e95b9cda2d7bbb8531bf39b8627adb7453a5dcee403854c9",
     "vite.config.ts": "a935eb052e8d243db2979ae826bec092ede478cc137b0af532f2d623365f9d27"
   },
   "asset_hashes": {
-    "assets/console.js": "11b650743810ddb808f6939c6d3cad1e9013b208ba21df4adc298de28a3a0aa1",
-    "assets/index.css": "2da6239b6e8ca75af8d3bec850c05cfbf57473b91f4368e53ff5d1def72b156e",
+    "assets/console.js": "9cd754e49963a10f1e9e2928c710f134f14e80c091c7ff39eb61cbd201d76a37",
+    "assets/index.css": "f50b9242471772e70af44d7dc3c989510a2d189d591562a7f2a66f3c71d88449",
     "index.html": "c331864adf235d51f91e1b43d7cf358f5c50652c2895c623d7d4669d9a265100"
   }
 }

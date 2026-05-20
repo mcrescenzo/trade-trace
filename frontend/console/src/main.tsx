@@ -913,6 +913,129 @@ function ProcessAnalyticsPage() {
   )
 }
 
+type PeriodControls = { decision_at_gte: string; decision_at_lt: string }
+
+function isoFromLocalInput(value: string) {
+  return value ? new Date(value).toISOString() : undefined
+}
+
+function reviewVelocityFilter(period: PeriodControls): Record<string, unknown> {
+  const timeWindow = {
+    decision_at_gte: isoFromLocalInput(period.decision_at_gte),
+    decision_at_lt: isoFromLocalInput(period.decision_at_lt)
+  }
+  return { time_window: Object.fromEntries(Object.entries(timeWindow).filter(([, value]) => value)) }
+}
+
+function reportCaveats(label: string, report: ReportPayload | undefined) {
+  return [report?.summary_sample_warning, ...(report?.summary_caveats ?? [])]
+    .filter(Boolean)
+    .map((caveat) => ({ report: label, caveat }))
+}
+
+function hasEvidenceMetadata(report: ReportPayload | undefined) {
+  return Boolean(report?.evidence && typeof report.evidence === 'object' && ('record_ids' in report.evidence || 'examples' in report.evidence))
+}
+
+function evidenceCount(report: ReportPayload | undefined) {
+  return Object.values(report?.evidence?.record_ids ?? {}).reduce((total, ids) => total + (Array.isArray(ids) ? ids.length : 0), 0)
+}
+
+function ReviewMetric({ title, query, metrics, href, note }: { title: string; query: ReturnType<typeof useReport>; metrics: string[]; href: string; note: string }) {
+  if (query.isLoading) return <LoadingBlock label={`Loading ${title}`} />
+  if (query.isError) return <UnsupportedPanel title={`${title} unavailable`} message={`The local report did not return a supported envelope: ${query.error instanceof Error ? query.error.message : 'unknown error'}. This section is labeled unavailable rather than simulated.`} />
+  return (
+    <article className="rounded border border-border bg-card p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div><h3 className="font-semibold">{title}</h3><p className="text-xs text-muted-foreground">{note}</p></div>
+        <a className="shrink-0 text-sm underline" href={href}>Open evidence</a>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {metrics.map((key) => <div key={key} className="rounded border border-border p-2"><p className="text-xs uppercase tracking-wide text-muted-foreground"><MetricHelp label={key.replaceAll('_', ' ')} /></p><p className="font-semibold">{metricValue(query.data?.summary_metrics, key)}</p></div>)}
+      </div>
+      <div className="mt-3"><CaveatChips value={[query.data?.summary_sample_warning, ...(query.data?.summary_caveats ?? [])].filter(Boolean)} /></div>
+    </article>
+  )
+}
+
+function ReviewExamples({ title, query, href }: { title: string; query: ReturnType<typeof useReport>; href: string }) {
+  if (query.isLoading || query.isError) return null
+  const exampleRows = (query.data?.groups ?? []).slice(0, 4).map((row) => ({ ...row, evidence_records: Object.values(row.record_ids ?? {}).reduce((total, ids) => total + (Array.isArray(ids) ? ids.length : 0), 0) }))
+  return (
+    <section className="space-y-3">
+      <div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">{title}</h3><p className="text-sm text-muted-foreground">Displayed only from returned report groups; labels are observed contributors, not advice or causal rankings.</p></div><a className="text-sm underline" href={href}>Open full report</a></div>
+      <DataTable rows={exampleRows} emptyMessage="No supported examples/groups were returned for this section." columns={[{ key: 'label', header: 'Observed group' }, { key: 'sample_size', header: 'N' }, { key: 'evidence_records', header: 'Evidence IDs' }, { key: 'sample_warning', header: 'Low-N/caveats', cell: (value) => <CaveatChips value={value} /> }]} renderDetail={(row) => <ReportGroupDetail row={row} rawEnvelope={query.data?.raw_envelope} />} />
+    </section>
+  )
+}
+
+function ReviewPage() {
+  const [period, setPeriod] = React.useState<PeriodControls>({ decision_at_gte: '', decision_at_lt: '' })
+  const [copied, setCopied] = React.useState(false)
+  const emptyArgs = React.useMemo(() => ({ filter: {} }), [])
+  const staleArgs = React.useMemo(() => ({ filter: {}, mode: 'stale' }), [])
+  const velocityArgs = React.useMemo(() => ({ filter: reviewVelocityFilter(period), bucket: 'week' }), [period])
+  const pnl = useReport('report.pnl', {})
+  const risk = useReport('report.risk', {})
+  const strategy = useReport('report.strategy_performance', emptyArgs)
+  const calibration = useReport('report.calibration', emptyArgs)
+  const evidence = useReport('report.source_quality', {})
+  const mistakes = useReport('report.mistakes', emptyArgs)
+  const strengths = useReport('report.strengths', emptyArgs)
+  const watchlist = useReport('report.watchlist', staleArgs)
+  const unscored = useReport('report.unscored_forecasts', emptyArgs)
+  const playbook = useReport('report.playbook_adherence', emptyArgs)
+  const velocity = useReport('report.decision_velocity', velocityArgs)
+  const reportQueries = { pnl, risk, strategy, calibration, evidence, mistakes, strengths, stale_watchlist: watchlist, unscored_forecasts: unscored, playbook_adherence: playbook, decision_velocity: velocity }
+  const reports: Record<string, ReportPayload> = Object.fromEntries(Object.entries(reportQueries).filter(([, query]) => query.isSuccess && query.data).map(([label, query]) => [label, query.data as ReportPayload]))
+  const reportStatus: Record<string, { status: 'loading' | 'loaded' | 'unavailable'; error?: string }> = Object.fromEntries(Object.entries(reportQueries).map(([label, query]) => [label, { status: query.isLoading ? 'loading' : query.isError ? 'unavailable' : query.data ? 'loaded' : 'unavailable', error: query.isError ? (query.error instanceof Error ? query.error.message : 'unknown error') : undefined }]))
+  const unavailableReports = Object.entries(reportStatus).filter(([, status]) => status.status !== 'loaded').map(([report, status]) => ({ report, status: status.status, error: status.error ?? '' }))
+  const packet = { generated_in_browser_at: new Date().toISOString(), scope: { local_only: true, saved: false, period_filter_applied_only_to: 'report.decision_velocity', period }, report_status: reportStatus, unavailable_reports: unavailableReports, reports }
+  const caveatRows = Object.entries(reports).flatMap(([label, report]) => reportCaveats(label, report))
+  const evidenceRows = Object.entries(reports).filter(([, report]) => hasEvidenceMetadata(report)).map(([label, report]) => ({ report: label, evidence_record_ids: evidenceCount(report), examples: report?.evidence?.examples?.length ?? 0, caveats: [report?.summary_sample_warning, ...(report?.summary_caveats ?? [])].filter(Boolean).length }))
+  const loading = Object.values(reportQueries).some((query) => query.isLoading)
+  return (
+    <>
+      <PageHeader eyebrow="Edge review" title="Local period review packet" />
+      <PageExplainer answers="A concise, read-only review of existing local aggregate report envelopes for human inspection." data="Overview/P&L/Risk/Strategy/Calibration/Evidence/Process aggregates already exposed by the Console. Optional decision_at dates are sent only to report.decision_velocity, the report with supported period filters." read="Snapshot cards are aggregate local reports unless explicitly marked period-scoped. Caveats, evidence counts, examples, and backlog rows are surfaced only when backend envelopes provide them." mislead="This page is not saved, cloud-shared, broker/live data, financial advice, next-trade recommendations, or frontend-invented period P&L/risk math." />
+      <section className="mb-4 rounded border border-border bg-card p-4">
+        <div className="mb-3"><h3 className="font-semibold">Period controls</h3><p className="text-sm text-muted-foreground">Optional local datetime range. Applied only to decision velocity/count buckets. Other reports below are labeled local aggregate snapshots because their backend contracts reject period filters today.</p></div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <label className="text-sm">Decision at start<input type="datetime-local" className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={period.decision_at_gte} onChange={(event) => setPeriod((current) => ({ ...current, decision_at_gte: event.target.value }))} /></label>
+          <label className="text-sm">Decision at end<input type="datetime-local" className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={period.decision_at_lt} onChange={(event) => setPeriod((current) => ({ ...current, decision_at_lt: event.target.value }))} /></label>
+          <div className="flex items-end"><button type="button" className="rounded border border-border px-3 py-2 text-sm" onClick={() => setPeriod({ decision_at_gte: '', decision_at_lt: '' })}>Clear period</button></div>
+        </div>
+      </section>
+      {loading ? <LoadingBlock label="Loading local review packet" /> : <div className="space-y-5">
+        <section className="grid gap-4 xl:grid-cols-2">
+          <ReviewMetric title="P&L snapshot" query={pnl} metrics={['realized_pnl', 'unrealized_pnl', 'mark_to_market_pnl']} href="/reports/pnl" note="Local aggregate snapshot; not period-scoped." />
+          <ReviewMetric title="Risk snapshot" query={risk} metrics={['n_closed_with_risk', 'expectancy_r', 'win_rate_r']} href="/reports/risk" note="Local aggregate snapshot; not period-scoped." />
+          <ReviewMetric title="Strategy snapshot" query={strategy} metrics={['total_trades', 'realized_pnl', 'win_rate']} href="/reports/strategy" note="Local aggregate snapshot; not period-scoped here." />
+          <ReviewMetric title="Calibration snapshot" query={calibration} metrics={['sample_size', 'brier', 'ece']} href="/calibration" note="Local aggregate snapshot; not period-scoped here." />
+          <ReviewMetric title="Evidence diagnostics" query={evidence} metrics={['total_sources', 'total_source_attachments', 'diagnostic_count']} href="/evidence" note="Journal-level source-quality diagnostics." />
+          <ReviewMetric title="Decision velocity" query={velocity} metrics={['total_decisions', 'bucket_count', 'avg_per_bucket']} href="/reports/performance" note="Only this card/table uses the selected decision_at period when present." />
+        </section>
+        <section className="grid gap-4 md:grid-cols-3">
+          <MetricCard label="Stale watches observed" value={metricValue(watchlist.data?.summary_metrics, 'watch_count')} icon={ListFilter} href="/process#process-watch" />
+          <MetricCard label="Unscored forecasts" value={metricValue(unscored.data?.summary_metrics, 'unscored_count')} icon={Database} href="/process#process-unscored" />
+          <MetricCard label="Playbook rows" value={metricValue(playbook.data?.summary_metrics, 'total_adherence_rows')} icon={BookOpen} href="/playbooks" />
+        </section>
+        <section className="space-y-3"><h3 className="text-lg font-semibold">Review packet links</h3><div className="flex flex-wrap gap-2">{[['P&L','/reports/pnl'], ['Risk','/reports/risk'], ['Strategy','/reports/strategy'], ['Calibration','/calibration'], ['Evidence','/evidence'], ['Process','/process'], ['Journal','/journal'], ['Decisions','/decisions']].map(([label, href]) => <a key={href} className="rounded border border-border px-3 py-2 text-sm underline" href={href}>{label}</a>)}</div></section>
+        <ReviewExamples title="Observed performance/process groups" query={strategy} href="/reports/strategy" />
+        <ReviewExamples title="Observed mistake associations" query={mistakes} href="/process#process-tags" />
+        <ReviewExamples title="Observed strength associations" query={strengths} href="/process#process-tags" />
+        <section className="grid gap-4 xl:grid-cols-2">
+          <section className="space-y-3"><h3 className="text-lg font-semibold">Recurring caveats and low-N warnings</h3><DataTable rows={caveatRows} emptyMessage="No summary caveats were returned by loaded reports." columns={[{ key: 'report', header: 'Report' }, { key: 'caveat', header: 'Caveat/warning', cell: (value) => <CaveatChips value={value} /> }]} /></section>
+          <section className="space-y-3"><h3 className="text-lg font-semibold">Evidence gaps and links</h3><DataTable rows={evidenceRows} emptyMessage="No evidence metadata was returned by loaded reports." columns={[{ key: 'report', header: 'Report' }, { key: 'evidence_record_ids', header: 'Record IDs' }, { key: 'examples', header: 'Examples' }, { key: 'caveats', header: 'Caveats' }]} /></section>
+        </section>
+        <section className="space-y-3"><h3 className="text-lg font-semibold">Unavailable report slots</h3><DataTable rows={unavailableReports} emptyMessage="All requested report envelopes loaded successfully." columns={[{ key: 'report', header: 'Report' }, { key: 'status', header: 'Status' }, { key: 'error', header: 'Error' }]} /></section>
+        <UnsupportedPanel title="Unsupported/deferred review features" message="Saved reviews, journal mutations, cloud sharing, community/mentor review, advice, recommendations for next trades, and period-scoped P&L/risk/strategy/calibration/evidence are not performed by this local page. Unsupported sections are labeled instead of inferred." />
+        <details className="rounded border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Displayed local review JSON packet</summary><div className="my-3"><button type="button" className="rounded border border-border px-3 py-1 text-sm" onClick={() => { navigator.clipboard?.writeText(JSON.stringify(packet, null, 2)); setCopied(true) }}>Copy displayed review JSON</button>{copied ? <span className="ml-2 text-sm text-muted-foreground">Copied in browser.</span> : null}</div><JsonBlock value={packet} /></details>
+      </div>}
+    </>
+  )
+}
+
 function rawData(report: ReportPayload | undefined): Record<string, unknown> {
   const envelope = report?.raw_envelope
   return envelope && typeof envelope === 'object' && 'data' in envelope && typeof (envelope as { data?: unknown }).data === 'object'
@@ -1343,6 +1466,8 @@ function routeComponent(definition: ConsoleRouteDefinition) {
       return TradesPage
     case 'catalog':
       return CatalogPage
+    case 'review':
+      return ReviewPage
     case 'report':
       return () => <ReportPage tool={definition.tool!} title={definition.title!} args={definition.args} />
     case 'process':

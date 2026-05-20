@@ -2,6 +2,7 @@
   { "path": "/", "label": "Overview", "icon": "Gauge", "component": "overview" },
   { "path": "/trades", "label": "Trades", "icon": "TableProperties", "component": "trades" },
   { "path": "/reports", "label": "Reports", "icon": "BarChart3", "component": "catalog" },
+  { "path": "/review", "label": "Period review", "icon": "Activity", "component": "review", "title": "Edge review" },
   { "path": "/reports/pnl", "label": "P&L analytics", "icon": "BarChart3", "component": "report", "tool": "report.pnl", "title": "P&L analytics" },
   { "path": "/reports/risk", "label": "Risk analytics", "icon": "BarChart3", "component": "report", "tool": "report.risk", "title": "Risk analytics" },
   { "path": "/reports/performance", "label": "Performance timeline", "icon": "BarChart3", "component": "report", "tool": "report.decision_velocity", "title": "Performance timeline" },
