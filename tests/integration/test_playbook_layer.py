@@ -424,6 +424,49 @@ def test_report_playbook_adherence_filter_by_playbook(home, adherence_setup):
     assert env.data["groups"][0]["key"] == pv2
 
 
+def test_report_playbook_adherence_missing_playbook_id_is_not_found(home):
+    env = _mcp(home, "report.playbook_adherence", {
+        "playbook_id": "pb_missing_for_report_adherence",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "NOT_FOUND"
+    assert env.error.details == {
+        "entity_kind": "playbook",
+        "playbook_id": "pb_missing_for_report_adherence",
+    }
+
+
+def test_report_playbook_adherence_valid_empty_playbook_is_success(home):
+    playbook_id = _mcp(home, "playbook.create", {
+        "name": "PB Empty Adherence",
+        "idempotency_key": "00000000-0000-4000-8000-pb-empty-adh",
+    }).data["id"]
+
+    report_env = _mcp(home, "report.playbook_adherence", {
+        "playbook_id": playbook_id,
+    })
+    assert report_env.ok
+    assert report_env.data["groups"] == []
+    assert report_env.data["summary"]["sample_size"] == 0
+    assert report_env.data["summary"]["metrics"]["total_adherence_rows"] == 0
+    assert report_env.data["summary"]["metrics"]["playbook_id_filter"] == playbook_id
+
+    wrapper_env = _mcp(home, "playbook.adherence", {"playbook_id": playbook_id})
+    assert wrapper_env.ok
+    assert wrapper_env.data == report_env.data
+
+
+def test_playbook_adherence_and_report_match_missing_playbook(home):
+    args = {"playbook_id": "pb_missing_for_wrapper_comparison"}
+    report_env = _mcp(home, "report.playbook_adherence", args)
+    wrapper_env = _mcp(home, "playbook.adherence", args)
+
+    assert report_env.ok is False
+    assert wrapper_env.ok is False
+    assert report_env.error.code.value == wrapper_env.error.code.value == "NOT_FOUND"
+    assert report_env.error.details == wrapper_env.error.details
+
+
 def test_report_playbook_adherence_filter_by_strategy(home):
     """Decisions carry strategy_id; the report filters by it."""
 

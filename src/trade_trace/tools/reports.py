@@ -46,7 +46,6 @@ from trade_trace.reports._filter_support import (
 from trade_trace.tools._helpers import open_db_for_args
 from trade_trace.tools.errors import ToolError
 
-
 _EMPTY_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {},
@@ -262,6 +261,19 @@ def _report_playbook_adherence(
     strategy_id = args.get("strategy_id")
     db = open_db_for_args(args)
     try:
+        if playbook_id is not None:
+            pb_row = db.connection.execute(
+                "SELECT 1 FROM playbooks WHERE id = ?", (playbook_id,),
+            ).fetchone()
+            if pb_row is None:
+                raise ToolError(
+                    ErrorCode.NOT_FOUND,
+                    f"playbook {playbook_id!r} not found",
+                    details={
+                        "entity_kind": "playbook",
+                        "playbook_id": playbook_id,
+                    },
+                )
         try:
             data = report_playbook_adherence(
                 db.connection, raw_filter=raw_filter,
