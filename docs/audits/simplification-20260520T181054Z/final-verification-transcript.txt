@@ -1,0 +1,183 @@
+=== bd lint ===
+✓ No template warnings found (60 issues checked)
+
+=== bd orphans ===
+
+⚠ Found 1 orphaned issue(s):
+
+1. trade-trace-frd0: EPIC: exhaustive deadcode hunt 2026-05-20
+   Status: open
+
+=== bd children epic ===
+[]
+
+=== bd dep list epic ===
+  trade-trace-10x6: Single-source Console route catalog and static asset provenance guard [P2] (open) via relates-to
+  trade-trace-2drt: Reconcile residual report and test-helper simplification findings against 2026-05-19 backlog [P2] (open) via relates-to
+  trade-trace-4v31: Single-source source.attach target metadata and registration [P3] (open) via relates-to
+  trade-trace-7v2i: Centralize strategy create/update response construction [P3] (open) via relates-to
+  trade-trace-9gp0: Normalize memory-local meta_json parsing in retain and reflect [P3] (open) via relates-to
+  trade-trace-d2jv: Extract generic safe path helpers for restore and import containment [P2] (open) via relates-to
+  trade-trace-fxxm: Centralize POSIX permission helpers across storage, exporter, and admin [P2] (open) via relates-to
+  trade-trace-gis0: Split journal.fixture_seed into composable deterministic builder profiles [P2] (open) via relates-to
+  trade-trace-lsi5: Investigate review.bundle decomposition with hash-stability proof [P3] (open) via relates-to
+  trade-trace-lu6g: Use named row access for positions projection replay [P2] (open) via relates-to
+  trade-trace-m29q: Investigate shared forecast add/supersede write kernel without breaking atomicity [P2] (open) via relates-to
+  trade-trace-y0b2: Investigate memory.recall decomposition with ranking and budget characterization [P2] (open) via relates-to
+  trade-trace-z5bd: Final verification: repo simplification backlog 2026-05-20 [P2] (open) via relates-to
+
+
+=== bd graph epic ===
+
+📊 Dependency graph for trade-trace-w3vs:
+
+  Status: ○ open  ◐ in_progress  ● blocked  ✓ closed  ❄ deferred
+
+  LAYER 0 (ready)                    LAYER 1                      
+
+  ┌───────────────────────────┐      ┌───────────────────────────┐
+  │ ○ Single-source Console … │─╭╭╭┬▶│ ○ Final verification: re… │
+  │ trade-trace-10x6 P2       │ ││││ │ trade-trace-z5bd P2       │
+  └───────────────────────────┘ ││││ └───────────────────────────┘
+                                ││││
+  ┌───────────────────────────┐ ││││
+  │ ○ Reconcile residual rep… │─││││
+  │ trade-trace-2drt P2       │ ││││
+  └───────────────────────────┘ ││││
+                                ││││
+  ┌───────────────────────────┐ ││││
+  │ ○ Single-source source.a… │─││││
+  │ trade-trace-4v31 P3       │ ││││
+  └───────────────────────────┘ ││││
+                                ││││
+  ┌───────────────────────────┐ ││││
+  │ ○ Centralize strategy cr… │─││││
+  │ trade-trace-7v2i P3       │ ││││
+  └───────────────────────────┘ ││││
+                                ││││
+  ┌───────────────────────────┐ ││││
+  │ ○ Normalize memory-local… │─╯│││
+  │ trade-trace-9gp0 P3       │  │││
+  └───────────────────────────┘  │││
+                                 │││
+  ┌───────────────────────────┐  │││
+  │ ○ Extract generic safe p… │──│││
+  │ trade-trace-d2jv P2       │  │││
+  └───────────────────────────┘  │││
+                                 │││
+  ┌───────────────────────────┐  │││
+  │ ○ Centralize POSIX permi… │──│││
+  │ trade-trace-fxxm P2       │  │││
+  └───────────────────────────┘  │││
+                                 │││
+  ┌───────────────────────────┐  │││
+  │ ○ Split journal.fixture_… │──╯││
+  │ trade-trace-gis0 P2       │   ││
+  └───────────────────────────┘   ││
+                                  ││
+  ┌───────────────────────────┐   ││
+  │ ○ Investigate review.bun… │───││
+  │ trade-trace-lsi5 P3       │   ││
+  └───────────────────────────┘   ││
+                                  ││
+  ┌───────────────────────────┐   ││
+  │ ○ Use named row access f… │───││
+  │ trade-trace-lu6g P2       │   ││
+  └───────────────────────────┘   ││
+                                  ││
+  ┌───────────────────────────┐   ││
+  │ ○ Investigate shared for… │───╯│
+  │ trade-trace-m29q P2       │    │
+  └───────────────────────────┘    │
+                                   │
+  ┌───────────────────────────┐    │
+  │ ○ EPIC: repo simplificat… │    │
+  │ trade-trace-w3vs P2       │    │
+  └───────────────────────────┘    │
+                                   │
+  ┌───────────────────────────┐    │
+  │ ○ Investigate memory.rec… │────╯
+  │ trade-trace-y0b2 P2       │
+  └───────────────────────────┘
+
+  Dependencies: 12 blocking relationships
+  Total: 14 issues across 2 layers
+
+
+=== bd dep list final ===
+  trade-trace-10x6: Single-source Console route catalog and static asset provenance guard [P2] (open) via blocks
+  trade-trace-2drt: Reconcile residual report and test-helper simplification findings against 2026-05-19 backlog [P2] (open) via blocks
+  trade-trace-4v31: Single-source source.attach target metadata and registration [P3] (open) via blocks
+  trade-trace-7v2i: Centralize strategy create/update response construction [P3] (open) via blocks
+  trade-trace-9gp0: Normalize memory-local meta_json parsing in retain and reflect [P3] (open) via blocks
+  trade-trace-d2jv: Extract generic safe path helpers for restore and import containment [P2] (open) via blocks
+  trade-trace-fxxm: Centralize POSIX permission helpers across storage, exporter, and admin [P2] (open) via blocks
+  trade-trace-gis0: Split journal.fixture_seed into composable deterministic builder profiles [P2] (open) via blocks
+  trade-trace-lsi5: Investigate review.bundle decomposition with hash-stability proof [P3] (open) via blocks
+  trade-trace-lu6g: Use named row access for positions projection replay [P2] (open) via blocks
+  trade-trace-m29q: Investigate shared forecast add/supersede write kernel without breaking atomicity [P2] (open) via blocks
+  trade-trace-w3vs: EPIC: repo simplification review 2026-05-20 [P2] (open) via relates-to
+  trade-trace-y0b2: Investigate memory.recall decomposition with ranking and budget characterization [P2] (open) via blocks
+
+
+=== bd dep cycles ===
+
+✓ No dependency cycles detected
+
+
+=== duplicate scan 0.45 ===
+{
+  "count": 3,
+  "method": "mechanical",
+  "pairs": [
+    {
+      "issue_a_id": "trade-trace-evwe",
+      "issue_a_title": "Unify self-describing tool metadata, CLI help, schemas, and errors",
+      "issue_b_id": "trade-trace-73zr",
+      "issue_b_title": "Inventory agent-facing contract drift and beta dogfood evidence",
+      "method": "mechanical",
+      "similarity": 0.5476360918909897
+    },
+    {
+      "issue_a_id": "trade-trace-mtdp",
+      "issue_a_title": "Final verification for agent-native workbench ergonomics hardening",
+      "issue_b_id": "trade-trace-iixm",
+      "issue_b_title": "Agent-native workbench ergonomics hardening from beta feedback",
+      "method": "mechanical",
+      "similarity": 0.46545640148269724
+    },
+    {
+      "issue_a_id": "trade-trace-9t48",
+      "issue_a_title": "Expose decision.add matrix and actionable recovery guidance",
+      "issue_b_id": "trade-trace-evwe",
+      "issue_b_title": "Unify self-describing tool metadata, CLI help, schemas, and errors",
+      "method": "mechanical",
+      "similarity": 0.46426029390988344
+    }
+  ],
+  "schema_version": 1,
+  "threshold": 0.45
+}
+
+=== open simplification 20260520 ===
+○ trade-trace-10x6 [● P2] [task] [behavior-preserving candidate:simp20-022 candidate:simp20-023 complexity:contract-drift complexity:duplicate-logic domain:console-backend-frontend repo-simplification risk:medium simplification simplification:20260520] - Single-source Console route catalog and static asset provenance guard (blocks: trade-trace-z5bd)
+○ trade-trace-2drt [● P2] [task] [behavior-preserving candidate:simp20-014 candidate:simp20-015 candidate:simp20-016 candidate:simp20-027 candidate:simp20-028 complexity:test-drag domain:reports-memory-playbook domain:tests-docs-build investigation needs-more-evidence repo-simplification risk:medium simplification simplification:20260520] - Reconcile residual report and test-helper simplification findings against 2026-05-19 backlog (blocks: trade-trace-z5bd)
+○ trade-trace-4v31 [● P3] [task] [behavior-preserving candidate:simp20-012 complexity:duplicate-logic domain:ledger-tools-projections repo-simplification risk:low simplification simplification:20260520] - Single-source source.attach target metadata and registration (blocks: trade-trace-z5bd)
+○ trade-trace-7v2i [● P3] [task] [behavior-preserving candidate:simp20-021 complexity:pass-through-layer domain:reports-memory-playbook repo-simplification risk:low simplification simplification:20260520] - Centralize strategy create/update response construction (blocks: trade-trace-z5bd)
+○ trade-trace-9gp0 [● P3] [task] [behavior-preserving candidate:simp20-019 complexity:duplicate-logic domain:reports-memory-playbook repo-simplification risk:low simplification simplification:20260520] - Normalize memory-local meta_json parsing in retain and reflect (blocks: trade-trace-z5bd)
+○ trade-trace-d2jv [● P2] [task] [behavior-preserving candidate:simp20-005 complexity:tangled-ownership domain:storage-events-security repo-simplification risk:medium security simplification simplification:20260520] - Extract generic safe path helpers for restore and import containment (blocks: trade-trace-z5bd)
+○ trade-trace-fxxm [● P2] [task] [behavior-preserving candidate:simp20-004 complexity:duplicate-logic domain:storage-events-security repo-simplification risk:medium simplification simplification:20260520] - Centralize POSIX permission helpers across storage, exporter, and admin (blocks: trade-trace-z5bd)
+○ trade-trace-gis0 [● P2] [task] [behavior-preserving candidate:simp20-029 complexity:test-drag domain:tests-docs-build repo-simplification risk:medium simplification simplification:20260520] - Split journal.fixture_seed into composable deterministic builder profiles (blocks: trade-trace-z5bd)
+○ trade-trace-lsi5 [● P3] [task] [behavior-preserving candidate:simp20-020 complexity:god-object domain:reports-memory-playbook investigation needs-more-evidence repo-simplification risk:medium simplification simplification:20260520] - Investigate review.bundle decomposition with hash-stability proof (blocks: trade-trace-z5bd)
+○ trade-trace-lu6g [● P2] [task] [behavior-preserving candidate:simp20-011 complexity:state-branching domain:ledger-tools-projections repo-simplification risk:low simplification simplification:20260520] - Use named row access for positions projection replay (blocks: trade-trace-z5bd)
+○ trade-trace-m29q [● P2] [task] [behavior-preserving candidate:simp20-009 complexity:duplicate-logic domain:ledger-tools-projections investigation needs-more-evidence repo-simplification risk:high simplification simplification:20260520] - Investigate shared forecast add/supersede write kernel without breaking atomicity (blocks: trade-trace-z5bd)
+○ trade-trace-w3vs [● P2] [epic] [behavior-preserving epic repo-simplification simplification simplification:20260520] - EPIC: repo simplification review 2026-05-20
+○ trade-trace-y0b2 [● P2] [task] [behavior-preserving candidate:simp20-017 complexity:god-object domain:reports-memory-playbook investigation needs-more-evidence repo-simplification risk:medium simplification simplification:20260520] - Investigate memory.recall decomposition with ranking and budget characterization (blocks: trade-trace-z5bd)
+● trade-trace-z5bd [● P2] [task] [behavior-preserving domain:verification gate repo-simplification risk:medium simplification simplification-final simplification:20260520 verification] - Final verification: repo simplification backlog 2026-05-20 (blocked by: trade-trace-10x6, trade-trace-2drt, trade-trace-4v31, trade-trace-7v2i, trade-trace-9gp0, trade-trace-d2jv, trade-trace-fxxm, trade-trace-gis0, trade-trace-lsi5, trade-trace-lu6g, trade-trace-m29q, trade-trace-y0b2)
+
+=== in_progress ===
+
+=== git status short ===
+
+=== git status sb ===
+## main...origin/main [ahead 1]

@@ -1,0 +1,249 @@
+[
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Centralize POSIX permission helpers across storage, exporter, and admin",
+      "--type",
+      "task",
+      "--priority",
+      "P2",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-004,domain:storage-events-security,complexity:duplicate-logic,risk:medium",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-004.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-fxxm"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Extract generic safe path helpers for restore and import containment",
+      "--type",
+      "task",
+      "--priority",
+      "P2",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-005,domain:storage-events-security,complexity:tangled-ownership,security,risk:medium",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-005.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-d2jv"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Use named row access for positions projection replay",
+      "--type",
+      "task",
+      "--priority",
+      "P2",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-011,domain:ledger-tools-projections,complexity:state-branching,risk:low",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-011.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-lu6g"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Single-source source.attach target metadata and registration",
+      "--type",
+      "task",
+      "--priority",
+      "P3",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-012,domain:ledger-tools-projections,complexity:duplicate-logic,risk:low",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-012.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-4v31"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Normalize memory-local meta_json parsing in retain and reflect",
+      "--type",
+      "task",
+      "--priority",
+      "P3",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-019,domain:reports-memory-playbook,complexity:duplicate-logic,risk:low",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-019.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-9gp0"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Centralize strategy create/update response construction",
+      "--type",
+      "task",
+      "--priority",
+      "P3",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-021,domain:reports-memory-playbook,complexity:pass-through-layer,risk:low",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-021.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-7v2i"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Single-source Console route catalog and static asset provenance guard",
+      "--type",
+      "task",
+      "--priority",
+      "P2",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-022,candidate:simp20-023,domain:console-backend-frontend,complexity:contract-drift,complexity:duplicate-logic,risk:medium",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-022-023.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-10x6"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Split journal.fixture_seed into composable deterministic builder profiles",
+      "--type",
+      "task",
+      "--priority",
+      "P2",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-029,domain:tests-docs-build,complexity:test-drag,risk:medium",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-029.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-gis0"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Investigate shared forecast add/supersede write kernel without breaking atomicity",
+      "--type",
+      "task",
+      "--priority",
+      "P2",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-009,domain:ledger-tools-projections,complexity:duplicate-logic,investigation,needs-more-evidence,risk:high",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-009.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-m29q"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Investigate memory.recall decomposition with ranking and budget characterization",
+      "--type",
+      "task",
+      "--priority",
+      "P2",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-017,domain:reports-memory-playbook,complexity:god-object,investigation,needs-more-evidence,risk:medium",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-017.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-y0b2"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Investigate review.bundle decomposition with hash-stability proof",
+      "--type",
+      "task",
+      "--priority",
+      "P3",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-020,domain:reports-memory-playbook,complexity:god-object,investigation,needs-more-evidence,risk:medium",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-020.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-lsi5"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Reconcile residual report and test-helper simplification findings against 2026-05-19 backlog",
+      "--type",
+      "task",
+      "--priority",
+      "P2",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,candidate:simp20-014,candidate:simp20-015,candidate:simp20-016,candidate:simp20-027,candidate:simp20-028,domain:reports-memory-playbook,domain:tests-docs-build,investigation,needs-more-evidence,complexity:test-drag,risk:medium",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-REC.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-2drt"
+  },
+  {
+    "cmd": [
+      "bd",
+      "create",
+      "Final verification: repo simplification backlog 2026-05-20",
+      "--type",
+      "task",
+      "--priority",
+      "P2",
+      "--labels",
+      "repo-simplification,simplification,simplification:20260520,behavior-preserving,simplification-final,verification,gate,domain:verification,risk:medium",
+      "--body-file",
+      "/home/hermes/code/trade-trace/docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-FINAL.md",
+      "--acceptance",
+      "See body acceptance criteria.",
+      "--json"
+    ],
+    "id": "trade-trace-z5bd"
+  }
+]
