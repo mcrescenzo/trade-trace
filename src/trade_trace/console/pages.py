@@ -739,10 +739,10 @@ def dashboard_evidence_context(
 def _dashboard_bar_chart_json(
     *, label: str, groups: list[dict[str, Any]], metric_key: str,
 ) -> str:
-    """Encode a minimal Chart.js bar-chart config for the dashboard.
-    Returns JSON the template injects into a
-    `<script type="application/json">` block; the chart bootstrap
-    consumes it via JSON.parse (no eval / no client math)."""
+    """Encode a historical chart config payload used by legacy
+    context-shape tests. The React Console now renders charts through
+    ECharts from JSON API responses; this helper remains only for
+    pure-Python report projection coverage."""
 
     config = {
         "type": "bar",

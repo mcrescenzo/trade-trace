@@ -165,9 +165,7 @@ def test_logs_context_tail_keeps_live_entries_when_rotated_exceeds_tail(tmp_path
 
 
 def test_base_template_includes_logs_nav_entry():
-    base = Path(__file__).resolve().parents[2] / "src" / "trade_trace" / "console" / "templates" / "base.html"
-    html = base.read_text(encoding="utf-8")
-    assert 'href="/logs"' in html
-    # Ensure the deferred-logs footer note has been removed
-    # (trade-trace-jtec acceptance).
-    assert "Logs page deferred" not in html
+    source = Path(__file__).resolve().parents[2] / "frontend" / "console" / "src" / "main.tsx"
+    text = source.read_text(encoding="utf-8")
+    assert "to: '/logs'" in text
+    assert "Logs page deferred" not in text

@@ -19,23 +19,20 @@ def test_overview_renders_navigation_and_no_console_errors(page, console_url):
     page.goto(console_url + "/")
 
     # Header brand + read-only badge.
-    assert page.locator(".tt-brand-link").is_visible()
-    assert page.locator(".tt-mode-badge").text_content().strip().lower() == "read-only"
+    assert page.get_by_text("Trade Trace").is_visible()
+    assert page.get_by_text("Read-only Console").is_visible()
+    assert page.get_by_text("read-only").first.is_visible()
 
     # Nav contains the documented routes.
     for label in (
         "Overview", "Journal", "Decisions", "Reports",
         "Calibration", "Strategies", "Playbooks",
-        "Evidence & Integrity", "Raw JSON",
+        "Evidence", "Raw JSON", "Logs",
     ):
         assert page.get_by_role("link", name=label).is_visible(), label
 
-    # No "Logs" entry (§12 / -jtec).
-    assert page.get_by_role("link", name="Logs").count() == 0
-
-    # Staleness indicator + refresh button + tz toggle present.
-    assert page.locator("[data-staleness]").is_visible()
-    assert page.locator("button[data-refresh]").is_visible()
-    assert page.locator("input[name='tt-tz'][value='utc']").is_checked()
+    # Refresh control and dashboard content present.
+    assert page.get_by_role("button", name="Refresh").is_visible()
+    assert page.get_by_text("Journal intelligence at a glance").is_visible()
 
     assert errors == [], errors

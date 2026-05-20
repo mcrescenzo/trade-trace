@@ -21,6 +21,7 @@ from __future__ import annotations
 import errno
 import socket
 import sys
+from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -72,23 +73,31 @@ def _import_server_deps() -> tuple[Any, Any] | None:
 
 
 def _build_app(home_path: str) -> Any:
-    """Construct the FastAPI app. Page handlers in
-    `trade_trace.console.pages` produce render contexts; this
-    function maps HTML routes to those handlers and JSON data
-    routes to `trade_trace.console.endpoints`. The lazy-write
-    deny set from console.md §7 is enforced by the pages /
-    endpoints modules never *calling* either handler."""
+    """Construct the FastAPI app.
+
+    The clean-break Console is a read-only JSON API plus a packaged
+    React/Vite SPA. FastAPI owns local serving, security headers,
+    read-only DB handles, and report dispatch. The browser owns all
+    routing and presentation over server-provided data.
+    """
 
     deps = _import_server_deps()
     assert deps is not None, "_build_app must not be called without deps"
     fastapi, _ = deps
 
-    from fastapi.responses import HTMLResponse, JSONResponse  # type: ignore[import-not-found]
+    from fastapi.responses import FileResponse, JSONResponse  # type: ignore[import-not-found]
     from fastapi.staticfiles import StaticFiles  # type: ignore[import-not-found]
-    from fastapi.templating import Jinja2Templates  # type: ignore[import-not-found]
 
-    from trade_trace.console import endpoints, pages
+    from trade_trace.console import endpoints
     from trade_trace.console.pagination import PaginationError
+    from trade_trace.console.reporting import (
+        SAFE_REPORT_TOOLS,
+        ReportAdapterError,
+        list_trades,
+        position_detail,
+        run_report,
+    )
+    from trade_trace.console.reporting.filter_state import FilterStateError, decode_filter
     from trade_trace.console.security import apply_security_headers
     from trade_trace.storage.database import (
         ReadOnlyDatabaseError,
@@ -97,76 +106,31 @@ def _build_app(home_path: str) -> Any:
     from trade_trace.storage.paths import db_path as _db_path
 
     console_root = Path(__file__).resolve().parent
-    templates = Jinja2Templates(directory=str(console_root / "templates"))
+    spa_root = console_root / "static" / "app"
+    assets_root = spa_root / "assets"
+    index_html = spa_root / "index.html"
 
     app = fastapi.FastAPI(
         title="Trade Trace Console",
-        version="1",
+        version="2",
         docs_url=None,
         redoc_url=None,
     )
-    app.mount(
-        "/static",
-        StaticFiles(directory=str(console_root / "static")),
-        name="static",
-    )
+    if assets_root.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_root)), name="console_assets")
+    app.mount("/static", StaticFiles(directory=str(console_root / "static")), name="static")
 
     def _generated_at() -> str:
         return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
-    def _render_console_error(
-        request: Any,
-        *,
-        status_code: int,
-        title: str,
-        message: str,
-        reason: str,
-        next_steps: list[tuple[str, str]],
-    ) -> Any:
-        return templates.TemplateResponse(
-            request,
-            "error.html",
-            {
-                "page_title": title,
-                "generated_at": _generated_at(),
-                "error_title": title,
-                "error_message": message,
-                "reason": reason,
-                "next_steps": next_steps,
-            },
-            status_code=status_code,
-        )
-
-    def _wants_json(request: Any) -> bool:
-        return request.url.path.startswith("/api/") or request.url.path.endswith(".json")
-
     @app.exception_handler(ReadOnlyDatabaseError)
     async def _readonly_database_error(request: Any, exc: ReadOnlyDatabaseError) -> Any:
-        status_code = 503
         detail = {
             "type": "readonly_database_error",
             "reason": exc.reason,
             "message": str(exc),
         }
-        if _wants_json(request):
-            return JSONResponse(status_code=status_code, content={"detail": detail})
-        next_steps = [
-            ("Initialize a journal", "tt journal init"),
-            ("Check the selected home", "tt console serve --home /path/to/home"),
-        ]
-        if exc.reason == "unsupported_schema":
-            next_steps = [
-                ("Use a Trade Trace journal home", "tt console serve --home /path/to/home"),
-                ("Initialize a new journal", "tt journal init"),
-            ]
-        return _render_console_error(
-            request,
-            status_code=status_code,
-            title="Console data unavailable",
-            message=str(exc),
-            reason=exc.reason,
-            next_steps=next_steps,
-        )
+        return JSONResponse(status_code=503, content={"detail": detail})
 
     @app.exception_handler(PaginationError)
     async def _pagination_error(request: Any, exc: PaginationError) -> Any:
@@ -174,18 +138,7 @@ def _build_app(home_path: str) -> Any:
             "type": "pagination_error",
             "message": str(exc),
         }
-        if _wants_json(request):
-            return JSONResponse(status_code=400, content={"detail": detail})
-        return _render_console_error(
-            request,
-            status_code=400,
-            title="Invalid pagination cursor",
-            message=str(exc),
-            reason="pagination_error",
-            next_steps=[
-                ("Restart from the first page", request.url.path),
-            ],
-        )
+        return JSONResponse(status_code=400, content={"detail": detail})
 
     @app.middleware("http")
     async def _security_headers(request: Any, call_next: Any) -> Any:
@@ -200,21 +153,18 @@ def _build_app(home_path: str) -> Any:
     def _page_to_dict(page: Any) -> dict[str, Any]:
         return {"rows": page.rows, "next_cursor": page.next_cursor, "limit": page.limit}
 
-    def _render(request: Any, template_name: str, context: dict[str, Any]) -> Any:
-        return templates.TemplateResponse(request, template_name, context)
+    def _jsonable(value: Any) -> Any:
+        if is_dataclass(value):
+            return asdict(value)
+        if isinstance(value, tuple):
+            return [_jsonable(v) for v in value]
+        if isinstance(value, list):
+            return [_jsonable(v) for v in value]
+        if isinstance(value, dict):
+            return {k: _jsonable(v) for k, v in value.items()}
+        return value
 
     def _decoded_filter_arg(value: str | None) -> dict[str, Any]:
-        """Decode canonical ``f=<base64url-json>`` report URL state.
-
-        Malformed state is a client error. Return the compact
-        ReportFilter JSON shape expected by report tool args.
-        """
-
-        from trade_trace.console.reporting.filter_state import (
-            FilterStateError,
-            decode_filter,
-        )
-
         try:
             decoded = decode_filter(value)
         except FilterStateError as exc:
@@ -233,295 +183,10 @@ def _build_app(home_path: str) -> Any:
             ) from exc
         return decoded.model_dump(mode="json", exclude_defaults=True)
 
-    # -- HTML pages --------------------------------------------------------
-
-    @app.get("/", response_class=HTMLResponse)
-    def overview_html(request: _Request, f: str | None = None) -> Any:
-        """Reporting-lane Overview per trade-trace-w422.
-
-        Replaces the legacy DB-meta snapshot with a P&L / risk roll-up
-        dashboard built on the safe-report adapter. The legacy
-        `pages.overview_context` function still exists for tests that
-        pin its shape, but this route now serves the canonical reader
-        view per reporting-product.md §3 (Reporting lane Overview)."""
-
-        return _render_dashboard(request, pages.dashboard_overview_context, f=f)
-
-    @app.get("/overview-legacy", response_class=HTMLResponse, include_in_schema=False)
-    def overview_legacy_html(request: _Request) -> Any:
-        """Legacy DB-meta snapshot kept under a developer-lane URL so
-        operators auditing schema_version / row counts can still reach
-        it. Linked from the Audit / Integrity page when needed."""
-
-        path, db = _open()
-        try:
-            ctx = pages.overview_context(db.connection, db_path=path)
-        finally:
-            db.close()
-        return _render(request, "overview.html", ctx)
-
-    @app.get("/journal", response_class=HTMLResponse)
-    def journal_html(request: _Request, cursor: str | None = None, limit: int = 50) -> Any:
-        _, db = _open()
-        try:
-            ctx = pages.journal_context(db.connection, cursor=cursor, limit=limit)
-        finally:
-            db.close()
-        return _render(request, "journal.html", ctx)
-
-    @app.get("/decisions", response_class=HTMLResponse)
-    def decisions_html(
-        request: _Request,
-        cursor: str | None = None,
-        limit: int = 50,
-        decision_type: str | None = None,
-        instrument_id: str | None = None,
-    ) -> Any:
-        _, db = _open()
-        try:
-            ctx = pages.decisions_context(
-                db.connection,
-                cursor=cursor,
-                limit=limit,
-                filters={
-                    "decision_type": decision_type or "",
-                    "instrument_id": instrument_id or "",
-                },
-            )
-        finally:
-            db.close()
-        return _render(request, "decisions.html", ctx)
-
-    @app.get("/decisions/{decision_id}", response_class=HTMLResponse)
-    def decision_detail_html(request: _Request, decision_id: str) -> Any:
-        _, db = _open()
-        try:
-            ctx = pages.decision_detail_context(db.connection, decision_id=decision_id)
-        finally:
-            db.close()
-        if ctx is None:
-            raise fastapi.HTTPException(status_code=404, detail=f"decision {decision_id} not found")
-        return _render(request, "decision_detail.html", ctx)
-
-    @app.get("/positions/{position_id}", response_class=HTMLResponse)
-    def position_detail_html(request: _Request, position_id: str) -> Any:
-        """Per-position audit page per bead trade-trace-svp2.
-
-        Backed by `console.reporting.position_detail`. Renders the
-        lifecycle projection, full chronological position_events
-        lineage, and the named missing-data caveats (open_no_mark,
-        missing_risk_budget, no_strategy)."""
-
-        _, db = _open()
-        try:
-            ctx = pages.position_detail_context(db.connection, position_id=position_id)
-        finally:
-            db.close()
-        if ctx is None:
-            raise fastapi.HTTPException(status_code=404, detail=f"position {position_id} not found")
-        return _render(request, "position_detail.html", ctx)
-
-    def _render_dashboard(
-        request: _Request,
-        builder: Any,
-        template: str = "dashboard.html",
-        f: str | None = None,
-    ) -> Any:
-        """Common error wrapper for the report-backed dashboards.
-        The adapter raises `ReportAdapterError` on validation failures
-        / unsupported tools / lazy-write attempts; the route surfaces
-        those as 400s rather than letting them bubble as 500s."""
-
-        from trade_trace.console.reporting import ReportAdapterError
-
-        home = resolve_home(home_path)
-        filter_arg = _decoded_filter_arg(f)
-        _, db = _open()
-        try:
-            try:
-                ctx = builder(str(home), filter=filter_arg)
-            except ReportAdapterError as exc:
-                raise fastapi.HTTPException(status_code=400, detail=str(exc)) from exc
-        finally:
-            db.close()
-        return _render(request, template, ctx)
-
-    @app.get("/reports/pnl", response_class=HTMLResponse)
-    def dashboard_pnl_html(request: _Request, f: str | None = None) -> Any:
-        return _render_dashboard(request, pages.dashboard_pnl_context, f=f)
-
-    @app.get("/reports/risk", response_class=HTMLResponse)
-    def dashboard_risk_html(request: _Request, f: str | None = None) -> Any:
-        return _render_dashboard(request, pages.dashboard_risk_context, f=f)
-
-    @app.get("/reports/performance", response_class=HTMLResponse)
-    def dashboard_performance_html(request: _Request, f: str | None = None) -> Any:
-        return _render_dashboard(request, pages.dashboard_performance_context, f=f)
-
-    @app.get("/reports/strategy", response_class=HTMLResponse)
-    def dashboard_strategy_html(request: _Request, f: str | None = None) -> Any:
-        return _render_dashboard(request, pages.dashboard_strategy_context, f=f)
-
-    @app.get("/reports/decisions", response_class=HTMLResponse)
-    def dashboard_decision_intelligence_html(request: _Request, f: str | None = None) -> Any:
-        return _render_dashboard(request, pages.dashboard_decision_intelligence_context, f=f)
-
-    @app.get("/reports/calibration", response_class=HTMLResponse)
-    def dashboard_calibration_full_html(request: _Request, f: str | None = None) -> Any:
-        return _render_dashboard(request, pages.dashboard_calibration_context, f=f)
-
-    @app.get("/evidence", response_class=HTMLResponse)
-    def dashboard_evidence_html(request: _Request, f: str | None = None) -> Any:
-        return _render_dashboard(request, pages.dashboard_evidence_context, f=f)
-
-    @app.get("/reports/compare", response_class=HTMLResponse)
-    def dashboard_compare_html(
-        request: _Request,
-        base_report: str = "calibration",
-        group_by: str = "strategy_id",
-        f: str | None = None,
-    ) -> Any:
-        """Comparison builder per bead trade-trace-sqtq. Wraps
-        report.compare(base_report, group_by, filter={}). Defaults
-        compare calibration across strategies; the per-page form
-        rebinds base_report (calibration|pnl) and group_by."""
-
-        from trade_trace.console.reporting import ReportAdapterError
-
-        home = resolve_home(home_path)
-        filter_arg = _decoded_filter_arg(f)
-        _, db = _open()
-        try:
-            try:
-                ctx = pages.dashboard_compare_context(
-                    str(home), base_report=base_report, group_by=group_by,
-                    filter=filter_arg,
-                )
-            except ReportAdapterError as exc:
-                raise fastapi.HTTPException(status_code=400, detail=str(exc)) from exc
-        finally:
-            db.close()
-        return _render(request, "dashboard.html", ctx)
-
-    @app.get("/reports/{tool}/export.json")
-    def report_export_json(tool: str, f: str | None = None) -> Any:
-        """Read-only export packet per bead trade-trace-sqtq. Returns
-        the report's full envelope + filter + request_id + as_of +
-        record_ids + exported_at as JSON, with no credentials. The
-        adapter enforces the safe-report allowlist; any
-        non-allowlisted tool surfaces as a 400."""
-
-        from trade_trace.console.reporting import ReportAdapterError
-
-        # The CLI invocation uses dots in tool names; the URL path
-        # uses the same dotted name (e.g. `/reports/report.pnl/export.json`).
-        home = resolve_home(home_path)
-        filter_arg = _decoded_filter_arg(f)
-        _, db = _open()
-        try:
-            try:
-                packet = pages.report_export_packet(
-                    home=str(home), tool=tool, args={"filter": filter_arg},
-                )
-            except ReportAdapterError as exc:
-                raise fastapi.HTTPException(status_code=400, detail=str(exc)) from exc
-        finally:
-            db.close()
-        return packet
-
-    @app.get("/trades", response_class=HTMLResponse)
-    def trades_html(
-        request: _Request,
-        cursor: str | None = None,
-        limit: int = 50,
-        strategy_id: str | None = None,
-        instrument_id: str | None = None,
-        decision_type: str | None = None,
-    ) -> Any:
-        """Reporting-lane Trades index per bead trade-trace-q2li.
-
-        Read-only paginated view of trading-typed decisions; backed by
-        `console.reporting.list_trades`. Query params double as the
-        per-page filter form's persistence layer; the global
-        ReportFilter URL state (the `f=` parameter from hayy) is
-        consumed by the dashboard pages that render aggregate metrics.
-        """
-
-        _, db = _open()
-        try:
-            ctx = pages.trades_context(
-                db.connection, cursor=cursor, limit=limit,
-                strategy_id=strategy_id or None,
-                instrument_id=instrument_id or None,
-                decision_type=decision_type or None,
-            )
-        finally:
-            db.close()
-        return _render(request, "trades.html", ctx)
-
-    @app.get("/reports", response_class=HTMLResponse)
-    def reports_html(request: _Request) -> Any:
-        _, db = _open()
-        try:
-            ctx = pages.reports_context(db.connection)
-        finally:
-            db.close()
-        return _render(request, "reports.html", ctx)
-
-    @app.get("/calibration", response_class=HTMLResponse)
-    def calibration_html(request: _Request, f: str | None = None) -> Any:
-        return _render_dashboard(request, pages.dashboard_calibration_context, f=f)
-
-    @app.get("/strategies", response_class=HTMLResponse)
-    def strategies_html(request: _Request, cursor: str | None = None, limit: int = 50) -> Any:
-        _, db = _open()
-        try:
-            ctx = pages.strategies_context(db.connection, cursor=cursor, limit=limit)
-        finally:
-            db.close()
-        return _render(request, "strategies.html", ctx)
-
-    @app.get("/playbooks", response_class=HTMLResponse)
-    def playbooks_html(request: _Request, cursor: str | None = None, limit: int = 50) -> Any:
-        _, db = _open()
-        try:
-            ctx = pages.playbooks_context(db.connection, cursor=cursor, limit=limit)
-        finally:
-            db.close()
-        return _render(request, "playbooks.html", ctx)
-
-    @app.get("/integrity", response_class=HTMLResponse)
-    def integrity_html(request: _Request) -> Any:
-        _, db = _open()
-        try:
-            ctx = pages.integrity_context(db.connection)
-        finally:
-            db.close()
-        return _render(request, "integrity.html", ctx)
-
-    @app.get("/logs", response_class=HTMLResponse)
-    def logs_html(request: _Request, level: str | None = None, tail: int = 200) -> Any:
-        from trade_trace.console.logs import logs_context
-
-        ctx = logs_context(
-            home=resolve_home(home_path),
-            tail=max(10, min(int(tail), 2000)),
-            level_filter=level or None,
-        )
-        return _render(request, "logs.html", ctx)
-
-    @app.get("/raw", response_class=HTMLResponse)
-    def raw_html(request: _Request, event_id: int | None = None) -> Any:
-        _, db = _open()
-        try:
-            ctx = pages.raw_context(db.connection, event_id=event_id)
-        finally:
-            db.close()
-        return _render(request, "raw.html", ctx)
-
-    # -- JSON data endpoints ----------------------------------------------
+    # -- JSON API ----------------------------------------------------------
 
     @app.get("/status")
+    @app.get("/api/console/status")
     def status() -> dict[str, Any]:
         path = _db_path(resolve_home(home_path))
         try:
@@ -535,9 +200,24 @@ def _build_app(home_path: str) -> Any:
                 "logs_available": True,
             }
         try:
-            return endpoints.status(db.connection, db_path=path)
+            data = endpoints.status(db.connection, db_path=path)
+            data["generated_at"] = _generated_at()
+            return data
         finally:
             db.close()
+
+    @app.get("/api/console/catalog")
+    def catalog() -> dict[str, Any]:
+        return {
+            "routes": [
+                "/", "/trades", "/reports", "/reports/pnl", "/reports/risk",
+                "/reports/performance", "/reports/strategy", "/reports/decisions",
+                "/reports/compare", "/calibration", "/evidence", "/strategies",
+                "/playbooks", "/journal", "/decisions", "/logs", "/raw",
+            ],
+            "report_tools": list(SAFE_REPORT_TOOLS),
+            "lazy_write_handlers_blocked": list(endpoints.LAZY_WRITE_DENY_SET),
+        }
 
     def _bind_list(route: str, fn: Any) -> None:
         @app.get(route)
@@ -550,16 +230,69 @@ def _build_app(home_path: str) -> Any:
 
         _handler.__name__ = fn.__name__
 
-    _bind_list("/api/events", endpoints.journal_events)
-    _bind_list("/api/decisions", endpoints.decisions_list)
-    _bind_list("/api/memory_nodes", endpoints.memory_nodes_list)
-    _bind_list("/api/strategies", endpoints.strategies_list)
-    _bind_list("/api/playbooks", endpoints.playbooks_list)
-    _bind_list("/api/instruments", endpoints.instruments_list)
-    _bind_list("/api/forecasts", endpoints.forecasts_list)
-    _bind_list("/api/outcomes", endpoints.outcomes_list)
+    _bind_list("/api/console/events", endpoints.journal_events)
+    _bind_list("/api/console/memory-nodes", endpoints.memory_nodes_list)
+    _bind_list("/api/console/strategies", endpoints.strategies_list)
+    _bind_list("/api/console/playbooks", endpoints.playbooks_list)
+    _bind_list("/api/console/instruments", endpoints.instruments_list)
+    _bind_list("/api/console/forecasts", endpoints.forecasts_list)
+    _bind_list("/api/console/outcomes", endpoints.outcomes_list)
 
-    @app.get("/api/events/{event_id}")
+    @app.get("/api/console/decisions")
+    def decisions(
+        cursor: str | None = None,
+        limit: int = 50,
+        decision_type: str | None = None,
+        instrument_id: str | None = None,
+    ) -> dict[str, Any]:
+        _, db = _open()
+        try:
+            page = endpoints.decisions_list(
+                db.connection,
+                cursor=cursor,
+                limit=limit,
+                decision_type=decision_type,
+                instrument_id=instrument_id,
+            )
+            return _page_to_dict(page)
+        finally:
+            db.close()
+
+    @app.get("/api/console/trades")
+    def trades(
+        cursor: str | None = None,
+        limit: int = 50,
+        strategy_id: str | None = None,
+        instrument_id: str | None = None,
+        decision_type: str | None = None,
+    ) -> dict[str, Any]:
+        _, db = _open()
+        try:
+            page = list_trades(
+                db.connection,
+                cursor=cursor,
+                limit=limit,
+                strategy_id=strategy_id,
+                instrument_id=instrument_id,
+                decision_type=decision_type,
+            )
+            return _jsonable(_page_to_dict(page))
+        finally:
+            db.close()
+
+    @app.get("/api/console/positions/{position_id}")
+    def position(position_id: str) -> dict[str, Any]:
+        _, db = _open()
+        try:
+            detail = position_detail(db.connection, position_id)
+        finally:
+            db.close()
+        if detail is None:
+            raise fastapi.HTTPException(status_code=404, detail=f"position {position_id} not found")
+        return _jsonable(detail)
+
+    @app.get("/api/console/raw/{event_id}")
+    @app.get("/api/console/events/{event_id}")
     def event_detail(event_id: int) -> dict[str, Any]:
         _, db = _open()
         try:
@@ -569,6 +302,61 @@ def _build_app(home_path: str) -> Any:
         if event is None:
             raise fastapi.HTTPException(status_code=404, detail=f"event {event_id} not found")
         return event
+
+    @app.get("/api/console/logs")
+    def logs(level: str | None = None, tail: int = 200) -> dict[str, Any]:
+        from trade_trace.console.logs import logs_context
+
+        return logs_context(
+            home=resolve_home(home_path),
+            tail=max(10, min(int(tail), 2000)),
+            level_filter=level or None,
+        )
+
+    @app.post("/api/console/reports/{tool}/run")
+    def report_run(tool: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        args = dict(payload or {})
+        if "filter" not in args:
+            args["filter"] = {}
+        try:
+            ctx = run_report(tool, args, home=str(resolve_home(home_path)))
+        except ReportAdapterError as exc:
+            raise fastapi.HTTPException(status_code=400, detail=str(exc)) from exc
+        return _jsonable(ctx)
+
+    @app.get("/api/console/reports/{tool}/export")
+    def report_export(tool: str, f: str | None = None) -> dict[str, Any]:
+        filter_arg = _decoded_filter_arg(f)
+        try:
+            ctx = run_report(
+                tool,
+                {"filter": filter_arg},
+                home=str(resolve_home(home_path)),
+            )
+        except ReportAdapterError as exc:
+            raise fastapi.HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "tool": tool,
+            "filter": filter_arg,
+            "request_id": ctx.evidence.request_id,
+            "as_of": ctx.as_of,
+            "record_ids": ctx.evidence.record_ids,
+            "exported_at": datetime.now(UTC).isoformat(),
+            "envelope": ctx.raw_envelope,
+        }
+
+    # -- SPA fallback ------------------------------------------------------
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str) -> Any:
+        if full_path.startswith("api/"):
+            raise fastapi.HTTPException(status_code=404, detail="not found")
+        if not index_html.exists():
+            raise fastapi.HTTPException(
+                status_code=503,
+                detail="Console app assets are missing; run npm --prefix frontend/console run build",
+            )
+        return FileResponse(index_html, media_type="text/html")
 
     return app
 

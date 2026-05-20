@@ -1,197 +1,149 @@
-# Trade Trace Console — User Guide
+# Trade Trace Console - User Guide
 
-> Status: **shipped**. The Console is the optional `[console]`
-> extra; the base install does not require it (trade-trace-1kkv).
+> Status: clean-break React Console. The Console remains optional under
+> `trade-trace[console]`, local-first, read-only, and package-shipped.
 
-## What it is
+## What It Is
 
-A **local, read-only** review dashboard for the Trade Trace
-journal. It runs `http://127.0.0.1:8765` by default, reads the
-journal SQLite file via a SQLite URI `mode=ro` handle, and
-renders the same data the CLI and MCP surface — without
-mutating any state.
+The Console is a local analytics dashboard for a Trade Trace journal.
+It runs at `http://127.0.0.1:8765` by default, reads the journal SQLite
+file through a read-only handle, serves a prebuilt React/Vite app, and
+exposes read-only JSON APIs under `/api/console/*`.
 
-What it does **not** do:
+It does not execute trades, call broker APIs, fetch market data, mutate
+the journal DB, load CDN assets, send telemetry, or make outbound
+network connections during normal Console use.
 
-- Does **not** execute trades, route orders, or sign anything.
-- Does **not** call broker APIs.
-- Does **not** fetch market data.
-- Does **not** make outbound network connections (the
-  network-isolation guard in
-  [`docs/architecture/console.md`](./architecture/console.md)
-  §read-only-threat-model pins this).
-- Does **not** alter the journal DB.
-
-## Install
+## Install And Launch
 
 ```bash
 pip install 'trade-trace[console]'
-```
-
-The base wheel ships without FastAPI / Uvicorn / Jinja2; the
-extra adds them. If you skip the extra and run
-`tt console serve` anyway, the CLI prints:
-
-```
-Console requires the [console] extra:
-    pip install 'trade-trace[console]'
-```
-
-## Launch
-
-```bash
 tt console serve
 ```
 
-The default flags:
+The base wheel ships the compiled frontend assets. The `[console]`
+extra adds the Python server runtime:
 
-| Flag | Default | What it does |
-|------|---------|---------------|
-| `--host` | `127.0.0.1` | TCP bind host. Non-loopback values require `--allow-non-loopback`. |
-| `--port` | `8765` | TCP bind port. Choose an explicit free port; `--port=0` is rejected because the Console must print and open the actual URL. |
-| `--no-browser` | (off) | Skip the auto-open on startup. |
-| `--allow-non-loopback` | (off) | Explicit acknowledgement that `--host` exposes the dashboard beyond localhost. |
+- `fastapi`
+- `uvicorn[standard]`
 
-The CLI prints a banner on startup naming the URL, the DB path,
-the read-only mode, and the no-trade notice. It then opens your
-default browser (unless `--no-browser`).
+Node.js is only needed by maintainers rebuilding the frontend.
 
-If the port is occupied, the CLI exits with code **73** and a
-helpful message naming the port and suggesting `--port=<n+1>`
-or another explicit free port. There is no traceback; operators
-can script around the documented exit code.
+Launch flags:
 
-`Ctrl+C` triggers a graceful shutdown without traceback.
+| Flag | Default | Meaning |
+|---|---:|---|
+| `--host` | `127.0.0.1` | TCP bind host. Non-loopback values require explicit opt-in. |
+| `--port` | `8765` | TCP bind port. `--port=0` is rejected so the banner can name the URL. |
+| `--home` | resolved Trade Trace home | Journal home to read. |
+| `--no-browser` | off | Skip auto-opening the browser. |
+| `--allow-non-loopback` | off | Acknowledge that the dashboard is reachable beyond localhost. |
+
+## Frontend Stack
+
+The shipped app is built from `frontend/console/`:
+
+- React + TypeScript + Vite
+- TanStack Router for SPA routes
+- TanStack Query for server state and refresh
+- TanStack Table / Virtual for dense tables
+- Apache ECharts for charts
+- Radix primitives, Tailwind, source-owned shadcn-style components
+- Lucide React icons
+
+Release builds emit `src/trade_trace/console/static/app/index.html`
+and `src/trade_trace/console/static/app/assets/*`. FastAPI serves
+`/assets/*` directly and returns the app shell for SPA routes.
 
 ## Pages
 
-Every page shows the read-only badge and a staleness indicator
-("Data as of HH:MM:SS UTC"). A manual refresh button is in the
-filter bar; a "Refresh on R" keyboard shortcut works on every
-page. Optional `Off / 10s / 30s / 60s` polling persists in
-`localStorage`. The UTC↔Local time-zone toggle also persists
-client-side; the server always returns UTC ISO 8601.
+The SPA owns these routes:
 
-Per the reporting product overhaul ([trade-trace-3o4a]), the
-navigation now splits three lanes (reporting / strategies+playbooks /
-developer-audit). The reporting lane covers the Tradervue-like reading
-experience; the developer-audit lane preserves the inspection surface.
+| Route | Purpose |
+|---|---|
+| `/` | Overview rollup for journal counts, P&L, and risk. |
+| `/trades` | Trade-typed decisions with caveats. |
+| `/reports` | Safe report catalog. |
+| `/reports/pnl` | P&L analytics. |
+| `/reports/risk` | Risk analytics. |
+| `/reports/performance` | Decision velocity and performance timeline. |
+| `/reports/strategy` | Strategy performance. |
+| `/reports/decisions` | Watchlist and decision intelligence. |
+| `/reports/compare` | Comparison report surface. |
+| `/calibration` | Calibration metrics and integrity. |
+| `/evidence` | Source quality and provenance analytics. |
+| `/strategies`, `/playbooks` | Strategy and playbook tables. |
+| `/journal`, `/decisions`, `/logs`, `/raw` | Developer/audit inspection surfaces. |
 
-### Reporting lane
+## Read-Only API
 
-| Page | What it shows |
-|------|---------------|
-| Overview (`/`) | P&L + risk + performance roll-up dashboard: realized/unrealized P&L tiles, open-position count, open-mark coverage, mean R, expectancy. Evidence affordance deep-links into `report.pnl` and `report.risk` record IDs. |
-| Trades (`/trades`) | Every trade-typed decision (`actual_enter`, `actual_exit`, `paper_enter`, `paper_exit`, `add`, `reduce`) with side / qty / price / declared risk / strategy / per-row caveat chips. Filterable by strategy, instrument, decision type; cursor pagination. |
-| Reports (`/reports`) | Index of read-only `report.*` tools the Console exposes. Side-effect-risky handlers (`signal.scan`, `report.coach`) are not invocable. |
-| P&L (`/reports/pnl`) | `report.pnl` dashboard with realized / unrealized / MTM tiles, open-mark coverage caveat, per-instrument bar chart. |
-| Risk (`/reports/risk`) | `report.risk` R-multiple panel: mean / median R, expectancy, win rate, payoff ratio, pending-with-risk caveat. |
-| Performance (`/reports/performance`) | Decision velocity bucketed by day; placeholder for the dedicated equity-curve / drawdown view. |
-| Strategy (`/reports/strategy`) | `report.strategy_performance` — wraps `report.compare(base_report='pnl', group_by='strategy_id')`. |
-| Decision intelligence (`/reports/decisions`) | Watch + overdue watch + stale watch surface from `report.watchlist`. |
-| Compare (`/reports/compare`) | Comparison builder. `base_report` × `group_by` form bound to the closed enums (calibration/pnl × strategy_id/agent_id/model_id/playbook_version_id/decision_type). |
-| Calibration (`/calibration`) | Brier / log score / ECE / sharpness / baseline panel + reliability bins from `report.calibration`. Integrity diagnostics embedded. |
-| Evidence (`/evidence`) | Provenance hygiene from `report.source_quality`: missing / stale / contradictory / duplicated / sensitive sources. |
-| Audit · Integrity (`/integrity`) | Legacy developer-lane integrity snapshot (source totals, attachment counts, outbox pending). Kept alongside the new Evidence dashboard. |
+The frontend calls these local JSON endpoints:
 
-### Strategies / Playbooks
+- `GET /api/console/status`
+- `GET /api/console/catalog`
+- `GET /api/console/events`
+- `GET /api/console/decisions`
+- `GET /api/console/trades`
+- `GET /api/console/positions/{id}`
+- `GET /api/console/logs`
+- `GET /api/console/raw/{event_id}`
+- `POST /api/console/reports/{report_name}/run`
+- `GET /api/console/reports/{report_name}/export`
 
-| Page | What it shows |
-|------|---------------|
-| Strategies (`/strategies`) | Paginated strategies table. |
-| Playbooks (`/playbooks`) | Paginated playbooks table. |
+All financial and calibration aggregates come from backend report tools.
+The frontend renders server-provided metrics and never computes P&L,
+R-multiples, win rate, ECE, scoring, or other report math in JavaScript.
 
-### Developer / Audit lane
+## Maintainer Build
 
-| Page | What it shows |
-|------|---------------|
-| Journal (`/journal`) | Paginated event stream with event-type / actor / subject-kind filters and per-row Raw JSON drilldown. |
-| Decisions (`/decisions`) | Paginated decisions table with detail page (`/decisions/<id>`) showing decision row plus related events. |
-| Position detail (`/positions/<id>`) | Per-position lifecycle audit: realized/unrealized P&L tiles, full `position_events` lineage chronologically, opening decision strategy/playbook, missing-mark / no-strategy caveats. |
-| Logs (`/logs`) | Last N lines of `<home>/logs/trade-trace.log` (configurable via `TRADE_TRACE_LOG_DIR`). Optional level filter, malformed-line tolerance, and the same secret redaction the logging module applies on write. |
-| Raw JSON (`/raw`) | Index of latest events plus per-event payload viewer (`/raw?event_id=<n>`). |
-| Legacy Overview (`/overview-legacy`) | DB-meta snapshot kept for operators auditing schema_version / row counts; the reporting-lane Overview at `/` is the canonical reader view. |
+```bash
+npm --prefix frontend/console ci
+npm --prefix frontend/console run test
+npm --prefix frontend/console run build
+python -m build
+```
 
-### Read-only data flow
+The built app is intentionally committed into package data so users do
+not need Node.js to run the Console from a wheel or source checkout.
 
-Every dashboard renders server-computed metrics — there is no
-frontend financial math. The `report.*` tools produce a
-`ReportResult` envelope; the
-`trade_trace.console.reporting.adapter.run_report` helper enforces
-the closed safe-report allowlist (`SAFE_REPORT_TOOLS`) and projects
-the envelope into a typed `DashboardContext` Jinja consumes. Every
-aggregate metric exposes an Evidence affordance with the originating
-tool name, CLI invocation, request_id, and per-record drilldown IDs
-(per the §6 evidence contract in
-[`architecture/reporting-product.md`](./architecture/reporting-product.md)).
+## Quality Gates
 
-### Filter URL state
+Before release, run:
 
-The reporting dashboards share a single `f=<base64url-json>` URL
-parameter carrying the canonical `ReportFilter`. Bookmarking or
-sharing a dashboard URL preserves the filter; the encoder /
-decoder lives at
-`trade_trace.console.reporting.filter_state` (trade-trace-hayy).
-Empty filter encodes to `e30` (base64url of `{}`); unknown axes are
-rejected via `ReportFilter.model_validate` (`extra="forbid"`) so a
-crafted URL can never silently broaden the filter.
+```bash
+npm --prefix frontend/console run test
+npm --prefix frontend/console run build
+pytest tests/contracts/test_console_serve.py tests/contracts/test_console_http_routes.py
+pytest tests/contracts/test_console_shell.py tests/contracts/test_console_dashboard_a11y.py
+pytest tests/contracts/test_console_chart_bootstrap.py
+pytest tests/security/test_console_security_headers.py
+pytest tests/console_browser/
+```
 
-### Read-only export packets
-
-Every reporting dashboard exposes `/reports/<tool>/export.json`
-(e.g. `/reports/report.pnl/export.json`) which bundles the full
-ReportResult envelope, originating filter, request_id, as_of, and
-record_ids in one JSON packet for cross-tool audit. No credentials
-are ever embedded; the packet is the same envelope the CLI / MCP
-client would receive. Per-bead trade-trace-sqtq.
-
-### Charting
-
-Dashboards render charts via the vendored Chart.js asset under
-`static/vendor/chartjs/`. The bootstrap script
-(`static/js/chart-bootstrap.js`) reads `<script
-type="application/json" data-chart="<canvas-id>">` blocks via
-`JSON.parse` (no `eval`, no `new Function` — CSP-clean). The asset
-is downloaded once via the curl in
-`static/vendor/chartjs/README.md`; when the binary is missing every
-chart canvas degrades to a visible "asset not loaded" caveat
-(numeric evidence below is unaffected). See trade-trace-ycag for
-the bootstrap and trade-trace-nfn4 for the binary install.
-
-The operational logging contract lives in
-[`docs/architecture/logging.md`](./architecture/logging.md)
-(trade-trace-3zvl); the Logs page consumes those JSONL files.
+Agentic visual QA is tracked in
+`docs/architecture/console-visual-review.md`. A release review should
+capture screenshots of the rich fixture at desktop, tablet, and mobile
+widths, then inspect hierarchy, density, overlap, table ergonomics,
+chart readability, loading/error/empty states, and route consistency.
 
 ## Troubleshooting
 
 | Symptom | Resolution |
-|---------|------------|
-| `Console requires the [console] extra` | `pip install 'trade-trace[console]'` |
-| `port <n> on 127.0.0.1 is already in use` | Re-run with `--port <n+1>` or another explicit free port. The CLI exits with code 73 — operators can script around it. |
-| Status page reports `reason: 'missing'` | The DB path does not exist. Run `tt journal init` first or pass `--home` to the right path. |
-| Status page reports `reason: 'unsupported_schema'` | The file at the DB path is not a Trade Trace journal (missing M0 tables). The Console will not auto-migrate. Check `$TRADE_TRACE_HOME`. |
-| Browser fails to render anything | The vendored htmx / CSS / JS path may not have shipped. Verify the `[console]` extra is installed and the wheel contains `src/trade_trace/console/static/`. |
-| Non-loopback bind warning | Pass `--allow-non-loopback` only if you intentionally want LAN-reachable Console. The default 127.0.0.1 bind is correct for almost every use. |
+|---|---|
+| `Console requires the [console] extra` | Install with `pip install 'trade-trace[console]'`. |
+| Browser shows only an asset-missing error | Rebuild with `npm --prefix frontend/console run build`. |
+| `/api/console/status` says `missing` | Run `tt journal init` or pass the correct `--home`. |
+| Port conflict exits with code 73 | Re-run with another explicit `--port`. |
+| Non-loopback bind refused | Add `--allow-non-loopback` only if LAN exposure is intentional. |
 
-## Read-only contract
+## Read-Only Contract
 
-The Console enforces read-only at four layers:
+The Console enforces read-only behavior at the SQLite handle, endpoint,
+tool-dispatch, and browser layers:
 
-1. **OS file descriptor** — every SQLite handle opens with the
-   URI `mode=ro` flag, so the kernel refuses writes.
-2. **SQLite layer** — `PRAGMA query_only = 1` re-asserts the
-   intent. Any `INSERT/UPDATE/DELETE/DDL` raises
-   `sqlite3.OperationalError("attempt to write a readonly
-   database")`.
-3. **Tool dispatch** — the Console code path never calls a
-   write tool. The lazy-write deny set
-   (`signal.scan`, `report.coach`) is enforced by an AST test
-   that pins endpoints/pages source.
-4. **Security headers** — every HTTP response carries CSP
-   (no `unsafe-inline`, no `unsafe-eval`, `'self'` only),
-   `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
-   `Referrer-Policy: no-referrer`, a locked-down
-   `Permissions-Policy`, and `Cache-Control: no-store`.
-
-See [`docs/architecture/console.md`](./architecture/console.md)
-for the complete contract and threat model.
+1. SQLite opens with URI read-only mode and `PRAGMA query_only`.
+2. Console API routes use `open_database_readonly()`.
+3. The report adapter allows only `SAFE_REPORT_TOOLS` and blocks
+   `signal.scan` and `report.coach`.
+4. CSP allows only `'self'`, forbids inline script/style and eval, and
+   no built app asset may reference a CDN or remote bundle.

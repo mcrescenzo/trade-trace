@@ -51,15 +51,12 @@ dependencies = [
 [project.optional-dependencies]
 mcp = []  # back-compat alias; mcp is now a base runtime dependency
 embeddings = ["sqlite-vec==0.1.6", "keyring>=25"]
-# Console extra adds FastAPI + Uvicorn + Jinja2 for the local
-# read-only dashboard. Kept optional so the core MCP/CLI install
-# stays lean (trade-trace-1kkv.2). The serve entrypoint is always
-# registered; missing deps surface as a UNSUPPORTED_CAPABILITY
-# error with the install command.
+# Console extra adds FastAPI + Uvicorn for the local read-only
+# dashboard. The React/Vite app is built at release time and ships
+# as static package data, so package users do not need Node.js.
 console = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
-    "jinja2>=3.1",
 ]
 # Console browser-test harness (trade-trace-1kkv.15). Operators
 # run `pip install 'trade-trace[console-test]' && playwright
@@ -93,11 +90,10 @@ Changelog = "https://github.com/mcrescenzo/trade-trace/releases"
 where = ["src"]
 
 [tool.setuptools.package-data]
-# Console ships HTML templates, CSS, and vendored JS as
-# package-data so the wheel includes them. Operators install
-# `trade-trace[console]` to get the runtime; the assets are
-# present in every wheel either way (trade-trace-1kkv.2/.5).
-"trade_trace.console" = ["templates/*.html", "static/**/*"]
+# Console ships the prebuilt React/Vite app as package data.
+# Operators install `trade-trace[console]` to get the FastAPI/Uvicorn
+# runtime; the app assets are present in every wheel.
+"trade_trace.console" = ["static/**/*"]
 
 [tool.ruff]
 line-length = 100

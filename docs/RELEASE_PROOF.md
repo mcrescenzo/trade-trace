@@ -28,9 +28,8 @@ The wheel contains only the intended public files:
 - `trade_trace/` (Python source tree, including `console/`,
   `contracts/`, `events/`, `models/`, `reports/`, `security/`,
   `storage/`, `tools/`).
-- `trade_trace/console/templates/*.html`.
-- `trade_trace/console/static/css/*.css`,
-  `trade_trace/console/static/js/*.js`.
+- `trade_trace/console/static/app/index.html`.
+- `trade_trace/console/static/app/assets/*`.
 - `LICENSE`, `METADATA`, `WHEEL`, `entry_points.txt`,
   `top_level.txt`, `RECORD`.
 

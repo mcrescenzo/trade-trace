@@ -296,47 +296,18 @@ This rules out "trust me" tiles.
 
 ### 7.1 Charting
 
-Vendored **Chart.js**, pinned, served from
-`trade_trace/console/static/vendor/chartjs/`.
-This is the resolved default from the gtep bead.
-
-Rules:
-
-- **Pin** the version in `pyproject.toml` constraints + the static
-  asset filename (e.g. `chart-4.4.3.min.js`); upgrading the asset is
-  a deliberate PR that bumps the pinned filename, not a silent
-  refresh.
-- **Local-only.** No CDN fallback, no `integrity` hash that gates
-  network loading. The file is served from the `[console]` extra's
-  bundled static assets.
-- **CSP compatible.** No inline `<script>` execution; chart configs
-  are emitted as `<script type="application/json">` blocks read by
-  a small bootstrap script under `static/js/`. CSP `script-src` stays
-  `'self'`.
-- **No npm build pipeline.** The vendored file is downloaded once
-  during the trade-trace-ycag implementation and committed as a
-  static asset. A `tests/security/test_console_security_headers.py`
-  case must assert the asset's SHA matches the pinned value.
-- **No frontend math.** Chart series are pre-computed by the report
-  tool and shipped as JSON to the page. Tooltips show the
-  server-provided metric verbatim — no client-side rounding,
-  bucketing, or aggregation.
-
-Rejected alternatives (recorded for context):
-
-- **Server-rendered SVG**: rejected for MVP because interactive
-  hover/click affordances (essential for drilldowns) would require a
-  client-side library anyway, defeating the simplification.
-- **uPlot**: smaller and faster but covers fewer chart kinds; would
-  need a supplementary library for histograms/calendar heatmaps.
-- **D3**: too low-level for the MVP timeline; deferred.
-- **External chart service / CDN**: rejected per §1.4.
+Charts use **Apache ECharts** bundled into the React/Vite build under
+`src/trade_trace/console/static/app/assets/`. No CDN or runtime package
+download is allowed. Chart series and aggregate values are produced by
+backend report tools; the frontend renders those values and does not
+perform financial or calibration aggregation in JavaScript.
 
 ### 7.2 Frontend stack
 
-Unchanged: FastAPI + Jinja + vanilla DOM + htmx (per
-[`console.md`](./console.md) §Decision 4). No React, no Vue, no Svelte,
-no npm build, no bundler.
+FastAPI serves a prebuilt React/Vite SPA. Source lives in
+`frontend/console/`; wheels ship the compiled app assets. The stack is
+React, TypeScript, Vite, TanStack Router, TanStack Query, TanStack
+Table/Virtual, ECharts, Radix primitives, Tailwind, and Lucide icons.
 
 ### 7.3 Python dependencies
 
@@ -409,20 +380,10 @@ state) and `src/trade_trace/console/static/` (chart scaffold).
    No new SQLite indexes were needed — the existing
    `decisions(created_at)` ordering meets budget under the composite
    cursor.
-4. **Charting layer** (trade-trace-ycag — *scaffold shipped*; binary
-   install tracked as trade-trace-nfn4): vendored Chart.js v4.4.3
-   under `src/trade_trace/console/static/vendor/chartjs/`. The
-   bootstrap script
-   `src/trade_trace/console/static/js/chart-bootstrap.js` reads
-   `<script type="application/json" data-chart="<canvas-id>">` blocks
-   via `JSON.parse` (no `eval`, no `new Function` — CSP-clean),
-   constructs Chart.js instances on the matching canvases, and
-   renders a graceful "Chart asset not loaded" caveat when
-   `window.Chart` is undefined (e.g. before the operator has run
-   the curl in `vendor/chartjs/README.md`). Test pin:
-   `tests/contracts/test_console_chart_bootstrap.py` (5 tests).
-   The actual `chart.umd.min.js` download is the explicit operator
-   step in trade-trace-nfn4.
+4. **Charting layer**: ECharts is bundled by Vite into the shipped SPA
+   assets. There is no runtime chart download, no CDN fallback, and no
+   operator-installed chart binary. Test pin:
+   `tests/contracts/test_console_chart_bootstrap.py`.
 5. **Fixtures** (trade-trace-dnwh — *shipped*): the new
    `mvp-eval-rich` `journal.fixture_seed` target (in
    `src/trade_trace/tools/fixture.py`) overlays `mvp-eval` with
@@ -448,7 +409,7 @@ state) and `src/trade_trace/console/static/` (chart scaffold).
 
 Out of scope (deferred to dedicated beads):
 
-- Specific Chart.js color palette / branding / theming.
+- Specific ECharts color palette / branding / theming.
 - Per-page wireframes (UI beads own those).
 - Visual polish + responsive breakpoints (trade-trace-bxhu).
 - Browser/a11y QA (trade-trace-0d3p).

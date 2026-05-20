@@ -38,7 +38,8 @@ Requirements: Python 3.11+ and SQLite with FTS5 (see
 Optional vector recall installs with `trade-trace[embeddings]`
 (adds `sqlite-vec` and OS keyring support for local or API embeddings).
 The optional read-only **Console** dashboard installs with
-`trade-trace[console]` (FastAPI + Uvicorn + Jinja2); see
+`trade-trace[console]` (FastAPI + Uvicorn serving a packaged
+React/Vite dashboard); see
 [`docs/CONSOLE.md`](./docs/CONSOLE.md).
 
 For development:

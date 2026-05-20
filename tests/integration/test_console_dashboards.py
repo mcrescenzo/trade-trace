@@ -73,9 +73,9 @@ def test_dashboard_context_uses_safe_report_tool(rich_home: Path, builder, slug,
 
 @pytest.mark.parametrize("builder, slug, tool", DASHBOARDS)
 def test_dashboard_context_includes_chart_config_json(rich_home: Path, builder, slug, tool):
-    """`chart_config_json` is the JSON payload the chart bootstrap
-    consumes via JSON.parse (no eval). It must decode cleanly to a
-    Chart.js config dict."""
+    """Legacy context helpers still emit a JSON chart config for
+    projection coverage even though the shipped React app renders
+    charts with ECharts."""
 
     ctx = builder(str(rich_home))
     raw = ctx["chart_config_json"]

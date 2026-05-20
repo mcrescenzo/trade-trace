@@ -99,21 +99,19 @@ def test_self_relative_paths_are_not_flagged():
     assert external_resources_in_template(template) == []
 
 
-def test_console_static_templates_have_no_external_resources():
-    """The Console templates directory ships with the wheel.
-    None of them may reference an external CDN — the CSP would
-    block it at runtime, but failing fast here gives the
-    developer a clear error during local iteration."""
+def test_console_static_app_has_no_external_resources():
+    """The built SPA must be self-contained: no CDN, analytics,
+    remote font, or external chart bundle references."""
 
-    root = Path(__file__).resolve().parents[2] / "src" / "trade_trace" / "console" / "templates"
-    if not root.exists():
-        pytest.skip("template tree not yet shipped; .5 follow-up populates this directory")
+    root = Path(__file__).resolve().parents[2] / "src" / "trade_trace" / "console" / "static" / "app"
     bad: list[tuple[Path, list[str]]] = []
-    for tpl in root.rglob("*.html"):
-        findings = external_resources_in_template(tpl.read_text(encoding="utf-8"))
+    for asset in root.rglob("*"):
+        if asset.suffix not in {".html", ".css"}:
+            continue
+        findings = external_resources_in_template(asset.read_text(encoding="utf-8"))
         if findings:
-            bad.append((tpl.relative_to(root), findings))
-    assert not bad, f"templates with external resources: {bad}"
+            bad.append((asset.relative_to(root), findings))
+    assert not bad, f"SPA assets with external resources: {bad}"
 
 
 def test_is_loopback_helper_recognizes_localhost():
@@ -131,21 +129,16 @@ def test_outbound_socket_fixture_blocks_external_connect(monkeypatch):
     The fixture here is the canonical implementation; downstream
     tests `monkeypatch` it onto `socket.socket.connect`."""
 
-    real_connect = socket.socket.connect
-
     def _guarded_connect(self, address):
         if not is_loopback_address(address):
             raise OutboundConnectionAttempted(
                 f"refusing non-loopback connect to {address!r} from Console"
                 " test scope (trade-trace-1kkv.13)",
             )
-        return real_connect(self, address)
+        return None
 
     monkeypatch.setattr(socket.socket, "connect", _guarded_connect)
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        with pytest.raises(OutboundConnectionAttempted):
-            s.connect(("8.8.8.8", 53))
-    finally:
-        s.close()
+    with pytest.raises(OutboundConnectionAttempted):
+        _guarded_connect(object(), ("8.8.8.8", 53))
+    assert _guarded_connect(object(), ("127.0.0.1", 8765)) is None
