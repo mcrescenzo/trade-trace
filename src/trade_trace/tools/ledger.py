@@ -30,7 +30,11 @@ from trade_trace.tools._helpers import (
     reject_if_contains_secrets,
     require,
 )
-from trade_trace.tools.decision_matrix import validate_decision_fields
+from trade_trace.tools.decision_matrix import (
+    allowed_decision_types,
+    decision_matrix_contract,
+    validate_decision_fields,
+)
 from trade_trace.tools.errors import ToolError
 
 
@@ -1871,10 +1875,16 @@ _SOURCE_ADD_SCHEMA: dict[str, Any] = {
 }
 
 
+_DECISION_MATRIX_CONTRACT = decision_matrix_contract()
+
 _DECISION_ADD_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "type": {"type": "string"},
+        "type": {
+            "type": "string",
+            "enum": allowed_decision_types(),
+            "description": "Decision discriminator. See x-decision-matrix for per-type required/optional/forbidden fields.",
+        },
         "instrument_id": {"type": "string"},
         "thesis_id": {"type": "string"},
         "forecast_id": {"type": "string"},
@@ -1900,8 +1910,42 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
     "description": (
         "decision.add — runtime decision matrix in decision_matrix.py "
         "enforces per-`type` required/forbidden fields and returns a "
-        "VALIDATION_ERROR envelope on violation (bead trade-trace-hsnz)."
+        "VALIDATION_ERROR envelope on violation. Use x-decision-matrix "
+        "for per-type required/optional/forbidden fields."
     ),
+    "x-decision-matrix": _DECISION_MATRIX_CONTRACT,
+    "x-decision-examples": {
+        "skip": {
+            "type": "skip",
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "reason": "Spread too wide for planned edge.",
+            "idempotency_key": "00000000-0000-4000-8000-000000000000",
+        },
+        "watch": {
+            "type": "watch",
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "reason": "Waiting for liquidity to improve.",
+            "review_by": "2026-05-22T14:30:00Z",
+            "idempotency_key": "00000000-0000-4000-8000-000000000000",
+        },
+        "actual_enter": {
+            "type": "actual_enter",
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "thesis_id": "thes_THESIS_ID_HERE",
+            "side": "yes",
+            "quantity": 100,
+            "price": 0.62,
+            "idempotency_key": "00000000-0000-4000-8000-000000000000",
+        },
+        "actual_exit": {
+            "type": "actual_exit",
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "side": "yes",
+            "quantity": 100,
+            "price": 0.78,
+            "idempotency_key": "00000000-0000-4000-8000-000000000000",
+        },
+    },
 }
 
 
@@ -1922,7 +1966,18 @@ def register_ledger_tools(registry: ToolRegistry) -> None:
     registry.register("thesis.add", _thesis_add, is_write=True, **_examples_for("thesis.add"))
     registry.register("forecast.add", _forecast_add, is_write=True, **_examples_for("forecast.add"))
     registry.register("forecast.supersede", _forecast_supersede, is_write=True, **_examples_for("forecast.supersede"))
-    registry.register("decision.add", _decision_add, is_write=True, json_schema=_DECISION_ADD_SCHEMA, **_examples_for("decision.add"))
+    registry.register(
+        "decision.add",
+        _decision_add,
+        is_write=True,
+        json_schema=_DECISION_ADD_SCHEMA,
+        description=(
+            "decision.add type choices: " + ", ".join(allowed_decision_types()) +
+            ". Per-type required/optional/forbidden fields are exposed in "
+            "tool.schema json_schema.x-decision-matrix."
+        ),
+        **_examples_for("decision.add"),
+    )
     registry.register("outcome.add", _outcome_add, is_write=True, **_examples_for("outcome.add"))
     # resolve.record is an alias for outcome.add (PRD §4.4).
     registry.register("resolve.record", _outcome_add, is_write=True, **_examples_for("outcome.add"))
