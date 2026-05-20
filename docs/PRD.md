@@ -206,7 +206,7 @@ The four segmentation fields (`agent_id`, `model_id`, `environment`, `run_id`) s
 
 | `type` | `instrument_id` | `thesis_id` | `side` | `quantity` | `price` | `fees` | `slippage` | `reason` | `review_by` |
 |---|---|---|---|---|---|---|---|---|---|
-| `watch` | R | O | O | X | X | X | X | O | X |
+| `watch` | R | O | O | X | X | X | X | O | O |
 | `skip` | R | O | O | X | X | X | X | R | X |
 | `paper_enter` | R | R | R | R | R | O | O | O | X |
 | `paper_exit` | R | O | R | R | R | O | O | O | X |
@@ -221,6 +221,8 @@ The four segmentation fields (`agent_id`, `model_id`, `environment`, `run_id`) s
 | `review` | R | O | X | X | X | X | X | O | R |
 
 Forbidden-but-supplied fields raise `VALIDATION_ERROR` with `details.field` set. The matrix is enforced at write time, not at projection time.
+
+Per bead trade-trace-gbtj, `watch` accepts an optional `review_by` (matrix `O`) so a watch can carry a first-class deferred-review deadline. `report.watchlist` surfaces the deadline plus a per-row `overdue` flag (`review_by <= as_of`) and a summary `overdue_count`. Age-based `mode='stale'` filtering remains independent so age-only callers are unchanged.
 
 #### `decision_tags`
 - `decision_id`, `tag`

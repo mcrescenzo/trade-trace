@@ -5,8 +5,12 @@ Lists outstanding `watch`-type decisions. (The historical `watch.stale` name was
 freshness threshold — "I said I'd revisit this and never did."
 
 For MVP, a watch is "stale" when `now - decision.created_at >
-stale_threshold_days` (default 14). Future versions tie staleness to
-periodic check-in events or per-watch SLA fields.
+stale_threshold_days` (default 14). Per bead trade-trace-gbtj,
+watches now also carry first-class `review_by` deadlines: a watch is
+`overdue` when `review_by <= as_of`. `stale` (age-based) and
+`overdue` (deadline-based) are surfaced independently — the latter is
+a per-row flag plus an `overdue_count` summary metric, so a stale
+view still works for watches without a scheduled deadline.
 """
 
 from __future__ import annotations
@@ -53,14 +57,20 @@ def report_watchlist(
         threshold_ts = as_of_dt - timedelta(days=stale_threshold_days)
         rows = [r for r in rows if _is_stale(r[2], threshold_ts)]
 
-    groups = [
-        {
+    groups = []
+    overdue_count = 0
+    for r in rows:
+        is_overdue = _is_overdue(r[4], as_of_dt)
+        if is_overdue:
+            overdue_count += 1
+        groups.append({
             "key": r[0],
             "label": f"watch on {r[1]}",
             "metrics": {
                 "created_at": r[2],
                 "review_by": r[4],
                 "age_days": _age_days(r[2], now=as_of_dt),
+                "overdue": is_overdue,
             },
             "filter": filter_view,
             "record_ids": {"decisions": [r[0]], "instruments": [r[1]]},
@@ -69,9 +79,7 @@ def report_watchlist(
             "sample_size": 1,
             "sample_warning": None,
             "truncated": False,
-        }
-        for r in rows
-    ]
+        })
 
     summary: dict[str, Any] = {
         "sample_size": len(rows),
@@ -79,6 +87,7 @@ def report_watchlist(
         "filter": filter_view,
         "metrics": {
             "watch_count": len(rows),
+            "overdue_count": overdue_count,
             "mode": "stale" if stale else "all",
             "stale_threshold_days": stale_threshold_days if stale else None,
         },
@@ -102,3 +111,10 @@ def _age_days(created_at: str, *, now: datetime) -> float:
 def _is_stale(created_at: str, threshold_ts: datetime) -> bool:
     ts = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(UTC)
     return ts < threshold_ts
+
+
+def _is_overdue(review_by: str | None, as_of: datetime) -> bool:
+    if not review_by:
+        return False
+    ts = datetime.fromisoformat(review_by.replace("Z", "+00:00")).astimezone(UTC)
+    return ts <= as_of

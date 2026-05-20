@@ -18,7 +18,7 @@ DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
     "watch": {
         "instrument_id": "R", "thesis_id": "O", "side": "O",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
-        "reason": "O", "review_by": "X",
+        "reason": "O", "review_by": "O",
     },
     "skip": {
         "instrument_id": "R", "thesis_id": "O", "side": "O",

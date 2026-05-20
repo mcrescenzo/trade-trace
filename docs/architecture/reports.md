@@ -270,9 +270,13 @@ depending on the caller's `group_by`.
 
 ### 4.4 `report.watchlist` (stale-watch surface; rolled in the historical `watch.stale` name per trade-trace-ftnu)
 
-Lists `watch`/`skip` decisions with no follow-up decision past a
-threshold (default 30 days; configurable). Per-row: original decision,
-days since, current snapshot delta. Single group; rows are records.
+Lists `watch` decisions. Per-row metrics: `created_at`, `review_by`,
+`age_days`, `overdue`. Per bead trade-trace-gbtj, `watch` decisions
+accept first-class UTC ISO `review_by` deadlines (matrix kind `O`); a
+row is `overdue=True` when `review_by <= as_of`. The summary echoes
+`overdue_count`. `mode='stale'` filters rows by *age* against
+`stale_threshold_days` (default 14) and remains independent of
+`overdue` — a watch can be one, both, or neither.
 
 ### 4.5 `report.unscored_forecasts`
 

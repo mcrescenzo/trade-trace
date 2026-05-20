@@ -877,11 +877,13 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
                 )
                 row = uow.conn.execute(
-                    "SELECT created_at FROM decisions WHERE id = ?", (decision_id,)
+                    "SELECT created_at, review_by FROM decisions WHERE id = ?",
+                    (decision_id,),
                 ).fetchone()
                 return {"id": decision_id, "type": decision_type,
                         "instrument_id": args.get("instrument_id"),
-                        "tags": tags, "created_at": row[0]}
+                        "tags": tags, "created_at": row[0],
+                        "review_by": row[1]}
 
             decision_id = args.get("id") or new_id("dec")
             created_at = now_iso()
@@ -923,7 +925,7 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         db.close()
     return {"id": decision_id, "type": decision_type,
             "instrument_id": args.get("instrument_id"), "tags": tags,
-            "created_at": created_at}
+            "created_at": created_at, "review_by": review_by}
 
 
 # -- outcome.add / resolve.record ------------------------------------------

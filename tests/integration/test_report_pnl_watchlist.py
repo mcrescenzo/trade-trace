@@ -214,3 +214,125 @@ def test_watchlist_stale_mode_filters_by_age(home):
     # All-mode still surfaces it.
     env_all = _envelope(home, "report.watchlist", {})
     assert env_all["data"]["summary"]["metrics"]["watch_count"] == 1
+
+
+# -- watch + review_by per beads trade-trace-gbtj / trade-trace-sjz6 -----
+
+
+def test_watch_decision_accepts_review_by(home):
+    """Watches now accept first-class `review_by` so agents can schedule
+    a deferred review without burying the date in metadata."""
+
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market", "title": "X",
+    })
+    env = _envelope(home, "decision.add", {
+        "instrument_id": inst["data"]["id"],
+        "type": "watch",
+        "review_by": "2026-06-18T00:00:00.000Z",
+        "reason": "revisit after CPI",
+    })
+    assert env["ok"], env
+    # The decision is persisted with the normalized review_by timestamp.
+    assert env["data"]["review_by"].startswith("2026-06-18")
+
+
+def test_watch_decision_still_optional(home):
+    """`review_by` remains optional for watch — omitting it is still valid."""
+
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market", "title": "X",
+    })
+    env = _envelope(home, "decision.add", {
+        "instrument_id": inst["data"]["id"],
+        "type": "watch",
+        "reason": "monitor",
+    })
+    assert env["ok"], env
+    # `exclude_none=True` strips the field; either absence or None is fine.
+    assert env["data"].get("review_by") is None
+
+
+def test_watchlist_surfaces_review_by_and_overdue_flag(home):
+    """A watch with `review_by <= as_of` is flagged `overdue=True`; one
+    without `review_by` or with a future `review_by` is `overdue=False`.
+    The summary echoes the overdue_count."""
+
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market", "title": "X",
+    })
+    # 1. Overdue watch — review_by in the deep past.
+    _envelope(home, "decision.add", {
+        "instrument_id": inst["data"]["id"], "type": "watch",
+        "review_by": "2024-01-01T00:00:00.000Z",
+        "reason": "overdue",
+    })
+    # 2. Not-yet-due watch — review_by far in the future.
+    _envelope(home, "decision.add", {
+        "instrument_id": inst["data"]["id"], "type": "watch",
+        "review_by": "2030-01-01T00:00:00.000Z",
+        "reason": "future",
+    })
+    # 3. Watch without review_by.
+    _envelope(home, "decision.add", {
+        "instrument_id": inst["data"]["id"], "type": "watch",
+        "reason": "no schedule",
+    })
+
+    env = _envelope(home, "report.watchlist", {})
+    assert env["ok"], env
+    assert env["data"]["summary"]["metrics"]["watch_count"] == 3
+    assert env["data"]["summary"]["metrics"]["overdue_count"] == 1
+
+    # Each row carries an `overdue` flag in its metrics.
+    by_reason = {
+        g["examples"][0]["summary"]: g["metrics"]
+        for g in env["data"]["groups"]
+    }
+    assert by_reason["overdue"]["overdue"] is True
+    assert by_reason["future"]["overdue"] is False
+    assert by_reason["no schedule"]["overdue"] is False
+    # review_by is preserved on every row (None when not set).
+    assert by_reason["overdue"]["review_by"].startswith("2024-01-01")
+    assert by_reason["future"]["review_by"].startswith("2030-01-01")
+    assert by_reason["no schedule"]["review_by"] is None
+
+
+def test_watch_decision_add_review_by_validates_iso():
+    """An ill-formed `review_by` for a watch returns VALIDATION_ERROR on
+    `field='review_by'` — same path used by `type='review'`."""
+
+    import tempfile
+    from pathlib import Path as P
+
+    from trade_trace.mcp_server import mcp_call
+
+    with tempfile.TemporaryDirectory() as tmp:
+        h = P(tmp) / "home"
+        mcp_call("journal.init", {"home": str(h)})
+        venue = mcp_call(
+            "venue.add", {"home": str(h), "name": "PM", "kind": "prediction_market"},
+            actor_id="agent:default",
+        ).model_dump(mode="json")
+        inst = mcp_call(
+            "instrument.add", {
+                "home": str(h), "venue_id": venue["data"]["id"],
+                "asset_class": "prediction_market", "title": "X",
+            },
+            actor_id="agent:default",
+        ).model_dump(mode="json")
+        env = mcp_call(
+            "decision.add", {
+                "home": str(h), "instrument_id": inst["data"]["id"],
+                "type": "watch", "review_by": "not-a-timestamp",
+            },
+            actor_id="agent:default",
+        ).model_dump(mode="json", exclude_none=True)
+        assert env["ok"] is False
+        assert env["error"]["details"]["field"] == "review_by"
