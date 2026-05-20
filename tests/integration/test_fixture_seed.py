@@ -180,3 +180,103 @@ def test_fixture_seed_unknown_target_rejected(home):
     assert env.ok is False
     assert env.error.code.value == "VALIDATION_ERROR"
     assert env.error.details["field"] == "target"
+
+
+# -- 5. mvp-eval-rich reporting fixture per bead trade-trace-dnwh ---------
+
+
+def test_fixture_seed_mvp_eval_rich_target_runs(home):
+    """`mvp-eval-rich` is the second fixture profile per bead
+    trade-trace-dnwh. It extends mvp-eval with traded positions
+    (winners/losers/breakevens), open positions with and without
+    marks, declared risk amounts, and a low-N strategy — the
+    coverage the reporting product overhaul needs to exercise its
+    caveat surface."""
+
+    env = mcp_call("journal.fixture_seed", {
+        "home": str(home), "target": "mvp-eval-rich",
+    })
+    assert env.ok, env
+    assert env.data["target"] == "mvp-eval-rich"
+    assert env.data["counts"]["decisions"] >= 30  # inherits mvp-eval floor
+
+
+def test_fixture_seed_mvp_eval_rich_creates_closed_and_open_positions(home):
+    """The rich fixture must produce a mix of position lifecycle states
+    so dashboards can render winners/losers/breakevens AND
+    open-with-mark / open-without-mark caveats."""
+
+    env = mcp_call("journal.fixture_seed", {
+        "home": str(home), "target": "mvp-eval-rich",
+    })
+    assert env.ok, env
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        rows = db.connection.execute(
+            "SELECT status, realized_pnl, unrealized_pnl FROM positions"
+        ).fetchall()
+    finally:
+        db.close()
+
+    closed = [r for r in rows if r[0] == "closed"]
+    open_rows = [r for r in rows if r[0] == "open"]
+
+    assert len(closed) >= 3, (
+        f"need >= 3 closed positions for winners/losers/breakeven; "
+        f"got {len(closed)}"
+    )
+    realized = sorted(r[1] for r in closed if r[1] is not None)
+    assert realized[0] < 0, f"need a losing closed position; sorted realized: {realized}"
+    assert realized[-1] > 0, f"need a winning closed position; sorted realized: {realized}"
+
+    assert len(open_rows) >= 2, (
+        f"need >= 2 open positions (with-mark + without-mark); "
+        f"got {len(open_rows)}"
+    )
+    with_mark = [r for r in open_rows if r[2] is not None]
+    without_mark = [r for r in open_rows if r[2] is None]
+    assert with_mark, "need >= 1 open position WITH a mark"
+    assert without_mark, "need >= 1 open position WITHOUT a mark (caveat path)"
+
+
+def test_fixture_seed_mvp_eval_rich_includes_declared_risk(home):
+    """Some decisions must carry declared_risk_amount so report.risk
+    can aggregate R-multiples; others must NOT so the missing-risk
+    caveat path exercises."""
+
+    env = mcp_call("journal.fixture_seed", {
+        "home": str(home), "target": "mvp-eval-rich",
+    })
+    assert env.ok, env
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        with_risk = db.connection.execute(
+            "SELECT COUNT(*) FROM decisions WHERE declared_risk_amount IS NOT NULL"
+        ).fetchone()[0]
+        without_risk = db.connection.execute(
+            "SELECT COUNT(*) FROM decisions WHERE declared_risk_amount IS NULL"
+        ).fetchone()[0]
+    finally:
+        db.close()
+
+    assert with_risk >= 1, "need >= 1 decision with declared_risk_amount"
+    assert without_risk >= 1, "need >= 1 decision without declared_risk_amount (caveat path)"
+
+
+def test_fixture_seed_mvp_eval_rich_is_deterministic(tmp_path):
+    """Two fresh runs of mvp-eval-rich must produce byte-identical
+    table content (modulo SQLite WAL)."""
+
+    hashes: list[str] = []
+    for run in range(2):
+        h = tmp_path / f"rich-run-{run}"
+        init = mcp_call("journal.init", {"home": str(h)})
+        assert init.ok
+        env = mcp_call("journal.fixture_seed", {
+            "home": str(h), "target": "mvp-eval-rich",
+        })
+        assert env.ok, env
+        hashes.append(_content_hash(h))
+    assert hashes[0] == hashes[1], "mvp-eval-rich must be deterministic"

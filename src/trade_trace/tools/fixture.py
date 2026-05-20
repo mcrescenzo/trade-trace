@@ -29,7 +29,7 @@ from trade_trace.tools._helpers import (
 )
 from trade_trace.tools.errors import ToolError
 
-FIXTURE_TARGETS = ("mvp-eval",)
+FIXTURE_TARGETS = ("mvp-eval", "mvp-eval-rich")
 
 
 # Anchor timestamp used as the deterministic clock during seeding.
@@ -67,8 +67,13 @@ def _journal_fixture_seed(
 
     _reset_deterministic_request_id_counter()
     try:
-        counts = _seed_mvp_eval(home=home, registry=ctx.raw_args.get(
-            "_registry") if isinstance(ctx.raw_args, dict) else None)
+        registry = ctx.raw_args.get(
+            "_registry") if isinstance(ctx.raw_args, dict) else None
+        counts = _seed_mvp_eval(home=home, registry=registry)
+        if target == "mvp-eval-rich":
+            counts = _seed_mvp_eval_rich_overlay(
+                home=home, registry=registry, counts=counts,
+            )
     finally:
         CLOCK_OVERRIDE.reset(token)
     return {
@@ -451,6 +456,211 @@ def _build_decision_args(
     if tags is not None:
         base["tags"] = tags
     return base
+
+
+def _seed_mvp_eval_rich_overlay(
+    *,
+    home: str | None,
+    registry: Any,
+    counts: dict[str, int],
+) -> dict[str, int]:
+    """Extend the mvp-eval seed with traded position lifecycles + risk
+    budgets needed by the reporting product overhaul (trade-trace-dnwh).
+
+    Adds: 5 closed positions (2 winners, 2 losers, 1 breakeven), 4
+    open positions (2 with mark, 2 without), a low-N "rich-only-N1"
+    strategy with a single decision, and a couple of decisions that
+    carry `declared_risk_amount` so report.risk has both included and
+    missing-risk rows to chart.
+
+    The seed writes `position_events` rows directly via SQL and then
+    rebuilds the positions projection so the dashboards see canonical
+    rows. Decisions are still written through `decision.add` so the
+    matrix invariants and idempotency contract apply.
+    """
+
+    from trade_trace.projections import rebuild_positions
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path, resolve_home
+
+    home_path = resolve_home(home)
+    db = open_database(db_path(home_path), create_parent=False)
+    try:
+        venue_row = db.connection.execute(
+            "SELECT id FROM venues WHERE name = ?", ("Equities-Sim",),
+        ).fetchone()
+        if venue_row is None:
+            raise RuntimeError(
+                "mvp-eval-rich requires the mvp-eval seed to run first; "
+                "Equities-Sim venue missing"
+            )
+        rich_venue = venue_row[0]
+    finally:
+        db.close()
+
+    rich_strategy = _call(home, "strategy.create", {
+        "name": "Rich-only single", "slug": "rich-only-n1",
+        "hypothesis": "Low-N group used to exercise sample-warning paths.",
+    }, suffix="rich-strategy").get("id")
+    counts["strategies"] = counts.get("strategies", 0) + 1
+
+    # 9 instruments for the rich overlay so trades don't collide with
+    # mvp-eval's positions.
+    rich_instruments: list[str] = []
+    for i in range(9):
+        inst = _call(home, "instrument.add", {
+            "venue_id": rich_venue,
+            "asset_class": "equity",
+            "title": f"RichInst-{i:02d}",
+            "currency_or_collateral": "USD",
+        }, suffix=f"rich-inst-{i}").get("id")
+        rich_instruments.append(inst)
+    counts["instruments"] = counts.get("instruments", 0) + 9
+
+    rich_thesis_ids: list[str] = []
+    for i, inst in enumerate(rich_instruments):
+        t = _call(home, "thesis.add", {
+            "instrument_id": inst, "side": "long",
+            "body": f"Rich fixture thesis #{i:02d}: equity momentum.",
+            "strategy_id": rich_strategy if i == 0 else None,
+        }, suffix=f"rich-thesis-{i}").get("id")
+        rich_thesis_ids.append(t)
+    counts["theses"] = counts.get("theses", 0) + 9
+
+    # 5 closed positions: 2 winners, 2 losers, 1 breakeven.
+    # Risk budget on 2 of the closed winners + 1 loser.
+    closed_specs = [
+        # (entry_price, exit_price, qty, declared_risk_amount, label)
+        (0.40, 0.55, 100, 30.0, "closed-winner-1"),
+        (0.30, 0.42, 100, 25.0, "closed-winner-2"),
+        (0.50, 0.40, 100, 20.0, "closed-loser-1"),
+        (0.60, 0.45, 100, None, "closed-loser-2"),
+        (0.45, 0.45, 100, None, "closed-breakeven"),
+    ]
+    enter_decision_ids: list[str] = []
+    exit_decision_ids: list[str] = []
+    for i, (entry, exit_, qty, risk, label) in enumerate(closed_specs):
+        inst = rich_instruments[i]
+        thesis = rich_thesis_ids[i]
+        enter_args: dict[str, Any] = {
+            "type": "paper_enter",
+            "instrument_id": inst,
+            "thesis_id": thesis,
+            "side": "long",
+            "quantity": qty,
+            "price": entry,
+        }
+        if risk is not None:
+            enter_args["declared_risk_amount"] = risk
+            enter_args["declared_risk_unit"] = "dollar"
+        enter_id = _call(home, "decision.add", enter_args,
+                         suffix=f"rich-{label}-enter")["id"]
+        enter_decision_ids.append(enter_id)
+        exit_id = _call(home, "decision.add", {
+            "type": "paper_exit",
+            "instrument_id": inst,
+            "thesis_id": thesis,
+            "side": "long",
+            "quantity": qty,
+            "price": exit_,
+        }, suffix=f"rich-{label}-exit")["id"]
+        exit_decision_ids.append(exit_id)
+    counts["decisions"] = counts.get("decisions", 0) + len(closed_specs) * 2
+
+    # 4 open positions: 2 with mark, 2 without.
+    open_specs = [
+        # (entry_price, qty, declared_risk_amount, mark_price | None, label)
+        (0.35, 100, 18.0, 0.50, "open-marked-up"),
+        (0.55, 100, None, 0.42, "open-marked-down"),
+        (0.20, 100, None, None, "open-unmarked-1"),
+        (0.80, 100, 12.0, None, "open-unmarked-2"),
+    ]
+    open_decision_ids: list[str] = []
+    for i, (entry, qty, risk, mark_price, label) in enumerate(open_specs):
+        inst = rich_instruments[5 + i]
+        thesis = rich_thesis_ids[5 + i]
+        enter_args = {
+            "type": "paper_enter",
+            "instrument_id": inst,
+            "thesis_id": thesis,
+            "side": "long",
+            "quantity": qty,
+            "price": entry,
+        }
+        if risk is not None:
+            enter_args["declared_risk_amount"] = risk
+            enter_args["declared_risk_unit"] = "dollar"
+        enter_id = _call(home, "decision.add", enter_args,
+                         suffix=f"rich-{label}-enter")["id"]
+        open_decision_ids.append(enter_id)
+        # snapshot.add for the open positions that should be marked. The
+        # marks land in the `snapshots` table, which `_latest_snapshot_price`
+        # queries during rebuild_positions to populate unrealized_pnl.
+        if mark_price is not None:
+            mark_ts = (_ANCHOR + timedelta(days=21, hours=i)).isoformat()
+            _call(home, "snapshot.add", {
+                "instrument_id": inst,
+                "captured_at": mark_ts,
+                "price": mark_price,
+            }, suffix=f"rich-{label}-mark")
+    counts["decisions"] = counts.get("decisions", 0) + len(open_specs)
+
+    # Write position_events + marks directly so the rebuild produces
+    # the lifecycle states (closed / open w-mark / open wo-mark) that
+    # the dashboards exercise.
+    db = open_database(db_path(home_path), create_parent=False)
+    try:
+        with db.transaction():
+            base_ts = _ANCHOR + timedelta(days=20)
+            seq = 0
+            for i, ((entry, exit_, qty, _risk, _label), enter_id, exit_id) in enumerate(
+                zip(closed_specs, enter_decision_ids, exit_decision_ids, strict=True)
+            ):
+                inst = rich_instruments[i]
+                position_id = f"pos_rich_closed_{i:02d}"
+                open_ts = (base_ts + timedelta(hours=seq)).isoformat()
+                close_ts = (base_ts + timedelta(hours=seq + 1)).isoformat()
+                db.connection.execute(
+                    "INSERT INTO position_events(id, position_id, instrument_id, "
+                    "decision_id, event_type, quantity_delta, price, fees, "
+                    "slippage, created_at, actor_id) "
+                    "VALUES (?, ?, ?, ?, 'open', ?, ?, 0, 0, ?, 'agent:fixture')",
+                    (f"pev_rich_open_{i:02d}", position_id, inst, enter_id,
+                     qty, entry, open_ts),
+                )
+                db.connection.execute(
+                    "INSERT INTO position_events(id, position_id, instrument_id, "
+                    "decision_id, event_type, quantity_delta, price, fees, "
+                    "slippage, created_at, actor_id) "
+                    "VALUES (?, ?, ?, ?, 'close', ?, ?, 0, 0, ?, 'agent:fixture')",
+                    (f"pev_rich_close_{i:02d}", position_id, inst, exit_id,
+                     -qty, exit_, close_ts),
+                )
+                seq += 2
+
+            for i, ((entry, qty, _risk, _mark_price, _label), enter_id) in enumerate(
+                zip(open_specs, open_decision_ids, strict=True)
+            ):
+                inst = rich_instruments[5 + i]
+                position_id = f"pos_rich_open_{i:02d}"
+                open_ts = (base_ts + timedelta(hours=seq)).isoformat()
+                db.connection.execute(
+                    "INSERT INTO position_events(id, position_id, instrument_id, "
+                    "decision_id, event_type, quantity_delta, price, fees, "
+                    "slippage, created_at, actor_id) "
+                    "VALUES (?, ?, ?, ?, 'open', ?, ?, 0, 0, ?, 'agent:fixture')",
+                    (f"pev_rich_open2_{i:02d}", position_id, inst, enter_id,
+                     qty, entry, open_ts),
+                )
+                seq += 1
+
+            rebuild_positions(db.connection)
+    finally:
+        db.close()
+
+    counts.setdefault("rich_closed_positions", len(closed_specs))
+    counts.setdefault("rich_open_positions", len(open_specs))
+    return counts
 
 
 def register_fixture_tools(registry: ToolRegistry) -> None:
