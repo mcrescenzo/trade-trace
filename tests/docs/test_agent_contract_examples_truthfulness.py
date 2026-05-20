@@ -1,0 +1,39 @@
+"""Regression checks for stale agent-facing docs examples.
+
+These assertions intentionally target exact snippets that have drifted from
+live CLI/help/schema contracts before. If a future compatibility alias is
+made canonical, update the docs and this list together.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+DOC_PATHS = [
+    ROOT / "README.md",
+    ROOT / "docs" / "AI_AGENT_MCP_GETTING_STARTED.md",
+    ROOT / "docs" / "AGENT_GUIDE.md",
+    ROOT / "docs" / "PRD.md",
+    ROOT / "docs" / "architecture" / "reports.md",
+    ROOT / "docs" / "architecture" / "memory-layer.md",
+    ROOT / "docs" / "architecture" / "contracts.md",
+    ROOT / "docs" / "architecture" / "operability.md",
+]
+STALE_SNIPPETS = [
+    "journal config_set embeddings.provider",
+    "journal restore --from",
+    "model import <path>",
+    "memory.reflect(target, body, *, importance?, derived_from?",
+]
+
+
+def test_agent_facing_docs_do_not_publish_stale_cli_or_schema_examples():
+    offenders: list[str] = []
+    for path in DOC_PATHS:
+        text = path.read_text(encoding="utf-8")
+        for snippet in STALE_SNIPPETS:
+            if snippet in text:
+                offenders.append(f"{path.relative_to(ROOT)} contains {snippet!r}")
+
+    assert not offenders, "stale agent-facing docs examples found:\n" + "\n".join(offenders)

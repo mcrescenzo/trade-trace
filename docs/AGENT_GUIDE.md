@@ -8,6 +8,8 @@ Install MCP support locally with `pip install -e .` from the repository, initial
 
 A minimal agent loop is ordered so every later record can point back to the evidence it used. Use `tool.schema` first if you need exact current fields for any call.
 
+If you only have an unstructured market thought, start with `idea.capture` to create a local draft source/observation and promote it later. When a run is partially complete, call `journal.bundle.status` with the known `instrument_id`, `thesis_id`, `forecast_id`, `decision_id`, `source_id`, or `memory_node_id`; it is read-only and returns concrete `next_calls` for missing local journal steps.
+
 1. `venue.add` — create or identify the source venue.
 
 ```json

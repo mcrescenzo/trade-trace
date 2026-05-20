@@ -188,17 +188,19 @@ run-20260519-001:forecast.add:polymarket-event-123:v1
 A useful agent loop is ordered so later records point back to earlier evidence.
 
 1. `journal.init` — initialize the local journal if not already initialized.
-2. `venue.add` — create or identify the source venue.
-3. `instrument.add` — create the market/instrument under the venue.
-4. `source.add` and `source.attach_to_*` — record the evidence you used, when relevant.
-5. `thesis.add` — record the reasoning and falsification criteria.
-6. `forecast.add` — commit probabilities before outcome resolution.
-7. `decision.add` — record the actual trade/skip/hold decision and rationale.
-8. `outcome.add` or `resolve.record` — record final outcome; scoring runs when prerequisites are met.
-9. `report.calibration`, `report.coach`, `report.mistakes`, `report.strengths`, or other reports — review deterministic feedback.
-10. `reflection.prompt_for_outcome` and `memory.reflect` — write an outcome-linked lesson.
-11. `playbook.propose_version` — propose a rule update when a reflection should alter future behavior.
-12. `memory.recall` — before the next thesis/decision, retrieve relevant prior lessons.
+2. `idea.capture` — optionally park a rough market thought as a local draft when you are not ready to create a full instrument/thesis yet.
+3. `venue.add` — create or identify the source venue.
+4. `instrument.add` — create the market/instrument under the venue.
+5. `source.add` and `source.attach_to_*` — record the evidence you used, when relevant.
+6. `thesis.add` — record the reasoning and falsification criteria.
+7. `forecast.add` — commit probabilities before outcome resolution.
+8. `decision.add` — record the actual trade/skip/hold decision and rationale.
+9. `outcome.add` or `resolve.record` — record final outcome; scoring runs when prerequisites are met.
+10. `journal.bundle.status` — inspect partial arcs and follow returned `next_calls` when an instrument/thesis/forecast/decision/outcome chain is incomplete.
+11. `report.calibration`, `report.coach`, `report.mistakes`, `report.strengths`, or other reports — review deterministic feedback.
+12. `reflection.prompt_for_outcome` and `memory.reflect` — write an outcome-linked lesson.
+13. `playbook.propose_version` — propose a rule update when a reflection should alter future behavior.
+14. `memory.recall` — before the next thesis/decision, retrieve relevant prior lessons.
 
 For exact fields and examples, call `tool.schema` for each tool immediately before using it.
 

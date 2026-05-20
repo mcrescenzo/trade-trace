@@ -270,7 +270,7 @@ overwrite the same file.
 
 ### 5.3 Restore
 
-Restore is `tt journal restore --from <path>`. The command:
+Restore is `tt journal restore --src <path> --idempotency-key <uuid> --confirm`. The command:
 
 1. Validates the source DB's schema version is compatible (equal to or
    one less than the installed version; in the latter case, runs

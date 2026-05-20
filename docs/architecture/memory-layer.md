@@ -21,7 +21,7 @@ It is **not** a generic agent memory framework. The schema is trading-shaped: ev
 ## 2. Design principles
 
 1. **One SQLite file is the entire product state.** Ledger, memory, edges, FTS index, and (when enabled) vector index live in one DB. `cp trade-trace.sqlite` is a complete backup. Load-bearing for the air-gappable install promise. Backup/restore caveats (open WAL, in-flight outbox drain) covered in [`operability.md`](operability.md) §5.
-2. **Zero-config first run, no surprise network.** `pip install trade-trace && tt journal init && trade-trace-mcp` works without flags or API keys. Vectors are **off** by MVP default; `journal.init` makes zero outbound calls. The SEMANTIC strategy is opt-in via explicit config (`tt journal config_set embeddings.provider local` or `tt model import <path>`); this preserves the absolute air-gap promise from VISION §safety on first run.
+2. **Zero-config first run, no surprise network.** `pip install trade-trace && tt journal init && trade-trace-mcp` works without flags or API keys. Vectors are **off** by MVP default; `journal.init` makes zero outbound calls. The SEMANTIC strategy is opt-in via explicit config (`tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` or `tt model import --src <path-to-bge-small> --idempotency-key <uuid> --confirm`); this preserves the absolute air-gap promise from VISION §safety on first run.
 3. **Optional capabilities, never required.** Vectors, API embedding providers, graph traversal, edge-density confidence — all opt-in or deferred. The MVP product is fully functional without them.
 4. **Trading-specific edges, generic everything else.** Custom typed edges from memory to ledger rows are the moat. Retrieval primitives (BM25, vector, RRF) are standard.
 5. **System-emitted signals are not memory.** They live in a separate table because they have a different author (the system) and a different lifecycle (time-bounded notifications, not durable knowledge the agent authored).
@@ -174,12 +174,12 @@ So the agent can triangulate (e.g., "BM25 surfaced this node, semantic didn't �
 
 ### 7.2 Opt-in strategy: SEMANTIC
 
-**Implementation status (agent-ready epic):** the SEMANTIC strategy and its enabling config surfaces (`tt journal config_set embeddings.provider local|openai|none`, `tt model import <path>`, `tt model warm`, `tt memory reindex --confirm`) now ship behind explicit opt-in. Fresh journals still default to BM25 + TEMPORAL + GRAPH only; `memory.recall` runs with zero network unless an embedding provider is configured. `journal.status` reports `embeddings_provider = "none"` on every fresh init. The off-by-default contract is verified end-to-end in `tests/security/test_no_network_default.py`.
+**Implementation status (agent-ready epic):** the SEMANTIC strategy and its enabling config surfaces (`tt journal config_set --key embeddings.provider --value local|api:openai|none --idempotency-key <uuid> --confirm`, `tt model import --src <path-to-bge-small> --idempotency-key <uuid>`, `tt model warm`, `tt memory reindex --confirm`) now ship behind explicit opt-in. Fresh journals still default to BM25 + TEMPORAL + GRAPH only; `memory.recall` runs with zero network unless an embedding provider is configured. `journal.status` reports `embeddings_provider = "none"` on every fresh init. The off-by-default contract is verified end-to-end in `tests/security/test_no_network_default.py`.
 
 - **`SEMANTIC`** — vector similarity via `sqlite-vec`. **Off by default in MVP** (per PRD §2.4.1). The embeddings extra ships `sqlite-vec`; no model weights are downloaded on `journal.init`. To enable:
-  - `tt journal config_set embeddings.provider local` — authorizes one-time download of `BAAI/bge-small-en-v1.5` (~130MB) into `$TRADE_TRACE_HOME/models/`. Subsequent recall calls use it transparently.
-  - `tt model import <path>` — air-gapped install path that uses a pre-staged model without any network call.
-  - `tt journal config_set embeddings.provider openai` (or other API provider) — opt-in remote embedding; see §8.3.
+  - `tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` — authorizes one-time download of `BAAI/bge-small-en-v1.5` (~130MB) into `$TRADE_TRACE_HOME/models/`. Subsequent recall calls use it transparently.
+  - `tt model import --src <path-to-bge-small> --idempotency-key <uuid>` — air-gapped install path that uses a pre-staged model without any network call.
+  - `tt journal config_set --key embeddings.provider --value api:openai --idempotency-key <uuid> --confirm` — opt-in remote embedding; see §8.3.
   - Once enabled, `memory.recall` includes SEMANTIC in the default `strategies` value.
 
 The "off by default" choice preserves the absolute air-gap promise in VISION §safety on first `journal.init`. MVP recall via BM25 + temporal (+ graph if requested) returns valid results without vectors; SEMANTIC is a ranking-quality improvement, not a correctness gate.
@@ -244,22 +244,22 @@ Rationale for an optional extra: the vector path is useful but not required for 
 
 Two paths, both explicit:
 
-- **Online opt-in**: `tt journal config_set embeddings.provider local` authorizes a one-time download of `BAAI/bge-small-en-v1.5` (~130MB, 384-dim, English-only, sufficient for trading content). The next recall call (or `tt model warm`) triggers the download into `$TRADE_TRACE_HOME/models/`. The download target is the model's host only; no telemetry, no metrics, no journal data transmitted. After download, the system runs fully air-gapped.
-- **Air-gapped install**: `tt model import <path-to-bge-small>` copies a manually-staged model directory into the cache. The model is identified by its config hash; once present, recall uses it without any network call.
+- **Online opt-in**: `tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` authorizes a one-time download of `BAAI/bge-small-en-v1.5` (~130MB, 384-dim, English-only, sufficient for trading content). The next recall call (or `tt model warm`) triggers the download into `$TRADE_TRACE_HOME/models/`. The download target is the model's host only; no telemetry, no metrics, no journal data transmitted. After download, the system runs fully air-gapped.
+- **Air-gapped install**: `tt model import --src <path-to-bge-small> --idempotency-key <uuid>` copies a manually-staged model directory into the cache. The model is identified by its config hash; once present, recall uses it without any network call.
 
-`tt journal config_set embeddings.provider none` (the default state) removes the SEMANTIC strategy. `memory.recall` runs with BM25 + temporal (+ graph if requested) and returns valid results.
+`tt journal config_set --key embeddings.provider --value none --idempotency-key <uuid> --confirm` (the default state) removes the SEMANTIC strategy. `memory.recall` runs with BM25 + temporal (+ graph if requested) and returns valid results.
 
 ### 8.3 API providers
 
 Users can configure a remote embedding provider:
 
 ```
-tt journal config_set embeddings.provider openai --model text-embedding-3-small
+tt journal config_set --key embeddings.provider --value api:openai --idempotency-key <uuid> --confirm
 ```
 
 The CLI prompts for the API key and stores it in the OS keyring (via the `keyring` library; declared as an optional install extra). The key is **never** stored in the database, **never** stored in plaintext config, and **never** logged. Each call sends `body` (and optionally `title`) to the provider; the response embedding is persisted in `memory_node_embeddings`.
 
-This path sends memory text outside the machine. The CLI emits an explicit warning on `tt journal config_set embeddings.provider <api>` describing what data leaves and where. It is opt-in, requires the API key prompt, and does not become default in any future MVP path.
+This path sends memory text outside the machine. The CLI emits an explicit warning on `tt journal config_set --key embeddings.provider --value api:openai` describing what data leaves and where. It is opt-in, requires secure keyring storage, and does not become default in any future MVP path.
 
 Two outbound paths exist in trade-trace; both opt-in:
 - **Local model weight download** (§8.2): one-time, weights only, no journal data.
@@ -280,7 +280,7 @@ Lazy re-embed at recall time is rejected because the vector index needs a fixed 
 
 ### 8.5 Disabling vectors
 
-`tt journal config_set embeddings.provider none` removes the SEMANTIC strategy from the default-enabled set. Recall continues to work via BM25 + temporal. The setting is persisted in the config table.
+`tt journal config_set --key embeddings.provider --value none --idempotency-key <uuid> --confirm` removes the SEMANTIC strategy from the default-enabled set. Recall continues to work via BM25 + temporal. The setting is persisted in the config table.
 
 ## 9. Public API surface
 
@@ -288,7 +288,7 @@ All operations are exposed as MCP tools and CLI subcommands with semantic parity
 
 - **`memory.retain(node_type, body, *, title?, tags?, meta_json?, importance?, confidence_base?, decay_rate_per_day?, valid_from?, valid_to?, edges?)`** — write a memory node. `node_type ∈ {observation, reflection, playbook_rule}`. The `edges` parameter lets the caller specify outgoing edges in the same call so reflection-without-edges never happens.
 - **`memory.recall(query?, context?, strategies?, k?, max_chars?, compact?, include_body?, include_provenance?, min_confidence?, node_types?, mode?, as_of?)`** — read with multi-strategy retrieval, context-budget shaping, and optional bi-temporal `as_of` filtering.
-- **`memory.reflect(target, body, *, importance?, derived_from?, supports?, contradicts?, supersedes?, ...)`** — sugar over `retain(node_type=reflection, ...)` that auto-wires the `about` edge to `target`.
+- **`memory.reflect(target, body, *, importance?, ...)`** — sugar over `retain(node_type=reflection, ...)` that auto-wires the required `about` edge to `target`. The live schema does not accept `derived_from`; add supporting/provenance edges separately with `memory.link` or `memory.retain(edges=...)`.
 - **`memory.link(from, to, edge_type, *, weight?)`** — explicit edge creation between two existing endpoints. Validates endpoint kind and ID.
 - **`reflection.prompt_for_outcome(outcome_id, *, include_forecast?, include_thesis?, include_prior_reflections?)`** — deterministic, no-LLM tool. Returns a structured packet: the resolved outcome, the original thesis and forecast it resolved, prior reflections on the same instrument/strategy, and the calibration delta (forecast probability vs. realized indicator). The caller (a separate LLM) decides what to write back via `memory.reflect`. The system never auto-generates reflections; this tool packages evidence for the reviewer.
 
