@@ -129,6 +129,7 @@ class ToolRegistry:
         example_minimal: dict[str, Any] | None = None,
         example_rich: dict[str, Any] | None = None,
         json_schema: dict[str, Any] | None = None,
+        optional_keys: tuple[str, ...] | list[str] | None = None,
     ) -> None:
         if name in self.by_name:
             raise CLINameCollisionError(
@@ -141,7 +142,8 @@ class ToolRegistry:
             raise CLINameCollisionError([(prior, name)])
         effective_json_schema = (
             json_schema if json_schema is not None
-            else derive_schema(example_minimal) if example_minimal is not None
+            else derive_schema(example_minimal, optional_keys=optional_keys)
+            if example_minimal is not None
             else None
         )
         self.by_name[name] = ToolRegistration(

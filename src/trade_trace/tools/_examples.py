@@ -276,8 +276,15 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
     "playbook.propose_version": {
         "minimal": {
             "playbook_id": "pbk_PLAYBOOK_ID_HERE",
-            "rules_json": '[{"text": "Skip if spread > 50bp"}]',
             "provenance_reflection_node_id": "mem_REFLECTION_NODE_HERE",
+            "idempotency_key": _IDEM,
+        },
+        "rich": {
+            "playbook_id": "pbk_PLAYBOOK_ID_HERE",
+            "provenance_reflection_node_id": "mem_REFLECTION_NODE_HERE",
+            "parent_version_id": "pbv_PRIOR_VERSION_HERE",
+            "description": "Tighten spread guard after Q1 review.",
+            "metadata_json": {"review": "2026-Q1"},
             "idempotency_key": _IDEM,
         },
     },
@@ -285,8 +292,17 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
         "minimal": {
             "decision_id": "dec_DECISION_ID_HERE",
             "playbook_version_id": "pbv_PLAYBOOK_VERSION_HERE",
-            "rule_id": "rule_RULE_ID_HERE",
-            "outcome": "followed",
+            "rule_node_id": "mem_RULE_NODE_HERE",
+            "status": "followed",
+            "idempotency_key": _IDEM,
+        },
+        "rich": {
+            "decision_id": "dec_DECISION_ID_HERE",
+            "playbook_version_id": "pbv_PLAYBOOK_VERSION_HERE",
+            "rule_node_id": "mem_RULE_NODE_HERE",
+            "status": "overridden",
+            "reason": "Earnings beat materially overrode the spread guard.",
+            "metadata_json": {"override_review": "pending"},
             "idempotency_key": _IDEM,
         },
     },

@@ -637,9 +637,24 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "moves, exit-efficiency, data_coverage, sparse/missing snapshot "
             "caveats, and documented labels such as missed_positive_edge, "
             "good_skip, right_thesis_wrong_timing, bad_process_good_outcome, "
-            "and good_process_bad_outcome. No external price fetching."
+            "and good_process_bad_outcome. No external price fetching. All "
+            "arguments are optional; defaults apply for omitted keys per bead "
+            "trade-trace-4zbk."
         ),
-        example_minimal={"filter": {}, "minimum_coverage": "sparse", "max_records": 100},
+        example_minimal={
+            "filter": {},
+            "minimum_coverage": "sparse",
+            "max_records": 100,
+            "include_labels": True,
+            "min_sample": 20,
+        },
+        optional_keys=(
+            "filter",
+            "minimum_coverage",
+            "max_records",
+            "include_labels",
+            "min_sample",
+        ),
     )
     registry.register(
         "report.compare",
