@@ -157,6 +157,83 @@ def decisions_context(
     }
 
 
+def trades_context(
+    conn: sqlite3.Connection,
+    *,
+    cursor: str | None,
+    limit: int,
+    strategy_id: str | None = None,
+    instrument_id: str | None = None,
+    decision_type: str | None = None,
+) -> dict[str, Any]:
+    """Context for the Trades index page (trade-trace-q2li).
+
+    Backed by `console.reporting.list_trades`. Surfaces the full
+    `TradeRow` shape including the named missing-data caveats so the
+    template can render caveat chips next to incomplete rows. Filter
+    args narrow the page server-side; the global ReportFilter URL
+    state encoder (hayy) and the per-page form normalize these into
+    the same shape.
+    """
+
+    from trade_trace.console.reporting import list_trades
+    from trade_trace.console.reporting.metric_glossary import page_explanation
+
+    page = list_trades(
+        conn,
+        cursor=cursor,
+        limit=limit,
+        strategy_id=strategy_id,
+        instrument_id=instrument_id,
+        decision_type=decision_type,
+    )
+    return {
+        "page_title": "Trades",
+        "generated_at": _iso_now(),
+        "rows": [
+            {
+                "decision_id": r.decision_id,
+                "decision_type": r.decision_type,
+                "decision_at": r.decision_at,
+                "instrument_id": r.instrument_id,
+                "instrument_symbol": r.instrument_symbol,
+                "instrument_title": r.instrument_title,
+                "venue_kind": r.venue_kind,
+                "side": r.side,
+                "quantity": r.quantity,
+                "price": r.price,
+                "declared_risk_amount": r.declared_risk_amount,
+                "declared_risk_unit": r.declared_risk_unit,
+                "strategy_id": r.strategy_id,
+                "strategy_slug": r.strategy_slug,
+                "tag_count": r.tag_count,
+                "source_count": r.source_count,
+                "caveats": list(r.caveats),
+            }
+            for r in page.rows
+        ],
+        "next_cursor": page.next_cursor,
+        "limit": page.limit,
+        "filters": {
+            "strategy_id": strategy_id or "",
+            "instrument_id": instrument_id or "",
+            "decision_type": decision_type or "",
+        },
+        "page_explanation": page_explanation("trades"),
+        "empty_state": {
+            "title": "No trades recorded yet.",
+            "next_steps": [
+                ("Seed the rich reporting fixture",
+                 "tt journal fixture-seed --target=mvp-eval-rich"),
+                ("Record a paper-entry decision",
+                 "tt decision add --type=paper_enter ..."),
+            ],
+        }
+        if not page.rows
+        else None,
+    }
+
+
 def decision_detail_context(
     conn: sqlite3.Connection, *, decision_id: str,
 ) -> dict[str, Any] | None:

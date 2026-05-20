@@ -165,6 +165,36 @@ def _build_app(home_path: str) -> Any:
             raise fastapi.HTTPException(status_code=404, detail=f"decision {decision_id} not found")
         return _render(request, "decision_detail.html", ctx)
 
+    @app.get("/trades", response_class=HTMLResponse)
+    def trades_html(
+        request: _Request,
+        cursor: str | None = None,
+        limit: int = 50,
+        strategy_id: str | None = None,
+        instrument_id: str | None = None,
+        decision_type: str | None = None,
+    ) -> Any:
+        """Reporting-lane Trades index per bead trade-trace-q2li.
+
+        Read-only paginated view of trading-typed decisions; backed by
+        `console.reporting.list_trades`. Query params double as the
+        per-page filter form's persistence layer; the global
+        ReportFilter URL state (the `f=` parameter from hayy) is
+        consumed by the dashboard pages that render aggregate metrics.
+        """
+
+        _, db = _open()
+        try:
+            ctx = pages.trades_context(
+                db.connection, cursor=cursor, limit=limit,
+                strategy_id=strategy_id or None,
+                instrument_id=instrument_id or None,
+                decision_type=decision_type or None,
+            )
+        finally:
+            db.close()
+        return _render(request, "trades.html", ctx)
+
     @app.get("/reports", response_class=HTMLResponse)
     def reports_html(request: _Request) -> Any:
         _, db = _open()

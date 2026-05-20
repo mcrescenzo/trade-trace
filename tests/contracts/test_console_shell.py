@@ -23,6 +23,7 @@ STATIC_DIR = Path(__file__).resolve().parents[2] / "src" / "trade_trace" / "cons
 
 REQUIRED_NAV_ROUTES = [
     "/",
+    "/trades",
     "/journal",
     "/decisions",
     "/reports",
@@ -100,7 +101,7 @@ def test_base_template_splits_nav_into_three_lanes_per_i1ds():
 
 @pytest.mark.parametrize("name", [
     "overview", "journal", "decisions", "reports", "calibration",
-    "strategies", "playbooks", "integrity", "raw",
+    "strategies", "playbooks", "integrity", "raw", "trades",
 ])
 def test_top_level_template_exists(name: str):
     assert (TEMPLATE_DIR / f"{name}.html").is_file(), f"missing template {name}.html"

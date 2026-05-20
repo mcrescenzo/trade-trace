@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Trades · Trade Trace Console{% endblock %}
+{% block content %}
+<section class="tt-trades">
+  <div class="tt-page-heading">
+    <p class="tt-eyebrow">Reporting · Trades</p>
+    <h1>Trades</h1>
+    {% if page_explanation %}
+      <details class="tt-page-explanation" open>
+        <summary>What this page does · How to read it · What can mislead</summary>
+        <dl>
+          <dt>What this page does</dt>
+          <dd>{{ page_explanation.what }}</dd>
+          <dt>How to read it</dt>
+          <dd>{{ page_explanation.how_to_read }}</dd>
+          <dt>What can mislead</dt>
+          <dd>{{ page_explanation.what_can_mislead }}</dd>
+        </dl>
+      </details>
+    {% endif %}
+  </div>
+  <form class="tt-filter-form" data-filter-form>
+    <label>Strategy <input type="text" name="strategy_id" value="{{ filters.strategy_id }}" placeholder="strat_..."></label>
+    <label>Instrument <input type="text" name="instrument_id" value="{{ filters.instrument_id }}" placeholder="ins_..."></label>
+    <label>Decision type
+      <select name="decision_type">
+        <option value="">(any trade type)</option>
+        <option value="actual_enter" {% if filters.decision_type == "actual_enter" %}selected{% endif %}>actual_enter</option>
+        <option value="actual_exit" {% if filters.decision_type == "actual_exit" %}selected{% endif %}>actual_exit</option>
+        <option value="paper_enter" {% if filters.decision_type == "paper_enter" %}selected{% endif %}>paper_enter</option>
+        <option value="paper_exit" {% if filters.decision_type == "paper_exit" %}selected{% endif %}>paper_exit</option>
+        <option value="add" {% if filters.decision_type == "add" %}selected{% endif %}>add</option>
+        <option value="reduce" {% if filters.decision_type == "reduce" %}selected{% endif %}>reduce</option>
+      </select>
+    </label>
+    <button type="submit">Apply filters</button>
+  </form>
+  {% if empty_state %}
+    <article class="tt-empty-state" data-empty-state="trades">
+      <h2>{{ empty_state.title }}</h2>
+      <ol>
+        {% for label, cmd in empty_state.next_steps %}
+          <li>{{ label }}: <code>{{ cmd }}</code></li>
+        {% endfor %}
+      </ol>
+    </article>
+  {% else %}
+    <div class="tt-table-shell">
+      <table class="tt-table" data-trades-table>
+        <thead>
+          <tr>
+            <th>decision</th>
+            <th>type</th>
+            <th>instrument</th>
+            <th>side</th>
+            <th class="tt-number">qty</th>
+            <th class="tt-number">price</th>
+            <th class="tt-number">risk</th>
+            <th>strategy</th>
+            <th>recorded</th>
+            <th>caveats</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr data-record-id="{{ row.decision_id }}">
+              <td><a href="/decisions/{{ row.decision_id }}"><code>{{ row.decision_id }}</code></a></td>
+              <td><span class="tt-badge tt-badge--accent">{{ row.decision_type }}</span></td>
+              <td>
+                {% if row.instrument_symbol %}<strong>{{ row.instrument_symbol }}</strong>{% endif %}
+                {% if row.instrument_title %}<br><span class="tt-muted">{{ row.instrument_title }}</span>{% endif %}
+              </td>
+              <td>{{ row.side or "—" }}</td>
+              <td class="tt-number">{{ row.quantity if row.quantity is not none else "—" }}</td>
+              <td class="tt-number">{{ row.price if row.price is not none else "—" }}</td>
+              <td class="tt-number">
+                {% if row.declared_risk_amount is not none %}
+                  {{ row.declared_risk_amount }}{% if row.declared_risk_unit %} {{ row.declared_risk_unit }}{% endif %}
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if row.strategy_id %}<code>{{ row.strategy_slug or row.strategy_id }}</code>{% else %}<span class="tt-muted">(no strategy)</span>{% endif %}
+              </td>
+              <td><time data-ts="{{ row.decision_at }}">{{ row.decision_at }}</time></td>
+              <td>
+                {% for code in row.caveats %}
+                  <span class="tt-caveat-chip" data-caveat="{{ code }}">{{ code }}</span>
+                {% endfor %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if next_cursor %}
+      <p class="tt-pagination"><a href="?cursor={{ next_cursor }}&amp;limit={{ limit }}" rel="next">Next page →</a></p>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

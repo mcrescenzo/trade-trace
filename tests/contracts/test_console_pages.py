@@ -118,6 +118,65 @@ def test_decision_detail_returns_row_for_existing_id(conn):
     assert "related_events" in ctx
 
 
+def test_trades_context_lists_trading_decisions_per_q2li(conn):
+    """The Trades index page (trade-trace-q2li) surfaces every
+    trade-typed decision from `list_trades`. Empty fixture (mvp-eval
+    has watch/skip/etc. but few trades) is still a valid response."""
+
+    from trade_trace.console.pages import trades_context
+
+    ctx = trades_context(conn, cursor=None, limit=50)
+    assert ctx["page_title"] == "Trades"
+    assert "rows" in ctx
+    # Every row carries the caveat list (possibly empty).
+    for row in ctx["rows"]:
+        assert "caveats" in row
+        assert "decision_id" in row
+        assert "decision_type" in row
+
+
+def test_trades_context_against_rich_fixture_includes_caveats(tmp_path: Path):
+    """With mvp-eval-rich seeded, the Trades index must surface rows
+    AND attach the named caveats to rows missing data."""
+
+    from trade_trace.console.pages import trades_context
+    from trade_trace.storage.database import open_database_readonly
+
+    home = tmp_path / "rich"
+    init = mcp_call("journal.init", {"home": str(home)})
+    assert init.ok
+    seed = mcp_call(
+        "journal.fixture_seed", {"home": str(home), "target": "mvp-eval-rich"},
+        actor_id="agent:test",
+    )
+    assert seed.ok
+
+    db = open_database_readonly(db_path(home))
+    try:
+        ctx = trades_context(db.connection, cursor=None, limit=500)
+    finally:
+        db.close()
+
+    assert ctx["rows"], "rich fixture must produce trade rows"
+    with_risk = [r for r in ctx["rows"] if r["declared_risk_amount"] is not None]
+    without_risk = [r for r in ctx["rows"] if r["declared_risk_amount"] is None]
+    assert with_risk
+    assert without_risk
+    # Caveat chip data shape: missing-risk rows carry the code.
+    assert any("missing_risk_budget" in r["caveats"] for r in without_risk)
+
+
+def test_trades_context_filter_narrows_results(conn):
+    from trade_trace.console.pages import trades_context
+
+    ctx_all = trades_context(conn, cursor=None, limit=500)
+    # `watch` is not a trading type — must return zero rows.
+    ctx_watch = trades_context(conn, cursor=None, limit=500, decision_type="watch")
+    assert ctx_watch["rows"] == []
+    # And the empty filter must not include `watch` rows from the all-types page.
+    assert all(r["decision_type"] != "watch" for r in ctx_all["rows"])
+
+
 def test_reports_context_omits_lazy_write_handlers(conn):
     from trade_trace.console.pages import reports_context
 
