@@ -7,15 +7,15 @@
     <h1>Logs</h1>
     <p class="tt-lede">Read redacted operational logs from <code>{{ log_dir }}</code> without writing back to the log files.</p>
   </div>
-  <form class="tt-filter-form" data-filter-form>
+  <form class="tt-filter-form" data-filter-form method="get" action="/logs">
     <label>Level
       <select name="level">
         <option value="">All</option>
-        <option value="DEBUG">DEBUG</option>
-        <option value="INFO">INFO</option>
-        <option value="WARN">WARN</option>
-        <option value="WARNING">WARNING</option>
-        <option value="ERROR">ERROR</option>
+        <option value="DEBUG" {% if level_filter == "DEBUG" %}selected{% endif %}>DEBUG</option>
+        <option value="INFO" {% if level_filter == "INFO" %}selected{% endif %}>INFO</option>
+        <option value="WARN" {% if level_filter == "WARN" %}selected{% endif %}>WARN</option>
+        <option value="WARNING" {% if level_filter == "WARNING" %}selected{% endif %}>WARNING</option>
+        <option value="ERROR" {% if level_filter == "ERROR" %}selected{% endif %}>ERROR</option>
       </select>
     </label>
     <label>Tail <input type="number" name="tail" min="10" max="2000" value="{{ tail|default(200) }}"></label>

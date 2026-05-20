@@ -102,6 +102,23 @@ def test_decisions_context_paginates(conn):
     assert ctx["page_title"] == "Decisions"
 
 
+def test_decisions_context_consumes_filters(conn):
+    from trade_trace.console.pages import decisions_context
+
+    row = conn.execute(
+        "SELECT type, instrument_id FROM decisions WHERE instrument_id IS NOT NULL LIMIT 1"
+    ).fetchone()
+    ctx = decisions_context(
+        conn,
+        cursor=None,
+        limit=50,
+        filters={"decision_type": row[0], "instrument_id": row[1]},
+    )
+    assert ctx["filters"] == {"decision_type": row[0], "instrument_id": row[1]}
+    assert ctx["rows"]
+    assert all(r["type"] == row[0] and r["instrument_id"] == row[1] for r in ctx["rows"])
+
+
 def test_decision_detail_returns_none_for_missing_id(conn):
     from trade_trace.console.pages import decision_detail_context
 
@@ -173,8 +190,27 @@ def test_trades_context_filter_narrows_results(conn):
     # `watch` is not a trading type — must return zero rows.
     ctx_watch = trades_context(conn, cursor=None, limit=500, decision_type="watch")
     assert ctx_watch["rows"] == []
+    assert ctx_watch["filters"]["decision_type"] == "watch"
     # And the empty filter must not include `watch` rows from the all-types page.
     assert all(r["decision_type"] != "watch" for r in ctx_all["rows"])
+
+
+def test_trades_pagination_query_preserves_filters(conn):
+    from trade_trace.console.pages import trades_context
+
+    ctx = trades_context(
+        conn,
+        cursor=None,
+        limit=1,
+        strategy_id="strat alpha/beta",
+        instrument_id="ins:btc",
+        decision_type="paper_enter",
+    )
+    assert "cursor=" in ctx["next_query"]
+    assert "limit=1" in ctx["next_query"]
+    assert "strategy_id=strat+alpha%2Fbeta" in ctx["next_query"]
+    assert "instrument_id=ins%3Abtc" in ctx["next_query"]
+    assert "decision_type=paper_enter" in ctx["next_query"]
 
 
 def test_reports_context_omits_lazy_write_handlers(conn):

@@ -146,14 +146,16 @@ def test_shell_has_optional_poll_control():
         assert f">{option}<" in html
 
 
-def test_filter_state_is_url_encoded_via_hash():
-    """console.js's filter-state path writes to `location.hash`,
-    not to a server-side preference store. The hash is
-    reload-survivable and shareable."""
+def test_filter_forms_submit_query_params_to_server():
+    """Table filters must remain server-visible/shareable: forms use
+    GET query params and console.js must not intercept them into a hash."""
 
     js = (STATIC_DIR / "js" / "console.js").read_text(encoding="utf-8")
-    assert "location.hash" in js
-    assert "decodeHash" in js
+    assert "location.hash" not in js
+    assert "ev.preventDefault" not in js
+    for name in ("trades", "logs", "decisions"):
+        html = (TEMPLATE_DIR / f"{name}.html").read_text(encoding="utf-8")
+        assert 'data-filter-form method="get"' in html
 
 
 def test_static_assets_are_vendored():

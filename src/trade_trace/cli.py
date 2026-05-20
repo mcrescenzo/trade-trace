@@ -161,6 +161,63 @@ def _invocation_from_args(
     return ".".join(longest), tokens[len(longest):]
 
 
+def _schema_arg_lines(tool_name: str, registry: ToolRegistry) -> list[str]:
+    """Render schema properties as CLI flags for command-specific help."""
+
+    reg = registry.get(tool_name)
+    schema = reg.json_schema or {}
+    properties = schema.get("properties") or {}
+    required = set(schema.get("required") or [])
+    lines: list[str] = []
+    for name in sorted(properties, key=lambda n: (n not in required, n)):
+        prop = properties.get(name) or {}
+        flag = "--" + name.replace("_", "-")
+        kind = prop.get("type") or "value"
+        if isinstance(kind, list):
+            kind = "|".join(str(k) for k in kind)
+        marker = "required" if name in required else "optional"
+        description = prop.get("description") or ""
+        enum = prop.get("enum")
+        if enum:
+            description = (description + " " if description else "") + "one of: " + ", ".join(map(str, enum))
+        lines.append(f"  {flag} <{kind}>  {marker}" + (f"; {description}" if description else ""))
+    return lines
+
+
+def _print_command_help(parser: argparse.ArgumentParser, tool_name: str, registry: ToolRegistry) -> None:
+    """Print global argparse help plus schema-derived flags for one tool."""
+
+    reg = registry.get(tool_name)
+    invocation = " ".join(reg.cli_invocation)
+    print(f"usage: tt [global options] {invocation} [tool options]", file=sys.stdout)
+    print("", file=sys.stdout)
+    print(f"Tool: {tool_name}", file=sys.stdout)
+    if reg.description:
+        print(reg.description, file=sys.stdout)
+        print("", file=sys.stdout)
+    print("global options:", file=sys.stdout)
+    for action in parser._actions:
+        if not action.option_strings:
+            continue
+        opts = ", ".join(action.option_strings)
+        print(f"  {opts}  {action.help or ''}", file=sys.stdout)
+    print("", file=sys.stdout)
+    print("tool options from schema:", file=sys.stdout)
+    lines = _schema_arg_lines(tool_name, registry)
+    if lines:
+        for line in lines:
+            print(line, file=sys.stdout)
+    else:
+        print("  (no schema-advertised arguments)", file=sys.stdout)
+    print("", file=sys.stdout)
+    print(
+        "JSON convention: for object/array values, pass JSON with the schema field flag "
+        "(for example --metadata-json '{...}' or --tags '[...]'). Repeating a flag "
+        "accumulates values into a list.",
+        file=sys.stdout,
+    )
+
+
 def _emit_cli_error(
     *,
     tool: str,
@@ -198,8 +255,9 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
     parser = argparse.ArgumentParser(
         prog="tt",
         description="Trade Trace CLI — agent-native journal, memory, and calibration substrate.",
-        add_help=True,
+        add_help=False,
     )
+    parser.add_argument("-h", "--help", action="store_true", help="show this help message and exit")
     parser.add_argument("--human", action="store_true", help="emit a one-line prose hint to stderr")
     parser.add_argument(
         "--actor-id",
@@ -262,7 +320,7 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
 
     if not positional:
         parser.print_help(sys.stderr)
-        return 2
+        return 0 if args.help else 2
 
     try:
         tool_name, remaining = _invocation_from_args(positional, registry)
@@ -281,6 +339,9 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
                 "known_invocations": exc.known,
             },
         )
+    if args.help:
+        _print_command_help(parser, tool_name, registry)
+        return 0
     try:
         tool_args = _parse_kv_args(remaining)
     except MalformedJsonArgError as exc:

@@ -27,7 +27,7 @@ from datetime import UTC
 from pathlib import Path
 from typing import Any
 
-from trade_trace.console.pagination import Page, paginate_query
+from trade_trace.console.pagination import Page, _decode_cursor, _encode_cursor, paginate_query
 
 LAZY_WRITE_DENY_SET: tuple[str, ...] = (
     "report" + "." + "coach",
@@ -138,16 +138,40 @@ def event_detail(conn: sqlite3.Connection, *, event_id: int) -> dict[str, Any] |
     }
 
 
-def decisions_list(conn: sqlite3.Connection, *, cursor: str | None, limit: int) -> Page:
-    return _table_page(
-        conn,
-        columns=("id", "type", "instrument_id", "thesis_id", "side",
-                 "quantity", "price", "created_at"),
-        table="decisions",
-        order_by="created_at DESC",
-        cursor=cursor,
-        limit=limit,
+def decisions_list(
+    conn: sqlite3.Connection,
+    *,
+    cursor: str | None,
+    limit: int,
+    decision_type: str | None = None,
+    instrument_id: str | None = None,
+) -> Page:
+    columns = ("id", "type", "instrument_id", "thesis_id", "side",
+               "quantity", "price", "created_at")
+    clamped_limit = max(1, min(int(limit), 500))
+    clauses: list[str] = []
+    params: list[Any] = []
+    if decision_type:
+        clauses.append("type = ?")
+        params.append(decision_type)
+    if instrument_id:
+        clauses.append("instrument_id = ?")
+        params.append(instrument_id)
+    if cursor is not None:
+        clauses.append("created_at < ?")
+        params.append(_decode_cursor(cursor))
+    where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = (
+        f"SELECT {', '.join(columns)} FROM decisions"
+        f"{where} ORDER BY created_at DESC LIMIT ?"
     )
+    rows = list(conn.execute(sql, tuple(params) + (clamped_limit + 1,)))
+    next_cursor = None
+    if len(rows) > clamped_limit:
+        rows = rows[:clamped_limit]
+        next_cursor = _encode_cursor(rows[-1][7])
+    return Page(rows=[dict(zip(columns, row, strict=True)) for row in rows],
+                next_cursor=next_cursor, limit=clamped_limit)
 
 
 def memory_nodes_list(conn: sqlite3.Connection, *, cursor: str | None, limit: int) -> Page:

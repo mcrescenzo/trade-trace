@@ -7,7 +7,7 @@
     <h1>Decisions</h1>
     <p class="tt-lede">Review entry, watch, skip, and hold decisions with their price, size, instrument, and source trail.</p>
   </div>
-  <form class="tt-filter-form" data-filter-form>
+  <form class="tt-filter-form" data-filter-form method="get" action="/decisions">
     <label>Type <input type="text" name="decision_type" value="{{ filters.decision_type|default('') }}" placeholder="paper_enter"></label>
     <label>Instrument <input type="text" name="instrument_id" value="{{ filters.instrument_id|default('') }}" placeholder="ins_..."></label>
     <button type="submit">Apply filters</button>
@@ -51,7 +51,7 @@
       </table>
     </div>
     {% if next_cursor %}
-      <p class="tt-pagination"><a href="?cursor={{ next_cursor }}&amp;limit={{ limit }}" rel="next">Next page →</a></p>
+      <p class="tt-pagination"><a href="?{{ next_query }}" rel="next">Next page →</a></p>
     {% endif %}
   {% endif %}
 </section>

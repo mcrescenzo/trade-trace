@@ -162,10 +162,24 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "journal.html", ctx)
 
     @app.get("/decisions", response_class=HTMLResponse)
-    def decisions_html(request: _Request, cursor: str | None = None, limit: int = 50) -> Any:
+    def decisions_html(
+        request: _Request,
+        cursor: str | None = None,
+        limit: int = 50,
+        decision_type: str | None = None,
+        instrument_id: str | None = None,
+    ) -> Any:
         _, db = _open()
         try:
-            ctx = pages.decisions_context(db.connection, cursor=cursor, limit=limit)
+            ctx = pages.decisions_context(
+                db.connection,
+                cursor=cursor,
+                limit=limit,
+                filters={
+                    "decision_type": decision_type or "",
+                    "instrument_id": instrument_id or "",
+                },
+            )
         finally:
             db.close()
         return _render(request, "decisions.html", ctx)

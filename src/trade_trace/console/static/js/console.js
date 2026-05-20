@@ -142,43 +142,21 @@
     });
   }
 
-  /* Filter state lives in the URL hash, so reload/share works
-     without any server-side preference write. Forms with
-     `data-filter-form` push their fields onto location.hash on
-     submit and rehydrate on page load. */
+  /* Filter forms use normal GET query parameters so the server sees
+     them, rendered rows update from route handlers, and copied URLs are
+     shareable. Keep this hook only to normalize empty values before
+     submission; do not intercept submit or write hash state. */
   function setupFilterState() {
-    function decodeHash() {
-      var raw = window.location.hash.replace(/^#/, "");
-      if (!raw) return {};
-      var out = {};
-      var pairs = raw.split("&");
-      for (var i = 0; i < pairs.length; i++) {
-        var kv = pairs[i].split("=");
-        if (kv.length === 2) {
-          out[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1]);
-        }
-      }
-      return out;
-    }
-    var state = decodeHash();
     var forms = document.querySelectorAll("form[data-filter-form]");
     for (var i = 0; i < forms.length; i++) {
       var form = forms[i];
-      for (var key in state) {
-        var input = form.querySelector("[name='" + key + "']");
-        if (input) input.value = state[key];
-      }
       if (form.getAttribute("data-filter-bound") === "true") continue;
       form.setAttribute("data-filter-bound", "true");
       form.addEventListener("submit", function (ev) {
-        ev.preventDefault();
-        var data = new FormData(ev.target);
-        var parts = [];
-        data.forEach(function (value, name) {
-          if (value) parts.push(encodeURIComponent(name) + "=" + encodeURIComponent(value));
-        });
-        window.location.hash = parts.join("&");
-        refreshNow();
+        var inputs = ev.target.querySelectorAll("input[name], select[name], textarea[name]");
+        for (var j = 0; j < inputs.length; j++) {
+          if (inputs[j].value === "") inputs[j].disabled = true;
+        }
       });
     }
   }

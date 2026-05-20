@@ -20,6 +20,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from trade_trace.console import endpoints
 
@@ -138,14 +139,27 @@ def decisions_context(
     limit: int,
     filters: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    page = endpoints.decisions_list(conn, cursor=cursor, limit=limit)
+    decision_type = (filters or {}).get("decision_type") or None
+    instrument_id = (filters or {}).get("instrument_id") or None
+    page = endpoints.decisions_list(
+        conn,
+        cursor=cursor,
+        limit=limit,
+        decision_type=decision_type,
+        instrument_id=instrument_id,
+    )
+    active_filters = {
+        "decision_type": decision_type or "",
+        "instrument_id": instrument_id or "",
+    }
     return {
         "page_title": "Decisions",
         "generated_at": _iso_now(),
         "rows": page.rows,
         "next_cursor": page.next_cursor,
         "limit": page.limit,
-        "filters": filters or {},
+        "filters": active_filters,
+        "next_query": _next_query(page.next_cursor, page.limit, active_filters),
         "empty_state": {
             "title": "No decisions recorded yet.",
             "next_steps": [
@@ -790,6 +804,11 @@ def trades_context(
             "instrument_id": instrument_id or "",
             "decision_type": decision_type or "",
         },
+        "next_query": _next_query(page.next_cursor, page.limit, {
+            "strategy_id": strategy_id or "",
+            "instrument_id": instrument_id or "",
+            "decision_type": decision_type or "",
+        }),
         "page_explanation": page_explanation("trades"),
         "empty_state": {
             "title": "No trades recorded yet.",
@@ -803,6 +822,12 @@ def trades_context(
         if not page.rows
         else None,
     }
+
+
+def _next_query(next_cursor: str | None, limit: int, filters: dict[str, Any]) -> str:
+    params: dict[str, Any] = {"cursor": next_cursor or "", "limit": limit}
+    params.update({k: v for k, v in filters.items() if v not in (None, "")})
+    return urlencode(params)
 
 
 def decision_detail_context(

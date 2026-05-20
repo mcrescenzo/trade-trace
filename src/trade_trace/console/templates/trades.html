@@ -19,7 +19,7 @@
       </details>
     {% endif %}
   </div>
-  <form class="tt-filter-form" data-filter-form>
+  <form class="tt-filter-form" data-filter-form method="get" action="/trades">
     <label>Strategy <input type="text" name="strategy_id" value="{{ filters.strategy_id }}" placeholder="strat_..."></label>
     <label>Instrument <input type="text" name="instrument_id" value="{{ filters.instrument_id }}" placeholder="ins_..."></label>
     <label>Decision type
@@ -93,7 +93,7 @@
       </table>
     </div>
     {% if next_cursor %}
-      <p class="tt-pagination"><a href="?cursor={{ next_cursor }}&amp;limit={{ limit }}" rel="next">Next page →</a></p>
+      <p class="tt-pagination"><a href="?{{ next_query }}" rel="next">Next page →</a></p>
     {% endif %}
   {% endif %}
 </section>
