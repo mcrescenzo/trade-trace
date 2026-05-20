@@ -16,6 +16,14 @@ Modules:
 
 from __future__ import annotations
 
+from trade_trace.console.reporting.adapter import (
+    SAFE_REPORT_TOOLS,
+    DashboardContext,
+    DashboardGroup,
+    ReportAdapterError,
+    WidgetEvidence,
+    run_report,
+)
 from trade_trace.console.reporting.position_rows import (
     CAVEAT_OPEN_NO_MARK,
     PositionDetail,
@@ -30,10 +38,16 @@ from trade_trace.console.reporting.trade_rows import (
 
 __all__ = [
     "CAVEAT_OPEN_NO_MARK",
+    "DashboardContext",
+    "DashboardGroup",
     "PositionDetail",
     "PositionEvent",
+    "ReportAdapterError",
+    "SAFE_REPORT_TOOLS",
     "TradeRow",
+    "WidgetEvidence",
     "list_trades",
     "position_detail",
+    "run_report",
     "trade_detail",
 ]
