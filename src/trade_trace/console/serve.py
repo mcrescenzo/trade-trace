@@ -29,6 +29,20 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.storage.paths import resolve_home
 from trade_trace.tools.errors import ToolError
 
+# FastAPI ships in the [console] extra, so this import is guarded.
+# When the extra is absent, _build_app is never called (see
+# _console_serve below), so the only consumers of `_Request` are
+# the route handlers' annotations — which FastAPI evaluates via
+# `get_type_hints()` against this module's globals. A local import
+# inside `_build_app` is *not* visible to that lookup, which is
+# why an earlier `request: Any` (and a later `request: _Request`
+# referencing a local binding) caused FastAPI to treat `request`
+# as a query parameter and return 422 on every page.
+try:
+    from fastapi import Request as _Request  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover — gated by _import_server_deps
+    _Request = None  # type: ignore[assignment,misc]
+
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 
@@ -114,7 +128,7 @@ def _build_app(home_path: str) -> Any:
     # -- HTML pages --------------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
-    def overview_html(request: Any) -> Any:
+    def overview_html(request: _Request) -> Any:
         path, db = _open()
         try:
             ctx = pages.overview_context(db.connection, db_path=path)
@@ -123,7 +137,7 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "overview.html", ctx)
 
     @app.get("/journal", response_class=HTMLResponse)
-    def journal_html(request: Any, cursor: str | None = None, limit: int = 50) -> Any:
+    def journal_html(request: _Request, cursor: str | None = None, limit: int = 50) -> Any:
         _, db = _open()
         try:
             ctx = pages.journal_context(db.connection, cursor=cursor, limit=limit)
@@ -132,7 +146,7 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "journal.html", ctx)
 
     @app.get("/decisions", response_class=HTMLResponse)
-    def decisions_html(request: Any, cursor: str | None = None, limit: int = 50) -> Any:
+    def decisions_html(request: _Request, cursor: str | None = None, limit: int = 50) -> Any:
         _, db = _open()
         try:
             ctx = pages.decisions_context(db.connection, cursor=cursor, limit=limit)
@@ -141,7 +155,7 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "decisions.html", ctx)
 
     @app.get("/decisions/{decision_id}", response_class=HTMLResponse)
-    def decision_detail_html(request: Any, decision_id: str) -> Any:
+    def decision_detail_html(request: _Request, decision_id: str) -> Any:
         _, db = _open()
         try:
             ctx = pages.decision_detail_context(db.connection, decision_id=decision_id)
@@ -152,7 +166,7 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "decision_detail.html", ctx)
 
     @app.get("/reports", response_class=HTMLResponse)
-    def reports_html(request: Any) -> Any:
+    def reports_html(request: _Request) -> Any:
         _, db = _open()
         try:
             ctx = pages.reports_context(db.connection)
@@ -161,7 +175,7 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "reports.html", ctx)
 
     @app.get("/calibration", response_class=HTMLResponse)
-    def calibration_html(request: Any) -> Any:
+    def calibration_html(request: _Request) -> Any:
         _, db = _open()
         try:
             ctx = pages.calibration_context(db.connection)
@@ -170,7 +184,7 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "calibration.html", ctx)
 
     @app.get("/strategies", response_class=HTMLResponse)
-    def strategies_html(request: Any, cursor: str | None = None, limit: int = 50) -> Any:
+    def strategies_html(request: _Request, cursor: str | None = None, limit: int = 50) -> Any:
         _, db = _open()
         try:
             ctx = pages.strategies_context(db.connection, cursor=cursor, limit=limit)
@@ -179,7 +193,7 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "strategies.html", ctx)
 
     @app.get("/playbooks", response_class=HTMLResponse)
-    def playbooks_html(request: Any, cursor: str | None = None, limit: int = 50) -> Any:
+    def playbooks_html(request: _Request, cursor: str | None = None, limit: int = 50) -> Any:
         _, db = _open()
         try:
             ctx = pages.playbooks_context(db.connection, cursor=cursor, limit=limit)
@@ -188,7 +202,7 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "playbooks.html", ctx)
 
     @app.get("/integrity", response_class=HTMLResponse)
-    def integrity_html(request: Any) -> Any:
+    def integrity_html(request: _Request) -> Any:
         _, db = _open()
         try:
             ctx = pages.integrity_context(db.connection)
@@ -197,7 +211,7 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "integrity.html", ctx)
 
     @app.get("/logs", response_class=HTMLResponse)
-    def logs_html(request: Any, level: str | None = None, tail: int = 200) -> Any:
+    def logs_html(request: _Request, level: str | None = None, tail: int = 200) -> Any:
         from trade_trace.console.logs import logs_context
 
         ctx = logs_context(
@@ -208,7 +222,7 @@ def _build_app(home_path: str) -> Any:
         return _render(request, "logs.html", ctx)
 
     @app.get("/raw", response_class=HTMLResponse)
-    def raw_html(request: Any, event_id: int | None = None) -> Any:
+    def raw_html(request: _Request, event_id: int | None = None) -> Any:
         _, db = _open()
         try:
             ctx = pages.raw_context(db.connection, event_id=event_id)
