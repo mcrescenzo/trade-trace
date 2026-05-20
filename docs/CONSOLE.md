@@ -48,7 +48,7 @@ The default flags:
 | Flag | Default | What it does |
 |------|---------|---------------|
 | `--host` | `127.0.0.1` | TCP bind host. Non-loopback values require `--allow-non-loopback`. |
-| `--port` | `8765` | TCP bind port. Use `0` to let the OS pick a free port. |
+| `--port` | `8765` | TCP bind port. Choose an explicit free port; `--port=0` is rejected because the Console must print and open the actual URL. |
 | `--no-browser` | (off) | Skip the auto-open on startup. |
 | `--allow-non-loopback` | (off) | Explicit acknowledgement that `--host` exposes the dashboard beyond localhost. |
 
@@ -58,8 +58,8 @@ default browser (unless `--no-browser`).
 
 If the port is occupied, the CLI exits with code **73** and a
 helpful message naming the port and suggesting `--port=<n+1>`
-or `--port=0`. There is no traceback; operators can script
-around the documented exit code.
+or another explicit free port. There is no traceback; operators
+can script around the documented exit code.
 
 `Ctrl+C` triggers a graceful shutdown without traceback.
 
@@ -167,7 +167,7 @@ The operational logging contract lives in
 | Symptom | Resolution |
 |---------|------------|
 | `Console requires the [console] extra` | `pip install 'trade-trace[console]'` |
-| `port <n> on 127.0.0.1 is already in use` | Re-run with `--port <n+1>` or `--port=0`. The CLI exits with code 73 — operators can script around it. |
+| `port <n> on 127.0.0.1 is already in use` | Re-run with `--port <n+1>` or another explicit free port. The CLI exits with code 73 — operators can script around it. |
 | Status page reports `reason: 'missing'` | The DB path does not exist. Run `tt journal init` first or pass `--home` to the right path. |
 | Status page reports `reason: 'unsupported_schema'` | The file at the DB path is not a Trade Trace journal (missing M0 tables). The Console will not auto-migrate. Check `$TRADE_TRACE_HOME`. |
 | Browser fails to render anything | The vendored htmx / CSS / JS path may not have shipped. Verify the `[console]` extra is installed and the wheel contains `src/trade_trace/console/static/`. |

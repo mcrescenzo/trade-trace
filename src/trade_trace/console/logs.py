@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections import deque
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -39,18 +40,30 @@ def _log_dir(home: Path | None = None) -> Path:
 
 
 def _iter_log_paths(dir_path: Path) -> Iterable[Path]:
-    """Live file plus rotated siblings, newest-first. Returns an
+    """Rotated siblings plus live file, oldest-first. Returns an
     empty iterator if the directory does not exist."""
 
     if not dir_path.exists():
         return []
     live = dir_path / LOG_FILENAME
-    rotated = sorted(dir_path.glob(LOG_FILENAME + ".*"), reverse=True)
+    rotated = sorted(
+        dir_path.glob(LOG_FILENAME + ".*"),
+        key=lambda path: _rotation_index(path),
+        reverse=True,
+    )
     paths: list[Path] = []
+    paths.extend(rotated)
     if live.exists():
         paths.append(live)
-    paths.extend(rotated)
     return paths
+
+
+def _rotation_index(path: Path) -> int:
+    suffix = path.name.removeprefix(LOG_FILENAME + ".")
+    try:
+        return int(suffix)
+    except ValueError:
+        return 0
 
 
 def _parse_lines(lines: Iterable[str]) -> list[dict[str, Any]]:
@@ -117,10 +130,10 @@ def logs_context(
             },
         }
 
-    # Read the newest `tail` lines across the live file and rotated
-    # siblings in order. `tail` is bounded to keep page render
-    # cheap on a 5 MiB+ rotated log.
-    lines: list[str] = []
+    # Read the newest `tail` lines across the rotated siblings and
+    # live file in chronological order. `tail` is bounded to keep
+    # page render cheap on a 5 MiB+ rotated log.
+    lines: deque[str] = deque(maxlen=tail)
     for path in log_paths:
         try:
             with path.open("r", encoding="utf-8", errors="replace") as fh:
@@ -129,10 +142,8 @@ def logs_context(
                 lines.extend(fh.readlines())
         except OSError:
             continue
-        if len(lines) >= tail:
-            break
 
-    records = _parse_lines(lines[-tail:])
+    records = _parse_lines(lines)
     if level_filter:
         wanted = level_filter.upper()
         records = [r for r in records if r.get("level") == wanted]

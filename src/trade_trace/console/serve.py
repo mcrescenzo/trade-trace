@@ -488,7 +488,7 @@ def _check_port_free(host: str, port: int) -> None:
             raise ToolError(
                 ErrorCode.VALIDATION_ERROR,
                 f"port {port} on {host} is already in use; try `--port "
-                f"{port + 1}` or pass `--port=0` to let the OS pick one",
+                f"{port + 1}` or choose another explicit free port",
                 details={
                     "field": "port", "host": host, "port": port,
                     "errno": exc.errno, "exit_code": PORT_IN_USE_EXIT_CODE,
@@ -521,6 +521,14 @@ def _console_serve(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "dashboard becomes reachable from your LAN).",
             details={"field": "host", "value": host,
                      "loopback_hosts": ["127.0.0.1", "localhost", "::1"]},
+        )
+    if port == 0:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "--port=0 is not supported for `tt console serve` because the "
+            "startup banner and browser URL must name the actual bound port; "
+            "choose an explicit free port instead (for example, --port 8766).",
+            details={"field": "port", "port": port},
         )
     if not allow_non_loopback:
         # No-op for default flow; the warning lives in the actual

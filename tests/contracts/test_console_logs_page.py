@@ -141,6 +141,29 @@ def test_logs_context_reads_rotated_files(tmp_path: Path, monkeypatch):
     assert "rotated" in messages
 
 
+def test_logs_context_tail_keeps_live_entries_when_rotated_exceeds_tail(tmp_path: Path, monkeypatch):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    (log_dir / "trade-trace.log.1").write_text(
+        "".join(
+            json.dumps({"ts": f"rotated-{i}", "level": "INFO", "actor": "a", "message": f"rotated-{i}"}) + "\n"
+            for i in range(10)
+        ),
+        encoding="utf-8",
+    )
+    (log_dir / "trade-trace.log").write_text(
+        json.dumps({"ts": "current", "level": "INFO", "actor": "a", "message": "current"}) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("TRADE_TRACE_LOG_DIR", str(log_dir))
+    from trade_trace.console.logs import logs_context
+
+    ctx = logs_context(home=tmp_path, tail=5)
+    messages = [r.get("message") for r in ctx["rows"]]
+    assert len(messages) == 5
+    assert messages == ["rotated-6", "rotated-7", "rotated-8", "rotated-9", "current"]
+
+
 def test_base_template_includes_logs_nav_entry():
     base = Path(__file__).resolve().parents[2] / "src" / "trade_trace" / "console" / "templates" / "base.html"
     html = base.read_text(encoding="utf-8")

@@ -13,9 +13,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC_ROOT = REPO_ROOT / "src" / "trade_trace" / "console" / "static"
+TEMPLATE_ROOT = REPO_ROOT / "src" / "trade_trace" / "console" / "templates"
 BOOTSTRAP_SCRIPT = STATIC_ROOT / "js" / "chart-bootstrap.js"
 VENDOR_DIR = STATIC_ROOT / "vendor" / "chartjs"
 VENDOR_README = VENDOR_DIR / "README.md"
+VENDOR_SCRIPT_URL = "/static/vendor/chartjs/chart.umd.min.js"
+BOOTSTRAP_SCRIPT_URL = "/static/js/chart-bootstrap.js"
 
 
 def test_chart_bootstrap_script_ships() -> None:
@@ -92,3 +95,19 @@ def test_vendor_chartjs_binary_is_gracefully_absent() -> None:
     # The README + bootstrap together provide the missing-asset UX.
     assert VENDOR_README.exists()
     assert BOOTSTRAP_SCRIPT.exists()
+
+
+def test_dashboard_loads_local_chartjs_before_bootstrap() -> None:
+    """Chart-capable dashboards must load the documented local
+    Chart.js asset before the bootstrap that expects ``window.Chart``.
+    The binary itself remains operator-installed and may be absent.
+    """
+
+    html = (TEMPLATE_ROOT / "dashboard.html").read_text(encoding="utf-8")
+
+    assert VENDOR_SCRIPT_URL in html
+    assert BOOTSTRAP_SCRIPT_URL in html
+    assert html.index(VENDOR_SCRIPT_URL) < html.index(BOOTSTRAP_SCRIPT_URL)
+    assert "cdn" not in html.lower()
+    assert "https://" not in html.lower()
+    assert "http://" not in html.lower()

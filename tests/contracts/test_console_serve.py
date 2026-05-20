@@ -47,6 +47,16 @@ def test_dry_run_returns_default_host_and_port(tmp_path: Path):
     assert data["url"] == "http://127.0.0.1:8765/"
 
 
+def test_port_zero_is_rejected_with_validation_error(tmp_path: Path):
+    env = _serve_dry_run(tmp_path, port=0)
+    assert env["ok"] is False, env
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "port"
+    assert env["error"]["details"]["port"] == 0
+    assert "--port=0 is not supported" in env["error"]["message"]
+    assert "choose an explicit free port" in env["error"]["message"]
+
+
 def test_non_loopback_host_requires_explicit_opt_in(tmp_path: Path):
     env = _serve_dry_run(tmp_path, host="0.0.0.0")
     assert env["ok"] is False, env

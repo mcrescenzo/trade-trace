@@ -32,6 +32,7 @@
   {% if chart_canvas_id and chart_config_json %}
     <canvas id="{{ chart_canvas_id }}" class="tt-chart" aria-label="{{ dashboard_heading }} chart"></canvas>
     <script type="application/json" data-chart="{{ chart_canvas_id }}">{{ chart_config_json|safe }}</script>
+    <script src="/static/vendor/chartjs/chart.umd.min.js" defer></script>
     <script src="/static/js/chart-bootstrap.js" defer></script>
   {% endif %}
 
