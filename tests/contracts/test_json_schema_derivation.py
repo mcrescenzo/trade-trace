@@ -112,6 +112,32 @@ def test_tool_schema_envelope_echoes_valid_json_schema() -> None:
     _assert_valid_json_schema(schema)
 
 
+def test_instrument_and_decision_schema_advertise_persisted_optional_fields() -> None:
+    registry = build_registry()
+
+    instrument = registry.get("instrument.add").json_schema
+    decision = registry.get("decision.add").json_schema
+
+    assert instrument is not None
+    for field in (
+        "external_id",
+        "symbol",
+        "currency_or_collateral",
+        "expiration_or_resolution_at",
+        "resolution_criteria_text",
+        "contract_multiplier",
+        "metadata_json",
+    ):
+        assert field in instrument["properties"]
+        assert field not in instrument["required"]
+
+    assert decision is not None
+    assert "snapshot_id" in decision["properties"]
+    assert "snapshot_id" not in decision["required"]
+    for row in decision["x-decision-matrix"].values():
+        assert "snapshot_id" in row["optional"]
+
+
 def test_source_add_schema_distinguishes_freshness_from_retrieval_time() -> None:
     registry = build_registry()
     schema = registry.get("source.add").json_schema

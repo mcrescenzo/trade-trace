@@ -53,6 +53,48 @@ def _seed_thesis_and_decision(
             "forecast": fcst, "decision": dec}
 
 
+def test_instrument_add_accepts_rich_audit_payload(home):
+    venue = _mcp(home, "venue.add", {
+        "name": "PM Rich", "kind": "prediction_market",
+        "idempotency_key": "00000000-0000-4000-8000-000000000091",
+    }).data["id"]
+    env = _mcp(home, "instrument.add", {
+        "venue_id": venue,
+        "asset_class": "prediction_market",
+        "title": "Rich contract",
+        "external_id": "venue:contract-123",
+        "symbol": "RICH-123",
+        "currency_or_collateral": "USD",
+        "expiration_or_resolution_at": "2026-05-22T20:00:00Z",
+        "resolution_criteria_text": "Resolves according to official rules.",
+        "contract_multiplier": 1.0,
+        "metadata_json": {"event_type": "test"},
+        "idempotency_key": "00000000-0000-4000-8000-000000000092",
+    })
+    assert env.ok, env
+    assert env.data["id"].startswith("ins_")
+
+
+def test_decision_add_echoes_snapshot_id_when_provided_and_allows_omission(home):
+    seeds = _seed_thesis_and_decision(home)
+    assert _mcp(home, "decision.add", {
+        "type": "watch", "instrument_id": seeds["instrument"],
+        "idempotency_key": "00000000-0000-4000-8000-000000000101",
+    }).data["snapshot_id"] is None
+
+    snap = _mcp(home, "snapshot.add", {
+        "instrument_id": seeds["instrument"],
+        "captured_at": "2026-05-20T12:00:00Z",
+    }).data["id"]
+    env = _mcp(home, "decision.add", {
+        "type": "watch", "instrument_id": seeds["instrument"],
+        "snapshot_id": snap,
+        "idempotency_key": "00000000-0000-4000-8000-000000000102",
+    })
+    assert env.ok, env
+    assert env.data["snapshot_id"] == snap
+
+
 # -- 1. stance → edge_type mapping per stance value ------------------
 
 
@@ -191,6 +233,29 @@ def test_stale_sources_fires_when_freshness_predates_decision(home):
     assert diag["count"] >= 1
     sample = next(s for s in diag["samples"] if s["id"] == src)
     assert sample["staleness_days"] > 7
+
+
+def test_stale_sources_include_direct_decision_attachment_and_deduplicate(home):
+    seeds = _seed_thesis_and_decision(home)
+    src = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports", "uri": "https://e.x/direct-stale",
+        "freshness_at": "2020-01-01T00:00:00Z",
+        "idempotency_key": "00000000-0000-4000-8000-300000000101",
+    }).data["id"]
+    _mcp(home, "source.attach_to_decision", {
+        "source_id": src, "target_id": seeds["decision"],
+        "idempotency_key": "00000000-0000-4000-8000-300000000102",
+    })
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": src, "target_id": seeds["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-300000000103",
+    })
+
+    env = _mcp(home, "report.source_quality", {})
+    diag = env.data["diagnostics"]["stale_sources"]
+    matches = [s for s in diag["samples"] if s["id"] == src and s["decision_id"] == seeds["decision"]]
+    assert len(matches) == 1
+    assert matches[0]["staleness_days"] > 7
 
 
 def test_stale_sources_silent_when_freshness_recent(home):

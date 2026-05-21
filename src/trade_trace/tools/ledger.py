@@ -943,6 +943,7 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 ).fetchone()
                 return {"id": decision_id, "type": decision_type,
                         "instrument_id": args.get("instrument_id"),
+                        "snapshot_id": args.get("snapshot_id"),
                         "tags": tags, "created_at": row[0],
                         "review_by": row[1]}
 
@@ -985,7 +986,8 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     finally:
         db.close()
     return {"id": decision_id, "type": decision_type,
-            "instrument_id": args.get("instrument_id"), "tags": tags,
+            "instrument_id": args.get("instrument_id"),
+            "snapshot_id": args.get("snapshot_id"), "tags": tags,
             "created_at": created_at, "review_by": review_by}
 
 
@@ -2023,6 +2025,30 @@ _SOURCE_ADD_SCHEMA: dict[str, Any] = {
 }
 
 
+_INSTRUMENT_ADD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "venue_id": {"type": "string"},
+        "asset_class": {"type": "string"},
+        "title": {"type": "string"},
+        "external_id": {"type": "string"},
+        "symbol": {"type": "string"},
+        "currency_or_collateral": {"type": "string"},
+        "expiration_or_resolution_at": {"type": "string"},
+        "resolution_criteria_text": {"type": "string"},
+        "contract_multiplier": {"type": "number"},
+        "metadata_json": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["venue_id", "asset_class", "title", "idempotency_key"],
+    "description": (
+        "instrument.add — create an instrument. Optional audit/venue fields "
+        "are accepted and persisted when provided."
+    ),
+}
+
+
 _DECISION_MATRIX_CONTRACT = decision_matrix_contract()
 
 _DECISION_ADD_SCHEMA: dict[str, Any] = {
@@ -2036,6 +2062,7 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
         "instrument_id": {"type": "string"},
         "thesis_id": {"type": "string"},
         "forecast_id": {"type": "string"},
+        "snapshot_id": {"type": "string"},
         "side": {"type": "string"},
         "quantity": {"type": "number"},
         "price": {"type": "number"},
@@ -2109,7 +2136,13 @@ def register_ledger_tools(registry: ToolRegistry) -> None:
         return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
 
     registry.register("venue.add", _venue_add, is_write=True, **_examples_for("venue.add"))
-    registry.register("instrument.add", _instrument_add, is_write=True, **_examples_for("instrument.add"))
+    registry.register(
+        "instrument.add",
+        _instrument_add,
+        is_write=True,
+        json_schema=_INSTRUMENT_ADD_SCHEMA,
+        **_examples_for("instrument.add"),
+    )
     registry.register(
         "snapshot.add",
         _snapshot_add,

@@ -15,67 +15,67 @@ from typing import Any, Literal
 FieldKind = Literal["R", "O", "X"]
 DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
     "watch": {
-        "instrument_id": "R", "thesis_id": "O", "side": "O",
+        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "O",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
         "reason": "O", "review_by": "O",
     },
     "skip": {
-        "instrument_id": "R", "thesis_id": "O", "side": "O",
+        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "O",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
         "reason": "R", "review_by": "X",
     },
     "paper_enter": {
-        "instrument_id": "R", "thesis_id": "R", "side": "R",
+        "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
         "reason": "O", "review_by": "X",
     },
     "paper_exit": {
-        "instrument_id": "R", "thesis_id": "O", "side": "R",
+        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
         "reason": "O", "review_by": "X",
     },
     "actual_enter": {
-        "instrument_id": "R", "thesis_id": "R", "side": "R",
+        "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
         "reason": "O", "review_by": "X",
     },
     "actual_exit": {
-        "instrument_id": "R", "thesis_id": "O", "side": "R",
+        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
         "reason": "O", "review_by": "X",
     },
     "add": {
-        "instrument_id": "R", "thesis_id": "O", "side": "R",
+        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
         "reason": "O", "review_by": "X",
     },
     "reduce": {
-        "instrument_id": "R", "thesis_id": "O", "side": "R",
+        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
         "reason": "O", "review_by": "X",
     },
     "hold": {
-        "instrument_id": "R", "thesis_id": "O", "side": "O",
+        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "O",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
         "reason": "O", "review_by": "X",
     },
     "invalidate_thesis": {
-        "instrument_id": "R", "thesis_id": "R", "side": "X",
+        "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "X",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
         "reason": "R", "review_by": "X",
     },
     "update_thesis": {
-        "instrument_id": "R", "thesis_id": "R", "side": "X",
+        "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "X",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
         "reason": "O", "review_by": "X",
     },
     "resolved": {
-        "instrument_id": "R", "thesis_id": "O", "side": "X",
+        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "X",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
         "reason": "O", "review_by": "X",
     },
     "review": {
-        "instrument_id": "R", "thesis_id": "O", "side": "X",
+        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "X",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
         "reason": "O", "review_by": "R",
     },

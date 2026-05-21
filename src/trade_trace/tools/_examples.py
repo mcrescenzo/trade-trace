@@ -133,6 +133,7 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "instrument_id": "ins_INSTRUMENT_ID_HERE",
             "thesis_id": "thes_THESIS_ID_HERE",
             "forecast_id": "fcst_FORECAST_ID_HERE",
+            "snapshot_id": "snp_SNAPSHOT_ID_HERE",
             "side": "yes",
             "quantity": 100,
             "price": 0.62,

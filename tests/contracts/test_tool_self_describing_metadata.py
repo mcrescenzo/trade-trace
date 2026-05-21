@@ -58,6 +58,44 @@ def test_mcp_tool_specs_include_metadata_and_augmented_description():
     assert "Example: tt decision add" in spec["description"]
 
 
+def test_help_and_mcp_specs_advertise_instrument_and_decision_optional_fields(capsys):
+    rc = cli_main(["instrument", "add", "--help"])
+    out = capsys.readouterr()
+    instrument_help = out.out + out.err
+    assert rc == 0
+    for flag in (
+        "--external-id <string>",
+        "--symbol <string>",
+        "--currency-or-collateral <string>",
+        "--expiration-or-resolution-at <string>",
+        "--resolution-criteria-text <string>",
+        "--contract-multiplier <number>",
+        "--metadata-json <object>",
+    ):
+        assert flag in instrument_help
+
+    rc = cli_main(["decision", "add", "--help"])
+    out = capsys.readouterr()
+    decision_help = out.out + out.err
+    assert rc == 0
+    assert "--snapshot-id <string>" in decision_help
+
+    specs = {s["name"]: s for s in mcp_tool_specs()}
+    instrument_props = specs["instrument.add"]["input_schema"]["properties"]
+    decision_props = specs["decision.add"]["input_schema"]["properties"]
+    assert "snapshot_id" in decision_props
+    for field in (
+        "external_id",
+        "symbol",
+        "currency_or_collateral",
+        "expiration_or_resolution_at",
+        "resolution_criteria_text",
+        "contract_multiplier",
+        "metadata_json",
+    ):
+        assert field in instrument_props
+
+
 def test_tool_schema_self_contract_is_advertised_in_cli_and_mcp(capsys):
     rc = cli_main(["tool", "schema", "--help"])
 

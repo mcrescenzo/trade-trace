@@ -120,6 +120,30 @@ def test_report_opportunity_schema_treats_defaulted_args_as_optional():
         )
 
 
+def test_instrument_add_schema_advertises_optional_audit_fields():
+    schema = _schema_for("instrument.add")
+    properties = schema.get("properties", {})
+    required = schema.get("required", [])
+
+    for key in (
+        "external_id",
+        "symbol",
+        "currency_or_collateral",
+        "expiration_or_resolution_at",
+        "resolution_criteria_text",
+        "contract_multiplier",
+        "metadata_json",
+    ):
+        assert key in properties
+        assert key not in required
+
+
+def test_decision_add_schema_advertises_optional_snapshot_id():
+    schema = _schema_for("decision.add")
+    assert "snapshot_id" in schema.get("properties", {})
+    assert "snapshot_id" not in schema.get("required", [])
+
+
 def test_snapshot_add_schema_advertises_optional_market_state_fields():
     schema = _schema_for("snapshot.add")
     properties = schema.get("properties", {})

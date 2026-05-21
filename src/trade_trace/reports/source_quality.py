@@ -151,8 +151,9 @@ def _missing_sources_on_actual_enter(conn: sqlite3.Connection) -> dict[str, Any]
 def _stale_sources(
     conn: sqlite3.Connection, *, stale_threshold_days: int,
 ) -> dict[str, Any]:
-    """Sources whose `freshness_at` predates a decision-via-thesis they
-    attach to by more than the threshold. The acceptance criterion's
+    """Sources whose `freshness_at` predates a linked decision by more than
+    the threshold, whether attached through the decision's thesis or attached
+    directly to the decision. The acceptance criterion's
     phrasing — 'freshness_at > 7 days before decision.created_at' —
     operationalizes as `(decision.created_at - source.freshness_at) > 7d`.
     """
@@ -165,6 +166,14 @@ def _stale_sources(
         JOIN decisions d ON d.thesis_id = e.target_id
         WHERE e.source_kind = 'source'
           AND e.target_kind = 'thesis'
+          AND s.freshness_at IS NOT NULL
+        UNION
+        SELECT s.id, d.id AS decision_id, s.freshness_at, d.created_at
+        FROM edges e
+        JOIN sources s ON s.id = e.source_id
+        JOIN decisions d ON d.id = e.target_id
+        WHERE e.source_kind = 'source'
+          AND e.target_kind = 'decision'
           AND s.freshness_at IS NOT NULL
         ORDER BY s.id, d.created_at
         """
