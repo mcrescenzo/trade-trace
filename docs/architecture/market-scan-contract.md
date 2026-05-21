@@ -1,6 +1,6 @@
 # Guided market-scan dry-run/promote contract
 
-Status: design contract expanded for bead `trade-trace-ebc1.2`. This document specifies the public contract for a venue-agnostic guided market-scan flow. It does not implement the tools.
+Status: design/operation contract expanded through bead `trade-trace-ebc1.6`. The `market.scan.dry_run` and `market.scan.promote` tools are implemented; this document specifies their public contract and the Polymarket-style caller-supplied mapping/workflow.
 
 ## 1. Purpose and public surface
 
@@ -9,7 +9,7 @@ Trade Trace should let an agent turn a caller-supplied market snapshot plus rese
 The additive public surface is:
 
 - `market.scan.dry_run` — read-only validator/planner. It validates and normalizes a proposed market-scan bundle, returns an ordered primitive call plan, checks/warnings, deterministic child idempotency keys, missing fields, and a promote payload hint/hash. It performs no database writes.
-- `market.scan.promote` — write-capable materializer. It transactionally executes the previously dry-run plan or an equivalent payload, reuses idempotent rows when the same child keys already exist, and returns created/reused IDs plus final bundle status.
+- `market.scan.promote` — write-capable materializer. It executes the previously dry-run plan or an equivalent payload, reuses idempotent rows when the same child keys already exist, and returns created/reused IDs plus final bundle status. Promote is replay-safe through deterministic child idempotency keys; it should be treated as logical idempotent materialization, not as a guarantee that every primitive side effect can be physically rolled back after a later primitive fails.
 
 These tools are orchestration sugar over existing primitives such as `venue.add`, `instrument.add`, `snapshot.add`, `source.add`, `source.attach_to_thesis`, `source.attach_to_forecast`, `source.attach_to_decision`, `thesis.add`, `forecast.add`, `decision.add`, `memory.reflect` when requested, and `journal.bundle.status`. They do not create a second storage model.
 
@@ -18,8 +18,8 @@ These tools are orchestration sugar over existing primitives such as `venue.add`
 `market.scan.*` MUST preserve existing Trade Trace boundaries:
 
 - No external venue, broker, market-data, order-book, outcome, URL, or file fetches. The caller supplies all market snapshot fields, research text, URLs, venue identifiers, and resolution information.
-- No advice or recommendation. The caller supplies the final `decision.action`; Trade Trace may report validation checks and audit warnings but must not choose `watch`, `skip`, or `paper_enter` for the caller.
-- No trade execution. `paper_enter` means the existing `decision.add(type="paper_enter")` journal behavior only: it creates a paper decision, appends the automatic linked `position_events.open` row, refreshes the `positions` projection, and returns `position_id` / `position_event_id`. It does not place, route, sign, or cancel any order.
+- No advice or recommendation. Trade Trace does not provide investment advice. The caller supplies the final `decision.action`; Trade Trace may report validation checks and audit warnings but must not choose `watch`, `skip`, or `paper_enter` for the caller.
+- No trade execution. Trade Trace does not execute trades. `paper_enter` means the existing `decision.add(type="paper_enter")` journal behavior only: it creates a paper decision, appends the automatic linked `position_events.open` row, refreshes the `positions` projection, and returns `position_id` / `position_event_id`. It does not place, route, sign, or cancel any order.
 - No credentials. Payloads must not include broker/API keys, wallet seeds, private keys, or execution tokens.
 
 ## 3. Input model
@@ -346,14 +346,14 @@ Dry-run must classify the result as:
 
 ## 5. Promote semantics
 
-`market.scan.promote` is write-capable and MUST run in one transaction where practical. It materializes the dry-run plan or an equivalent normalized payload. Validation must be rerun at promote time; stale dry-run output is only a hint.
+`market.scan.promote` is write-capable and MUST rerun validation immediately before materialization. Because current primitive write tools commit their own events, the implemented transaction contract is logical replay-safe materialization through deterministic child idempotency keys, not physical all-or-nothing rollback after a later primitive fails. Validation must be rerun at promote time; stale dry-run output is only a hint.
 
 Promote behavior:
 
 1. Verify the provided `promote_hash` if present. A hash mismatch is a blocking `VALIDATION_ERROR` with a corrected dry-run hint.
 2. Execute primitive calls in the same logical order as dry-run. Existing primitive validation remains authoritative.
 3. Use deterministic child idempotency keys. Safe replays return reused IDs; semantic conflicts surface as `IDEMPOTENCY_CONFLICT` with the conflicting child step.
-4. Roll back the whole bundle on validation or write failure. A failed `source.attach_to_decision` must not leave a committed venue/instrument/snapshot/thesis/forecast/decision created by the same promote call.
+4. Use logical replay-safe child idempotency. Promote validates before writes and should use a database transaction where practical, but callers must not rely on physical rollback of every primitive side effect after a later primitive fails. If a partial failure is reported, retry the same payload/idempotency keys after correcting the problem; existing successful child rows are reused and conflicts are surfaced as `IDEMPOTENCY_CONFLICT`.
 5. Preserve existing primitive side effects. In particular, `paper_enter` invokes `decision.add(type="paper_enter")`, which creates the linked `position_events.open` and refreshes `positions` exactly as the primitive already does.
 
 A successful promote returns:
@@ -606,6 +606,10 @@ Caller-known Polymarket-ish fields can map as:
 | market page URL / rules URL / evidence URL | `snapshot.source_url`, `source.uri` |
 | research/source summaries | `source.summary`, `source.excerpt`, `source.extracted_text` when caller supplies inline content |
 
+### 9.1 Complete Polymarket-style caller-supplied example
+
+This example is intentionally concrete but not factual advice. The caller has already copied the market page URL, rules, prices, depth, source URLs, thesis, forecast, and selected decision action. Trade Trace stores and audits those inputs; it does not verify the title, URL, prices, liquidity, depth, source summaries, resolution criteria, or forecast.
+
 Example bundle fragment:
 
 ```json
@@ -613,24 +617,127 @@ Example bundle fragment:
   "venue": {"name": "Polymarket", "kind": "prediction_market"},
   "instrument": {
     "asset_class": "prediction_market",
-    "external_id": "will-event-x-happen",
-    "title": "Will event X happen by June 30?",
+    "external_id": "https://polymarket.com/event/fed-cut-june-2026",
+    "symbol": "PM:FED-CUT-JUN2026:YES",
+    "title": "Will the Federal Reserve cut rates by the June 2026 FOMC meeting?",
+    "currency_or_collateral": "USDC",
     "expiration_or_resolution_at": "2026-06-30T23:59:59Z",
-    "resolution_criteria_text": "Caller-copied Polymarket rules text.",
-    "metadata_json": {"polymarket": {"slug": "will-event-x-happen", "tokens": {"YES": "123", "NO": "456"}}}
+    "resolution_criteria_text": "Caller-copied rules: market resolves YES if the target federal funds range is lowered at or before the June 2026 FOMC decision, according to the official Federal Reserve statement; otherwise NO. Edge cases and source of truth are the caller-copied Polymarket rules.",
+    "metadata_json": {
+      "polymarket": {
+        "slug": "fed-cut-june-2026",
+        "market_url": "https://polymarket.com/event/fed-cut-june-2026",
+        "condition_id": "0xabc123...caller-supplied",
+        "tokens": {"YES": "1234567890", "NO": "9876543210"}
+      }
+    }
   },
   "snapshot": {
     "captured_at": "2026-05-21T12:00:00Z",
     "source": "manual",
-    "source_url": "https://polymarket.com/event/will-event-x-happen",
-    "bid": 0.50,
-    "ask": 0.54,
-    "mid": 0.52,
-    "spread": 0.04,
-    "implied_probability": 0.52
+    "source_url": "https://polymarket.com/event/fed-cut-june-2026",
+    "price": 0.48,
+    "bid": 0.47,
+    "ask": 0.50,
+    "mid": 0.485,
+    "spread": 0.03,
+    "volume": 1250000,
+    "open_interest": 315000,
+    "implied_probability": 0.485,
+    "liquidity_depth_json": {
+      "best_bid_size": 4200,
+      "best_ask_size": 3700,
+      "depth_levels": [
+        {"side": "bid", "price": 0.47, "size": 4200},
+        {"side": "bid", "price": 0.46, "size": 9800},
+        {"side": "ask", "price": 0.50, "size": 3700},
+        {"side": "ask", "price": 0.51, "size": 11200}
+      ],
+      "depth_source": "caller-copied order-book snapshot"
+    },
+    "metadata_json": {"liquidity_note": "Caller-supplied; not fetched or verified by Trade Trace."}
+  },
+  "sources": [
+    {
+      "kind": "url",
+      "stance": "supports",
+      "uri": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      "title": "Federal Reserve FOMC calendars",
+      "freshness_at": "2026-05-21T11:30:00Z",
+      "summary": "Caller summary: official calendar identifies the relevant June 2026 FOMC date.",
+      "storage_kind": "url"
+    },
+    {
+      "kind": "url",
+      "stance": "neutral",
+      "uri": "https://polymarket.com/event/fed-cut-june-2026",
+      "title": "Polymarket market page and rules",
+      "freshness_at": "2026-05-21T11:45:00Z",
+      "summary": "Caller summary: copied title, condition ID, token IDs, bid/ask, depth, and rules from market page.",
+      "storage_kind": "url"
+    }
+  ],
+  "thesis": {
+    "side": "yes",
+    "body": "Caller-authored thesis: market mid is below the caller's 56% binary forecast because recent inflation prints and policy communication make one pre-June cut more likely than the current mid implies.",
+    "falsification_criteria": "Caller-authored: hotter inflation data or explicit Fed guidance ruling out near-term cuts would falsify the setup.",
+    "exit_triggers": "Reassess after the next CPI release, FOMC minutes, or if spread widens above 8 cents.",
+    "risk_notes": "Prediction-market liquidity can vanish; resolution text may have edge cases; this is journaling, not advice.",
+    "time_horizon_at": "2026-06-30T23:59:59Z",
+    "confidence_label": "medium"
+  },
+  "forecast": {
+    "kind": "binary",
+    "yes_label": "YES",
+    "resolution_at": "2026-06-30T23:59:59Z",
+    "resolution_rule_text": "Same caller-copied Polymarket/Fed statement rule as instrument.resolution_criteria_text.",
+    "outcomes": [
+      {"outcome_label": "YES", "probability": 0.56},
+      {"outcome_label": "NO", "probability": 0.44}
+    ]
+  },
+  "decision": {
+    "action": "watch",
+    "side": "yes",
+    "reason": "Caller-selected watch: monitor until CPI data updates thesis or spread tightens.",
+    "review_by": "2026-06-12T16:00:00Z",
+    "tags": ["market-scan", "prediction-market", "polymarket", "rates"]
   }
 }
 ```
+
+Decision substitutions for the same caller-supplied bundle:
+
+- `watch`: keep `decision.action = "watch"`, omit `quantity`/`price`, and include `review_by`, for example `reason = "Caller-selected watch: wait for tighter spread or new CPI data."`.
+- `skip`: set `decision.action = "skip"`, omit `quantity`/`price`/`review_by`, and include a reason, for example `reason = "Caller-selected skip: resolution wording and spread are too ambiguous for this run."`.
+- `paper_enter`: set `decision.action = "paper_enter"`, include `quantity` and `price`, omit `review_by`, for example `quantity = 25`, `price = 0.50`, `fees = 0`, `slippage = 0.01`, `reason = "Caller-selected paper entry for calibration only; no broker or market order is sent."`.
+
+### 9.2 Guided CLI/MCP workflow
+
+Use dry-run first, inspect the returned checks/plan/hash, then promote only if the caller accepts the plan. CLI names are derived from dotted tool names and nested values are passed as JSON flags where needed.
+
+```bash
+# 1. Dry-run: validates and plans only; no writes, no URL fetches, no advice, no trades.
+tt market scan dry_run \
+  --idempotency-key run-20260521-001:market-scan:polymarket:fed-cut-june-2026:v1 \
+  --venue-json '{"name":"Polymarket","kind":"prediction_market","external_id":"polymarket"}' \
+  --instrument-json '{"asset_class":"prediction_market","external_id":"https://polymarket.com/event/fed-cut-june-2026","title":"Will the Federal Reserve cut rates by the June 2026 FOMC meeting?","currency_or_collateral":"USDC","expiration_or_resolution_at":"2026-06-30T23:59:59Z","resolution_criteria_text":"Caller-copied Polymarket resolution criteria."}' \
+  --snapshot-json '{"captured_at":"2026-05-21T12:00:00Z","source":"manual","source_url":"https://polymarket.com/event/fed-cut-june-2026","price":0.48,"bid":0.47,"ask":0.50,"mid":0.485,"spread":0.03,"volume":1250000,"open_interest":315000,"implied_probability":0.485,"liquidity_depth_json":{"best_bid_size":4200,"best_ask_size":3700}}' \
+  --sources-json '[{"kind":"url","stance":"neutral","uri":"https://polymarket.com/event/fed-cut-june-2026","title":"Polymarket market page and rules","summary":"Caller-supplied market/rules summary.","storage_kind":"url"}]' \
+  --thesis-json '{"side":"yes","body":"Caller-authored thesis text.","risk_notes":"Journaling only; not advice.","time_horizon_at":"2026-06-30T23:59:59Z","confidence_label":"medium"}' \
+  --forecast-json '{"kind":"binary","yes_label":"YES","resolution_at":"2026-06-30T23:59:59Z","resolution_rule_text":"Caller-copied rules.","outcomes":[{"outcome_label":"YES","probability":0.56},{"outcome_label":"NO","probability":0.44}]}' \
+  --decision-json '{"action":"watch","side":"yes","reason":"Caller-selected watch.","review_by":"2026-06-12T16:00:00Z","tags":["market-scan","polymarket"]}'
+
+# 2. Promote: pass the accepted dry-run promote_hash/promote_payload_hint or equivalent bundle.
+tt market scan promote \
+  --idempotency-key run-20260521-001:market-scan:polymarket:fed-cut-june-2026:v1 \
+  --promote-hash sha256:<value-from-dry-run> \
+  --promote-payload-hint-json '<promote_payload_hint-from-dry-run>'
+```
+
+MCP callers use the same sequence: call `market.scan.dry_run` with the JSON bundle, require `data.bundle_status == "ready_to_promote"` or explicit caller acknowledgement of non-blocking warnings, then call `market.scan.promote` with the accepted payload/hash. After promote, verify `data.final_check.tool == "journal.bundle.status"` and read `data.final_check.result.status`; that final journal `bundle.status` is the authoritative completion/enrichment status for the recorded arc.
+
+Boundary recap for agents: Trade Trace does not fetch URLs, provide investment advice, execute trades, or verify market facts. Every market title, external ID/URL, resolution criterion, bid/ask/mid/spread, liquidity/depth value, source URL/summary, thesis, forecast, and decision action is caller supplied.
 
 ## 10. Downstream implementation bead sequencing
 
