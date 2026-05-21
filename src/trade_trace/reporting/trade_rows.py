@@ -15,7 +15,7 @@ and attached sources. Missing data is represented with named caveats
 silently zero-filled").
 
 Pagination uses the shared cursor helper in
-`trade_trace.console.pagination`.
+`trade_trace.reporting.pagination`.
 
 `trade_detail(conn, decision_id)` is a supported exported Python
 read-model API for callers that already have a database connection. It
@@ -31,7 +31,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from trade_trace.console.pagination import (
+from trade_trace.reporting.pagination import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
     Page,
@@ -300,7 +300,7 @@ def trade_detail(conn: sqlite3.Connection, decision_id: str) -> TradeRow | None:
 
     Returns `None` if the id is unknown or if the decision is not a
     trading type. This helper is exported from
-    `trade_trace.console.reporting`; it is not a Console HTTP/UI route.
+    `trade_trace.reporting`; it is not a Console HTTP/UI route.
     """
 
     sql = _TRADE_BASE_SQL + " AND d.id = ?"

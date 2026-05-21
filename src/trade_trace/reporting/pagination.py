@@ -1,5 +1,4 @@
-"""Cursor-based pagination for Console read endpoints
-(trade-trace-1kkv.14, see docs/architecture/console.md §13).
+"""Cursor-based pagination for read-only reporting helpers.
 
 The contract:
 
@@ -12,8 +11,8 @@ back as `cursor` on the next request; when no more rows remain
 
 Why cursor and not offset:
 
-- Offset pagination scans every prior row on every page. On the
-  Console's perf-fixture target (~100k events) the final page
+- Offset pagination scans every prior row on every page. On large
+  report targets (~100k events) the final page
   would cost as much as the first.
 - A cursor binds the next page to "rows where the ordering column
   is > (or <) the last value seen" — a single index seek.
@@ -39,7 +38,7 @@ for more than this; the backend clamps any caller that tries."""
 
 class PaginationError(ValueError):
     """Raised when a cursor is malformed or references a column the
-    query doesn't include. Console renders this as a 400 response."""
+    query doesn't include."""
 
 
 @dataclass
@@ -106,7 +105,7 @@ def paginate_query(
     a parameterized query, but the `order_by` column is interpolated
     verbatim (since SQL placeholders can't replace identifiers). The
     caller is responsible for passing a column they trust; the
-    Console only ever calls this with constants from its own code.
+    Callers should pass constants from trusted code.
     """
 
     column, direction = _split_order_by(order_by)
@@ -147,7 +146,7 @@ def paginate_created_at_id_query(
 ) -> Page:
     """Run a newest-first `(created_at, id)` keyset page.
 
-    Several Console tables select `id` first for display but sort by
+    Several report tables select `id` first for display but sort by
     `created_at`. A simple cursor over the first selected column would
     repeat or skip rows. This helper encodes the true order key plus an
     id tie-breaker so duplicate timestamps walk correctly.

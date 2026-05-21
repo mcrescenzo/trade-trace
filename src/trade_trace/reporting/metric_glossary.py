@@ -8,7 +8,7 @@ A single source of truth keeps explanations consistent across pages
 and prevents copy drift when the underlying report changes.
 
 Plain-language caveats follow the same pattern: each named caveat
-code (from `console.reporting.trade_rows` / `position_rows` /
+code (from `trade_trace.reporting.trade_rows` / `position_rows` /
 `reports.md`) maps to a one-sentence explanation the UI renders next
 to the affected metric tile.
 

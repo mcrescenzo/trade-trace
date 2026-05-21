@@ -14,7 +14,6 @@ import sqlite3
 import uuid
 from typing import Any
 
-from trade_trace.console.serve import register_console_tools
 from trade_trace.contracts.envelope import (
     ErrorEnvelope,
     Meta,
@@ -72,7 +71,6 @@ def build_registry() -> ToolRegistry:
     register_csv_import(registry)
     register_report_tools(registry)
     register_signal_tools(registry)
-    register_console_tools(registry)
     registry.validate()
     return registry
 

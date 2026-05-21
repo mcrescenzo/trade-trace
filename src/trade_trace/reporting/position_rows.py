@@ -18,15 +18,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from trade_trace.console.pagination import (
+from trade_trace.reporting.metric_glossary import CaveatEntry, caveat_copy
+from trade_trace.reporting.pagination import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
     Page,
     _decode_cursor,
     _encode_cursor,
 )
-from trade_trace.console.reporting.metric_glossary import CaveatEntry, caveat_copy
-from trade_trace.console.reporting.trade_rows import (
+from trade_trace.reporting.trade_rows import (
     CAVEAT_MISSING_RISK_BUDGET,
     CAVEAT_NO_STRATEGY,
 )

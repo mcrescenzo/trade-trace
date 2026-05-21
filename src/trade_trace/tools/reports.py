@@ -863,7 +863,7 @@ def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
     stale_cutoff = as_of - timedelta(days=stale_mark_threshold_days)
     db = open_db_for_args(args)
     try:
-        from trade_trace.console.reporting.position_rows import list_positions
+        from trade_trace.reporting.position_rows import list_positions
 
         page = list_positions(
             db.connection,

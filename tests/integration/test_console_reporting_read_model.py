@@ -13,8 +13,10 @@ from pathlib import Path
 
 import pytest
 
-import trade_trace.console.reporting as reporting
-from trade_trace.console.reporting import (
+import trade_trace.reporting as reporting
+from trade_trace.contracts.envelope import SuccessEnvelope
+from trade_trace.mcp_server import mcp_call
+from trade_trace.reporting import (
     CAVEAT_OPEN_NO_MARK,
     PositionDetail,
     PositionRow,
@@ -24,14 +26,12 @@ from trade_trace.console.reporting import (
     position_detail,
     trade_detail,
 )
-from trade_trace.console.reporting.trade_rows import (
+from trade_trace.reporting.trade_rows import (
     CAVEAT_MISSING_RISK_BUDGET,
     CAVEAT_NO_SOURCES,
     CAVEAT_NO_STRATEGY,
     TRADING_DECISION_TYPES,
 )
-from trade_trace.contracts.envelope import SuccessEnvelope
-from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
 

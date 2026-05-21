@@ -94,12 +94,6 @@ Changelog = "https://github.com/mcrescenzo/trade-trace/releases"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.package-data]
-# Console ships the prebuilt React/Vite app as package data.
-# Operators install `trade-trace[console]` to get the FastAPI/Uvicorn
-# runtime; the app assets are present in every wheel.
-"trade_trace.console" = ["static/**/*", "route_catalog.json"]
-
 [tool.ruff]
 line-length = 100
 target-version = "py311"

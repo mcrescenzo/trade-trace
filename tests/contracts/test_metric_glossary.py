@@ -9,7 +9,7 @@ adding the definition here.
 
 from __future__ import annotations
 
-from trade_trace.console.reporting import (
+from trade_trace.reporting import (
     CAVEAT_GLOSSARY,
     METRIC_GLOSSARY,
     PAGE_EXPLANATIONS,
@@ -19,7 +19,7 @@ from trade_trace.console.reporting import (
     metric_help,
     page_explanation,
 )
-from trade_trace.console.reporting.trade_rows import ALL_CAVEAT_CODES
+from trade_trace.reporting.trade_rows import ALL_CAVEAT_CODES
 
 # -- shape -----------------------------------------------------------
 
@@ -63,7 +63,7 @@ def test_metric_help_returns_none_for_unknown_metric() -> None:
 
 def test_every_trade_row_caveat_code_has_glossary_copy() -> None:
     """The trade read model emits named caveat codes via
-    `console.reporting.trade_rows.ALL_CAVEAT_CODES`. Every one of
+    `trade_trace.reporting.trade_rows.ALL_CAVEAT_CODES`. Every one of
     those codes MUST have a copy entry, otherwise the UI renders
     an unlabeled chip."""
 
@@ -78,7 +78,7 @@ def test_position_open_no_mark_caveat_is_documented() -> None:
     position read model emits today; future codes from that module
     should also land in the glossary."""
 
-    from trade_trace.console.reporting import CAVEAT_OPEN_NO_MARK
+    from trade_trace.reporting import CAVEAT_OPEN_NO_MARK
 
     assert CAVEAT_OPEN_NO_MARK in CAVEAT_GLOSSARY
 
