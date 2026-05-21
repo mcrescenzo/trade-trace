@@ -42,9 +42,17 @@ from trade_trace.tools.errors import ToolError
 # referencing a local binding) caused FastAPI to treat `request`
 # as a query parameter and return 422 on every page.
 try:
+    from fastapi import Query as _Query  # type: ignore[import-not-found]
     from fastapi import Request as _Request  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover — gated by _import_server_deps
+    _Query = None  # type: ignore[assignment,misc]
     _Request = None  # type: ignore[assignment,misc]
+
+_STATUS_QUERY_DEFAULT = _Query(default=None) if _Query is not None else None
+_KIND_QUERY_DEFAULT = _Query(default=None) if _Query is not None else None
+_INSTRUMENT_QUERY_DEFAULT = _Query(default=None) if _Query is not None else None
+_STRATEGY_QUERY_DEFAULT = _Query(default=None) if _Query is not None else None
+_OUTCOME_QUERY_DEFAULT = _Query(default=None) if _Query is not None else None
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -94,6 +102,7 @@ def _build_app(home_path: str) -> Any:
     from trade_trace.console.reporting import (
         SAFE_REPORT_TOOLS,
         ReportAdapterError,
+        list_positions,
         list_trades,
         position_detail,
         run_report,
@@ -299,6 +308,36 @@ def _build_app(home_path: str) -> Any:
                 strategy_id=strategy_id,
                 instrument_id=instrument_id,
                 decision_type=decision_type,
+            )
+            return _jsonable(_page_to_dict(page))
+        finally:
+            db.close()
+
+    @app.get("/api/console/positions")
+    def positions(
+        cursor: str | None = None,
+        limit: int = 50,
+        status: list[str] | None = _STATUS_QUERY_DEFAULT,
+        kind: list[str] | None = _KIND_QUERY_DEFAULT,
+        instrument_id: list[str] | None = _INSTRUMENT_QUERY_DEFAULT,
+        strategy_id: list[str] | None = _STRATEGY_QUERY_DEFAULT,
+        opened_from: str | None = None,
+        opened_to: str | None = None,
+        outcome: list[str] | None = _OUTCOME_QUERY_DEFAULT,
+    ) -> dict[str, Any]:
+        _, db = _open()
+        try:
+            page = list_positions(
+                db.connection,
+                cursor=cursor,
+                limit=limit,
+                status=status,
+                kind=kind,
+                instrument_id=instrument_id,
+                strategy_id=strategy_id,
+                opened_from=opened_from,
+                opened_to=opened_to,
+                outcome=outcome,
             )
             return _jsonable(_page_to_dict(page))
         finally:

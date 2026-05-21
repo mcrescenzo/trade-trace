@@ -118,6 +118,7 @@ def test_missing_db_status_returns_typed_json(missing_db_client: TestClient) -> 
     "/api/console/events?cursor=not-a-real-cursor",
     "/api/console/decisions?cursor=not-a-real-cursor",
     "/api/console/strategies?cursor=not-a-real-cursor",
+    "/api/console/positions?cursor=not-a-real-cursor",
 ])
 def test_json_list_routes_reject_malformed_cursor_as_400(
     rich_client: TestClient,
@@ -148,6 +149,67 @@ def test_trade_detail_is_not_exposed_as_console_http_route(rich_client: TestClie
 
     response = rich_client.get("/api/console/trades/dec_does_not_exist")
     assert response.status_code == 404
+
+
+def test_positions_list_endpoint_returns_rows_filters_and_paginates(rich_client: TestClient) -> None:
+    first = rich_client.get("/api/console/positions?limit=2")
+    assert first.status_code == 200, first.text[:300]
+    body = first.json()
+    assert set(body) == {"rows", "next_cursor", "limit"}
+    assert body["limit"] == 2
+    assert len(body["rows"]) == 2
+    assert body["next_cursor"] is not None
+    row = body["rows"][0]
+    for key in [
+        "position_id", "instrument_id", "kind", "status", "outcome",
+        "opened_at", "net_quantity", "add_count", "reduce_count",
+        "event_count", "opening_decision_id", "opening_strategy_id",
+        "caveats", "caveat_entries",
+    ]:
+        assert key in row
+
+    second = rich_client.get(f"/api/console/positions?limit=2&cursor={body['next_cursor']}")
+    assert second.status_code == 200, second.text[:300]
+    assert {r["position_id"] for r in body["rows"]}.isdisjoint(
+        {r["position_id"] for r in second.json()["rows"]},
+    )
+
+    filtered = rich_client.get(
+        "/api/console/positions",
+        params={
+            "status": row["status"],
+            "kind": row["kind"],
+            "instrument_id": row["instrument_id"],
+            "outcome": row["outcome"],
+            "opened_from": row["opened_at"],
+            "opened_to": row["opened_at"],
+            "limit": 50,
+        },
+    )
+    assert filtered.status_code == 200, filtered.text[:300]
+    filtered_rows = filtered.json()["rows"]
+    assert filtered_rows
+    assert all(r["status"] == row["status"] for r in filtered_rows)
+    assert all(r["kind"] == row["kind"] for r in filtered_rows)
+    assert all(r["instrument_id"] == row["instrument_id"] for r in filtered_rows)
+    assert all(r["outcome"] == row["outcome"] for r in filtered_rows)
+
+    empty = rich_client.get("/api/console/positions?status=not-a-status")
+    assert empty.status_code == 200
+    assert empty.json()["rows"] == []
+
+
+def test_positions_list_endpoint_strategy_filter(rich_client: TestClient) -> None:
+    all_rows = rich_client.get("/api/console/positions?limit=100").json()["rows"]
+    target = next(r for r in all_rows if r["opening_strategy_id"] is not None)
+    filtered = rich_client.get(
+        "/api/console/positions",
+        params={"strategy_id": target["opening_strategy_id"], "limit": 100},
+    )
+    assert filtered.status_code == 200, filtered.text[:300]
+    rows = filtered.json()["rows"]
+    assert rows
+    assert all(r["opening_strategy_id"] == target["opening_strategy_id"] for r in rows)
 
 
 def test_journal_events_support_local_audit_filters_and_related_context(rich_client: TestClient) -> None:

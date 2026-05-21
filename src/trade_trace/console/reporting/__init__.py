@@ -46,6 +46,8 @@ from trade_trace.console.reporting.position_rows import (
     CAVEAT_OPEN_NO_MARK,
     PositionDetail,
     PositionEvent,
+    PositionRow,
+    list_positions,
     position_detail,
 )
 from trade_trace.console.reporting.trade_rows import (
@@ -67,6 +69,7 @@ __all__ = [
     "PAGE_EXPLANATIONS",
     "PositionDetail",
     "PositionEvent",
+    "PositionRow",
     "ReportAdapterError",
     "SAFE_REPORT_TOOLS",
     "TradeRow",
@@ -75,6 +78,7 @@ __all__ = [
     "decode_filter",
     "encode_filter",
     "list_trades",
+    "list_positions",
     "metric_help",
     "page_explanation",
     "position_detail",

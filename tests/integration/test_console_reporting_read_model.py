@@ -17,7 +17,9 @@ import trade_trace.console.reporting as reporting
 from trade_trace.console.reporting import (
     CAVEAT_OPEN_NO_MARK,
     PositionDetail,
+    PositionRow,
     TradeRow,
+    list_positions,
     list_trades,
     position_detail,
     trade_detail,
@@ -237,7 +239,69 @@ def test_trade_detail_returns_none_for_non_trading_decision(rich_home: Path) -> 
         db.close()
 
 
-# -- position_detail -------------------------------------------------
+# -- list_positions / position_detail --------------------------------
+
+
+def test_list_positions_returns_scan_rows_with_event_counts_and_caveats(rich_home: Path) -> None:
+    db = open_database(db_path(rich_home), create_parent=False)
+    try:
+        page = list_positions(db.connection, limit=500)
+    finally:
+        db.close()
+    assert page.rows
+    assert all(isinstance(r, PositionRow) for r in page.rows)
+    assert {r.status for r in page.rows} >= {"open", "closed"}
+    assert {r.kind for r in page.rows} <= {"paper", "actual", "simulation"}
+    assert all(r.event_count >= 1 for r in page.rows)
+    assert any(r.caveats for r in page.rows)
+    assert all(entry.code in r.caveats for r in page.rows for entry in r.caveat_entries)
+
+
+def test_list_positions_filters_status_kind_instrument_strategy_date_outcome(rich_home: Path) -> None:
+    db = open_database(db_path(rich_home), create_parent=False)
+    try:
+        all_rows = list_positions(db.connection, limit=500).rows
+        target = next(r for r in all_rows if r.opening_strategy_id is not None)
+        status_page = list_positions(db.connection, status=target.status, limit=500)
+        kind_page = list_positions(db.connection, kind=target.kind, limit=500)
+        instrument_page = list_positions(db.connection, instrument_id=target.instrument_id, limit=500)
+        strategy_page = list_positions(db.connection, strategy_id=target.opening_strategy_id, limit=500)
+        date_page = list_positions(db.connection, opened_from=target.opened_at, opened_to=target.opened_at, limit=500)
+        outcome_page = list_positions(db.connection, outcome=target.outcome, limit=500)
+        unknown_page = list_positions(db.connection, status="not-a-status", limit=10)
+    finally:
+        db.close()
+    assert status_page.rows and all(r.status == target.status for r in status_page.rows)
+    assert kind_page.rows and all(r.kind == target.kind for r in kind_page.rows)
+    assert instrument_page.rows and all(r.instrument_id == target.instrument_id for r in instrument_page.rows)
+    assert strategy_page.rows and all(r.opening_strategy_id == target.opening_strategy_id for r in strategy_page.rows)
+    assert date_page.rows and all(r.opened_at == target.opened_at for r in date_page.rows)
+    assert outcome_page.rows and all(r.outcome == target.outcome for r in outcome_page.rows)
+    assert unknown_page.rows == []
+
+
+def test_list_positions_pagination_yields_stable_cursor_walk(rich_home: Path) -> None:
+    db = open_database(db_path(rich_home), create_parent=False)
+    try:
+        all_rows = list_positions(db.connection, limit=500).rows
+        first = list_positions(db.connection, limit=2)
+    finally:
+        db.close()
+    assert len(first.rows) == 2
+    assert first.next_cursor is not None
+    seen = [r.position_id for r in first.rows]
+    cursor = first.next_cursor
+    while cursor is not None:
+        db = open_database(db_path(rich_home), create_parent=False)
+        try:
+            page = list_positions(db.connection, limit=2, cursor=cursor)
+        finally:
+            db.close()
+        for row in page.rows:
+            assert row.position_id not in seen
+            seen.append(row.position_id)
+        cursor = page.next_cursor
+    assert sorted(seen) == sorted(r.position_id for r in all_rows)
 
 
 def test_position_detail_open_unmarked_surfaces_open_no_mark_caveat(rich_home: Path) -> None:
