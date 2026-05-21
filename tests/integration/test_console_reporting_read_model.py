@@ -27,6 +27,7 @@ from trade_trace.console.reporting import (
 from trade_trace.console.reporting.trade_rows import (
     CAVEAT_MISSING_RISK_BUDGET,
     CAVEAT_NO_SOURCES,
+    CAVEAT_NO_STRATEGY,
     TRADING_DECISION_TYPES,
 )
 from trade_trace.contracts.envelope import SuccessEnvelope
@@ -380,3 +381,97 @@ def test_position_detail_includes_event_lineage(rich_home: Path) -> None:
     # Lineage is chronological.
     timestamps = [ev.created_at for ev in detail.events]
     assert timestamps == sorted(timestamps), "events must be chronological"
+
+
+
+def test_position_detail_enriches_trade_card_fields(rich_home: Path) -> None:
+    db = open_database(db_path(rich_home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            """
+            SELECT pe.position_id, pe.decision_id
+            FROM position_events pe
+            JOIN decisions d ON d.id = pe.decision_id
+            WHERE d.strategy_id IS NOT NULL AND d.thesis_id IS NOT NULL
+            ORDER BY pe.created_at, pe.id
+            LIMIT 1
+            """,
+        ).fetchone()
+        assert row is not None, "fixture must include a strategy/thesis-backed position"
+        position_id, decision_id = row
+    finally:
+        db.close()
+
+    source = mcp_call("source.add", {
+        "home": str(rich_home),
+        "kind": "note",
+        "stance": "supports",
+        "title": "Position detail enrichment source",
+        "excerpt": "Compact source metadata for the expanded trade card.",
+        "idempotency_key": "00000000-0000-4000-8000-000000009801",
+    })
+    assert source.ok, source
+    attach = mcp_call("source.attach_to_decision", {
+        "home": str(rich_home),
+        "source_id": source.data["id"],
+        "target_id": decision_id,
+        "idempotency_key": "00000000-0000-4000-8000-000000009802",
+    })
+    assert attach.ok, attach
+
+    db = open_database(db_path(rich_home), create_parent=False)
+    try:
+        detail = position_detail(db.connection, position_id)
+    finally:
+        db.close()
+
+    assert detail is not None
+    assert detail.opening_strategy_id is not None
+    assert detail.opening_strategy_slug
+    assert detail.opening_strategy_name
+    assert detail.strategy is not None
+    assert detail.strategy.slug == detail.opening_strategy_slug
+    assert detail.opening_thesis_id is not None
+    assert detail.thesis is not None
+    assert detail.thesis.body_snippet
+    assert decision_id in detail.decision_ids
+    assert any(s.id == source.data["id"] and s.excerpt for s in detail.sources)
+    assert detail.risk_rollup is not None
+    assert isinstance(detail.risk_rollup.total_fees, float)
+    assert isinstance(detail.risk_rollup.total_slippage, float)
+    assert all(entry.code in detail.caveats for entry in detail.caveat_entries)
+
+
+def test_position_detail_missing_links_degrade_without_500(rich_home: Path) -> None:
+    db = open_database(db_path(rich_home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            """
+            SELECT p.id
+            FROM positions p
+            WHERE NOT EXISTS (
+                SELECT 1 FROM position_events pe
+                JOIN decisions d ON d.id = pe.decision_id
+                WHERE pe.position_id = p.id AND d.strategy_id IS NOT NULL
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM position_events pe
+                JOIN decision_tags dt ON dt.decision_id = pe.decision_id
+                WHERE pe.position_id = p.id
+            )
+            LIMIT 1
+            """,
+        ).fetchone()
+        assert row is not None, "fixture must include a position missing strategy linkage"
+        detail = position_detail(db.connection, row[0])
+    finally:
+        db.close()
+
+    assert detail is not None
+    assert detail.strategy is None
+    assert detail.opening_strategy_slug is None
+    assert detail.opening_strategy_name is None
+    assert detail.sources == ()
+    assert detail.tags == ()
+    assert CAVEAT_NO_STRATEGY in detail.caveats
+    assert any(entry.code == CAVEAT_NO_STRATEGY for entry in detail.caveat_entries)

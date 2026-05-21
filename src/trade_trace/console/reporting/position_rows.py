@@ -92,12 +92,56 @@ class PositionEvent:
 
 
 @dataclass(frozen=True)
+class StrategySummary:
+    id: str
+    slug: str | None
+    name: str | None
+
+
+@dataclass(frozen=True)
+class ThesisSummary:
+    id: str
+    side: str | None
+    created_at: str | None
+    body_snippet: str | None
+
+
+@dataclass(frozen=True)
+class SourceSummary:
+    id: str
+    kind: str
+    title: str | None
+    ref: str | None
+    uri: str | None
+    stance: str | None
+    edge_type: str | None
+    excerpt: str | None
+
+
+@dataclass(frozen=True)
+class TagSummary:
+    tag: str
+    decision_id: str
+
+
+@dataclass(frozen=True)
+class RiskRollup:
+    initial_risk_amount: float | None
+    declared_risk_amount: float | None
+    declared_risk_unit: str | None
+    realized_r_multiple: float | None
+    unrealized_r_multiple: float | None
+    total_fees: float
+    total_slippage: float
+
+
+@dataclass(frozen=True)
 class PositionDetail:
     """Full lifecycle of one position. `events` lists every
     `position_events` row in chronological order; `caveats` lists
     machine-readable codes for missing-data states."""
-
     position_id: str
+
     instrument_id: str
     instrument_symbol: str | None
     instrument_title: str | None
@@ -117,9 +161,19 @@ class PositionDetail:
     unrealized_r_multiple: float | None
     opening_decision_id: str | None
     opening_strategy_id: str | None
+    opening_strategy_slug: str | None
+    opening_strategy_name: str | None
     opening_playbook_version_id: str | None
+    opening_thesis_id: str | None
+    thesis: ThesisSummary | None = None
+    strategy: StrategySummary | None = None
+    sources: tuple[SourceSummary, ...] = field(default_factory=tuple)
+    tags: tuple[TagSummary, ...] = field(default_factory=tuple)
+    decision_ids: tuple[str, ...] = field(default_factory=tuple)
+    risk_rollup: RiskRollup | None = None
     events: tuple[PositionEvent, ...] = field(default_factory=tuple)
     caveats: tuple[str, ...] = field(default_factory=tuple)
+    caveat_entries: tuple[CaveatEntry, ...] = field(default_factory=tuple)
 
 
 def _multi(value: str | Sequence[str] | None) -> tuple[str, ...]:
@@ -316,6 +370,58 @@ def list_positions(
     return Page(rows=position_rows, next_cursor=next_cursor, limit=limit)
 
 
+def _snippet(value: str | None, *, limit: int = 240) -> str | None:
+    if value is None:
+        return None
+    compact = " ".join(value.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1].rstrip() + "…"
+
+
+def _source_summaries(conn: sqlite3.Connection, decision_ids: tuple[str, ...]) -> tuple[SourceSummary, ...]:
+    if not decision_ids:
+        return ()
+    placeholders = ",".join("?" * len(decision_ids))
+    rows = conn.execute(
+        f"""
+        SELECT DISTINCT s.id, s.kind, s.title, s.ref, s.uri, s.stance,
+               e.edge_type, s.excerpt, s.summary, s.note
+        FROM edges e
+        JOIN sources s ON s.id = e.source_id
+        WHERE e.source_kind = 'source'
+          AND e.target_kind = 'decision'
+          AND e.edge_type IN ('about', 'supports', 'contradicts')
+          AND e.target_id IN ({placeholders})
+        ORDER BY s.captured_at DESC, s.created_at DESC, s.id ASC
+        """,
+        decision_ids,
+    ).fetchall()
+    return tuple(
+        SourceSummary(
+            id=r[0], kind=r[1], title=r[2], ref=r[3], uri=r[4], stance=r[5],
+            edge_type=r[6], excerpt=_snippet(r[7] or r[8] or r[9]),
+        )
+        for r in rows
+    )
+
+
+def _tag_summaries(conn: sqlite3.Connection, decision_ids: tuple[str, ...]) -> tuple[TagSummary, ...]:
+    if not decision_ids:
+        return ()
+    placeholders = ",".join("?" * len(decision_ids))
+    rows = conn.execute(
+        f"""
+        SELECT decision_id, tag
+        FROM decision_tags
+        WHERE decision_id IN ({placeholders})
+        ORDER BY tag ASC, decision_id ASC
+        """,
+        decision_ids,
+    ).fetchall()
+    return tuple(TagSummary(tag=r[1], decision_id=r[0]) for r in rows)
+
+
 def position_detail(conn: sqlite3.Connection, position_id: str) -> PositionDetail | None:
     """Return the full `PositionDetail` for `position_id`, or `None`
     if the position is unknown."""
@@ -367,17 +473,45 @@ def position_detail(conn: sqlite3.Connection, position_id: str) -> PositionDetai
         if ev.decision_id is not None:
             opening_decision_id = ev.decision_id
             break
+    decision_ids = tuple(dict.fromkeys(ev.decision_id for ev in events if ev.decision_id is not None))
     strategy_id: str | None = None
+    strategy_slug: str | None = None
+    strategy_name: str | None = None
     playbook_version_id: str | None = None
+    thesis_id: str | None = None
+    declared_risk_amount: float | None = None
+    declared_risk_unit: str | None = None
     if opening_decision_id is not None:
         dec_row = conn.execute(
-            "SELECT strategy_id, playbook_version_id, declared_risk_amount "
-            "FROM decisions WHERE id = ?",
+            """
+            SELECT d.strategy_id, s.slug, s.name, d.playbook_version_id,
+                   d.thesis_id, d.declared_risk_amount, d.declared_risk_unit
+            FROM decisions d
+            LEFT JOIN strategies s ON s.id = d.strategy_id
+            WHERE d.id = ?
+            """,
             (opening_decision_id,),
         ).fetchone()
         if dec_row is not None:
             strategy_id = dec_row[0]
-            playbook_version_id = dec_row[1]
+            strategy_slug = dec_row[1]
+            strategy_name = dec_row[2]
+            playbook_version_id = dec_row[3]
+            thesis_id = dec_row[4]
+            declared_risk_amount = float(dec_row[5]) if dec_row[5] is not None else None
+            declared_risk_unit = dec_row[6]
+
+    thesis: ThesisSummary | None = None
+    if thesis_id is not None:
+        thesis_row = conn.execute(
+            "SELECT id, side, created_at, body FROM theses WHERE id = ?",
+            (thesis_id,),
+        ).fetchone()
+        if thesis_row is not None:
+            thesis = ThesisSummary(
+                id=thesis_row[0], side=thesis_row[1], created_at=thesis_row[2],
+                body_snippet=_snippet(thesis_row[3]),
+            )
 
     status = pos_row[8]
     unrealized_pnl = pos_row[12]
@@ -390,6 +524,24 @@ def position_detail(conn: sqlite3.Connection, position_id: str) -> PositionDetai
         caveats.append(CAVEAT_MISSING_RISK_BUDGET)
     if strategy_id is None:
         caveats.append(CAVEAT_NO_STRATEGY)
+    entries = tuple(entry for code in caveats if (entry := caveat_copy(code)) is not None)
+    sources = _source_summaries(conn, decision_ids)
+    tags = _tag_summaries(conn, decision_ids)
+    strategy = (
+        StrategySummary(id=strategy_id, slug=strategy_slug, name=strategy_name)
+        if strategy_id is not None else None
+    )
+    realized_r_multiple = float(pos_row[16]) if pos_row[16] is not None else None
+    unrealized_r_multiple = float(pos_row[17]) if pos_row[17] is not None else None
+    risk_rollup = RiskRollup(
+        initial_risk_amount=float(initial_risk_amount) if initial_risk_amount is not None else None,
+        declared_risk_amount=declared_risk_amount,
+        declared_risk_unit=declared_risk_unit,
+        realized_r_multiple=realized_r_multiple,
+        unrealized_r_multiple=unrealized_r_multiple,
+        total_fees=sum(float(ev.fees or 0) for ev in events),
+        total_slippage=sum(float(ev.slippage or 0) for ev in events),
+    )
 
     return PositionDetail(
         position_id=pos_row[0],
@@ -409,11 +561,21 @@ def position_detail(conn: sqlite3.Connection, position_id: str) -> PositionDetai
         updated_at=pos_row[14],
         initial_risk_amount=float(initial_risk_amount)
         if initial_risk_amount is not None else None,
-        realized_r_multiple=float(pos_row[16]) if pos_row[16] is not None else None,
-        unrealized_r_multiple=float(pos_row[17]) if pos_row[17] is not None else None,
+        realized_r_multiple=realized_r_multiple,
+        unrealized_r_multiple=unrealized_r_multiple,
         opening_decision_id=opening_decision_id,
         opening_strategy_id=strategy_id,
+        opening_strategy_slug=strategy_slug,
+        opening_strategy_name=strategy_name,
         opening_playbook_version_id=playbook_version_id,
+        opening_thesis_id=thesis_id,
+        thesis=thesis,
+        strategy=strategy,
+        sources=sources,
+        tags=tags,
+        decision_ids=decision_ids,
+        risk_rollup=risk_rollup,
         events=events,
         caveats=tuple(caveats),
+        caveat_entries=entries,
     )
