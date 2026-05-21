@@ -276,7 +276,7 @@ def _build_app(home_path: str) -> Any:
     def decisions(
         cursor: str | None = None,
         limit: int = 50,
-        decision_type: str | None = None,
+        decision_type: list[str] | None = _DECISION_TYPE_QUERY_DEFAULT,
         instrument_id: str | None = None,
     ) -> dict[str, Any]:
         _, db = _open()

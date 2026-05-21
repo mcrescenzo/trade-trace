@@ -23,6 +23,7 @@ Contract:
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 from datetime import UTC
 from pathlib import Path
 from typing import Any
@@ -297,12 +298,20 @@ def record_events(
     ]
 
 
+def _multi(value: str | Sequence[str] | None) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value else []
+    return [item for item in value if item]
+
+
 def decisions_list(
     conn: sqlite3.Connection,
     *,
     cursor: str | None,
     limit: int,
-    decision_type: str | None = None,
+    decision_type: str | Sequence[str] | None = None,
     instrument_id: str | None = None,
 ) -> Page:
     columns = ("id", "type", "instrument_id", "thesis_id", "side",
@@ -310,9 +319,10 @@ def decisions_list(
     clamped_limit = max(1, min(int(limit), 500))
     clauses: list[str] = []
     params: list[Any] = []
-    if decision_type:
-        clauses.append("type = ?")
-        params.append(decision_type)
+    decision_types = _multi(decision_type)
+    if decision_types:
+        clauses.append(f"type IN ({','.join('?' * len(decision_types))})")
+        params.extend(decision_types)
     if instrument_id:
         clauses.append("instrument_id = ?")
         params.append(instrument_id)

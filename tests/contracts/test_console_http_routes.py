@@ -192,6 +192,30 @@ def test_trades_list_endpoint_preserves_repeated_filters_and_dates(rich_client: 
     assert all(row["decision_at"].startswith(target_day) for row in date_only_rows)
 
 
+def test_decisions_list_endpoint_treats_repeated_decision_type_as_or(rich_client: TestClient) -> None:
+    all_response = rich_client.get("/api/console/decisions?limit=100")
+    assert all_response.status_code == 200, all_response.text[:300]
+    all_rows = all_response.json()["rows"]
+    assert all_rows
+    target_type = all_rows[0]["type"]
+    other_type = next(row["type"] for row in all_rows if row["type"] != target_type)
+
+    filtered = rich_client.get(
+        "/api/console/decisions",
+        params=[
+            ("decision_type", other_type),
+            ("decision_type", target_type),
+            ("limit", "100"),
+        ],
+    )
+
+    assert filtered.status_code == 200, filtered.text[:300]
+    rows = filtered.json()["rows"]
+    assert rows
+    assert {row["type"] for row in rows}.issubset({other_type, target_type})
+    assert {target_type, other_type}.issubset({row["type"] for row in rows})
+
+
 def test_positions_list_endpoint_returns_rows_filters_and_paginates(rich_client: TestClient) -> None:
     first = rich_client.get("/api/console/positions?limit=2")
     assert first.status_code == 200, first.text[:300]
