@@ -8,6 +8,7 @@ coverage. No catalog routes are intentionally excluded.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -83,7 +84,7 @@ def test_shipped_console_route_renders_heading_and_no_console_errors(
     page.goto(console_url + str(route["path"]))
 
     expect(page.get_by_role("heading", name=_heading_for_route(route), level=2)).to_be_visible()
-    assert page.get_by_text("Trade Trace").is_visible()
+    assert page.get_by_role("link", name=re.compile(r"Trade Trace\s+Console")).is_visible()
     assert page.get_by_text("Read-only Console").is_visible()
     assert errors == [], errors
 
@@ -98,7 +99,7 @@ def test_overview_renders_navigation_refresh_and_dashboard_content(page, console
     page.goto(console_url + "/")
 
     # Header brand + read-only badge.
-    assert page.get_by_text("Trade Trace").is_visible()
+    assert page.get_by_role("link", name=re.compile(r"Trade Trace\s+Console")).is_visible()
     assert page.get_by_text("Read-only Console").is_visible()
     assert page.get_by_text("read-only").first.is_visible()
 

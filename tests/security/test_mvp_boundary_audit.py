@@ -210,7 +210,10 @@ SHIPPED_REPORTS = {
     "report.playbook_adherence",
     "report.coach",
     "report.compare",
+    "report.current_exposure",
+    "report.exposure_anomalies",
     "report.filter_schema",
+    "report.open_positions",
     "report.strategy_performance",
 }
 

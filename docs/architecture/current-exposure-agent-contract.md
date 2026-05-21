@@ -1,6 +1,6 @@
 # Current exposure agent contract
 
-> Status: contract seam for trade-trace-39pg. This document defines the agent-facing semantics future CLI/MCP reports must preserve; it does not introduce a shipped tool by itself.
+> Status: **decision document for trade-trace-39pg**. This document defines the agent-facing semantics current-exposure CLI/MCP reports must preserve; it does not introduce a shipped tool by itself.
 
 ## 1. Boundary and precedence
 
