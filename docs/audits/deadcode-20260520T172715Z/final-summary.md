@@ -67,3 +67,28 @@ Caveats:
 - `trade-trace-0apb`, `trade-trace-kq8y`, and `trade-trace-bh7q` require owner/product confirmation before deletion/removal because they touch public/exported or future-facing surfaces.
 - The docs stale-command findings were not duplicated as deadcode beads because a concurrent open docs-QC bead already covers agent-facing docs/schema/example drift; the evidence was appended there instead.
 - This is exhaustive over the current tracked manifest and reviewed surfaces, not a proof that no dead code remains.
+
+## 2026-05-21 execution closeout addendum
+
+Owner-confirmation candidates were resolved after product approval:
+
+- `trade-trace-0apb` closed: production outbox export now serializes via `EventRecord.to_jsonl_line()`, and the outbox export test asserts drained JSONL equals the EventRecord serializer. Commit: `47eb504`.
+- `trade-trace-bh7q` closed: added the narrow `keyring.revoke` admin write tool for the stored OpenAI embeddings OS-keyring key, including preview/confirm behavior, idempotent absent-key handling, schema/help coverage, and an MCP-spec wording repair so public tool specs remain free of forbidden secret/keying fragments. Commits: `792a272`, `e007aec`.
+- `trade-trace-kq8y` closed: kept `trade_detail(conn, decision_id)` as an exported external Python read-model helper, explicitly not a Console HTTP/UI route, and updated code docs, docs, and route/read-model regression coverage. Commit: `1f63999`.
+
+Final verification evidence:
+
+- `python -m ruff check src tests` passed.
+- `python -m mypy src/trade_trace` passed.
+- `python -m pytest` passed: 1345 passed, 8 skipped.
+- `bd dep list trade-trace-frd0` shows `trade-trace-hdlx`, `trade-trace-0apb`, `trade-trace-bh7q`, `trade-trace-kq8y`, and `trade-trace-4hr9` as the relation-indexed program members.
+- `bd dep list trade-trace-4hr9` shows the four materialized blocker IDs as gate blockers; all four are closed before gate closeout.
+- `bd dep cycles` passed.
+- `bd lint` passed.
+- `bd orphans` reported only the relation-indexed narrative epic `trade-trace-frd0` before epic closeout; this is expected for the root index shape and is not an executable orphan.
+
+Remaining scope caveats:
+
+- The stale CLI/docs findings remain merged into `trade-trace-r1mt`; they were intentionally not materialized as deadcode blockers.
+- This closeout resolves the materialized 2026-05-20 deadcode hunt candidates; it does not prove the repo has no undiscovered dead code.
+- Separate product-opportunity beads such as `trade-trace-3box`, `trade-trace-qfjy`, `trade-trace-r566`, and `trade-trace-ebc1` are outside this deadcode final gate and still require durable product decisions before implementation.
