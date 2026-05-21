@@ -102,7 +102,7 @@ class Database:
 class ReadOnlyDatabaseError(RuntimeError):
     """Raised by `open_database_readonly` when the requested DB
     cannot be opened cleanly (trade-trace-1kkv.3). Carries a
-    machine-readable `reason` so the Console can render a
+    machine-readable `reason` so read-only consumers can present a
     friendly empty-state instead of crashing."""
 
     def __init__(self, message: str, *, reason: str) -> None:
@@ -114,8 +114,8 @@ _MIN_REQUIRED_TABLES = ("events", "config")
 
 
 def open_database_readonly(path: Path) -> Database:
-    """Open `path` in OS-enforced read-only mode for the Console
-    data-access layer (trade-trace-1kkv.3). Uses
+    """Open `path` in OS-enforced read-only mode for read-only
+    reporting data access (trade-trace-1kkv.3). Uses
     `sqlite3.connect("file:<path>?mode=ro", uri=True)` so attempted
     writes raise `sqlite3.OperationalError` at the SQLite layer —
     not via call-site discipline.
@@ -143,20 +143,19 @@ def open_database_readonly(path: Path) -> Database:
     # contract — the OS file descriptor opens read-only and the
     # SQLite layer rejects writes with "attempt to write a readonly
     # database". `check_same_thread=False` matches the writable
-    # `open_database` helper so a FastAPI worker pool can share a
-    # handle without re-opening per request.
+    # `open_database` helper so long-lived CLI/MCP/reporting callers
+    # can share a handle without re-opening per query.
     uri = f"{path.resolve().as_uri()}?mode=ro"
     conn = sqlite3.connect(uri, uri=True, isolation_level=None, check_same_thread=False)
 
-    # Belt-and-suspenders: pin `query_only` so any tool inspecting
-    # pragmas (Console pool-factory tests; oncall greps) can verify
-    # the intent without parsing the URI flags. URI ro mode is the
-    # actual guard.
+    # Belt-and-suspenders: pin `query_only` so any tool or test
+    # inspecting pragmas can verify the intent without parsing the URI
+    # flags. URI ro mode is the actual guard.
     conn.execute("PRAGMA query_only = 1")
 
     # Verify the baseline schema. Missing required tables means the
-    # caller pointed at a wrong file or a pre-M0 database; either
-    # way the Console must render an empty state, not migrate.
+    # caller pointed at a wrong file or a pre-M0 database; either way
+    # read-only consumers must present an empty state, not migrate.
     try:
         present = {
             row[0]

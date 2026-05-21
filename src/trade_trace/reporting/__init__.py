@@ -1,8 +1,8 @@
 """Read-only reporting read models.
 
-This package contains non-UI report/query helpers that were originally
-implemented for the Console dashboards but are also used by Python report
-tools. Keep UI routing, HTTP, and static-asset code out of this namespace.
+This package contains non-UI report/query helpers used by CLI, MCP,
+library, and reporting consumers. Keep UI routing, HTTP, and static-asset
+code out of this namespace.
 """
 
 from __future__ import annotations

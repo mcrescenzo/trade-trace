@@ -32,8 +32,8 @@ from typing import Any
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 500
-"""Hard ceiling on rows returned per page. The frontend never asks
-for more than this; the backend clamps any caller that tries."""
+"""Hard ceiling on rows returned per page. Reporting consumers should
+request smaller pages; the helper clamps any caller that asks for more."""
 
 
 class PaginationError(ValueError):
@@ -73,8 +73,7 @@ def _split_order_by(order_by: str) -> tuple[str, str]:
     """Return `(column, direction)` from an `order_by` clause like
     `"id"` or `"id DESC"`. Multi-column order is intentionally not
     supported — cursor pagination over a composite key needs a
-    composite cursor, which is filed as a follow-up if the Console
-    grows a use case."""
+    composite cursor and should use a dedicated helper when required."""
 
     parts = order_by.strip().split()
     if len(parts) == 1:
@@ -127,9 +126,9 @@ def paginate_query(
         rows = rows[:clamped_limit]
         last = rows[-1]
         # Cursor key is the first column of the row, which by
-        # convention is the order-by column. The Console's own SQL
-        # is written with the order column first to make this
-        # invariant trivial to enforce.
+        # convention is the order-by column. Reporting queries using
+        # this helper are written with the order column first to make
+        # this invariant trivial to enforce.
         next_cursor = _encode_cursor(last[0])
     return Page(rows=rows, next_cursor=next_cursor, limit=clamped_limit)
 

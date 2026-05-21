@@ -41,11 +41,11 @@ _ORIGINAL_ASYNCIO_RUN = asyncio.run
 def _run_coro(coro):
     """Run a coroutine, tolerating a leaked event loop from upstream tests.
 
-    pytest-playwright's sync API may leave a running asyncio loop in the
-    main thread after console browser tests. ``asyncio.run()`` raises when
-    called inside a running loop, and ``run_until_complete`` on the
-    existing loop also fails because that loop is already running. We fall
-    back to running the coroutine in a fresh background-thread loop.
+    Some upstream sync test helpers may leave a running asyncio loop in
+    the main thread. ``asyncio.run()`` raises when called inside a running
+    loop, and ``run_until_complete`` on the existing loop also fails
+    because that loop is already running. We fall back to running the
+    coroutine in a fresh background-thread loop.
     """
     try:
         return _ORIGINAL_ASYNCIO_RUN(coro)

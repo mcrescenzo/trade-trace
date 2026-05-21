@@ -19,9 +19,8 @@ Pagination uses the shared cursor helper in
 
 `trade_detail(conn, decision_id)` is a supported exported Python
 read-model API for callers that already have a database connection. It
-is intentionally not wired as a Console HTTP endpoint or React route;
-the shipped Console UI currently exposes the paginated trades list and
-position/event/raw detail routes only.
+is intentionally a Python read-model helper rather than a route; CLI,
+MCP, library, and reporting consumers can call it directly.
 """
 
 from __future__ import annotations
@@ -75,7 +74,7 @@ class TradeRow:
     strategy data and per-decision aggregates.
 
     Every field is read-only. `caveats` carries machine-readable codes
-    from `ALL_CAVEAT_CODES`; the UI maps them to copy via the metric
+    from `ALL_CAVEAT_CODES`; consumers map them to copy via the metric
     glossary system (trade-trace-4nux).
     """
 
@@ -300,7 +299,7 @@ def trade_detail(conn: sqlite3.Connection, decision_id: str) -> TradeRow | None:
 
     Returns `None` if the id is unknown or if the decision is not a
     trading type. This helper is exported from
-    `trade_trace.reporting`; it is not a Console HTTP/UI route.
+    `trade_trace.reporting` as a Python read-model API.
     """
 
     sql = _TRADE_BASE_SQL + " AND d.id = ?"

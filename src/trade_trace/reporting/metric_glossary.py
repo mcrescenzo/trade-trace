@@ -291,13 +291,13 @@ PAGE_EXPLANATIONS: dict[str, dict[str, str]] = {
     },
     "reports": {
         "what": (
-            "Index of every read-only report tool available to the "
-            "Console, with a one-line summary of what each computes."
+            "Index of every read-only report tool available to safe "
+            "reporting consumers, with a one-line summary of what each computes."
         ),
         "how_to_read": (
-            "Click a row to open the corresponding dashboard. report.coach "
+            "Select an entry to inspect the corresponding report. report.coach "
             "and signal.scan are intentionally hidden — they persist "
-            "rows and are out of scope for the read-only Console."
+            "rows and are out of scope for read-only reporting consumers."
         ),
         "what_can_mislead": (
             "The list reflects the live tool registry; a future report "
