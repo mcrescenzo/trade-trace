@@ -213,6 +213,28 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "decisions or watches."
         ),
     ),
+    "report.exposure_anomalies": _schema(
+        {
+            "stale_mark_threshold_days": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Age threshold in days for latest snapshot/mark anomalies; defaults to 14.",
+            },
+            "as_of": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Optional ISO timestamp used to evaluate stale latest marks; defaults to current UTC.",
+            },
+        },
+        description=(
+            "Read-only current-exposure ambiguity/data-quality caveat report. "
+            "Returns projection_anomalies with stable codes including "
+            "ENTRY_DECISION_WITHOUT_POSITION_EVENT, DUPLICATE_DECISIONS, "
+            "RECORD_ONLY_ACTUAL, MISSING_MARK, STALE_MARK, PROJECTION_MISSING, "
+            "and PROJECTION_STALE. This reports local journal/projection data quality, "
+            "not market risk or broker truth."
+        ),
+    ),
     "report.coach": _schema(
         {"filter": _FILTER_PROP, "stale_threshold_days": {"type": "integer", "minimum": 0}}
     ),
@@ -871,6 +893,211 @@ def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
     return data
 
 
+_RECORD_ONLY_TERMS = (
+    "record-only",
+    "record only",
+    "not external",
+    "not externally executed",
+    "journal-only",
+    "journal only",
+    "manual record",
+    "dogfood",
+    "simulated",
+)
+
+
+def _exposure_anomaly(code: str, summary: str, affected_ids: dict[str, list[str]], evidence: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "code": code,
+        "category": "data_quality",
+        "severity": "warning",
+        "summary": summary,
+        "affected_ids": affected_ids,
+        "evidence": evidence,
+    }
+
+
+def _report_exposure_anomalies(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.exposure_anomalies` — current-exposure ambiguity caveats."""
+
+    stale_mark_threshold_days = args.get("stale_mark_threshold_days", 14)
+    if not isinstance(stale_mark_threshold_days, int) or stale_mark_threshold_days < 0:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "stale_mark_threshold_days must be a non-negative integer",
+            details={"field": "stale_mark_threshold_days", "value": stale_mark_threshold_days},
+        )
+    as_of_raw = args.get("as_of")
+    if as_of_raw is None:
+        as_of = datetime.now(UTC)
+    elif isinstance(as_of_raw, str):
+        as_of = _parse_report_timestamp(as_of_raw, field="as_of")
+    else:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "as_of must be an ISO timestamp string",
+            details={"field": "as_of", "value": as_of_raw},
+        )
+    stale_cutoff = as_of - timedelta(days=stale_mark_threshold_days)
+    anomalies: list[dict[str, Any]] = []
+
+    db = open_db_for_args(args)
+    try:
+        connection = db.connection
+        decisions = connection.execute(
+            """
+            SELECT d.id, d.instrument_id, d.type, d.side, d.quantity, d.price,
+                   d.run_id, d.reason, d.metadata_json, d.created_at,
+                   COUNT(pe.id) AS event_count
+            FROM decisions d
+            LEFT JOIN position_events pe ON pe.decision_id = d.id
+            WHERE d.type IN ('paper_enter','actual_enter','actual_exit','add','reduce')
+            GROUP BY d.id
+            ORDER BY d.created_at, d.id
+            """
+        ).fetchall()
+        for row in decisions:
+            payload = {
+                "decision_id": row[0], "instrument_id": row[1], "type": row[2],
+                "side": row[3], "quantity": row[4], "price": row[5],
+                "run_id": row[6], "created_at": row[9], "linked_position_event_count": row[10],
+            }
+            if row[2] in ("paper_enter", "actual_enter", "add") and row[10] == 0:
+                anomalies.append(_exposure_anomaly(
+                    "ENTRY_DECISION_WITHOUT_POSITION_EVENT",
+                    "Entry decision lacks linked position_events row; do not count as exposure.",
+                    {"decisions": [row[0]], "instruments": [row[1]]},
+                    payload,
+                ))
+            if row[2] in ("actual_enter", "actual_exit", "add", "reduce") and row[10] == 0:
+                text = f"{row[7] or ''} {row[8] or ''}".lower()
+                matched = [term for term in _RECORD_ONLY_TERMS if term in text]
+                evidence = {**payload, "record_only_phrase_matches": matched}
+                anomalies.append(_exposure_anomaly(
+                    "RECORD_ONLY_ACTUAL",
+                    "Actual-recorded/add/reduce/exit decision has no linked position_event/projection lineage; treat as journal activity, not open exposure.",
+                    {"decisions": [row[0]], "instruments": [row[1]]},
+                    evidence,
+                ))
+
+        dupes = connection.execute(
+            """
+            SELECT instrument_id, type, COALESCE(side,''), COALESCE(quantity,''), COALESCE(price,''),
+                   COALESCE(run_id,''), COUNT(*) AS n, GROUP_CONCAT(id), MIN(created_at), MAX(created_at)
+            FROM decisions
+            WHERE type IN ('paper_enter','actual_enter','add')
+            GROUP BY instrument_id, type, COALESCE(side,''), COALESCE(quantity,''), COALESCE(price,''), COALESCE(run_id,'')
+            HAVING COUNT(*) > 1
+            ORDER BY MIN(created_at), instrument_id, type
+            """
+        ).fetchall()
+        for row in dupes:
+            decision_ids = row[7].split(",") if row[7] else []
+            anomalies.append(_exposure_anomaly(
+                "DUPLICATE_DECISIONS",
+                "Duplicate entry-like journal decisions found; exposure should be based only on linked position projection/events.",
+                {"decisions": decision_ids, "instruments": [row[0]]},
+                {"instrument_id": row[0], "type": row[1], "side": row[2] or None,
+                 "quantity": row[3] or None, "price": row[4] or None, "run_id": row[5] or None,
+                 "count": row[6], "first_created_at": row[8], "last_created_at": row[9]},
+            ))
+
+        open_positions = connection.execute(
+            """
+            SELECT id, instrument_id, kind, side, status, unrealized_pnl, updated_at
+            FROM positions
+            WHERE status IN ('open','partial')
+            ORDER BY updated_at, id
+            """
+        ).fetchall()
+        latest_marks = _latest_snapshot_mark_by_instrument(connection, {row[1] for row in open_positions})
+        for row in open_positions:
+            mark = latest_marks.get(row[1])
+            base = {"position_id": row[0], "instrument_id": row[1], "kind": row[2], "side": row[3], "status": row[4], "updated_at": row[6]}
+            if row[5] is None and mark is None:
+                anomalies.append(_exposure_anomaly(
+                    "MISSING_MARK",
+                    "Open/partial position has no unrealized P&L and no latest snapshot/mark.",
+                    {"positions": [row[0]], "instruments": [row[1]]},
+                    base,
+                ))
+            elif mark is not None:
+                captured_at = _parse_report_timestamp(mark["captured_at"], field="snapshots.captured_at")
+                if captured_at < stale_cutoff:
+                    anomalies.append(_exposure_anomaly(
+                        "STALE_MARK",
+                        "Open/partial position latest snapshot/mark is stale as of the report threshold.",
+                        {"positions": [row[0]], "instruments": [row[1]], "snapshots": [mark["snapshot_id"]]},
+                        {**base, "latest_mark": mark},
+                    ))
+
+        stale_projection = connection.execute(
+            """
+            SELECT p.id, p.instrument_id, p.updated_at, MAX(pe.created_at) AS latest_event_at
+            FROM positions p
+            JOIN position_events pe ON pe.position_id = p.id
+            GROUP BY p.id
+            HAVING latest_event_at > p.updated_at
+            ORDER BY latest_event_at, p.id
+            """
+        ).fetchall()
+        for row in stale_projection:
+            anomalies.append(_exposure_anomaly(
+                "PROJECTION_STALE",
+                "positions projection predates later position_events; rebuild/check projections before relying on exposure.",
+                {"positions": [row[0]], "instruments": [row[1]]},
+                {"position_id": row[0], "instrument_id": row[1], "position_updated_at": row[2], "latest_event_at": row[3]},
+            ))
+
+        missing_projection = connection.execute(
+            """
+            SELECT pe.position_id, pe.instrument_id, GROUP_CONCAT(pe.id), MIN(pe.created_at), MAX(pe.created_at)
+            FROM position_events pe
+            LEFT JOIN positions p ON p.id = pe.position_id
+            WHERE p.id IS NULL
+            GROUP BY pe.position_id, pe.instrument_id
+            ORDER BY MIN(pe.created_at), pe.position_id
+            """
+        ).fetchall()
+        for row in missing_projection:
+            anomalies.append(_exposure_anomaly(
+                "PROJECTION_MISSING",
+                "position_events exist for a position_id with no readable positions projection row.",
+                {"positions": [row[0]], "instruments": [row[1]], "position_events": row[2].split(",") if row[2] else []},
+                {"position_id": row[0], "instrument_id": row[1], "first_event_at": row[3], "latest_event_at": row[4]},
+            ))
+    finally:
+        db.close()
+
+    codes = sorted({item["code"] for item in anomalies})
+    if anomalies:
+        hints = [
+            "Projection/data-quality caveats found; do not infer open trades from decisions-only evidence.",
+            "These anomalies are local journal/projection caveats, not market risk or broker truth.",
+        ]
+    else:
+        hints = [
+            "No projection anomalies detected; use canonical position reports for current exposure.",
+            "Clean result does not query brokers or prove external market risk.",
+        ]
+    data = {
+        "summary": {
+            "bucket": "projection_anomalies",
+            "count": len(anomalies),
+            "anomaly_count": len(anomalies),
+            "codes": codes,
+            "severity_counts": {"data_quality": len(anomalies), "market_risk": 0},
+            "agent_answer_hints": hints,
+            "filter": {"stale_mark_threshold_days": stale_mark_threshold_days, "as_of": to_utc_iso8601(as_of)},
+        },
+        "groups": [],
+        "projection_anomalies": anomalies,
+        "agent_answer_hints": hints,
+    }
+    _propagate_report_meta(ctx, data)
+    return data
+
+
 def _report_coach(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`report.coach` — synthesized decision-support packet. No LLM, no
     network, no trade advice."""
@@ -1188,6 +1415,23 @@ def register_report_tools(registry: ToolRegistry) -> None:
         usage_summary="List canonical row-level open positions/current exposure; do not query or infer from decisions.",
         examples=("tt report open_positions --home <journal-home>",),
         next_actions=("Use these rows directly to summarize open exposure; do not run raw SQLite for open positions.",),
+    )
+    registry.register(
+        "report.exposure_anomalies",
+        _report_exposure_anomalies,
+        description=(
+            "Read-only current-exposure ambiguity/data-quality caveat report. "
+            "Surfaces projection_anomalies with stable codes for duplicate entry "
+            "decisions, decisions without linked position_events, record-only actual "
+            "journal rows, missing/stale marks, and missing/stale projections. "
+            "This is not market risk and does not assert broker truth."
+        ),
+        example_minimal={"stale_mark_threshold_days": 14},
+        optional_keys=("stale_mark_threshold_days", "as_of"),
+        json_schema=_REPORT_SCHEMAS["report.exposure_anomalies"],
+        usage_summary="List local journal/projection anomalies that caveat current-exposure answers; do not treat them as open trades.",
+        examples=("tt report exposure_anomalies --home <journal-home>",),
+        next_actions=("Use report.open_positions for canonical exposure rows; mention these caveats separately.",),
     )
     registry.register(
         "report.coach",

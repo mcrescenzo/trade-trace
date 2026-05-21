@@ -91,6 +91,7 @@ REPORT_TOOLS_AND_ARGS: list[tuple[str, dict[str, Any]]] = [
     ("report.pnl", {}),
     ("report.watchlist", {}),
     ("report.open_positions", {}),
+    ("report.exposure_anomalies", {}),
     ("report.unscored_forecasts", {}),
     ("report.decision_velocity", {}),
     ("report.coach", {}),
