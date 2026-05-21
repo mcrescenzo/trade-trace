@@ -35,6 +35,7 @@ import {
   CatalogPayload,
   EventRow,
   Page,
+  PageQueryValue,
   ReportPayload,
   StatusPayload,
   TradeRow,
@@ -64,6 +65,8 @@ type ConsoleFilter = {
   strategy?: { strategy_id?: string | null }
   instrument?: { instrument_id?: string[] }
   decision?: { decision_type?: string[] }
+  date?: { opened_from?: string | null; opened_to?: string | null }
+  view?: { mode?: 'positions' | 'decision-events' | null }
 }
 
 const TRADE_DECISION_TYPES = ['actual_enter', 'paper_enter', 'add', 'reduce', 'actual_exit', 'paper_exit']
@@ -71,8 +74,12 @@ const TRADE_DECISION_TYPES = ['actual_enter', 'paper_enter', 'add', 'reduce', 'a
 function stripEmptyFilter(filter: ConsoleFilter): ConsoleFilter {
   const next: ConsoleFilter = {}
   if (filter.strategy?.strategy_id) next.strategy = { strategy_id: filter.strategy.strategy_id }
-  if (filter.instrument?.instrument_id?.length) next.instrument = { instrument_id: filter.instrument.instrument_id }
-  if (filter.decision?.decision_type?.length) next.decision = { decision_type: filter.decision.decision_type }
+  const instrumentIds = filter.instrument?.instrument_id?.map(String).map((item) => item.trim()).filter(Boolean)
+  const decisionTypes = filter.decision?.decision_type?.map(String).filter((item) => TRADE_DECISION_TYPES.includes(item))
+  if (instrumentIds?.length) next.instrument = { instrument_id: [...new Set(instrumentIds)] }
+  if (decisionTypes?.length) next.decision = { decision_type: [...new Set(decisionTypes)] }
+  if (filter.date?.opened_from || filter.date?.opened_to) next.date = { opened_from: filter.date.opened_from || undefined, opened_to: filter.date.opened_to || undefined }
+  if (filter.view?.mode === 'decision-events') next.view = { mode: 'decision-events' }
   return next
 }
 
@@ -93,10 +100,12 @@ function decodeFilter(value: string | null): ConsoleFilter {
     const parsed = JSON.parse(new TextDecoder().decode(bytes)) as ConsoleFilter
     return stripEmptyFilter({
       strategy: parsed.strategy?.strategy_id ? { strategy_id: parsed.strategy.strategy_id } : undefined,
-      instrument: parsed.instrument?.instrument_id?.[0] ? { instrument_id: [String(parsed.instrument.instrument_id[0])] } : undefined,
+      instrument: Array.isArray(parsed.instrument?.instrument_id) ? { instrument_id: parsed.instrument.instrument_id.map(String) } : undefined,
       decision: parsed.decision?.decision_type?.length
         ? { decision_type: parsed.decision.decision_type.map(String).filter((item) => TRADE_DECISION_TYPES.includes(item)) }
-        : undefined
+        : undefined,
+      date: parsed.date ? { opened_from: parsed.date.opened_from ? String(parsed.date.opened_from) : undefined, opened_to: parsed.date.opened_to ? String(parsed.date.opened_to) : undefined } : undefined,
+      view: parsed.view?.mode === 'decision-events' ? { mode: 'decision-events' } : undefined
     })
   } catch {
     return {}
@@ -122,16 +131,18 @@ function useConsoleFilter() {
   return [filter, setFilter] as const
 }
 
-function tableFilterParams(filter: ConsoleFilter, supported: Array<'strategy_id' | 'instrument_id' | 'decision_type'>) {
+function tableFilterParams(filter: ConsoleFilter, supported: Array<'strategy_id' | 'instrument_id' | 'decision_type' | 'opened_from' | 'opened_to'>): Record<string, PageQueryValue> {
   return {
     strategy_id: supported.includes('strategy_id') ? filter.strategy?.strategy_id : undefined,
-    instrument_id: supported.includes('instrument_id') ? filter.instrument?.instrument_id?.[0] : undefined,
-    decision_type: supported.includes('decision_type') ? filter.decision?.decision_type?.[0] : undefined
+    instrument_id: supported.includes('instrument_id') ? filter.instrument?.instrument_id : undefined,
+    decision_type: supported.includes('decision_type') ? filter.decision?.decision_type : undefined,
+    opened_from: supported.includes('opened_from') ? filter.date?.opened_from : undefined,
+    opened_to: supported.includes('opened_to') ? filter.date?.opened_to : undefined
   }
 }
 
-function FilterBar({ filter, onChange, supportsStrategy = true }: { filter: ConsoleFilter; onChange: (filter: ConsoleFilter) => void; supportsStrategy?: boolean }) {
-  const decisionType = filter.decision?.decision_type?.[0] ?? ''
+function FilterBar({ filter, onChange, supportsStrategy = true, supportsTradeViewDates = false }: { filter: ConsoleFilter; onChange: (filter: ConsoleFilter) => void; supportsStrategy?: boolean; supportsTradeViewDates?: boolean }) {
+  const decisionTypes = filter.decision?.decision_type ?? []
   const instrumentId = filter.instrument?.instrument_id?.[0] ?? ''
   const strategyId = filter.strategy?.strategy_id ?? ''
   const update = (patch: ConsoleFilter) => onChange(stripEmptyFilter({ ...filter, ...patch }))
@@ -146,10 +157,10 @@ function FilterBar({ filter, onChange, supportsStrategy = true }: { filter: Cons
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         <label className="text-sm">Decision type
-          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={decisionType} onChange={(event) => update({ decision: { decision_type: event.target.value ? [event.target.value] : [] } })}>
-            <option value="">Any supported trade type</option>
+          <select multiple className="mt-1 h-32 w-full rounded border border-border bg-background px-2 py-2" value={decisionTypes} onChange={(event) => update({ decision: { decision_type: Array.from(event.target.selectedOptions, (option) => option.value) } })}>
             {TRADE_DECISION_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
+          <span className="mt-1 block text-xs text-muted-foreground">Ctrl/Cmd-click to select multiple; none means any supported trade type.</span>
         </label>
         <label className="text-sm">Instrument ID
           <input className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={instrumentId} placeholder="Exact local instrument_id" onChange={(event) => update({ instrument: { instrument_id: event.target.value.trim() ? [event.target.value.trim()] : [] } })} />
@@ -158,6 +169,14 @@ function FilterBar({ filter, onChange, supportsStrategy = true }: { filter: Cons
           <input className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={strategyId} placeholder="Exact strategy_id or __none__" onChange={(event) => update({ strategy: { strategy_id: event.target.value.trim() || null } })} />
         </label> : null}
       </div>
+      {supportsTradeViewDates ? <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <label className="text-sm">Opened from
+          <input type="date" className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={filter.date?.opened_from ?? ''} onChange={(event) => update({ date: { ...filter.date, opened_from: event.target.value || null } })} />
+        </label>
+        <label className="text-sm">Opened to
+          <input type="date" className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={filter.date?.opened_to ?? ''} onChange={(event) => update({ date: { ...filter.date, opened_to: event.target.value || null } })} />
+        </label>
+      </div> : null}
     </section>
   )
 }
@@ -540,7 +559,7 @@ function PageTable<T extends Record<string, unknown>>({
   columns: Parameters<typeof DataTable<T>>[0]['columns']
   emptyMessage: string
   subjectKind?: string
-  filters?: Record<string, string | number | null | undefined>
+  filters?: Record<string, PageQueryValue>
 }) {
   const [cursor, setCursor] = React.useState<string | null>(null)
   const [history, setHistory] = React.useState<string[]>([])
@@ -746,11 +765,11 @@ function TradesPage() {
     <>
       <PageHeader eyebrow="Trades" title="Trade decisions and caveats" />
       <PageExplainer answers="Which recorded trading decisions make up the trade history." data="/api/console/trades from journal decisions and position read models." read="Use filters to narrow rows; caveat chips explain missing risk, marks, sources, or other local limitations." mislead="Rows are journal-derived records, not broker statements; non-trading decisions are excluded here." />
-      <FilterBar filter={filter} onChange={setFilter} />
+      <FilterBar filter={filter} onChange={setFilter} supportsTradeViewDates />
       <PageTable<TradeRow>
         endpoint="/api/console/trades"
         queryKey="trades"
-        filters={tableFilterParams(filter, ['strategy_id', 'instrument_id', 'decision_type'])}
+        filters={tableFilterParams(filter, ['strategy_id', 'instrument_id', 'decision_type', 'opened_from', 'opened_to'])}
         subjectKind="decision"
         emptyMessage="No matching trades for the selected view."
         columns={[

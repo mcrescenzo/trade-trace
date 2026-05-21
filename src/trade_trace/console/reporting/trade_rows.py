@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Sequence
 
 from trade_trace.console.pagination import (
     DEFAULT_LIMIT,
@@ -196,21 +196,46 @@ _TRADE_BASE_SQL = f"""
 """
 
 
+def _multi(value: str | Sequence[str] | None) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,) if value else ()
+    return tuple(str(item) for item in value if str(item))
+
+
+def _date_range_bound(value: str, *, end: bool) -> str:
+    """Expand date-only bounds from `<input type=date>` to ISO instants.
+
+    Stored decision timestamps are ISO-ish strings. Comparing
+    `created_at <= 'YYYY-MM-DD'` would exclude every record later on that
+    selected calendar date, so date-only upper bounds must expand to the
+    end of the day. Non-date-only values are preserved for callers that
+    pass explicit timestamps.
+    """
+
+    if len(value) == 10 and value[4] == "-" and value[7] == "-":
+        return f"{value}T23:59:59.999999Z" if end else f"{value}T00:00:00.000000Z"
+    return value
+
+
 def list_trades(
     conn: sqlite3.Connection,
     *,
     cursor: str | None = None,
     limit: int = DEFAULT_LIMIT,
-    strategy_id: str | None = None,
-    instrument_id: str | None = None,
-    decision_type: str | None = None,
+    strategy_id: str | Sequence[str] | None = None,
+    instrument_id: str | Sequence[str] | None = None,
+    decision_type: str | Sequence[str] | None = None,
+    opened_from: str | None = None,
+    opened_to: str | None = None,
 ) -> Page:
     """Return a paginated page of `TradeRow` ordered newest first.
 
-    Filters are intentionally narrow (single-id or single-type) so the
-    page stays simple; the global filter UI (trade-trace-hayy) consumes
-    `ReportFilter` and projects through this helper on the broader
-    axes.
+    Filters are intentionally narrow but may contain repeated values for
+    strategy, instrument, and decision type. Date bounds accept either
+    explicit timestamps or date-only `YYYY-MM-DD` values; date-only upper
+    bounds are inclusive of the full selected calendar day.
 
     `decision_type` must be one of `TRADING_DECISION_TYPES` when set;
     a non-trading type is treated as "no rows" rather than an error
@@ -223,20 +248,26 @@ def list_trades(
     if limit > MAX_LIMIT:
         limit = MAX_LIMIT
 
-    if decision_type is not None and decision_type not in TRADING_DECISION_TYPES:
+    decision_types = _multi(decision_type)
+    if any(item not in TRADING_DECISION_TYPES for item in decision_types):
         return Page(rows=[], next_cursor=None, limit=limit, meta={"filter_match": "none"})
 
     sql = _TRADE_BASE_SQL
     params: list[Any] = list(TRADING_DECISION_TYPES)
-    if strategy_id is not None:
-        sql += " AND d.strategy_id = ?"
-        params.append(strategy_id)
-    if instrument_id is not None:
-        sql += " AND d.instrument_id = ?"
-        params.append(instrument_id)
-    if decision_type is not None:
-        sql += " AND d.type = ?"
-        params.append(decision_type)
+    for column, values in (
+        ("d.strategy_id", _multi(strategy_id)),
+        ("d.instrument_id", _multi(instrument_id)),
+        ("d.type", decision_types),
+    ):
+        if values:
+            sql += f" AND {column} IN ({','.join('?' * len(values))})"
+            params.extend(values)
+    if opened_from is not None:
+        sql += " AND d.created_at >= ?"
+        params.append(_date_range_bound(opened_from, end=False))
+    if opened_to is not None:
+        sql += " AND d.created_at <= ?"
+        params.append(_date_range_bound(opened_to, end=True))
     if cursor is not None:
         after = _decode_cursor(cursor)
         # The fixture seed runs under CLOCK_OVERRIDE so many decisions

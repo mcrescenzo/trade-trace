@@ -151,6 +151,47 @@ def test_trade_detail_is_not_exposed_as_console_http_route(rich_client: TestClie
     assert response.status_code == 404
 
 
+def test_trades_list_endpoint_preserves_repeated_filters_and_dates(rich_client: TestClient) -> None:
+    all_response = rich_client.get("/api/console/trades?limit=100")
+    assert all_response.status_code == 200, all_response.text[:300]
+    all_rows = all_response.json()["rows"]
+    assert all_rows
+    target = all_rows[0]
+    target_type = target["decision_type"]
+    other_type = next(row["decision_type"] for row in all_rows if row["decision_type"] != target_type)
+    target_date = target["decision_at"]
+
+    filtered = rich_client.get(
+        "/api/console/trades",
+        params=[
+            ("decision_type", other_type),
+            ("decision_type", target_type),
+            ("instrument_id", "does-not-match-target"),
+            ("instrument_id", target["instrument_id"]),
+            ("opened_from", target_date),
+            ("opened_to", target_date),
+            ("limit", "100"),
+        ],
+    )
+    assert filtered.status_code == 200, filtered.text[:300]
+    rows = filtered.json()["rows"]
+    assert rows
+    assert {row["decision_type"] for row in rows}.issubset({other_type, target_type})
+    assert {row["instrument_id"] for row in rows} == {target["instrument_id"]}
+    assert all(row["decision_at"] == target_date for row in rows)
+
+    target_day = target_date[:10]
+    date_only = rich_client.get(
+        "/api/console/trades",
+        params={"opened_from": target_day, "opened_to": target_day, "limit": "100"},
+    )
+    assert date_only.status_code == 200, date_only.text[:300]
+    date_only_rows = date_only.json()["rows"]
+    assert date_only_rows
+    assert target["decision_id"] in {row["decision_id"] for row in date_only_rows}
+    assert all(row["decision_at"].startswith(target_day) for row in date_only_rows)
+
+
 def test_positions_list_endpoint_returns_rows_filters_and_paginates(rich_client: TestClient) -> None:
     first = rich_client.get("/api/console/positions?limit=2")
     assert first.status_code == 200, first.text[:300]

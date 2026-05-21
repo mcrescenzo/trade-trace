@@ -83,11 +83,16 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
   return response.json() as Promise<T>
 }
 
-export function pageQuery(path: string, params: Record<string, string | number | null | undefined>) {
+export type PageQueryValue = string | number | readonly (string | number | null | undefined)[] | null | undefined
+
+export function pageQuery(path: string, params: Record<string, PageQueryValue>) {
   const url = new URL(path, window.location.origin)
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      url.searchParams.set(key, String(value))
+    const values = Array.isArray(value) ? value : [value]
+    for (const item of values) {
+      if (item !== undefined && item !== null && item !== '') {
+        url.searchParams.append(key, String(item))
+      }
     }
   }
   return `${url.pathname}${url.search}`

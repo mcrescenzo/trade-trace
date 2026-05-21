@@ -53,6 +53,7 @@ _KIND_QUERY_DEFAULT = _Query(default=None) if _Query is not None else None
 _INSTRUMENT_QUERY_DEFAULT = _Query(default=None) if _Query is not None else None
 _STRATEGY_QUERY_DEFAULT = _Query(default=None) if _Query is not None else None
 _OUTCOME_QUERY_DEFAULT = _Query(default=None) if _Query is not None else None
+_DECISION_TYPE_QUERY_DEFAULT = _Query(default=None) if _Query is not None else None
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -295,9 +296,11 @@ def _build_app(home_path: str) -> Any:
     def trades(
         cursor: str | None = None,
         limit: int = 50,
-        strategy_id: str | None = None,
-        instrument_id: str | None = None,
-        decision_type: str | None = None,
+        strategy_id: list[str] | None = _STRATEGY_QUERY_DEFAULT,
+        instrument_id: list[str] | None = _INSTRUMENT_QUERY_DEFAULT,
+        decision_type: list[str] | None = _DECISION_TYPE_QUERY_DEFAULT,
+        opened_from: str | None = None,
+        opened_to: str | None = None,
     ) -> dict[str, Any]:
         _, db = _open()
         try:
@@ -308,6 +311,8 @@ def _build_app(home_path: str) -> Any:
                 strategy_id=strategy_id,
                 instrument_id=instrument_id,
                 decision_type=decision_type,
+                opened_from=opened_from,
+                opened_to=opened_to,
             )
             return _jsonable(_page_to_dict(page))
         finally:
