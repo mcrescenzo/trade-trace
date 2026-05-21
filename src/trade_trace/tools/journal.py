@@ -38,6 +38,18 @@ from trade_trace.tools.errors import ToolError
 from trade_trace.version import CONTRACT_VERSION, __version__
 
 
+_TOOL_SCHEMA_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "tool": {
+            "type": "string",
+            "description": "Registered tool name to introspect; omit to enumerate the full catalog.",
+        },
+    },
+    "required": [],
+}
+
+
 def _journal_init(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`journal.init` — idempotent. Returns the new or existing schema_version,
     plus capability flags. Zero outbound calls."""
@@ -429,6 +441,7 @@ def register_journal_tools(registry: ToolRegistry) -> None:
     registry.register(
         "tool.schema",
         _tool_schema,
+        json_schema=_TOOL_SCHEMA_JSON_SCHEMA,
         description=(
             "Introspect a registered MVP tool: returns description, "
             "cli_invocation, example_minimal/example_rich payloads (for write "

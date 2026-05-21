@@ -112,6 +112,26 @@ def test_tool_schema_envelope_echoes_valid_json_schema() -> None:
     _assert_valid_json_schema(schema)
 
 
+def test_tool_schema_self_schema_advertises_optional_tool_argument() -> None:
+    registry = build_registry()
+    schema = registry.get("tool.schema").json_schema
+
+    assert schema is not None
+    assert schema["type"] == "object"
+    assert schema["required"] == []
+    assert schema["properties"]["tool"]["type"] == "string"
+    _assert_valid_json_schema(schema)
+
+    env = dispatch(
+        "tool.schema",
+        {"tool": "tool.schema"},
+        actor_id="agent:schema-test",
+        registry=registry,
+    )
+    dumped = env.model_dump(mode="json")
+    assert dumped["data"]["json_schema"] == schema
+
+
 def test_transport_control_keys_are_optional_not_required() -> None:
     schema = derive_schema({"name": "x", "_dry_run": True, "_confirm": False})
 

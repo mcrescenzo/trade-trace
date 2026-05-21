@@ -148,9 +148,57 @@ def test_journal_bundle_status_expands_thesis_to_forecasts_and_weak_unresolved(h
     assert isinstance(status, SuccessEnvelope)
     assert forecast.data["id"] in status.data["relevant_ids"]["forecast"]
     checks = {item["step"]: item for item in status.data["checklist"]}
+    assert checks["thesis_recorded"]["record_ids"] == {"theses": [thesis.data["id"]]}
     assert checks["forecast_recorded"]["status"] == "ok"
     assert checks["unresolved_forecasts"]["status"] == "weak"
     assert checks["unresolved_forecasts"]["record_ids"]["forecasts"] == [forecast.data["id"]]
+
+
+def test_journal_bundle_status_source_weakness_keeps_all_sources_distinct(home):
+    venue = _mcp(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    assert isinstance(venue, SuccessEnvelope)
+    instrument = _mcp(home, "instrument.add", {
+        "venue_id": venue.data["id"],
+        "title": "Event with mixed source freshness",
+        "asset_class": "prediction_market",
+    })
+    assert isinstance(instrument, SuccessEnvelope)
+    thesis = _mcp(home, "thesis.add", {
+        "instrument_id": instrument.data["id"],
+        "side": "yes",
+        "body": "Thesis body.",
+    })
+    assert isinstance(thesis, SuccessEnvelope)
+    stale_source = _mcp(home, "source.add", {
+        "kind": "url",
+        "uri": "https://example.com/stale",
+        "freshness_at": "2026-01-01T00:00:00.000Z",
+    })
+    assert isinstance(stale_source, SuccessEnvelope)
+    fresh_source = _mcp(home, "source.add", {
+        "kind": "url",
+        "uri": "https://example.com/fresh",
+        "freshness_at": "2999-01-01T00:00:00.000Z",
+    })
+    assert isinstance(fresh_source, SuccessEnvelope)
+    for source in (stale_source, fresh_source):
+        attach = _mcp(home, "source.attach_to_thesis", {
+            "source_id": source.data["id"],
+            "target_id": thesis.data["id"],
+        })
+        assert attach.ok, attach
+
+    status = _mcp(home, "journal.bundle.status", {
+        "thesis_id": thesis.data["id"],
+        "stale_source_days": 14,
+    })
+
+    assert isinstance(status, SuccessEnvelope)
+    checks = {item["step"]: item for item in status.data["checklist"]}
+    source_check = checks["source_attached"]
+    assert source_check["status"] == "weak"
+    assert set(source_check["record_ids"]["sources"]) == {stale_source.data["id"], fresh_source.data["id"]}
+    assert source_check["record_ids"]["weak_source_ids"] == [stale_source.data["id"]]
 
 
 def test_journal_bundle_status_metadata_lookup_escapes_like_wildcards(home):

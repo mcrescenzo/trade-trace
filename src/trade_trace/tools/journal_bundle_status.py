@@ -23,6 +23,16 @@ from trade_trace.tools.errors import ToolError
 
 CONTRACT_VERSION = "1.0"
 
+_RECORD_ID_KEYS = {
+    "venue": "venues",
+    "instrument": "instruments",
+    "snapshot": "snapshots",
+    "source": "sources",
+    "thesis": "theses",
+    "forecast": "forecasts",
+    "decision": "decisions",
+}
+
 
 class JournalBundleStatusInput(BaseModel):
     """Input contract for journal.bundle.status."""
@@ -258,10 +268,11 @@ def _build_checks(conn: sqlite3.Connection, rows: dict[str, list[dict[str, Any]]
 
 def _check(checks: list[dict[str, Any]], name: str, rows: list[dict[str, Any]], call: str, *, weak_if: list[str] | None = None) -> None:
     status = "ok" if rows else "missing"
-    record_ids = {name.split("_")[0] + "s": [r["id"] for r in rows]}
+    kind = name.split("_")[0]
+    record_ids = {_RECORD_ID_KEYS.get(kind, f"{kind}s"): [r["id"] for r in rows]}
     if rows and weak_if:
         status = "weak"
-        record_ids["sources"] = weak_if
+        record_ids["weak_source_ids"] = weak_if
     checks.append(_entry(name, status, record_ids, call))
 
 

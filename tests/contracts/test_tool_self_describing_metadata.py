@@ -58,6 +58,21 @@ def test_mcp_tool_specs_include_metadata_and_augmented_description():
     assert "Example: tt decision add" in spec["description"]
 
 
+def test_tool_schema_self_contract_is_advertised_in_cli_and_mcp(capsys):
+    rc = cli_main(["tool", "schema", "--help"])
+
+    out = capsys.readouterr()
+    help_text = out.out + out.err
+    assert rc == 0
+    assert "--tool <string>" in help_text
+    assert "optional" in help_text
+
+    spec = next(s for s in mcp_tool_specs() if s["name"] == "tool.schema")
+    schema = spec["input_schema"]
+    assert schema["required"] == []
+    assert schema["properties"]["tool"]["type"] == "string"
+
+
 def test_unknown_cli_command_error_has_next_actions(capsys):
     rc = cli_main(["decision", "nope"])
 
