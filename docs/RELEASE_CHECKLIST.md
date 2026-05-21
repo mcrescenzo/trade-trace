@@ -82,14 +82,19 @@ python -m venv /tmp/rc-smoke
 ```
 
 Scan refs intended for publication for leftover private/raw
-Beads/audit artifacts, personal info, or secret-shaped strings (see
+Beads/audit/review artifacts, personal info, or secret-shaped strings (see
 trade-trace-piav, trade-trace-ox5c):
 
 ```bash
-git ls-files | grep -E '^(\.beads/|audits/)'  # must be empty
-git ls-files | grep -E '^docs/audits/'         # intentionally non-empty:
-                                                # curated repo-public audit docs
+git ls-files | grep -E '^(\.beads/|audits/|docs/audits/|docs/reviews/)'  # must be empty
+git ls-files docs/audits docs/reviews                                      # must be empty
 ```
+
+Generated audit/review run directories are internal artifacts and must
+not be tracked in public HEAD. Release evidence intended for the public
+repo must be concise, curated proof/summary documentation such as this
+checklist and release proof docs, not raw run exports, candidate
+matrices, coverage ledgers, mutation logs, or Beads readbacks.
 
 Do not treat dated pytest counts in older release proof documents as
 current proof. Rerun `pytest -q` for the current HEAD and record the

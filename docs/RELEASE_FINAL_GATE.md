@@ -11,17 +11,18 @@ Every **material** child bead under the
 
 | Child bead | Status | Artifact |
 |------------|--------|----------|
-| trade-trace-piav | closed | HEAD scrub policy: `.beads/` and root `audits/` stay excluded; curated release-audit evidence under `docs/audits/` is intentionally tracked and repo-public. |
+| trade-trace-piav | closed | HEAD scrub policy: `.beads/`, root `audits/`, generated `docs/audits/`, and generated `docs/reviews/` stay excluded from public HEAD; release evidence is limited to curated summary/proof docs. |
 | trade-trace-ox5c | closed | `docs/RELEASE_HISTORY_REWRITE.md` — executable plan for the history rewrite + remote force-push. |
 | trade-trace-a468 | closed | `docs/RELEASE_PROOF.md` — full ruff / mypy / pytest / build / twine / fresh-install proof. |
 
 Owner decisions recorded under the bead are reflected in
 shipped surfaces:
 
-- **Beads/private or raw audit artifacts not public** → `.beads/`
-  and root `audits/` remain excluded from HEAD; .gitignore prevents
-  accidental re-tracking. Curated audit evidence under `docs/audits/`
-  is intentionally tracked as repo-public documentation.
+- **Beads/private or raw audit/review artifacts not public** → `.beads/`,
+  root `audits/`, generated `docs/audits/`, and generated `docs/reviews/`
+  remain excluded from HEAD; .gitignore prevents accidental re-tracking.
+  Public release evidence is limited to concise curated summary/proof docs,
+  not raw run directories.
 - **MCP required, not optional** → `pyproject.toml` lists
   `mcp>=1.0` under `dependencies` (the `[mcp]` extra is an
   empty back-compat alias).
@@ -55,8 +56,8 @@ entry point, optional extras, or browser/visual review are current.
 | Fresh-venv `pip install dist/*.whl` | works |
 | Fresh-venv `tt --help`, `trade-trace-mcp --help` | both render |
 | Fresh-venv `pip check` | No broken requirements found |
-| `git ls-files \| grep -E '^(\.beads/\|audits/)'` | empty — private/raw artifact roots absent from tracked HEAD |
-| `git ls-files \| grep -E '^docs/audits/'` | non-empty by policy — curated audit evidence is intentionally tracked/repo-public |
+| `git ls-files \| grep -E '^(\.beads/\|audits/\|docs/audits/\|docs/reviews/)'` | empty — private/raw artifact roots absent from tracked HEAD |
+| `git ls-files docs/audits docs/reviews` | empty — generated audit/review run directories are internal and ignored |
 | `git grep -l <owner-email>` against tracked HEAD | empty |
 | `git grep -l '/home/hermes'` against tracked HEAD | empty |
 | Wheel surface scan | only `trade_trace/storage/edge_audit.py` matches `audit` (intentional — it's the audit-policy module, not an audit export) |
@@ -69,9 +70,8 @@ time:
 
 1. **Execute the history rewrite** per
    `docs/RELEASE_HISTORY_REWRITE.md`. Required to scrub
-   owner email/name and audit artifacts from *prior* commits;
-   private/raw artifact roots are already clean at HEAD; curated
-   `docs/audits/` evidence is intentionally repo-public.
+   owner email/name and audit/review artifacts from *prior* commits;
+   private/raw artifact roots are already clean at HEAD.
 2. **Force-push** the rewritten history to `origin/main`.
 3. **Tag the release** (`git tag v0.0.1rc3 && git push --tags`).
 4. **Upload to PyPI** (via `twine upload` or the OIDC GitHub
@@ -97,8 +97,7 @@ This document records each of those criteria's status:
 - ✅ Release proof snapshot in `docs/RELEASE_PROOF.md` and the table
   above is historical evidence; rerun the checklist for current proof.
 - ✅ Tracked-HEAD scan clean for private/raw roots (`.beads/`, root
-  `audits/`); tracked `docs/audits/` entries are intentional
-  repo-public audit evidence.
+  `audits/`, generated `docs/audits/`, generated `docs/reviews/`).
 - ⏳ Full-history scan blocked on operator-approved rewrite.
 - ✅ "No publish/force-push happens without explicit final
   approval" — the injunction is the policy; this gate honors

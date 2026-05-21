@@ -8,13 +8,14 @@
 *.db
 .beads-credential-key
 
-# Audit run artifacts. Per trade-trace-piav, generated audit
-# exports (mutation logs, coverage ledgers, readback dumps,
-# candidate matrices) are internal review artifacts that must
+# Audit/review run artifacts. Per trade-trace-piav and trade-trace-jr9b,
+# generated audit/review exports (mutation logs, coverage ledgers,
+# readback dumps, candidate matrices) are internal artifacts that must
 # never enter the public repo; they carry personal email/name
 # metadata and local absolute paths by construction.
 audits/
 docs/audits/
+docs/reviews/
 
 # Python package artifacts
 __pycache__/

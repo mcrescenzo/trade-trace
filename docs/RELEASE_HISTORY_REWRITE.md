@@ -11,7 +11,8 @@
 ## Why we need to rewrite history
 
 `trade-trace-piav` removed tracked `.beads/`, `audits/`, and
-`docs/audits/` artifacts from HEAD. The files are still
+`docs/audits/` artifacts from HEAD; `trade-trace-jr9b` also removes
+generated `docs/reviews/` artifacts from public HEAD. The files are still
 reachable from prior commits — anyone who clones the repo can
 see them via `git log -p` or `git show <old-sha>`. For a public
 PyPI-targeted repo, the old commits must be unreachable so:
@@ -68,6 +69,7 @@ git filter-repo \
   --path .beads \
   --path audits \
   --path docs/audits \
+  --path docs/reviews \
   --invert-paths \
   --refs refs/heads/main
 
@@ -101,7 +103,7 @@ cd /tmp/trade-trace-rewrite.git
 
 # 1. No tracked beads/audit files at any point in history.
 git log --all --diff-filter=A --name-only \
-  -- '.beads/' 'audits/' 'docs/audits/' \
+  -- '.beads/' 'audits/' 'docs/audits/' 'docs/reviews/' \
   | sort -u
 # Expect: empty output.
 
@@ -169,14 +171,14 @@ git clone https://github.com/mcrescenzo/trade-trace.git trade-trace-postrewrite
 # 5. Re-run the post-rewrite scans against the clone.
 cd trade-trace-postrewrite
 git log --all --diff-filter=A --name-only \
-  -- '.beads/' 'audits/' 'docs/audits/' | sort -u
+  -- '.beads/' 'audits/' 'docs/audits/' 'docs/reviews/' | sort -u
 git grep -E "OWNER_EMAIL" $(git rev-list --all)
 ```
 
 ## Decision points the owner must approve
 
 - [ ] Approve the `--path` exclusion set (`.beads`, `audits`,
-      `docs/audits`).
+      `docs/audits`, `docs/reviews`).
 - [ ] Approve the replacement map (email, name, absolute paths).
 - [ ] Approve the author/committer mailmap substitution.
 - [ ] Approve the remote force-push to `origin` after the local
