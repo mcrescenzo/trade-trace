@@ -208,11 +208,11 @@ def _walk_related(conn: sqlite3.Connection, seeds: dict[str, str], *, limit: int
             ("forecasts", "forecast"),
             ("decisions", "decision"),
         ):
-            values = sorted(ids[kind])
-            if not values:
+            seed_values = sorted(ids[kind])
+            if not seed_values:
                 continue
-            marks = ",".join("?" for _ in values)
-            for (metadata_json,) in conn.execute(f"SELECT metadata_json FROM {table} WHERE id IN ({marks})", values):
+            marks = ",".join("?" for _ in seed_values)
+            for (metadata_json,) in conn.execute(f"SELECT metadata_json FROM {table} WHERE id IN ({marks})", seed_values):
                 refs = _idea_capture_refs_from_metadata(_json(metadata_json))
                 for source_id in refs["source"]:
                     changed |= _add(ids, "source", source_id)

@@ -46,6 +46,9 @@ dependencies = [
     # `[mcp]` extra below is preserved as an empty alias so existing
     # install recipes (`pip install trade-trace[mcp]`) keep working.
     "mcp>=1.0",
+    # Imported directly by the stdio MCP boundary for JSON Schema validation;
+    # keep it explicit rather than relying on the MCP SDK's transitive dep.
+    "jsonschema>=4.0",
 ]
 
 [project.optional-dependencies]
@@ -71,6 +74,7 @@ dev = [
     "pytest>=8",
     "ruff>=0.5",
     "mypy>=1.10",
+    "types-jsonschema>=4.0",
     "build>=1.0",
     "twine>=6",
 ]

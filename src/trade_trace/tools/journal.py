@@ -37,7 +37,6 @@ from trade_trace.storage.paths import db_path
 from trade_trace.tools.errors import ToolError
 from trade_trace.version import CONTRACT_VERSION, __version__
 
-
 _TOOL_SCHEMA_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
