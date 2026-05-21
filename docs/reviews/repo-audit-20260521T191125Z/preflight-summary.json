@@ -1,0 +1,13 @@
+{
+  "audit_run_id": "repo-audit-20260521T191125Z",
+  "repo": "/home/hermes/code/trade-trace",
+  "branch": "main",
+  "baseline_commit": "dbad4df65409d1e80bd64f23f0b0083916604332",
+  "current_commit_when_persisted": "e88b8c63bebfe01db302d2bd47668994441e28e1",
+  "scope_fingerprint": "081634a7ad5d9871",
+  "tracked_files": 402,
+  "status_short": "## main...origin/main [ahead 6]\n?? docs/reviews/repo-audit-20260521T191125Z/\n",
+  "beads_epic": "trade-trace-4ju9",
+  "materialization_posture": "exhaustive-backlog",
+  "mode": "refresh-existing"
+}
