@@ -106,6 +106,87 @@ def test_partial_market_journal_returns_missing_steps_ids_and_next_calls(home):
     }
 
 
+def test_journal_bundle_status_recovers_idea_capture_provenance_from_downstream_decision_metadata(home):
+    capture = _mcp(home, "idea.capture", {
+        "thought": "Promote this draft into a normal market journal arc.",
+        "title": "Decision provenance draft",
+        "captured_at": "2026-05-20T15:00:00Z",
+        "idempotency_key": "00000000-0000-4000-8000-5px100000001",
+    })
+    assert isinstance(capture, SuccessEnvelope)
+    venue = _mcp(home, "venue.add", {
+        "name": "Manual PM downstream",
+        "kind": "prediction_market",
+        "idempotency_key": "00000000-0000-4000-8000-5px100000002",
+    })
+    assert isinstance(venue, SuccessEnvelope)
+    instrument = _mcp(home, "instrument.add", {
+        "venue_id": venue.data["id"],
+        "title": "Decision provenance market",
+        "asset_class": "prediction_market",
+        "idempotency_key": "00000000-0000-4000-8000-5px100000003",
+    })
+    assert isinstance(instrument, SuccessEnvelope)
+    snapshot = _mcp(home, "snapshot.add", {
+        "instrument_id": instrument.data["id"],
+        "captured_at": "2026-05-20T15:05:00Z",
+        "idempotency_key": "00000000-0000-4000-8000-5px100000004",
+    })
+    assert isinstance(snapshot, SuccessEnvelope)
+    thesis = _mcp(home, "thesis.add", {
+        "instrument_id": instrument.data["id"],
+        "side": "yes",
+        "body": "Promoted thesis.",
+        "idempotency_key": "00000000-0000-4000-8000-5px100000005",
+    })
+    assert isinstance(thesis, SuccessEnvelope)
+    forecast = _mcp(home, "forecast.add", {
+        "thesis_id": thesis.data["id"],
+        "kind": "binary",
+        "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.55},
+            {"outcome_label": "no", "probability": 0.45},
+        ],
+        "idempotency_key": "00000000-0000-4000-8000-5px100000006",
+    })
+    assert isinstance(forecast, SuccessEnvelope)
+    decision = _mcp(home, "decision.add", {
+        "type": "skip",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "forecast_id": forecast.data["id"],
+        "snapshot_id": snapshot.data["id"],
+        "reason": "Regression test only; no advice.",
+        "metadata_json": {
+            "idea_capture_provenance": {
+                "source_id": capture.data["source_id"],
+                "memory_node_id": capture.data["memory_node_id"],
+            },
+        },
+        "idempotency_key": "00000000-0000-4000-8000-5px100000007",
+    })
+    assert isinstance(decision, SuccessEnvelope)
+
+    status = _mcp(home, "journal.bundle.status", {"decision_id": decision.data["id"]})
+
+    assert isinstance(status, SuccessEnvelope)
+    data = status.data
+    assert capture.data["source_id"] in data["relevant_ids"]["source"]
+    assert capture.data["memory_node_id"] in data["relevant_ids"]["memory_node"]
+    records = data["idea_capture_provenance"]["records"]
+    assert data["idea_capture_provenance"]["present"] is True
+    assert {record["kind"]: record for record in records} == {
+        "source": {"kind": "source", "id": capture.data["source_id"], "draft_state": "needs_enrichment"},
+        "memory_node": {"kind": "memory_node", "id": capture.data["memory_node_id"], "draft_state": "needs_enrichment"},
+    }
+    assert data["no_advice_boundary"] == {
+        "external_fetch_performed": False,
+        "trade_execution_performed": False,
+        "advice_generated": False,
+    }
+
+
 def test_journal_bundle_status_missing_home_does_not_create_directory(tmp_path: Path):
     missing_home = tmp_path / "never-created"
 

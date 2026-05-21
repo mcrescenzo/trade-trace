@@ -99,7 +99,25 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         description="Optional ReportFilter plus top-level playbook_id/strategy_id scoping.",
     ),
-    "report.source_quality": _schema({"stale_threshold_days": {"type": "integer", "minimum": 0}}),
+    "report.source_quality": _schema(
+        {
+            "stale_threshold_days": {
+                "type": "integer",
+                "minimum": 0,
+                "description": (
+                    "Age threshold in days for stale_sources. The diagnostic "
+                    "compares sources.freshness_at to the linked decision.created_at; "
+                    "sources without freshness_at are skipped, and retrieved_at is "
+                    "not used as a fallback."
+                ),
+            }
+        },
+        description=(
+            "Global source provenance hygiene report. stale_sources is driven by "
+            "sources.freshness_at (evidence-current time) versus decision.created_at; "
+            "retrieved_at is retrieval/provenance time only and does not trigger stale diagnostics."
+        ),
+    ),
     "report.calibration_integrity": _EMPTY_SCHEMA,
     "report.unscored_forecasts": _schema({"filter": _FILTER_PROP}),
     "report.decision_velocity": _schema(

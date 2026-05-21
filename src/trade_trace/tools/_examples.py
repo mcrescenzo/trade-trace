@@ -176,6 +176,7 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "uri": "https://example.com/article",
             "title": "AI demand drives chip sales",
             "freshness_at": "2026-05-20T14:00:00Z",
+            "retrieved_at": "2026-05-20T14:05:00Z",
             "summary": "Cites three independent supply-chain sources.",
             "redaction_status": "none",
             "idempotency_key": _IDEM,

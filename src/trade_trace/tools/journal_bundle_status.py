@@ -33,6 +33,24 @@ _RECORD_ID_KEYS = {
     "decision": "decisions",
 }
 
+_IDEA_SOURCE_METADATA_KEYS = {
+    "idea_capture_source_id",
+    "idea_source_id",
+    "source_id",
+    "raw_source_id",
+}
+_IDEA_MEMORY_METADATA_KEYS = {
+    "idea_capture_memory_node_id",
+    "idea_memory_node_id",
+    "memory_node_id",
+    "draft_memory_node_id",
+}
+_IDEA_PROVENANCE_CONTAINER_KEYS = {
+    "idea_capture",
+    "idea_capture_provenance",
+    "provenance",
+}
+
 
 class JournalBundleStatusInput(BaseModel):
     """Input contract for journal.bundle.status."""
@@ -180,6 +198,26 @@ def _walk_related(conn: sqlite3.Connection, seeds: dict[str, str], *, limit: int
             for table, kind in (("snapshots", "snapshot"), ("theses", "thesis"), ("decisions", "decision")):
                 for r in conn.execute(f"SELECT id FROM {table} WHERE instrument_id = ? ORDER BY created_at, id LIMIT ?", (instr_id, limit)):
                     changed |= _add(ids, kind, r[0])
+        # Downstream promoted rows may carry idea.capture source/memory ids in
+        # metadata instead of explicit source edges. Pull those ids forward so
+        # provenance is visible even when status starts from a decision/forecast.
+        for table, kind in (
+            ("instruments", "instrument"),
+            ("snapshots", "snapshot"),
+            ("theses", "thesis"),
+            ("forecasts", "forecast"),
+            ("decisions", "decision"),
+        ):
+            values = sorted(ids[kind])
+            if not values:
+                continue
+            marks = ",".join("?" for _ in values)
+            for (metadata_json,) in conn.execute(f"SELECT metadata_json FROM {table} WHERE id IN ({marks})", values):
+                refs = _idea_capture_refs_from_metadata(_json(metadata_json))
+                for source_id in refs["source"]:
+                    changed |= _add(ids, "source", source_id)
+                for memory_node_id in refs["memory_node"]:
+                    changed |= _add(ids, "memory_node", memory_node_id)
         # Promotion metadata from idea.capture often carries source/memory ids
         # before explicit edges are attached to promoted rows.
         for ref_id in sorted(ids["source"] | ids["memory_node"]):
@@ -229,7 +267,7 @@ def _load_rows(conn: sqlite3.Connection, ids: dict[str, set[str]]) -> dict[str, 
         "snapshot": ("snapshots", ["id", "instrument_id", "captured_at", "price", "bid", "ask", "mid", "implied_probability", "source", "source_url", "metadata_json", "created_at"]),
         "thesis": ("theses", ["id", "instrument_id", "side", "body", "confidence_label", "time_horizon_at", "strategy_id", "metadata_json", "created_at"]),
         "forecast": ("forecasts", ["id", "thesis_id", "kind", "yes_label", "resolution_at", "scoring_state", "scoring_support", "metadata_json", "created_at"]),
-        "decision": ("decisions", ["id", "instrument_id", "thesis_id", "forecast_id", "snapshot_id", "type", "reason", "review_by", "playbook_version_id", "created_at"]),
+        "decision": ("decisions", ["id", "instrument_id", "thesis_id", "forecast_id", "snapshot_id", "type", "reason", "review_by", "playbook_version_id", "metadata_json", "created_at"]),
         "source": ("sources", ["id", "kind", "title", "ref", "uri", "freshness_at", "captured_at", "metadata_json", "created_at"]),
         "memory_node": ("memory_nodes", ["id", "node_type", "title", "meta_json", "created_at"]),
     }
@@ -336,6 +374,34 @@ def _idea_capture_provenance(rows: dict[str, list[dict[str, Any]]]) -> dict[str,
             if meta.get("trade_trace_flow") == "idea.capture":
                 found.append({"kind": kind, "id": row["id"], "draft_state": str(meta.get("draft_state") or "")})
     return {"present": bool(found), "records": found}
+
+
+def _idea_capture_refs_from_metadata(meta: dict[str, Any]) -> dict[str, set[str]]:
+    refs: dict[str, set[str]] = {"source": set(), "memory_node": set()}
+
+    def visit(value: Any, *, in_provenance: bool = False) -> None:
+        if not isinstance(value, dict):
+            return
+        for key, raw in value.items():
+            nested = in_provenance or key in _IDEA_PROVENANCE_CONTAINER_KEYS
+            if key in _IDEA_SOURCE_METADATA_KEYS:
+                _add_ref_values(refs["source"], raw)
+            elif key in _IDEA_MEMORY_METADATA_KEYS:
+                _add_ref_values(refs["memory_node"], raw)
+            if nested and isinstance(raw, dict):
+                visit(raw, in_provenance=True)
+
+    visit(meta)
+    return refs
+
+
+def _add_ref_values(target: set[str], raw: Any) -> None:
+    if isinstance(raw, str) and raw:
+        target.add(raw)
+    elif isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, str) and item:
+                target.add(item)
 
 
 def _json(value: Any) -> dict[str, Any]:

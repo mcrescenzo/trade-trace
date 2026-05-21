@@ -348,7 +348,9 @@ Five provenance hygiene diagnostics over the source-attachment graph:
    `type='actual_enter'` whose linked thesis has zero attached sources.
 2. `stale_sources` — sources whose `freshness_at` predates the linked
    decision's `created_at` by more than `stale_threshold_days` (default
-   7).
+   7). The live diagnostic only considers rows where `sources.freshness_at`
+   is set; `sources.retrieved_at` is retrieval/provenance time and is not a
+   fallback for evidence freshness.
 3. `contradictory_sources` — theses with both `supports` and
    `contradicts` edges from sources of the same `kind`.
 4. `duplicated_sources` — source rows with the same `content_hash`

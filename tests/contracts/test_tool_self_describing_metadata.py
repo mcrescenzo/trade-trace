@@ -73,6 +73,43 @@ def test_tool_schema_self_contract_is_advertised_in_cli_and_mcp(capsys):
     assert schema["properties"]["tool"]["type"] == "string"
 
 
+def test_source_freshness_help_and_mcp_schema_are_self_describing(capsys):
+    rc = cli_main(["source", "add", "--help"])
+
+    out = capsys.readouterr()
+    help_text = out.out + out.err
+    assert rc == 0
+    assert "--freshness-at <string>" in help_text
+    assert "stale_sources uses this field" in help_text
+    assert "--retrieved-at <string>" in help_text
+    assert "does not drive report.source_quality stale_sources" in help_text
+
+    spec = next(s for s in mcp_tool_specs() if s["name"] == "source.add")
+    props = spec["input_schema"]["properties"]
+    assert "stale_sources uses this field" in props["freshness_at"]["description"]
+    assert "does not drive report.source_quality stale_sources" in props["retrieved_at"]["description"]
+
+
+def test_report_source_quality_help_and_mcp_schema_explain_stale_basis(capsys):
+    rc = cli_main(["report", "source_quality", "--help"])
+
+    out = capsys.readouterr()
+    help_text = out.out + out.err
+    assert rc == 0
+    assert "sources.freshness_at" in help_text
+    assert "retrieved_at" in help_text
+    assert "not used as a fallback" in help_text
+
+    spec = next(s for s in mcp_tool_specs() if s["name"] == "report.source_quality")
+    combined = (
+        spec["description"]
+        + " "
+        + spec["input_schema"]["properties"]["stale_threshold_days"]["description"]
+    )
+    assert "sources.freshness_at" in combined
+    assert "retrieved_at" in combined
+
+
 def test_unknown_cli_command_error_has_next_actions(capsys):
     rc = cli_main(["decision", "nope"])
 

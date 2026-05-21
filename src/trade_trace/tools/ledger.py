@@ -1977,7 +1977,14 @@ _SOURCE_ADD_SCHEMA: dict[str, Any] = {
         "title": {"type": "string"},
         "note": {"type": "string"},
         "ref": {"type": "string"},
-        "freshness_at": {"type": "string"},
+        "freshness_at": {
+            "type": "string",
+            "description": (
+                "ISO-8601 timestamp for when the evidence itself was current. "
+                "report.source_quality stale_sources uses this field versus "
+                "decision.created_at; set it when you want stale-evidence checks."
+            ),
+        },
         "content_hash": {"type": "string"},
         "captured_at": {"type": "string"},
         "media_type": {"type": "string"},
@@ -1985,7 +1992,14 @@ _SOURCE_ADD_SCHEMA: dict[str, Any] = {
             "type": "string",
             "enum": ["url", "local_path", "inline_text", "external_ref"],
         },
-        "retrieved_at": {"type": "string"},
+        "retrieved_at": {
+            "type": "string",
+            "description": (
+                "ISO-8601 timestamp for when this source was fetched/recorded as "
+                "provenance. It does not drive report.source_quality stale_sources; "
+                "use freshness_at for evidence freshness."
+            ),
+        },
         "source_author": {"type": "string"},
         "publisher": {"type": "string"},
         "excerpt": {"type": "string"},
@@ -2001,7 +2015,10 @@ _SOURCE_ADD_SCHEMA: dict[str, Any] = {
         "source.add — kind and stance use storage-pinned enums "
         "(persistence.md §5.2 / migration 003). Free-text fields "
         "(title/note/excerpt/extracted_text/summary) are scanned at "
-        "write time for sensitive-shaped substrings per trade-trace-sy1."
+        "write time for sensitive-shaped substrings per trade-trace-sy1. "
+        "freshness_at is the evidence-current timestamp used by "
+        "report.source_quality stale_sources; retrieved_at is retrieval/provenance "
+        "time only."
     ),
 }
 

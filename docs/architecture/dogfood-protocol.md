@@ -214,7 +214,7 @@ The dogfood fixture must contain at least:
 | Sources with `redaction_status="none"` | ≥3 | Normal attached evidence. |
 | Sources with `redaction_status="redacted"` | ≥1 | Tests body-omission path in `review.bundle`. |
 | Sources with `redaction_status="sensitive"` | ≥1 | Tests unconditional-exclusion path. |
-| Stale source | ≥1 | `sources.freshness_at` ≥ 30 days before the decision that cites it; tests `source.source_freshness_before_decision` filter. |
+| Stale source | ≥1 | Set `sources.freshness_at` ≥ 30 days before the decision that cites it; `retrieved_at` may record when the fixture fetched/recorded the source but does not drive stale-source diagnostics. Tests `source.source_freshness_before_decision` filter. |
 | Contradictory source pair | ≥1 | Two sources attached to the same decision/forecast with opposite `stance` (one `supports`, one `contradicts`); supports Scenario B (§3.2). |
 | Late-recorded forecast | ≥1 | Exercises §2.2 / §2.3 default-exclusion in `report.calibration`. |
 | Ambiguous-resolution scenarios A/B/C | 1 each | Per §3 above. |
