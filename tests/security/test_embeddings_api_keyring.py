@@ -64,6 +64,57 @@ def test_embeddings_api_keyring_round_trip_store_load_delete(monkeypatch):
     tt_keyring.delete_api_key(SERVICE)
     assert tt_keyring.load_api_key(SERVICE) is None
 
+    # Absent deletes are idempotent for callers.
+    tt_keyring.delete_api_key(SERVICE)
+    assert tt_keyring.load_api_key(SERVICE) is None
+
+
+def test_keyring_revoke_tool_previews_and_deletes_stored_embeddings_key(monkeypatch, tmp_path):
+    fake = _install_fake_keyring(monkeypatch)
+    home = tmp_path / "home"
+    _init_home(home)
+    fake.set_password(SERVICE, "api_key", KNOWN_SECRET)
+
+    preview = mcp_call("keyring.revoke", {"home": str(home)})
+    assert preview.ok, preview
+    assert preview.data == {
+        "preview_only": True,
+        "would_revoke": {"provider": "api:openai", "credential_storage": "os_keyring"},
+    }
+    assert preview.meta.preview_only is True
+    assert fake.get_password(SERVICE, "api_key") == KNOWN_SECRET
+
+    revoked = mcp_call("keyring.revoke", {"home": str(home), "_confirm": True})
+    assert revoked.ok, revoked
+    assert revoked.data == {
+        "preview_only": False,
+        "provider": "api:openai",
+        "credential_storage": "os_keyring",
+        "revoked": True,
+    }
+    assert fake.get_password(SERVICE, "api_key") is None
+
+
+def test_keyring_revoke_tool_confirm_is_idempotent_when_absent(monkeypatch, tmp_path):
+    fake = _install_fake_keyring(monkeypatch)
+    home = tmp_path / "home"
+    _init_home(home)
+
+    env = mcp_call("keyring.revoke", {"home": str(home), "_confirm": True})
+    assert env.ok, env
+    assert env.data["revoked"] is True
+    assert fake.get_password(SERVICE, "api_key") is None
+
+
+def test_keyring_revoke_tool_schema_is_narrow_and_secret_free():
+    env = mcp_call("tool.schema", {"tool": "keyring.revoke"})
+    assert env.ok, env
+    schema = env.data["json_schema"]
+    assert schema is not None
+    assert "api_key" not in json.dumps(env.model_dump(mode="json"), sort_keys=True)
+    assert set(schema.get("properties", {})) >= {"_confirm", "idempotency_key"}
+    assert "service" not in schema.get("properties", {})
+
 
 def test_embeddings_api_keyring_rejects_insecure_plaintext_backend(monkeypatch):
     secret = "s" + "k" + "-" + "insecurebackendsecret0001"

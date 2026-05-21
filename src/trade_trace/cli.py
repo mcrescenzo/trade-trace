@@ -170,6 +170,12 @@ def _schema_arg_lines(tool_name: str, registry: ToolRegistry) -> list[str]:
     required = set(schema.get("required") or [])
     lines: list[str] = []
     for name in sorted(properties, key=lambda n: (n not in required, n)):
+        # Underscore-prefixed fields are transport/control inputs injected by
+        # global CLI options (for example `_confirm` from `--confirm`). They are
+        # not user-facing schema flags; rendering them would produce confusing
+        # triple-dash spellings such as `---confirm` in command help.
+        if name.startswith("_"):
+            continue
         prop = properties.get(name) or {}
         flag = "--" + name.replace("_", "-")
         kind = prop.get("type") or "value"
@@ -312,8 +318,9 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
         action="store_true",
         help=(
             "required by mutating admin tools (journal.restore, "
-            "journal.backup, journal.repair, journal.config_set) — without "
-            "it the tool returns meta.preview_only=true (bead trade-trace-2z7)"
+            "journal.backup, journal.repair, journal.config_set, "
+            "keyring.revoke) — without it the tool returns "
+            "meta.preview_only=true (bead trade-trace-2z7)"
         ),
     )
 

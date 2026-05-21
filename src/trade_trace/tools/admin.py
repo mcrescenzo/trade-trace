@@ -17,6 +17,7 @@ Embeddings admin paths:
   - model.import      (opt-in local model staging/download path; 89x)
   - model.warm        (lazy warm of the local embedder; 89x)
   - memory.reindex    (re-embed all nodes when provider changes; 89x)
+  - keyring.revoke    (revoke stored OpenAI embeddings credential)
 
 Tools that mutate state respect the `--confirm` (CLI) / `_confirm: true`
 (MCP) flag per the operability contract: without it they return
@@ -822,6 +823,37 @@ def _memory_reindex(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         conn.close()
 
 
+def _keyring_revoke(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """Revoke the stored OpenAI embeddings credential from the OS keyring.
+
+    This is intentionally narrow: Trade Trace currently has exactly one
+    shipped keyring-backed credential lifecycle, configured by
+    ``journal.config_set key=embeddings.provider value=api:openai``. Do not
+    accept arbitrary service names here; broad credential management belongs in
+    a separate design.
+    """
+
+    if not _confirm_requested(args):
+        _set_preview_meta(ctx)
+        return {
+            "preview_only": True,
+            "would_revoke": {
+                "provider": "api:openai",
+                "credential_storage": "os_keyring",
+            },
+        }
+
+    from trade_trace.security.keyring import delete_api_key
+
+    delete_api_key(OPENAI_EMBEDDINGS_KEYRING_SERVICE)
+    return {
+        "preview_only": False,
+        "provider": "api:openai",
+        "credential_storage": "os_keyring",
+        "revoked": True,
+    }
+
+
 def register_admin_tools(registry: ToolRegistry) -> None:
     from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 
@@ -918,5 +950,17 @@ def register_admin_tools(registry: ToolRegistry) -> None:
             "cost estimate. api:openai requires only keyring presence and "
             "uses the deterministic local substrate; no OpenAI network call "
             "is implemented here."
+        ),
+    )
+    registry.register(
+        "keyring.revoke",
+        _keyring_revoke,
+        is_write=True,
+        **_examples_for("keyring.revoke"),
+        description=(
+            "Revoke the stored OpenAI embeddings credential from the validated "
+            "secure OS keyring. Requires --confirm; without it returns "
+            "meta.preview_only=true. This narrow admin path is idempotent and "
+            "does not accept or return secret material."
         ),
     )

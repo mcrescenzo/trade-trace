@@ -31,6 +31,7 @@ ADMIN_TOOLS = [
     "model.import",
     "model.warm",
     "memory.reindex",
+    "keyring.revoke",
 ]
 
 

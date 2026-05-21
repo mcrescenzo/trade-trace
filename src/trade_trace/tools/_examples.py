@@ -419,6 +419,12 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "idempotency_key": _IDEM,
         },
     },
+    "keyring.revoke": {
+        "minimal": {
+            "_confirm": True,
+            "idempotency_key": _IDEM,
+        },
+    },
     "model.import": {
         "minimal": {
             "src": "/tmp/models/bge-small-en-v1.5",
