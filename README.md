@@ -165,6 +165,9 @@ how to report vulnerabilities via GitHub Security Advisories.
 - [`docs/PRD.md`](./docs/PRD.md) — working PRD and MVP scope.
 - [`docs/architecture/contracts.md`](./docs/architecture/contracts.md)
   — CLI/MCP envelope and error codes.
+- [`docs/architecture/market-scan-contract.md`](./docs/architecture/market-scan-contract.md)
+  — design contract for guided, venue-agnostic market-scan dry-run/promote
+  journal bundles over caller-supplied data.
 - [`docs/architecture/persistence.md`](./docs/architecture/persistence.md)
   — events, outbox, idempotency.
 - [`docs/architecture/memory-layer.md`](./docs/architecture/memory-layer.md)
