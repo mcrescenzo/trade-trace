@@ -2,7 +2,6 @@
 
 > Status: **shipped**. JSONL `import.validate` / `import.commit` and CSV `import.csv_fills` are live; the contract on this page matches the current registry envelope shape.
 
-Status: implementation-era semantics. Date: 2026-05-19.
 
 **Implementation status:** `import.validate` and `import.commit` are real
 JSONL replay tools. Validation parses files or directories, checks line

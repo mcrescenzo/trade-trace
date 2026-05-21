@@ -2,7 +2,6 @@
 
 > Status: **partial — see §3 for the shipped subset**. Migration 004 ships the nullable column stubs; the full P1 R-multiple analytic surface in §4+ is design.
 
-Status: P1 design draft. Date: 2026-05-18.
 
 Companion docs: [PRD.md](../PRD.md), [scoring.md](scoring.md),
 [reports.md](reports.md), [opportunity-analysis.md](opportunity-analysis.md).

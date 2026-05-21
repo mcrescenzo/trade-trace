@@ -23,7 +23,7 @@ MVP vertical slice:
 9. Token-budgeted recall of prior observations, reflections, and playbook rules in the next decision
 10. Source/evidence capture attached to theses, decisions, and forecasts
 
-Deferred or optional after the manual loop: JSONL/CSV import implementations (the write schemas are import-ready in MVP — see [`imports.md`](./architecture/imports.md)), multi-class/scalar scoring, trading-native edge/market reports (forecast-vs-market, calibration-by-liquidity-bucket, skipped-positive-edge review), exact ForecastBench submission compatibility, web viewer, sync, HTTP/SSE transport, and websockets. The agent-ready epic adds stdio MCP, tool-schema introspection, optional `sqlite-vec` embeddings/model import/API-provider/reindex surfaces, and the shipped report implementations documented in the README and tool registry.
+The post-MVP pre-release track has since landed stdio MCP, tool-schema introspection, optional `sqlite-vec` embeddings/model import/API-provider/reindex surfaces, JSONL/CSV import implementations, comparison/review-bundle/risk/opportunity reports, and the optional local read-only Console documented in the README and tool registry. Still deferred: multi-class/scalar scoring, broader trading-native edge/market reports (forecast-vs-market, calibration-by-liquidity-bucket, skipped-positive-edge review), exact ForecastBench submission compatibility, sync, HTTP/SSE transport, and websockets.
 
 Trade Trace does not fetch trading data, broker data, market prices, or outcomes from external services. The agent supplies all market data through the structured ingestion APIs. The one outbound-network path is the optional local embedding model download (off by default in MVP — see §2.4 and [`memory-layer.md`](./architecture/memory-layer.md) §8), which never carries trading data and is explicitly opt-in.
 
@@ -437,9 +437,9 @@ JSONL import is the canonical local-ingestion path. Each line is a `{tool, args}
 - `import.validate(file, *, max_errors?)` — dry-run path. Parses, validates, and reports `validated`, `would_create`, `would_replay`, `errors[]`, and `warnings[]` without writing.
 - `import.commit(file, *, halt_on_error?)` — write path. Wraps the JSONL stream in a single transaction by default (atomic import); per-row transactions opt-in via `transaction_mode='per_row'` for very large files where atomicity is impractical.
 
-CSV-fills import (P1) is documented in [`imports.md`](./architecture/imports.md) §3 and shares the validation/dry-run/idempotency contract.
+CSV-fills import is implemented and documented in [`imports.md`](./architecture/imports.md) §3. It shares the validation/dry-run/idempotency contract.
 
-The MVP commitment is the **import-ready write schema**: every core write tool in §4.0 is callable from the same JSONL handler the import tools use. The MVP does not require shipping `import.validate`/`import.commit` implementations; they may land in early P1. See [`imports.md`](./architecture/imports.md) for the full contract.
+The current pre-release implementation includes the import-ready write schema plus `import.validate`, `import.commit`, and `import.csv_fills`. See [`imports.md`](./architecture/imports.md) for the full contract and current shipped status.
 
 ## 5. Storage
 
@@ -510,24 +510,27 @@ The MVP commitment is the **import-ready write schema**: every core write tool i
 - Optional `strategy_id` filter on `report.playbook_adherence` and `playbook.adherence` per §4.3
 - Playbook version update with reflection provenance
 
-### P1
+### Shipped in the post-MVP pre-release track
 - JSONL import implementation (`import.validate`, `import.commit`) per [`imports.md`](./architecture/imports.md)
 - CSV-fills import (including optional `strategy_id` column) per [`imports.md`](./architecture/imports.md) §3
-- Risk-unit fields and `report.risk` per [`risk-units.md`](./architecture/risk-units.md)
-- Path-dependent analysis and `report.opportunity` per [`opportunity-analysis.md`](./architecture/opportunity-analysis.md)
+- Risk-unit fields and the shipped subset of `report.risk` per [`risk-units.md`](./architecture/risk-units.md)
+- Path-dependent analysis and the shipped subset of `report.opportunity` per [`opportunity-analysis.md`](./architecture/opportunity-analysis.md)
 - `report.compare` implementation (segmentation data is captured from M1)
-- `review.bundle` implementation (the contract ships in MVP per §4.2; the implementation is P1)
+- `review.bundle` implementation
+- `report.strategy_performance` — per-strategy P&L, calibration trend, mistake-tag frequency, playbook adherence summary
+- Optional **local read-only Console** (live local server under the `[console]` extra) — superseded the prior "static read-only inspection export/viewer" framing; see [`docs/CONSOLE.md`](./CONSOLE.md). Console is still local-only and never executes trades or fetches market data.
+- Guided market-scan dry-run/promote journal bundle flow per [`market-scan-contract.md`](./architecture/market-scan-contract.md)
+
+### P1
 - Multi-class/categorical scoring and ranked probability score
 - Scalar/distribution schema including `distribution_json`
-- Trading-native reports: forecast-vs-market edge, calibration-by-liquidity-bucket, skipped-positive-edge review
-- `report.strategy_performance` — per-strategy P&L, calibration trend, mistake-tag frequency, playbook adherence summary
+- Broader trading-native reports: forecast-vs-market edge, calibration-by-liquidity-bucket, skipped-positive-edge review
 - ForecastBench schema verification and compatible export if feasible
 - HTTP/SSE transport, re-embedding tools
 - Subscribe API on the event log
 
 ### P2
-- Optional sync/backup
-- Optional **local read-only Console** (live local server under the `[console]` extra) — superseded the prior "static read-only inspection export/viewer" framing; see [`docs/CONSOLE.md`](./CONSOLE.md). Console is still local-only and never executes trades or fetches market data.
+- Optional cross-device sync
 - Historical/replay hooks
 - Multi-agent concurrency improvements
 

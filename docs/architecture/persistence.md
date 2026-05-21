@@ -2,7 +2,6 @@
 
 > Status: **shipped**. Events / outbox / idempotency contracts as implemented today.
 
-Status: clean planning draft. Date: 2026-05-18.
 
 **Implementation status (M0-M4 MVP):** every contract here ships — events
 table + outbox + closed event-type enum (per bead trade-trace-0r1),

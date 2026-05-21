@@ -10,12 +10,13 @@ and `src/trade_trace/version.py`.
 - The package stays on `0.0.x` pre-releases until the owner approves
   a stable `0.0.1` cut. Each release is a `0.0.1rc<N>` (e.g.
   `0.0.1rc3`).
-- All three version surfaces must agree before tagging:
-  - `pyproject.toml` → `[project] version`
-  - `src/trade_trace/version.py` → `__version__`
-  - the git tag (stripped of its `v` prefix)
-- The publish workflow re-checks all three and aborts on mismatch.
-  See the `Verify tag matches package versions` step in
+- `pyproject.toml` uses dynamic versioning and reads the package
+  version from `src/trade_trace/version.py` (`__version__`). The
+  source version and the git tag (stripped of its `v` prefix) must
+  agree before tagging.
+- The publish workflow builds from that dynamic version source and
+  aborts if the tag does not match the package metadata. See the
+  `Verify tag matches package versions` step in
   [`workflow.yml`](../.github/workflows/workflow.yml).
 
 ## Pre-publish checks (run from a clean checkout)
@@ -55,7 +56,8 @@ snapshot evidence.
 
 ## Cut a release
 
-1. Bump version in `pyproject.toml` and `src/trade_trace/version.py`.
+1. Bump `src/trade_trace/version.py` (`__version__`). `pyproject.toml`
+   reads this dynamically; do not add a separate static project version.
 2. Commit on `main`. Open a PR; require maintainer approval.
 3. After merge, tag the merge commit: `git tag v0.0.1rc<N>` and push.
 4. GitHub Actions builds, verifies version triple, and publishes via

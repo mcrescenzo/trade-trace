@@ -2,7 +2,6 @@
 
 > Status: **partial — see §1–§3 for the shipped subset**. `report.opportunity` is live; the broader path-dependent process diagnostics described in §4+ are P1 design.
 
-Status: P1 design draft. Date: 2026-05-18.
 
 Companion docs: [PRD.md](../PRD.md), [reports.md](reports.md),
 [risk-units.md](risk-units.md), [scoring.md](scoring.md).

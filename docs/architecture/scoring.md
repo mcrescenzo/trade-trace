@@ -2,7 +2,6 @@
 
 > Status: **shipped**. Binary Brier scoring + the lifecycle/failure_reason enum match the live `outcome.add` → auto-score path.
 
-Status: clean planning draft. Date: 2026-05-18.
 
 **Implementation status (M0-M4 MVP + P1 scoring upgrade):** binary Brier + log-score + ECE
 (equal-width 0.1 bins) + sharpness + baseline (prevalence /

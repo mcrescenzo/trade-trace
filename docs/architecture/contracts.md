@@ -2,7 +2,6 @@
 
 > Status: **shipped**. Describes the CLI/MCP envelope and error codes that the live registry returns today.
 
-Status: clean planning draft. Date: 2026-05-18.
 
 **Implementation status (M0-M4 MVP):** every contract in this doc
 ships in MVP — envelope shape, meta surface, error-code enum,

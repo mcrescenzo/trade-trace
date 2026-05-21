@@ -2,7 +2,6 @@
 
 > Status: **shipped**. `ReportFilter` / `ReportResult` / drill-down / `review.bundle` describe the live report surface.
 
-Status: clean planning draft. Date: 2026-05-18.
 
 **Implementation status (M0-M4 MVP):** shipped: report.calibration,
 report.calibration_integrity, report.source_quality, report.mistakes,

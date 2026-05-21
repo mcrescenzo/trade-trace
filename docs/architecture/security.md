@@ -2,7 +2,6 @@
 
 > Status: **shipped**. Outbound-off-by-default, no-credentials, write-time secret scan, manifest-verified restore — all enforced by tests under `tests/security/`.
 
-Status: clean planning draft. Date: 2026-05-18.
 Source bead: trade-trace-4qf.
 
 Companion docs: [operability.md](operability.md),
