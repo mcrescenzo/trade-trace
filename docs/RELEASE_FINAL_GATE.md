@@ -100,6 +100,11 @@ This document records each of those criteria's status:
   approval" — the injunction is the policy; this gate honors
   it by not running those commands.
 
-The release is **shippable** the moment the operator runs the
-plan in `docs/RELEASE_HISTORY_REWRITE.md` and approves the
-publish workflow.
+This document is **not** current publish authority for any later
+HEAD by itself. After the operator runs the plan in
+`docs/RELEASE_HISTORY_REWRITE.md`, the exact commit that will be
+tagged/uploaded must first have a fresh `docs/RELEASE_CHECKLIST.md`
+rerun recorded against that candidate SHA. The release becomes
+shippable only when that candidate-specific proof records the exact
+SHA and the outcomes of the checklist commands, and the operator then
+approves the publish workflow for that same candidate.

@@ -96,6 +96,36 @@ def test_readonly_query_does_not_mutate_db_file(tmp_path: Path):
     assert before == after, "read-only handle modified the DB file"
 
 
+def test_readonly_uri_escapes_reserved_characters_in_db_path(tmp_path: Path):
+    from trade_trace.storage.database import open_database_readonly
+    from trade_trace.storage.paths import db_path
+
+    home = _seeded_home(tmp_path)
+    requested = tmp_path / "journal ? # space & = %.sqlite"
+
+    source = sqlite3.connect(str(db_path(home)))
+    try:
+        destination = sqlite3.connect(str(requested))
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+    finally:
+        source.close()
+
+    wrong_truncated_sibling = requested.with_name(requested.name.split("?", 1)[0])
+
+    db = open_database_readonly(requested)
+    try:
+        row = db.connection.execute("PRAGMA database_list").fetchone()
+    finally:
+        db.close()
+
+    assert row is not None
+    assert Path(row[2]).resolve() == requested.resolve()
+    assert not wrong_truncated_sibling.exists()
+
+
 def test_readonly_handle_pragma_query_only_is_on(tmp_path: Path):
     """Belt-and-suspenders: the URI flag is the strict guard but
     `query_only=1` makes the intent obvious to any tool that

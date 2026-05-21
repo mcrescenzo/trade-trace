@@ -13,6 +13,7 @@ an empty payload when the runtime supports defaults.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 from trade_trace.core import default_registry
@@ -171,7 +172,7 @@ def test_snapshot_add_schema_advertises_optional_market_state_fields():
 
 def test_snapshot_add_cli_help_lists_optional_market_state_flags():
     proc = subprocess.run(
-        [str(ROOT / ".venv/bin/tt"), "snapshot", "add", "--help"],
+        [sys.executable, "-m", "trade_trace.cli", "snapshot", "add", "--help"],
         cwd=ROOT,
         text=True,
         capture_output=True,

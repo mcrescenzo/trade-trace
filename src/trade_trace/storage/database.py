@@ -145,7 +145,7 @@ def open_database_readonly(path: Path) -> Database:
     # database". `check_same_thread=False` matches the writable
     # `open_database` helper so a FastAPI worker pool can share a
     # handle without re-opening per request.
-    uri = f"file:{path}?mode=ro"
+    uri = f"{path.resolve().as_uri()}?mode=ro"
     conn = sqlite3.connect(uri, uri=True, isolation_level=None, check_same_thread=False)
 
     # Belt-and-suspenders: pin `query_only` so any tool inspecting
