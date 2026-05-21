@@ -1,9 +1,8 @@
-"""Console pagination perf baseline (trade-trace-1kkv.14).
+"""Reporting pagination perf baseline.
 
 Seeds a 100k-row events table directly via SQL (the existing
 `fixture.seed` only carries the M0-eval profile), then asserts
-that one cursor-paginated page loads under the budget documented
-in `docs/architecture/console.md` §13. Opt-in via
+that one cursor-paginated page loads under the reporting budget. Opt-in via
 `TRADE_TRACE_RUN_PERF_TESTS=1` to keep PR signal fast; CI flips
 the env var on a dedicated perf job.
 """
@@ -62,7 +61,7 @@ def _seed_events(home: Path, count: int) -> None:
 
 
 def test_first_journal_page_under_budget(tmp_path: Path):
-    from trade_trace.console.pagination import paginate_query
+    from trade_trace.reporting.pagination import paginate_query
     from trade_trace.storage.database import open_database_readonly
 
     home = tmp_path / "perf"
@@ -96,7 +95,7 @@ def test_deep_cursor_does_not_degrade(tmp_path: Path):
     """Cursor pagination's selling point is constant-time pages.
     Verify the 100th page takes no longer than the first."""
 
-    from trade_trace.console.pagination import paginate_query
+    from trade_trace.reporting.pagination import paginate_query
     from trade_trace.storage.database import open_database_readonly
 
     home = tmp_path / "perf-deep"
@@ -197,7 +196,7 @@ def test_list_trades_first_page_under_budget_at_100k(tmp_path: Path) -> None:
     """`list_trades` must serve the first page in under the cursor
     pagination budget against a 100k-decision population."""
 
-    from trade_trace.console.reporting import list_trades
+    from trade_trace.reporting import list_trades
     from trade_trace.storage.database import open_database_readonly
 
     home = tmp_path / "perf-trades"
@@ -226,7 +225,7 @@ def test_list_trades_deep_cursor_walk_does_not_degrade(tmp_path: Path) -> None:
     deep pages constant-time. The 100th page must fit the same budget
     as the first."""
 
-    from trade_trace.console.reporting import list_trades
+    from trade_trace.reporting import list_trades
     from trade_trace.storage.database import open_database_readonly
 
     home = tmp_path / "perf-trades-deep"

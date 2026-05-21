@@ -1,10 +1,8 @@
-"""Console reporting read model contract tests per trade-trace-bbww.
+"""Reporting read model contract tests per trade-trace-bbww.
 
-The read model lives in `src/trade_trace/console/reporting/`. The
-shipped Console UI consumes the Trades index and Position detail pages;
-`trade_detail` remains an exported external Python read-model helper,
-not a Console HTTP/UI route. These tests pin the row shape, the
-pagination contract, and the missing-data caveat surface.
+The read model lives in `src/trade_trace/reporting/`. These tests pin
+the row shape, the pagination contract, and the missing-data caveat
+surface for non-UI reporting consumers.
 """
 
 from __future__ import annotations

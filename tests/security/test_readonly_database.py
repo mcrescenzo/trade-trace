@@ -1,7 +1,6 @@
-"""Read-only SQLite access layer for the Console (trade-trace-1kkv.3).
+"""Read-only SQLite access layer for reporting consumers.
 
-These tests pin the contract documented in
-`docs/architecture/console.md` §6:
+These tests pin the storage contract for non-mutating report/read-model paths:
 
 - `open_database_readonly(path)` opens with the URI read-only flag.
 - The handle rejects INSERT / UPDATE / DELETE / DDL at the SQLite
@@ -129,7 +128,7 @@ def test_readonly_uri_escapes_reserved_characters_in_db_path(tmp_path: Path):
 def test_readonly_handle_pragma_query_only_is_on(tmp_path: Path):
     """Belt-and-suspenders: the URI flag is the strict guard but
     `query_only=1` makes the intent obvious to any tool that
-    inspects pragmas (Console pool-factory tests rely on this)."""
+    inspects pragmas."""
 
     from trade_trace.storage.database import open_database_readonly
     from trade_trace.storage.paths import db_path
@@ -158,8 +157,7 @@ def test_readonly_missing_db_raises_typed_error(tmp_path: Path):
 
 def test_readonly_empty_db_treated_as_unsupported_schema(tmp_path: Path):
     """A file that exists but has no `events` table is reported as
-    `unsupported_schema`, not a crash. Console renders this as a
-    friendly empty-state."""
+    `unsupported_schema`, not a crash."""
 
     from trade_trace.storage.database import (
         ReadOnlyDatabaseError,
@@ -193,33 +191,3 @@ def test_readonly_does_not_run_migrations(tmp_path: Path):
     with pytest.raises(ReadOnlyDatabaseError) as excinfo:
         open_database_readonly(legacy)
     assert excinfo.value.reason == "unsupported_schema"
-
-
-def test_console_serve_module_uses_only_readonly_database_opener():
-    """The Console server must never import or call the writable
-    ``open_database`` factory. A future refactor could accidentally
-    switch to the writable path without failing any functional test;
-    this AST guard detects the import at the source level."""
-
-    import ast
-
-    serve_py = (
-        Path(__file__).resolve().parents[2]
-        / "src"
-        / "trade_trace"
-        / "console"
-        / "serve.py"
-    )
-    source = serve_py.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            if node.module == "trade_trace.storage.database":
-                names = {alias.name for alias in node.names}
-                assert "open_database_readonly" in names, (
-                    "serve.py must import open_database_readonly"
-                )
-                assert "open_database" not in names, (
-                    "serve.py must not import the writable open_database"
-                )

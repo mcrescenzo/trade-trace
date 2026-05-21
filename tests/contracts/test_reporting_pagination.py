@@ -1,5 +1,4 @@
-"""Cursor-based pagination contract for the Console
-(trade-trace-1kkv.14, see docs/architecture/console.md §13).
+"""Cursor-based pagination contract for reporting read models.
 
 The contract is:
 
@@ -40,7 +39,7 @@ def conn():
 
 
 def test_first_page_with_no_cursor(conn):
-    from trade_trace.console.pagination import paginate_query
+    from trade_trace.reporting.pagination import paginate_query
 
     _seed(conn, 120)
     page = paginate_query(
@@ -56,7 +55,7 @@ def test_first_page_with_no_cursor(conn):
 
 
 def test_next_page_uses_returned_cursor(conn):
-    from trade_trace.console.pagination import paginate_query
+    from trade_trace.reporting.pagination import paginate_query
 
     _seed(conn, 120)
     page1 = paginate_query(conn, sql="SELECT id, body FROM events_test",
@@ -67,7 +66,7 @@ def test_next_page_uses_returned_cursor(conn):
 
 
 def test_final_page_returns_null_cursor(conn):
-    from trade_trace.console.pagination import paginate_query
+    from trade_trace.reporting.pagination import paginate_query
 
     _seed(conn, 60)
     page1 = paginate_query(conn, sql="SELECT id, body FROM events_test",
@@ -79,7 +78,7 @@ def test_final_page_returns_null_cursor(conn):
 
 
 def test_limit_is_clamped_to_max_limit(conn):
-    from trade_trace.console.pagination import MAX_LIMIT, paginate_query
+    from trade_trace.reporting.pagination import MAX_LIMIT, paginate_query
 
     _seed(conn, 10_000)
     page = paginate_query(conn, sql="SELECT id, body FROM events_test",
@@ -98,7 +97,7 @@ def test_cursor_format_is_opaque_base64(conn):
     import base64
     import json
 
-    from trade_trace.console.pagination import paginate_query
+    from trade_trace.reporting.pagination import paginate_query
 
     _seed(conn, 100)
     page = paginate_query(conn, sql="SELECT id, body FROM events_test",
@@ -110,7 +109,7 @@ def test_cursor_format_is_opaque_base64(conn):
 
 
 def test_invalid_cursor_raises_validation_error(conn):
-    from trade_trace.console.pagination import (
+    from trade_trace.reporting.pagination import (
         PaginationError,
         paginate_query,
     )
@@ -122,7 +121,7 @@ def test_invalid_cursor_raises_validation_error(conn):
 
 
 def test_descending_order_supported(conn):
-    from trade_trace.console.pagination import paginate_query
+    from trade_trace.reporting.pagination import paginate_query
 
     _seed(conn, 30)
     page = paginate_query(conn, sql="SELECT id, body FROM events_test",
@@ -133,12 +132,12 @@ def test_descending_order_supported(conn):
     assert [r[0] for r in page2.rows] == list(range(20, 10, -1))
 
 
-def test_created_at_ordered_console_lists_do_not_repeat_first_page(conn):
-    """Created-at ordered Console tables select `id` first but sort by
+def test_created_at_ordered_lists_do_not_repeat_first_page(conn):
+    """Created-at ordered tables may select `id` first but sort by
     `created_at`. Pagination must encode the actual ordering key so
     the second page advances instead of repeating page one."""
 
-    from trade_trace.console.endpoints import strategies_list
+    from trade_trace.reporting.pagination import paginate_created_at_id_query
 
     conn.execute(
         "CREATE TABLE strategies("
@@ -153,18 +152,24 @@ def test_created_at_ordered_console_lists_do_not_repeat_first_page(conn):
         ],
     )
 
-    page1 = strategies_list(conn, cursor=None, limit=1)
-    page2 = strategies_list(conn, cursor=page1.next_cursor, limit=1)
+    sql = "SELECT id, name, slug, status, created_at FROM strategies"
+    page1 = paginate_created_at_id_query(conn, sql=sql, cursor=None, limit=1)
+    page2 = paginate_created_at_id_query(
+        conn,
+        sql=sql,
+        cursor=page1.next_cursor,
+        limit=1,
+    )
 
-    assert [row["id"] for row in page1.rows] == ["strat-3"]
-    assert [row["id"] for row in page2.rows] == ["strat-2"]
+    assert [row[0] for row in page1.rows] == ["strat-3"]
+    assert [row[0] for row in page2.rows] == ["strat-2"]
 
 
-def test_created_at_ordered_console_lists_keep_duplicate_timestamps(conn):
+def test_created_at_ordered_lists_keep_duplicate_timestamps(conn):
     """Rows sharing the same timestamp need an id tie-breaker; otherwise
     the cursor skips siblings with duplicate `created_at` values."""
 
-    from trade_trace.console.endpoints import playbooks_list
+    from trade_trace.reporting.pagination import paginate_created_at_id_query
 
     conn.execute(
         "CREATE TABLE playbooks("
@@ -183,16 +188,21 @@ def test_created_at_ordered_console_lists_keep_duplicate_timestamps(conn):
     seen: list[str] = []
     cursor: str | None = None
     for _ in range(3):
-        page = playbooks_list(conn, cursor=cursor, limit=1)
+        page = paginate_created_at_id_query(
+            conn,
+            sql="SELECT id, name, description, status, created_at FROM playbooks",
+            cursor=cursor,
+            limit=1,
+        )
         assert page.rows
-        seen.append(page.rows[0]["id"])
+        seen.append(page.rows[0][0])
         cursor = page.next_cursor
 
     assert seen == ["pb-3", "pb-2", "pb-1"]
 
 
 def test_empty_table_returns_empty_page_and_null_cursor(conn):
-    from trade_trace.console.pagination import paginate_query
+    from trade_trace.reporting.pagination import paginate_query
 
     _seed(conn, 0)
     page = paginate_query(conn, sql="SELECT id, body FROM events_test",
