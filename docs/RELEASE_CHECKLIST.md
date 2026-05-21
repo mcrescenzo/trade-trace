@@ -117,10 +117,11 @@ separate explicit approval for the exact candidate SHA.
 4. GitHub Actions reruns only the shared Python test gate, verifies the
    tag/package version, builds, and runs `twine check`. It does not rerun
    the manual Console gate or fresh-wheel smoke above.
-5. If the `pypi` environment is protected, the operator separately
-   verifies the GitHub/PyPI trusted-publishing settings and approves that
-   environment for the same candidate SHA. Remote environment protection
-   configuration is human verification, not evidence produced by this
-   checklist.
+5. Verify the GitHub/PyPI trusted-publishing settings for the exact
+   candidate before pushing a release tag. Record the sanitized result in
+   [`docs/architecture/release-remote-publisher-proof.md`](architecture/release-remote-publisher-proof.md)
+   or a successor proof. Remote environment protection and PyPI trusted
+   publisher bindings are release gates; do not assume the local workflow
+   shape proves the remote settings are protected.
 
 Do not publish stable `0.0.1` until the owner records explicit approval.
