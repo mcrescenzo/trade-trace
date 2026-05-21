@@ -54,22 +54,6 @@ dependencies = [
 [project.optional-dependencies]
 mcp = []  # back-compat alias; mcp is now a base runtime dependency
 embeddings = ["sqlite-vec==0.1.6", "keyring>=25"]
-# Console extra adds FastAPI + Uvicorn for the local read-only
-# dashboard. The React/Vite app is built at release time and ships
-# as static package data, so package users do not need Node.js.
-console = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.30",
-]
-# Console browser-test harness (trade-trace-1kkv.15). Operators
-# run `pip install 'trade-trace[console,console-test]' && playwright
-# install chromium` once; subsequent `pytest tests/console_browser/`
-# runs the headless smoke suite. The separate `[console]` extra is
-# required because the smoke harness starts `tt console serve`.
-console-test = [
-    "playwright>=1.45",
-    "pytest-playwright>=0.5",
-]
 dev = [
     "pytest>=8",
     "ruff>=0.5",
