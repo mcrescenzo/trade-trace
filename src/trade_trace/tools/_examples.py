@@ -93,7 +93,7 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
     },
     "forecast.add": {
         "minimal": {
-            "thesis_id": "thes_THESIS_ID_HERE",
+            "thesis_id": "th_THESIS_ID_HERE",
             "kind": "binary",
             "yes_label": "yes",
             "outcomes": [
@@ -103,7 +103,7 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "idempotency_key": _IDEM,
         },
         "rich": {
-            "thesis_id": "thes_THESIS_ID_HERE",
+            "thesis_id": "th_THESIS_ID_HERE",
             "kind": "binary",
             "yes_label": "yes",
             "outcomes": [
@@ -121,8 +121,8 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
         "minimal": {
             "type": "actual_enter",
             "instrument_id": "ins_INSTRUMENT_ID_HERE",
-            "thesis_id": "thes_THESIS_ID_HERE",
-            "forecast_id": "fcst_FORECAST_ID_HERE",
+            "thesis_id": "th_THESIS_ID_HERE",
+            "forecast_id": "fc_FORECAST_ID_HERE",
             "side": "yes",
             "quantity": 100,
             "price": 0.62,
@@ -131,8 +131,8 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
         "rich": {
             "type": "actual_enter",
             "instrument_id": "ins_INSTRUMENT_ID_HERE",
-            "thesis_id": "thes_THESIS_ID_HERE",
-            "forecast_id": "fcst_FORECAST_ID_HERE",
+            "thesis_id": "th_THESIS_ID_HERE",
+            "forecast_id": "fc_FORECAST_ID_HERE",
             "snapshot_id": "snp_SNAPSHOT_ID_HERE",
             "side": "yes",
             "quantity": 100,
@@ -221,7 +221,7 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
     },
     "forecast.supersede": {
         "minimal": {
-            "prior_forecast_id": "fcst_PRIOR_FORECAST_ID_HERE",
+            "prior_forecast_id": "fc_PRIOR_FORECAST_ID_HERE",
             "kind": "binary",
             "outcomes": [
                 {"outcome_label": "yes", "probability": 0.7},
@@ -230,7 +230,7 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "idempotency_key": _IDEM,
         },
         "rich": {
-            "prior_forecast_id": "fcst_PRIOR_FORECAST_ID_HERE",
+            "prior_forecast_id": "fc_PRIOR_FORECAST_ID_HERE",
             "kind": "binary",
             "yes_label": "yes",
             "resolution_at": "2026-05-22T20:30:00Z",
@@ -245,7 +245,7 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
     "source.attach_to_thesis": {
         "minimal": {
             "source_id": "src_SOURCE_ID_HERE",
-            "target_id": "thes_THESIS_ID_HERE",
+            "target_id": "th_THESIS_ID_HERE",
             "idempotency_key": _IDEM,
         },
     },
@@ -259,7 +259,7 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
     "source.attach_to_forecast": {
         "minimal": {
             "source_id": "src_SOURCE_ID_HERE",
-            "target_id": "fcst_FORECAST_ID_HERE",
+            "target_id": "fc_FORECAST_ID_HERE",
             "idempotency_key": _IDEM,
         },
     },
@@ -288,7 +288,7 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
     "memory.reflect": {
         "minimal": {
             "target_kind": "thesis",
-            "target_id": "thes_THESIS_ID_HERE",
+            "target_id": "th_THESIS_ID_HERE",
             "body": "Falsifying evidence emerged when liquidity dried up.",
             "idempotency_key": _IDEM,
         },

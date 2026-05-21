@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -68,6 +68,26 @@ class JournalBundleStatusInput(BaseModel):
     home: str | None = None
 
 
+class JournalBundlePlanInput(BaseModel):
+    """Input contract for journal.bundle.plan."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    arc_type: Literal["watch", "skip"]
+    idempotency_key_prefix: str | None = None
+    venue_id: str | None = None
+    instrument_id: str | None = None
+    snapshot_id: str | None = None
+    source_id: str | None = None
+    thesis_id: str | None = None
+    forecast_id: str | None = None
+    decision_id: str | None = None
+    memory_node_id: str | None = None
+    venue_name: str | None = None
+    instrument_title: str | None = None
+    source_uri: str | None = None
+
+
 _SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -87,6 +107,28 @@ _SCHEMA: dict[str, Any] = {
         "memory links and returns relevant ids plus next suggested calls; no "
         "external market data, execution, or advice."
     ),
+}
+
+_PLAN_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["arc_type"],
+    "additionalProperties": False,
+    "properties": {
+        "arc_type": {"type": "string", "enum": ["watch", "skip"], "description": "Plan a watch or skip market journal arc."},
+        "idempotency_key_prefix": {"type": "string", "description": "Optional prefix for placeholder idempotency keys."},
+        "venue_id": {"type": "string"},
+        "instrument_id": {"type": "string"},
+        "snapshot_id": {"type": "string"},
+        "source_id": {"type": "string"},
+        "thesis_id": {"type": "string"},
+        "forecast_id": {"type": "string"},
+        "decision_id": {"type": "string"},
+        "memory_node_id": {"type": "string"},
+        "venue_name": {"type": "string"},
+        "instrument_title": {"type": "string"},
+        "source_uri": {"type": "string"},
+    },
+    "description": "Read-only plan for primitive local journal calls; no writes, external fetch, advice, or trades.",
 }
 
 
@@ -294,13 +336,13 @@ def _build_checks(conn: sqlite3.Connection, rows: dict[str, list[dict[str, Any]]
     _check(checks, "decision_recorded", rows["decision"], "decision.add")
 
     unresolved = [f["id"] for f in rows["forecast"] if f.get("scoring_state") == "pending"]
-    checks.append(_entry("unresolved_forecasts", "weak" if unresolved else "ok", {"forecasts": unresolved}, "forecast.score or outcome.add when resolution is known"))
+    checks.append(_entry("unresolved_forecasts", "weak" if unresolved else "ok", {"forecasts": unresolved}, "outcome.add when resolution is known"))
 
     reflected = _has_reflection(conn, [d["id"] for d in rows["decision"]])
     checks.append(_entry("reflection_attached", "ok" if reflected else "missing", {"decisions": [d["id"] for d in rows["decision"]]}, "memory.reflect / memory.link"))
 
     adherence_missing = [d["id"] for d in rows["decision"] if d.get("playbook_version_id") and not _has_playbook_rows(conn, d["id"])]
-    checks.append(_entry("playbook_adherence_rows", "weak" if adherence_missing else "ok", {"decisions": adherence_missing}, "playbook.rule.record for playbook-scoped decisions"))
+    checks.append(_entry("playbook_adherence_rows", "weak" if adherence_missing else "ok", {"decisions": adherence_missing}, "decision.record_adherence for playbook-scoped decisions"))
     return checks
 
 
@@ -416,7 +458,193 @@ def _json(value: Any) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _journal_bundle_plan(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    del ctx
+    try:
+        parsed = JournalBundlePlanInput.model_validate(args)
+    except ValidationError as exc:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"journal.bundle.plan input validation failed: {exc.errors()}",
+            details={"validation_errors": exc.errors()},
+        ) from exc
+
+    ids = {k: v for k, v in parsed.model_dump().items() if k.endswith("_id") and v}
+    prefix = parsed.idempotency_key_prefix or "<idempotency_key_prefix>"
+
+    def ph(kind: str) -> str:
+        if kind == "memory_node":
+            return ids.get("memory_node_id", "<memory_node_id from prior memory.reflect or memory.retain output>")
+        return ids.get(f"{kind}_id", f"<{kind}_id from prior {kind}.add output>")
+
+    def step(tool: str, purpose: str, args_template: dict[str, Any], *, creates: str | None = None, uses: list[str] | None = None, skip_when: str | None = None) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            "tool": tool,
+            "purpose": purpose,
+            "schema_call": {"tool": "tool.schema", "args": {"tool": tool}},
+            "args_template": args_template,
+        }
+        if creates:
+            out["creates"] = creates
+        if uses:
+            out["uses"] = uses
+        if skip_when:
+            out["skip_when"] = skip_when
+        return out
+
+    decision_args: dict[str, Any] = {
+        "type": parsed.arc_type,
+        "instrument_id": ph("instrument"),
+        "reason": "<required reason for skip; optional rationale for watch>",
+        "idempotency_key": f"{prefix}-decision-add",
+    }
+    if parsed.arc_type == "watch":
+        decision_args["review_by"] = "<optional_review_by_iso8601_for_watchlist>"
+    for key in ("thesis", "snapshot", "forecast"):
+        decision_args[f"{key}_id"] = ph(key)
+
+    ordered_calls = [
+        step(
+            "venue.add",
+            "Create venue if one was not supplied.",
+            {"name": parsed.venue_name or "<venue_name>", "kind": "prediction_market", "idempotency_key": f"{prefix}-venue-add"},
+            creates="venue_id",
+            skip_when="venue_id supplied",
+        ),
+        step(
+            "instrument.add",
+            "Create or identify the market instrument.",
+            {"venue_id": ph("venue"), "title": parsed.instrument_title or "<instrument_title>", "asset_class": "prediction_market", "idempotency_key": f"{prefix}-instrument-add"},
+            creates="instrument_id",
+            uses=["venue_id"],
+            skip_when="instrument_id supplied",
+        ),
+        step(
+            "snapshot.add",
+            "Record an agent-supplied local market snapshot.",
+            {
+                "instrument_id": ph("instrument"),
+                "captured_at": "2026-01-01T00:00:00Z",
+                "price": 0.0,
+                "source": "manual_or_public_market_readback",
+                "metadata_json": {"note": "manual/local snapshot; no external fetch by journal.bundle.plan"},
+                "idempotency_key": f"{prefix}-snapshot-add",
+            },
+            creates="snapshot_id",
+            uses=["instrument_id"],
+            skip_when="snapshot_id supplied",
+        ),
+        step(
+            "source.add",
+            "Record local source/provenance used by the arc.",
+            {"kind": "url", "stance": "neutral", "uri": parsed.source_uri or "<source_uri_or_local_note>", "title": "<source_title>", "idempotency_key": f"{prefix}-source-add"},
+            creates="source_id",
+            skip_when="source_id supplied",
+        ),
+        step(
+            "thesis.add",
+            "Capture the thesis being watched or rejected.",
+            {"instrument_id": ph("instrument"), "side": "yes", "body": "<thesis_body>", "idempotency_key": f"{prefix}-thesis-add"},
+            creates="thesis_id",
+            uses=["instrument_id"],
+            skip_when="thesis_id supplied",
+        ),
+        step(
+            "source.attach_to_thesis",
+            "Attach source to thesis using generic target_id.",
+            {"source_id": ph("source"), "target_id": ph("thesis"), "idempotency_key": f"{prefix}-source-thesis"},
+            uses=["source_id", "thesis_id"],
+        ),
+        step(
+            "forecast.add",
+            "Add an explicit forecast if the arc has a testable expectation.",
+            {
+                "thesis_id": ph("thesis"),
+                "kind": "binary",
+                "yes_label": "yes",
+                "outcomes": [{"outcome_label": "yes", "probability": 0.5}, {"outcome_label": "no", "probability": 0.5}],
+                "idempotency_key": f"{prefix}-forecast-add",
+            },
+            creates="forecast_id",
+            uses=["thesis_id"],
+            skip_when="forecast_id supplied",
+        ),
+        step(
+            "source.attach_to_forecast",
+            "Attach source to forecast using generic target_id.",
+            {"source_id": ph("source"), "target_id": ph("forecast"), "idempotency_key": f"{prefix}-source-forecast"},
+            uses=["source_id", "forecast_id"],
+        ),
+        step(
+            "decision.add",
+            (
+                f"Record the {parsed.arc_type} decision; do not include quantity, price, fees, or slippage."
+                if parsed.arc_type == "watch"
+                else "Record the skip decision; do not include quantity, price, fees, slippage, or review_by."
+            ),
+            decision_args,
+            creates="decision_id",
+            uses=["instrument_id", "thesis_id", "snapshot_id", "forecast_id"],
+            skip_when="decision_id supplied",
+        ),
+        step(
+            "source.attach_to_decision",
+            "Attach source to decision using generic target_id.",
+            {"source_id": ph("source"), "target_id": ph("decision"), "idempotency_key": f"{prefix}-source-decision"},
+            uses=["source_id", "decision_id"],
+        ),
+        step(
+            "memory.reflect",
+            "Reflect/retain the outcome-neutral learning note; if a memory_node_id already exists, carry it into journal.bundle.status.",
+            {"target_kind": "decision", "target_id": ph("decision"), "body": "<reflection_body>", "idempotency_key": f"{prefix}-memory-reflect"},
+            creates="memory_node_id",
+            uses=["decision_id"],
+            skip_when="memory_node_id supplied and no new reflection is needed",
+        ),
+        step(
+            "journal.bundle.status",
+            "Final read-only completeness check.",
+            {"decision_id": ph("decision"), "forecast_id": ph("forecast"), "thesis_id": ph("thesis"), "instrument_id": ph("instrument"), "source_id": ph("source"), "memory_node_id": ph("memory_node")},
+            uses=["decision_id", "forecast_id", "thesis_id", "instrument_id", "source_id", "memory_node_id"],
+        ),
+    ]
+
+    return {
+        "arc_type": parsed.arc_type,
+        "plan_state": "plan_only",
+        "no_advice_boundary": {"external_fetch_performed": False, "trade_execution_performed": False, "advice_generated": False},
+        "ordered_calls": ordered_calls,
+        "carry_forward_ids": {
+            "venue_id": parsed.venue_id or "venue.add.data.id -> instrument.add.venue_id",
+            "instrument_id": parsed.instrument_id or "instrument.add.data.id -> snapshot/thesis/decision.instrument_id",
+            "snapshot_id": parsed.snapshot_id or "snapshot.add.data.id -> decision.add.snapshot_id",
+            "source_id": parsed.source_id or "source.add.data.id -> source.attach_to_* source_id",
+            "thesis_id": parsed.thesis_id or "thesis.add.data.id -> forecast.add.thesis_id and attach target_id",
+            "forecast_id": parsed.forecast_id or "forecast.add.data.id -> decision.add.forecast_id and attach target_id",
+            "decision_id": parsed.decision_id or "decision.add.data.id -> source.attach_to_decision target_id and final status",
+            "memory_node_id": parsed.memory_node_id or "memory.reflect/retain output id -> final status memory_node_id",
+        },
+        "final_check": {"tool": "journal.bundle.status", "args": {"decision_id": ph("decision")}},
+        "next_actions": [
+            "Execute primitive calls in ordered_calls; journal.bundle.plan does not perform writes.",
+            "On validation failure, inspect the step schema_call/tool.schema and adjust only that primitive call.",
+            "Run journal.bundle.status after the primitives to verify the arc.",
+        ],
+    }
+
+
 def register_journal_bundle_status(registry: ToolRegistry) -> None:
+    registry.register(
+        "journal.bundle.plan",
+        _journal_bundle_plan,
+        json_schema=_PLAN_SCHEMA,
+        description="Read-only plan-only helper for watch/skip market journal arcs; no external fetch, advice, trades, or writes.",
+        usage_summary="Plan primitive journal calls for a watch or skip arc without guessing schemas.",
+        examples=("tt journal bundle plan --arc-type watch", "tt journal bundle plan --arc-type skip --instrument-id ins_..."),
+        enum_notes={"arc_type": "watch records a watch decision; skip records a skip decision with a reason."},
+        common_failures=("This helper is plan-only; execute the returned primitive tools yourself.",),
+        next_actions=("Execute ordered_calls in order, using each schema_call if validation fails, then run journal.bundle.status.",),
+    )
     registry.register(
         "journal.bundle.status",
         _journal_bundle_status,

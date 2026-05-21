@@ -6,7 +6,7 @@ from pathlib import Path
 from tests._mcp_helpers import mcp_default as _mcp
 from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope
 from trade_trace.core import default_registry
-from trade_trace.mcp_server import mcp_tool_specs
+from trade_trace.mcp_server import mcp_call, mcp_tool_specs
 from trade_trace.security.credential_keys import PROJECT_CREDENTIAL_KEYS
 from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
@@ -19,6 +19,89 @@ def test_journal_bundle_status_registered_and_self_describing():
     assert "decision_id" in reg.json_schema["properties"]
     assert reg.metadata()["next_actions"]
     assert "without external" in reg.description.lower()
+
+
+def test_journal_bundle_plan_registered_cli_and_mcp_self_describing(capsys):
+    from trade_trace.cli import main as cli_main
+
+    reg = default_registry().get("journal.bundle.plan")
+    assert reg.is_write is False
+    assert reg.json_schema is not None
+    assert reg.json_schema["required"] == ["arc_type"]
+    assert reg.json_schema["properties"]["arc_type"]["enum"] == ["watch", "skip"]
+
+    rc = cli_main(["journal", "bundle", "plan", "--help"])
+    out = capsys.readouterr()
+    assert rc == 0
+    assert "--arc-type" in out.out + out.err
+
+    specs = [spec for spec in mcp_tool_specs() if spec["name"] == "journal.bundle.plan"]
+    assert len(specs) == 1
+    assert specs[0]["input_schema"]["properties"]["arc_type"]["enum"] == ["watch", "skip"]
+
+
+def test_journal_bundle_plan_watch_uses_target_id_attach_guidance():
+    plan = mcp_call("journal.bundle.plan", {"arc_type": "watch", "idempotency_key_prefix": "pfx"}, actor_id="agent:default")
+    assert plan.ok, plan
+    assert isinstance(plan, SuccessEnvelope)
+    data = plan.data
+    assert data["arc_type"] == "watch"
+    assert data["plan_state"] == "plan_only"
+    assert data["no_advice_boundary"] == {"external_fetch_performed": False, "trade_execution_performed": False, "advice_generated": False}
+    calls = {step["tool"]: step for step in data["ordered_calls"]}
+    assert {"instrument_id", "captured_at"}.issubset(calls["snapshot.add"]["args_template"])
+    assert {"kind", "stance", "uri"}.issubset(calls["source.add"]["args_template"])
+    assert {"instrument_id", "side", "body"}.issubset(calls["thesis.add"]["args_template"])
+    assert {"thesis_id", "kind", "yes_label", "outcomes"}.issubset(calls["forecast.add"]["args_template"])
+    assert {"target_kind", "target_id", "body"}.issubset(calls["memory.reflect"]["args_template"])
+    for stale_field in ("as_of", "payload_json", "statement", "prompt", "response"):
+        for step in calls.values():
+            assert stale_field not in step["args_template"]
+    for tool in ("source.attach_to_thesis", "source.attach_to_forecast", "source.attach_to_decision"):
+        args = calls[tool]["args_template"]
+        assert "target_id" in args
+        assert "thesis_id" not in args
+        assert "forecast_id" not in args
+        assert "decision_id" not in args
+    decision_step = calls["decision.add"]
+    assert "review_by" in decision_step["args_template"]
+    assert "review_by" not in decision_step["purpose"]
+    status_args = calls["journal.bundle.status"]["args_template"]
+    assert "memory.reflect or memory.retain" in status_args["memory_node_id"]
+    assert "memory_node.add" not in status_args["memory_node_id"]
+    assert data["ordered_calls"][-1]["tool"] == "journal.bundle.status"
+    assert data["final_check"]["tool"] == "journal.bundle.status"
+
+
+def test_journal_bundle_plan_skip_with_existing_ids_carries_forward_and_avoids_trade_fields():
+    args = {
+        "arc_type": "skip",
+        "venue_id": "ven_existing",
+        "instrument_id": "inst_existing",
+        "snapshot_id": "snap_existing",
+        "source_id": "src_existing",
+        "thesis_id": "th_existing",
+        "forecast_id": "fc_existing",
+        "decision_id": "dec_existing",
+        "memory_node_id": "mem_existing",
+    }
+    plan = mcp_call("journal.bundle.plan", args, actor_id="agent:default")
+    assert plan.ok, plan
+    assert isinstance(plan, SuccessEnvelope)
+    data = plan.data
+    assert data["carry_forward_ids"] == {k: v for k, v in args.items() if k.endswith("_id")}
+    calls = {step["tool"]: step for step in data["ordered_calls"]}
+    assert calls["instrument.add"]["args_template"]["venue_id"] == "ven_existing"
+    assert calls["instrument.add"]["skip_when"] == "instrument_id supplied"
+    assert calls["decision.add"]["skip_when"] == "decision_id supplied"
+    decision_args = calls["decision.add"]["args_template"]
+    assert decision_args["type"] == "skip"
+    assert decision_args["instrument_id"] == "inst_existing"
+    assert "reason" in decision_args
+    assert "quantity" not in decision_args
+    assert "price" not in decision_args
+    assert "review_by" not in decision_args
+    assert data["final_check"]["args"]["decision_id"] == "dec_existing"
 
 
 def test_journal_bundle_status_mcp_spec_omits_private_auth_fragments():
@@ -233,6 +316,36 @@ def test_journal_bundle_status_expands_thesis_to_forecasts_and_weak_unresolved(h
     assert checks["forecast_recorded"]["status"] == "ok"
     assert checks["unresolved_forecasts"]["status"] == "weak"
     assert checks["unresolved_forecasts"]["record_ids"]["forecasts"] == [forecast.data["id"]]
+    assert "forecast.score" not in checks["unresolved_forecasts"]["next_call"]
+    assert "outcome.add" in checks["unresolved_forecasts"]["next_call"]
+
+
+def test_journal_bundle_status_playbook_adherence_guidance_uses_registered_tool(home):
+    venue = _mcp(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    assert isinstance(venue, SuccessEnvelope)
+    instrument = _mcp(home, "instrument.add", {
+        "venue_id": venue.data["id"],
+        "title": "Playbook-scoped watch",
+        "asset_class": "prediction_market",
+    })
+    assert isinstance(instrument, SuccessEnvelope)
+    decision = _mcp(home, "decision.add", {
+        "type": "watch",
+        "instrument_id": instrument.data["id"],
+        "playbook_version_id": "pbv_missing_rows_fixture",
+    })
+    assert isinstance(decision, SuccessEnvelope)
+
+    status = _mcp(home, "journal.bundle.status", {"decision_id": decision.data["id"]})
+
+    assert isinstance(status, SuccessEnvelope)
+    checks = {item["step"]: item for item in status.data["checklist"]}
+    adherence = checks["playbook_adherence_rows"]
+    assert adherence["status"] == "weak"
+    assert adherence["record_ids"] == {"decisions": [decision.data["id"]]}
+    assert "decision.record_adherence" in adherence["next_call"]
+    assert "playbook.rule.record" not in adherence["next_call"]
+    assert "decision.record_adherence" in default_registry().names()
 
 
 def test_journal_bundle_status_source_weakness_keeps_all_sources_distinct(home):

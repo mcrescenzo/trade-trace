@@ -6,6 +6,7 @@ from trade_trace.contracts.json_schema_derive import derive_schema
 from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.contracts.tool_registry import ToolRegistry
 from trade_trace.core import build_registry, dispatch
+from trade_trace.tools._helpers import new_id
 
 
 def _noop(args, ctx):  # noqa: ANN001
@@ -95,6 +96,24 @@ def test_build_registry_derives_schema_for_every_tool_with_example_minimal() -> 
         if reg.example_minimal is not None:
             assert reg.json_schema is not None
             _assert_valid_json_schema(reg.json_schema)
+
+
+def test_agent_facing_id_placeholders_match_runtime_prefixes() -> None:
+    registry = build_registry()
+    th_prefix = new_id("th").split("_", 1)[0] + "_"
+    fc_prefix = new_id("fc").split("_", 1)[0] + "_"
+
+    forecast_example = registry.get("forecast.add").example_minimal
+    decision_example = registry.get("decision.add").example_minimal
+    assert forecast_example is not None
+    assert decision_example is not None
+
+    assert forecast_example["thesis_id"].startswith(th_prefix)
+    assert decision_example["forecast_id"].startswith(fc_prefix)
+    rendered = str({name: (reg.description, reg.example_minimal, reg.example_rich, reg.json_schema, reg.metadata()) for name, reg in registry.by_name.items()})
+    assert "inst_" not in rendered
+    assert "thes_" not in rendered
+    assert "fcst_" not in rendered
 
 
 def test_tool_schema_envelope_echoes_valid_json_schema() -> None:
