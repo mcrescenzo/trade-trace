@@ -235,6 +235,24 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "not market risk or broker truth."
         ),
     ),
+    "report.current_exposure": _schema(
+        {
+            "recent_limit": {"type": "integer", "minimum": 0, "description": "Maximum recent trade-typed decision rows to return; defaults to 10."},
+            "include_watchlist": {"type": "boolean", "description": "Include watchlist bucket; defaults true. Watches are WATCH_ONLY_IDEA and never exposure."},
+            "include_anomalies": {"type": "boolean", "description": "Include projection_anomalies bucket; defaults true."},
+            "kind": {"type": "string", "enum": ["paper", "actual", "simulation"]},
+            "instrument_id": {"type": "string"},
+            "strategy_id": {"type": "string"},
+            "stale_mark_threshold_days": {"type": "integer", "minimum": 0},
+            "as_of": {"type": "string", "format": "date-time"},
+        },
+        description=(
+            "Recommended trader-agent entry point for open trades/current exposure/recent trading activity. "
+            "Returns open_positions, watchlist, recent_trade_activity, and projection_anomalies in one packet. "
+            "Current exposure comes from positions/position_events; watchlist rows are WATCH_ONLY_IDEA; recent_trade_activity "
+            "is journal activity and not canonical exposure by itself."
+        ),
+    ),
     "report.coach": _schema(
         {"filter": _FILTER_PROP, "stale_threshold_days": {"type": "integer", "minimum": 0}}
     ),
@@ -1098,6 +1116,150 @@ def _report_exposure_anomalies(args: dict[str, Any], ctx: ToolContext) -> dict[s
     return data
 
 
+def _watchlist_rows_for_current_exposure(watch_data: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for group in watch_data.get("groups", []):
+        record_ids = group.get("record_ids") or {}
+        examples = group.get("examples") or []
+        metrics = group.get("metrics") or {}
+        rows.append({
+            "decision_id": (record_ids.get("decisions") or [group.get("key")])[0],
+            "instrument_id": (record_ids.get("instruments") or [None])[0],
+            "reason": examples[0].get("summary") if examples else None,
+            "created_at": metrics.get("created_at"),
+            "review_by": metrics.get("review_by"),
+            "overdue": metrics.get("overdue"),
+            "age_days": metrics.get("age_days"),
+            "caveat_codes": ["WATCH_ONLY_IDEA"],
+            "exposure_hint": "Watch idea only; not counted as exposure.",
+        })
+    return rows
+
+
+def _recent_trade_activity(connection: Any, *, recent_limit: int) -> list[dict[str, Any]]:
+    if recent_limit == 0:
+        return []
+    rows = connection.execute(
+        """
+        SELECT d.id, d.instrument_id, d.thesis_id, d.forecast_id, d.snapshot_id,
+               d.type, d.side, d.quantity, d.price, d.created_at, d.reason,
+               d.strategy_id, d.run_id, COUNT(pe.id) AS event_count
+        FROM decisions d
+        LEFT JOIN position_events pe ON pe.decision_id = d.id
+        WHERE d.type IN ('paper_enter','paper_exit','actual_enter','actual_exit','add','reduce')
+        GROUP BY d.id
+        ORDER BY d.created_at DESC, d.id DESC
+        LIMIT ?
+        """,
+        (recent_limit,),
+    ).fetchall()
+    activity = []
+    for row in rows:
+        caveat_codes = ["JOURNAL_ACTIVITY_NOT_CANONICAL_EXPOSURE"]
+        if row[5] in ("actual_enter", "actual_exit", "add", "reduce") and row[13] == 0:
+            caveat_codes.append("RECORD_ONLY_ACTUAL")
+        activity.append({
+            "decision_id": row[0],
+            "instrument_id": row[1],
+            "thesis_id": row[2],
+            "forecast_id": row[3],
+            "snapshot_id": row[4],
+            "type": row[5],
+            "side": row[6],
+            "quantity": row[7],
+            "price": row[8],
+            "created_at": row[9],
+            "reason": row[10],
+            "strategy_id": row[11],
+            "run_id": row[12],
+            "linked_position_event_count": row[13],
+            "caveat_codes": caveat_codes,
+            "exposure_hint": "Recent journal activity is not canonical open exposure by itself; use open_positions for exposure.",
+        })
+    return activity
+
+
+def _current_exposure_hints(open_count: int, watch_count: int, recent_count: int, anomaly_count: int) -> list[str]:
+    hints = [f"Canonical open positions: {open_count}."]
+    if open_count == 0 and recent_count:
+        hints[0] = "Canonical open positions: zero; recent journal entries exist but are not open exposure."
+    if watch_count:
+        hints.append("Watchlist rows are WATCH_ONLY_IDEA; do not count them as exposure.")
+    if recent_count:
+        hints.append("Recent trade activity is an audit/journal trail; it can explain trading but does not define current exposure.")
+    if anomaly_count:
+        hints.append("Projection anomalies caveat the answer; do not infer open trades from decisions-only evidence.")
+    if open_count == 0 and watch_count == 0 and recent_count == 0 and anomaly_count == 0:
+        hints.append("No watch ideas, recent trade activity, or projection anomalies found in the local journal.")
+    hints.append("Trade Trace reports local journal/projection state only; it does not assert broker or external portfolio truth.")
+    return hints
+
+
+def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.current_exposure` — trader-agent packet for exposure questions."""
+
+    recent_limit = args.get("recent_limit", 10)
+    if not isinstance(recent_limit, int) or recent_limit < 0:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "recent_limit must be a non-negative integer", details={"field": "recent_limit", "value": recent_limit})
+    include_watchlist = args.get("include_watchlist", True)
+    include_anomalies = args.get("include_anomalies", True)
+    if not isinstance(include_watchlist, bool):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "include_watchlist must be a boolean", details={"field": "include_watchlist", "value": include_watchlist})
+    if not isinstance(include_anomalies, bool):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "include_anomalies must be a boolean", details={"field": "include_anomalies", "value": include_anomalies})
+
+    open_args = {k: v for k, v in args.items() if k in {"home", "limit", "kind", "instrument_id", "strategy_id", "stale_mark_threshold_days", "as_of"}}
+    open_data = _report_open_positions(open_args, ctx)
+    watch_data = _report_watchlist({"home": args.get("home")}, ctx) if include_watchlist else None
+    anomaly_args = {k: v for k, v in args.items() if k in {"home", "stale_mark_threshold_days", "as_of"}}
+    anomaly_data = _report_exposure_anomalies(anomaly_args, ctx) if include_anomalies else None
+
+    db = open_db_for_args(args)
+    try:
+        recent_activity = _recent_trade_activity(db.connection, recent_limit=recent_limit)
+    finally:
+        db.close()
+
+    watchlist = _watchlist_rows_for_current_exposure(watch_data) if watch_data is not None else []
+    anomalies = anomaly_data.get("projection_anomalies", []) if anomaly_data is not None else []
+    open_positions = open_data.get("open_positions", [])
+    hints = _current_exposure_hints(len(open_positions), len(watchlist), len(recent_activity), len(anomalies))
+    data = {
+        "summary": {
+            "bucket": "current_exposure",
+            "buckets": ["open_positions", "watchlist", "recent_trade_activity", "projection_anomalies"],
+            "open_position_count": open_data.get("summary", {}).get("open_position_count", len(open_positions)),
+            "watch_count": len(watchlist),
+            "recent_trade_decision_count": len(recent_activity),
+            "anomaly_count": len(anomalies),
+            "filter": {
+                "kind": args.get("kind"),
+                "instrument_id": args.get("instrument_id"),
+                "strategy_id": args.get("strategy_id"),
+                "recent_limit": recent_limit,
+                "include_watchlist": include_watchlist,
+                "include_anomalies": include_anomalies,
+                "stale_mark_threshold_days": args.get("stale_mark_threshold_days", 14),
+                "as_of": args.get("as_of"),
+            },
+            "agent_answer_hints": hints,
+        },
+        "groups": [],
+        "open_positions": open_positions,
+        "watchlist": watchlist,
+        "recent_trade_activity": recent_activity,
+        "anomalies": anomalies,
+        "agent_answer_hints": hints,
+        "lower_level_reports": {
+            "open_positions": "report.open_positions",
+            "watchlist": "report.watchlist",
+            "projection_anomalies": "report.exposure_anomalies",
+        },
+    }
+    _propagate_report_meta(ctx, data)
+    return data
+
+
 def _report_coach(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`report.coach` — synthesized decision-support packet. No LLM, no
     network, no trade advice."""
@@ -1432,6 +1594,22 @@ def register_report_tools(registry: ToolRegistry) -> None:
         usage_summary="List local journal/projection anomalies that caveat current-exposure answers; do not treat them as open trades.",
         examples=("tt report exposure_anomalies --home <journal-home>",),
         next_actions=("Use report.open_positions for canonical exposure rows; mention these caveats separately.",),
+    )
+    registry.register(
+        "report.current_exposure",
+        _report_current_exposure,
+        description=(
+            "Recommended trader-agent entry point for open trades/current exposure/recent trading activity. "
+            "Composes canonical open_positions, WATCH_ONLY_IDEA watchlist rows, recent_trade_activity journal rows, "
+            "and projection_anomalies in one read-only packet. Decisions are activity/audit trail, not canonical exposure; "
+            "actual-recorded rows are record-only without linked position_events/projection. Does not assert broker truth."
+        ),
+        example_minimal={"recent_limit": 10, "include_watchlist": True, "include_anomalies": True},
+        optional_keys=("recent_limit", "include_watchlist", "include_anomalies", "kind", "instrument_id", "strategy_id", "stale_mark_threshold_days", "as_of"),
+        json_schema=_REPORT_SCHEMAS["report.current_exposure"],
+        usage_summary="Recommended trader-agent entry point for answering open trades/current exposure and recently traded questions without raw queries.",
+        examples=("tt report current_exposure --home <journal-home> --recent-limit 10",),
+        next_actions=("Use open_positions for canonical exposure; mention watchlist/recent activity/anomalies separately as caveats/context.",),
     )
     registry.register(
         "report.coach",

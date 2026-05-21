@@ -236,6 +236,7 @@ def test_report_schemas_advertise_defaulted_args_as_optional():
     expected_optional = {
         "report.watchlist": ("filter", "mode", "stale_threshold_days"),
         "report.open_positions": ("limit", "cursor", "kind", "instrument_id", "strategy_id"),
+        "report.current_exposure": ("recent_limit", "include_watchlist", "include_anomalies", "kind", "instrument_id", "strategy_id"),
         "report.source_quality": ("stale_threshold_days",),
         "report.unscored_forecasts": ("filter",),
         "report.coach": ("filter", "stale_threshold_days"),
