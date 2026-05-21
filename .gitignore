@@ -29,12 +29,6 @@ build/
 venv/
 .venv/
 
-# Frontend workspace artifacts
-frontend/console/node_modules/
-frontend/console/*.tsbuildinfo
-frontend/console/*.config.js
-frontend/console/*.config.d.ts
-
 # Trade Trace runtime
 trade-trace.sqlite
 *.sqlite
