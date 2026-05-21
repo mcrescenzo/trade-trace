@@ -73,7 +73,7 @@ class JournalBundlePlanInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    arc_type: Literal["watch", "skip"]
+    arc_type: Literal["watch", "skip", "paper_enter"]
     idempotency_key_prefix: str | None = None
     venue_id: str | None = None
     instrument_id: str | None = None
@@ -114,7 +114,7 @@ _PLAN_SCHEMA: dict[str, Any] = {
     "required": ["arc_type"],
     "additionalProperties": False,
     "properties": {
-        "arc_type": {"type": "string", "enum": ["watch", "skip"], "description": "Plan a watch or skip market journal arc."},
+        "arc_type": {"type": "string", "enum": ["watch", "skip", "paper_enter"], "description": "Plan a watch, skip, or paper_enter market journal arc."},
         "idempotency_key_prefix": {"type": "string", "description": "Optional prefix for placeholder idempotency keys."},
         "venue_id": {"type": "string"},
         "instrument_id": {"type": "string"},
@@ -309,7 +309,7 @@ def _load_rows(conn: sqlite3.Connection, ids: dict[str, set[str]]) -> dict[str, 
         "snapshot": ("snapshots", ["id", "instrument_id", "captured_at", "price", "bid", "ask", "mid", "implied_probability", "source", "source_url", "metadata_json", "created_at"]),
         "thesis": ("theses", ["id", "instrument_id", "side", "body", "confidence_label", "time_horizon_at", "strategy_id", "metadata_json", "created_at"]),
         "forecast": ("forecasts", ["id", "thesis_id", "kind", "yes_label", "resolution_at", "scoring_state", "scoring_support", "metadata_json", "created_at"]),
-        "decision": ("decisions", ["id", "instrument_id", "thesis_id", "forecast_id", "snapshot_id", "type", "reason", "review_by", "playbook_version_id", "metadata_json", "created_at"]),
+        "decision": ("decisions", ["id", "instrument_id", "thesis_id", "forecast_id", "snapshot_id", "type", "side", "quantity", "price", "reason", "review_by", "playbook_version_id", "metadata_json", "created_at"]),
         "source": ("sources", ["id", "kind", "title", "ref", "uri", "freshness_at", "captured_at", "metadata_json", "created_at"]),
         "memory_node": ("memory_nodes", ["id", "node_type", "title", "meta_json", "created_at"]),
     }
@@ -335,15 +335,31 @@ def _build_checks(conn: sqlite3.Connection, rows: dict[str, list[dict[str, Any]]
     _check(checks, "forecast_recorded", rows["forecast"], "forecast.add")
     _check(checks, "decision_recorded", rows["decision"], "decision.add")
 
+    complete_paper_enter_only_arc = _is_complete_paper_enter_only_arc(rows["decision"])
     unresolved = [f["id"] for f in rows["forecast"] if f.get("scoring_state") == "pending"]
-    checks.append(_entry("unresolved_forecasts", "weak" if unresolved else "ok", {"forecasts": unresolved}, "outcome.add when resolution is known"))
+    checks.append(_entry("unresolved_forecasts", "weak" if unresolved and not complete_paper_enter_only_arc else "ok", {"forecasts": unresolved}, "outcome.add when resolution is known"))
 
-    reflected = _has_reflection(conn, [d["id"] for d in rows["decision"]])
-    checks.append(_entry("reflection_attached", "ok" if reflected else "missing", {"decisions": [d["id"] for d in rows["decision"]]}, "memory.reflect / memory.link"))
+    decision_ids = [d["id"] for d in rows["decision"]]
+    reflected = _has_reflection(conn, decision_ids)
+    reflection_required = not complete_paper_enter_only_arc
+    checks.append(_entry("reflection_attached", "ok" if reflected or not reflection_required else "missing", {"decisions": decision_ids}, "memory.reflect / memory.link"))
 
     adherence_missing = [d["id"] for d in rows["decision"] if d.get("playbook_version_id") and not _has_playbook_rows(conn, d["id"])]
     checks.append(_entry("playbook_adherence_rows", "weak" if adherence_missing else "ok", {"decisions": adherence_missing}, "decision.record_adherence for playbook-scoped decisions"))
     return checks
+
+
+def _is_complete_paper_enter_only_arc(decisions: list[dict[str, Any]]) -> bool:
+    """Return true only when all loaded decisions are complete paper entries."""
+
+    if not decisions:
+        return False
+    for decision in decisions:
+        if decision.get("type") != "paper_enter":
+            return False
+        if not all(decision.get(field) not in (None, "") for field in ("instrument_id", "thesis_id", "side", "quantity", "price")):
+            return False
+    return True
 
 
 def _check(checks: list[dict[str, Any]], name: str, rows: list[dict[str, Any]], call: str, *, weak_if: list[str] | None = None) -> None:
@@ -500,6 +516,13 @@ def _journal_bundle_plan(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
     }
     if parsed.arc_type == "watch":
         decision_args["review_by"] = "<optional_review_by_iso8601_for_watchlist>"
+    elif parsed.arc_type == "paper_enter":
+        decision_args.update({
+            "side": "<required_side_yes_or_no>",
+            "quantity": "<required_paper_quantity>",
+            "price": "<required_paper_entry_price>",
+            "reason": "<caller-selected paper journal rationale; not a broker order>",
+        })
     for key in ("thesis", "snapshot", "forecast"):
         decision_args[f"{key}_id"] = ph(key)
 
@@ -578,9 +601,13 @@ def _journal_bundle_plan(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
         step(
             "decision.add",
             (
-                f"Record the {parsed.arc_type} decision; do not include quantity, price, fees, or slippage."
+                "Record the watch decision; do not include quantity, price, fees, or slippage."
                 if parsed.arc_type == "watch"
-                else "Record the skip decision; do not include quantity, price, fees, slippage, or review_by."
+                else (
+                    "Record the skip decision; do not include quantity, price, fees, slippage, or review_by."
+                    if parsed.arc_type == "skip"
+                    else "Record the caller-selected paper_enter journal decision with required side, quantity, price, and thesis_id; preserves decision.add paper position event/projection outputs but performs no broker execution."
+                )
             ),
             decision_args,
             creates="decision_id",
@@ -638,10 +665,10 @@ def register_journal_bundle_status(registry: ToolRegistry) -> None:
         "journal.bundle.plan",
         _journal_bundle_plan,
         json_schema=_PLAN_SCHEMA,
-        description="Read-only plan-only helper for watch/skip market journal arcs; no external fetch, advice, trades, or writes.",
-        usage_summary="Plan primitive journal calls for a watch or skip arc without guessing schemas.",
-        examples=("tt journal bundle plan --arc-type watch", "tt journal bundle plan --arc-type skip --instrument-id ins_..."),
-        enum_notes={"arc_type": "watch records a watch decision; skip records a skip decision with a reason."},
+        description="Read-only plan-only helper for watch/skip/paper_enter market journal arcs; no external fetch, advice, trades, or writes.",
+        usage_summary="Plan primitive journal calls for a watch, skip, or paper_enter arc without guessing schemas.",
+        examples=("tt journal bundle plan --arc-type watch", "tt journal bundle plan --arc-type skip --instrument-id ins_...", "tt journal bundle plan --arc-type paper_enter --instrument-id ins_..."),
+        enum_notes={"arc_type": "watch records a watch decision; skip records a skip decision with a reason; paper_enter records a paper journal entry only, not broker execution."},
         common_failures=("This helper is plan-only; execute the returned primitive tools yourself.",),
         next_actions=("Execute ordered_calls in order, using each schema_call if validation fails, then run journal.bundle.status.",),
     )

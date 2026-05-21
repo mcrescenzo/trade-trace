@@ -28,7 +28,7 @@ def test_journal_bundle_plan_registered_cli_and_mcp_self_describing(capsys):
     assert reg.is_write is False
     assert reg.json_schema is not None
     assert reg.json_schema["required"] == ["arc_type"]
-    assert reg.json_schema["properties"]["arc_type"]["enum"] == ["watch", "skip"]
+    assert reg.json_schema["properties"]["arc_type"]["enum"] == ["watch", "skip", "paper_enter"]
 
     rc = cli_main(["journal", "bundle", "plan", "--help"])
     out = capsys.readouterr()
@@ -37,7 +37,7 @@ def test_journal_bundle_plan_registered_cli_and_mcp_self_describing(capsys):
 
     specs = [spec for spec in mcp_tool_specs() if spec["name"] == "journal.bundle.plan"]
     assert len(specs) == 1
-    assert specs[0]["input_schema"]["properties"]["arc_type"]["enum"] == ["watch", "skip"]
+    assert specs[0]["input_schema"]["properties"]["arc_type"]["enum"] == ["watch", "skip", "paper_enter"]
 
 
 def test_journal_bundle_plan_watch_uses_target_id_attach_guidance():
@@ -102,6 +102,26 @@ def test_journal_bundle_plan_skip_with_existing_ids_carries_forward_and_avoids_t
     assert "price" not in decision_args
     assert "review_by" not in decision_args
     assert data["final_check"]["args"]["decision_id"] == "dec_existing"
+
+
+
+def test_journal_bundle_plan_paper_enter_guides_required_fields_without_broker_execution():
+    plan = mcp_call("journal.bundle.plan", {"arc_type": "paper_enter", "idempotency_key_prefix": "paper"}, actor_id="agent:default")
+    assert plan.ok, plan
+    assert isinstance(plan, SuccessEnvelope)
+    data = plan.data
+    assert data["arc_type"] == "paper_enter"
+    calls = {step["tool"]: step for step in data["ordered_calls"]}
+    decision_step = calls["decision.add"]
+    decision_args = decision_step["args_template"]
+    assert decision_args["type"] == "paper_enter"
+    assert {"side", "quantity", "price", "thesis_id", "forecast_id", "snapshot_id"}.issubset(decision_args)
+    assert "review_by" not in decision_args
+    assert "no broker execution" in decision_step["purpose"]
+    assert "position event/projection outputs" in decision_step["purpose"]
+    assert "source.add" in calls
+    assert "forecast.add" in calls
+    assert data["no_advice_boundary"]["trade_execution_performed"] is False
 
 
 def test_journal_bundle_status_mcp_spec_omits_private_auth_fragments():
@@ -268,6 +288,141 @@ def test_journal_bundle_status_recovers_idea_capture_provenance_from_downstream_
         "trade_execution_performed": False,
         "advice_generated": False,
     }
+
+
+def test_journal_bundle_status_recognizes_complete_enough_paper_enter_without_reflection(home):
+    venue = _mcp(home, "venue.add", {"name": "Paper PM", "kind": "prediction_market"})
+    assert isinstance(venue, SuccessEnvelope)
+    instrument = _mcp(home, "instrument.add", {
+        "venue_id": venue.data["id"],
+        "title": "Paper entry market",
+        "asset_class": "prediction_market",
+    })
+    assert isinstance(instrument, SuccessEnvelope)
+    snapshot = _mcp(home, "snapshot.add", {
+        "instrument_id": instrument.data["id"],
+        "captured_at": "2026-05-20T15:05:00Z",
+        "price": 0.52,
+    })
+    assert isinstance(snapshot, SuccessEnvelope)
+    source = _mcp(home, "source.add", {"kind": "url", "uri": "https://example.invalid/paper-entry"})
+    assert isinstance(source, SuccessEnvelope)
+    thesis = _mcp(home, "thesis.add", {
+        "instrument_id": instrument.data["id"],
+        "side": "yes",
+        "body": "Caller-authored paper entry thesis.",
+    })
+    assert isinstance(thesis, SuccessEnvelope)
+    forecast = _mcp(home, "forecast.add", {
+        "thesis_id": thesis.data["id"],
+        "kind": "binary",
+        "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.57},
+            {"outcome_label": "no", "probability": 0.43},
+        ],
+    })
+    assert isinstance(forecast, SuccessEnvelope)
+    for tool, target_id in (
+        ("source.attach_to_thesis", thesis.data["id"]),
+        ("source.attach_to_forecast", forecast.data["id"]),
+    ):
+        attach = _mcp(home, tool, {"source_id": source.data["id"], "target_id": target_id})
+        assert isinstance(attach, SuccessEnvelope)
+    decision = _mcp(home, "decision.add", {
+        "type": "paper_enter",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "forecast_id": forecast.data["id"],
+        "snapshot_id": snapshot.data["id"],
+        "side": "yes",
+        "quantity": 10,
+        "price": 0.52,
+        "reason": "Caller-selected paper journal entry; not broker execution.",
+    })
+    assert isinstance(decision, SuccessEnvelope)
+    assert "position_id" in decision.data
+    assert "position_event_id" in decision.data
+    attach_decision = _mcp(home, "source.attach_to_decision", {"source_id": source.data["id"], "target_id": decision.data["id"]})
+    assert isinstance(attach_decision, SuccessEnvelope)
+
+    status = _mcp(home, "journal.bundle.status", {"decision_id": decision.data["id"]})
+
+    assert isinstance(status, SuccessEnvelope)
+    assert status.data["status"] == "complete_enough"
+    checks = {item["step"]: item for item in status.data["checklist"]}
+    assert checks["venue_recorded"]["status"] == "ok"
+    assert checks["instrument_recorded"]["status"] == "ok"
+    assert checks["snapshot_recorded"]["status"] == "ok"
+    assert checks["source_attached"]["status"] == "ok"
+    assert checks["thesis_recorded"]["status"] == "ok"
+    assert checks["forecast_recorded"]["status"] == "ok"
+    assert checks["decision_recorded"]["status"] == "ok"
+    assert checks["reflection_attached"]["status"] == "ok"
+    assert not [call for call in status.data["next_calls"] if call["for_step"] == "reflection_attached"]
+    assert status.data["no_advice_boundary"]["trade_execution_performed"] is False
+
+
+def test_journal_bundle_status_paper_enter_does_not_waive_related_skip_requirements(home):
+    venue = _mcp(home, "venue.add", {"name": "Mixed PM", "kind": "prediction_market"})
+    assert isinstance(venue, SuccessEnvelope)
+    instrument = _mcp(home, "instrument.add", {
+        "venue_id": venue.data["id"],
+        "title": "Mixed paper and skip market",
+        "asset_class": "prediction_market",
+    })
+    assert isinstance(instrument, SuccessEnvelope)
+    snapshot = _mcp(home, "snapshot.add", {
+        "instrument_id": instrument.data["id"],
+        "captured_at": "2026-05-20T15:05:00Z",
+        "price": 0.52,
+    })
+    assert isinstance(snapshot, SuccessEnvelope)
+    thesis = _mcp(home, "thesis.add", {
+        "instrument_id": instrument.data["id"],
+        "side": "yes",
+        "body": "Caller-authored mixed arc thesis.",
+    })
+    assert isinstance(thesis, SuccessEnvelope)
+    forecast = _mcp(home, "forecast.add", {
+        "thesis_id": thesis.data["id"],
+        "kind": "binary",
+        "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.57},
+            {"outcome_label": "no", "probability": 0.43},
+        ],
+    })
+    assert isinstance(forecast, SuccessEnvelope)
+    paper_decision = _mcp(home, "decision.add", {
+        "type": "paper_enter",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "forecast_id": forecast.data["id"],
+        "snapshot_id": snapshot.data["id"],
+        "side": "yes",
+        "quantity": 10,
+        "price": 0.52,
+        "reason": "Caller-selected paper journal entry; not broker execution.",
+    })
+    assert isinstance(paper_decision, SuccessEnvelope)
+    skip_decision = _mcp(home, "decision.add", {
+        "type": "skip",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "forecast_id": forecast.data["id"],
+        "snapshot_id": snapshot.data["id"],
+        "reason": "Regression test only; no advice.",
+    })
+    assert isinstance(skip_decision, SuccessEnvelope)
+
+    status = _mcp(home, "journal.bundle.status", {"decision_id": skip_decision.data["id"]})
+
+    assert isinstance(status, SuccessEnvelope)
+    checks = {item["step"]: item for item in status.data["checklist"]}
+    assert checks["unresolved_forecasts"]["status"] == "weak"
+    assert checks["reflection_attached"]["status"] == "missing"
+    assert {paper_decision.data["id"], skip_decision.data["id"]}.issubset(checks["reflection_attached"]["record_ids"]["decisions"])
 
 
 def test_journal_bundle_status_missing_home_does_not_create_directory(tmp_path: Path):
