@@ -73,6 +73,13 @@ trading-decision types; "Decision" otherwise. Detail pages use the
 storage-canonical noun (a position-detail page says "position", not
 "trade").
 
+Agent-facing current-exposure reports/tool schemas additionally follow
+[`current-exposure-agent-contract.md`](./current-exposure-agent-contract.md):
+open exposure is canonical only from `positions` backed by
+`position_events`; decisions are activity/audit; `watch` decisions are
+never positions; and actual-recorded decisions remain record-only unless
+a corresponding position projection/event exists.
+
 ## 3. Page information architecture (shipped)
 
 The React Console route catalog is now the source of truth. Primary

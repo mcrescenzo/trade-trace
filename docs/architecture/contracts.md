@@ -11,8 +11,9 @@ and `meta.dry_run` (bead 268), both backward-compatible.
 
 Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
-[memory-layer.md](memory-layer.md), and the agent-facing
-[AGENT_GUIDE.md](../AGENT_GUIDE.md).
+[memory-layer.md](memory-layer.md),
+[current-exposure-agent-contract.md](current-exposure-agent-contract.md),
+and the agent-facing [AGENT_GUIDE.md](../AGENT_GUIDE.md).
 
 ## 1. Purpose
 
