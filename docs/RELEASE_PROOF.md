@@ -19,17 +19,15 @@
 | MCP smoke | `trade-trace-mcp --help` (fresh venv) | exits 0 |
 | Pip check | `pip check` (fresh venv) | `No broken requirements found.` |
 | Journal init smoke | `tt journal init --home /tmp/tt-fresh-home` | ok=true, schema_version=10 |
-| Console help smoke | `tt console serve --help` (fresh venv) | renders flag block |
+
 
 ## Wheel and sdist surface
 
 The wheel contains only the intended public files:
 
-- `trade_trace/` (Python source tree, including `console/`,
+- `trade_trace/` (Python source tree, including
   `contracts/`, `events/`, `models/`, `reports/`, `security/`,
   `storage/`, `tools/`).
-- `trade_trace/console/static/app/index.html`.
-- `trade_trace/console/static/app/assets/*`.
 - `LICENSE`, `METADATA`, `WHEEL`, `entry_points.txt`,
   `top_level.txt`, `RECORD`.
 

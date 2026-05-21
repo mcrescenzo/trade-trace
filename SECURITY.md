@@ -59,7 +59,7 @@ Out of scope:
 ## Network and telemetry posture
 
 By default, Trade Trace is local-first and does not send telemetry. Fresh
-`journal.init`, local journal operations, Console startup/use, and MCP stdio
+`journal.init`, local journal operations, and MCP stdio
 startup are expected to make no outbound network calls; the repository keeps
 security tests for those default boundaries.
 

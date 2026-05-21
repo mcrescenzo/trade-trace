@@ -4,7 +4,7 @@
 **Status:** Clean planning draft
 **Companion docs:** [`VISION.md`](./VISION.md), [`docs/architecture/memory-layer.md`](./architecture/memory-layer.md), [`docs/architecture/scoring.md`](./architecture/scoring.md), [`docs/architecture/persistence.md`](./architecture/persistence.md), [`docs/architecture/contracts.md`](./architecture/contracts.md), [`docs/architecture/current-exposure-agent-contract.md`](./architecture/current-exposure-agent-contract.md), [`docs/architecture/market-scan-contract.md`](./architecture/market-scan-contract.md), [`docs/architecture/operability.md`](./architecture/operability.md), [`docs/architecture/reports.md`](./architecture/reports.md), [`docs/architecture/imports.md`](./architecture/imports.md), [`docs/architecture/risk-units.md`](./architecture/risk-units.md), [`docs/architecture/opportunity-analysis.md`](./architecture/opportunity-analysis.md), [`docs/architecture/dogfood-protocol.md`](./architecture/dogfood-protocol.md)
 
-Trade Trace is a local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents. It records decisions, resolves outcomes, scores supported forecasts, stores reflections, evolves playbooks, and recalls prior learning. It never executes trades, never queries external venues for market data, and never handles execution credentials. An optional **local read-only Console** (`trade-trace[console]`) ships a React/Vite analytics dashboard over the same data the CLI and MCP surface — it does not execute trades, call broker APIs, or fetch market data; see [`docs/CONSOLE.md`](./CONSOLE.md) and [`docs/architecture/console.md`](./architecture/console.md).
+Trade Trace is a local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents. It records decisions, resolves outcomes, scores supported forecasts, stores reflections, evolves playbooks, and recalls prior learning. It never executes trades, never queries external venues for market data, and never handles execution credentials. The former human-facing Console UI has been hard-removed; supported product surfaces are the MCP server, CLI, and Python/library reporting APIs.
 
 ## 1. MVP scope
 
@@ -23,7 +23,7 @@ MVP vertical slice:
 9. Token-budgeted recall of prior observations, reflections, and playbook rules in the next decision
 10. Source/evidence capture attached to theses, decisions, and forecasts
 
-The post-MVP pre-release track has since landed stdio MCP, tool-schema introspection, optional `sqlite-vec` embeddings/model import/API-provider/reindex surfaces, JSONL/CSV import implementations, comparison/review-bundle/risk/opportunity reports, and the optional local read-only Console documented in the README and tool registry. Still deferred: multi-class/scalar scoring, broader trading-native edge/market reports (forecast-vs-market, calibration-by-liquidity-bucket, skipped-positive-edge review), exact ForecastBench submission compatibility, sync, HTTP/SSE transport, and websockets.
+The post-MVP pre-release track has since landed stdio MCP, tool-schema introspection, optional `sqlite-vec` embeddings/model import/API-provider/reindex surfaces, JSONL/CSV import implementations, and comparison/review-bundle/risk/opportunity reports. Still deferred: multi-class/scalar scoring, broader trading-native edge/market reports (forecast-vs-market, calibration-by-liquidity-bucket, skipped-positive-edge review), exact ForecastBench submission compatibility, sync, HTTP/SSE transport, and websockets.
 
 Trade Trace does not fetch trading data, broker data, market prices, or outcomes from external services. The agent supplies all market data through the structured ingestion APIs. The one outbound-network path is the optional local embedding model download (off by default in MVP — see §2.4 and [`memory-layer.md`](./architecture/memory-layer.md) §8), which never carries trading data and is explicitly opt-in.
 
@@ -520,7 +520,7 @@ The current pre-release implementation includes the import-ready write schema pl
 - `report.compare` implementation (segmentation data is captured from M1)
 - `review.bundle` implementation
 - `report.strategy_performance` — per-strategy P&L, calibration trend, mistake-tag frequency, playbook adherence summary
-- Optional **local read-only Console** (live local server under the `[console]` extra) — superseded the prior "static read-only inspection export/viewer" framing; see [`docs/CONSOLE.md`](./CONSOLE.md). Console is still local-only and never executes trades or fetches market data.
+- The former local read-only Console UI was removed before release; current reporting/review surfaces are MCP/CLI tools, `review.bundle`, and Python/library report APIs.
 - Guided market-scan dry-run/promote journal bundle flow per [`market-scan-contract.md`](./architecture/market-scan-contract.md)
 
 ### P1

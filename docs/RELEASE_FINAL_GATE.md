@@ -21,6 +21,10 @@ shipped surfaces:
 - **Beads/private or raw audit/review artifacts not public** → `.beads/`,
   root `audits/`, generated `docs/audits/`, and generated `docs/reviews/`
   remain excluded from HEAD; .gitignore prevents accidental re-tracking.
+  `docs/audits/` is intentionally tracked only for curated audit evidence
+  and other curated proof documents when such documents are explicitly
+  promoted into repo-public release docs; generated audit run directories
+  remain private/ignored.
   Public release evidence is limited to concise curated summary/proof docs,
   not raw run directories.
 - **MCP required, not optional** → `pyproject.toml` lists
@@ -41,10 +45,10 @@ shipped surfaces:
 The command results below are preserved as a dated snapshot from the
 original gate run. They are not a live/current proof for later HEADs;
 rerun the commands in `docs/RELEASE_CHECKLIST.md` before publishing. In
-particular, this historical snapshot predates the explicit Console gate
-and full fresh-wheel script parity now required by the checklist, so it
-must not be treated as evidence that the Console gate, `trade-trace`
-entry point, optional extras, or browser/visual review are current.
+particular, this historical snapshot predates later release-checklist
+changes, so it must not be treated as evidence that the `trade-trace`
+entry point, optional extras, or current fresh-wheel script parity are
+current.
 
 | Gate | Result |
 |------|--------|
@@ -112,5 +116,4 @@ approves the publish workflow for that same candidate.
 The tag-triggered workflow is also not complete release proof by itself:
 it runs the shared Python ruff/mypy/pytest gate, verifies package/tag
 versions, builds, and checks distribution metadata, but it does not run
-the Console Node/Vite gate, browser smoke, visual review, or install the
-freshly built wheel for script/extra parity before upload.
+or install the freshly built wheel for script/extra parity before upload.

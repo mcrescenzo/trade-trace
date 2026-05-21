@@ -21,7 +21,7 @@ Trade Trace lives at that intersection. It is a *grader* and a *memory*, not a *
 
 - **Not an executor.** Trade Trace never places, signs, cancels, or routes a trade. It never handles wallet keys, broker credentials, or seed phrases. Execution is a separate concern with separate safety design.
 - **Not a data fetcher.** Trade Trace never queries external venues or market data APIs. The agent calling Trade Trace already has its own data connections — it is the one currently analyzing the market — and supplies all snapshots, outcomes, and metadata through the structured ingestion APIs.
-- **Not a remote dashboard or trading UI.** The optional `trade-trace[console]` extra ships a **local, read-only** React analytics dashboard at `http://127.0.0.1:8765` (see [`docs/CONSOLE.md`](./CONSOLE.md)). Outputs are JSON-by-default for agents; the Console is a read-only renderer over the same JSON, not a trading workflow.
+- **Not a remote dashboard or trading UI.** Trade Trace has no shipped human-facing dashboard; the former Console UI was hard-removed. Outputs are JSON-by-default for agents through MCP, CLI, and library/reporting surfaces.
 - **Not a generic agent memory framework.** Trade Trace's memory layer is trading-specific: nodes carry outcome links, calibration confidence, and position provenance. If you want a general memory store, use Mem0, Letta, or Hindsight directly.
 - **Not a backtesting or simulation engine.** Trade Trace records and grades real and paper trades. It does not synthesize market data or replay historical fills.
 - **Not a portfolio accounting system.** It computes P&L and basic exposure metrics, but it is not broker-grade and is not a tax tool.
@@ -117,7 +117,7 @@ This loop is the product. The MVP proves the complete loop with narrow breadth: 
 | **Hindsight (Vectorize.io)** | General agent memory: Retain/Recall/Reflect | Memory abstraction shape | Trading-specific schema: outcome-linked, calibration-aware, position-provenanced |
 | **Mem0 / Letta / Zep** | General agent memory frameworks | Multi-strategy retrieval | Domain-specific; would not be a good fit if generalized |
 | **ForecastBench** | Forecasting benchmark | Calibration scoring | Tooling, not benchmark — export shape remains TBD until schema verification |
-| **TradeNote / Deltalytix** | Open-source self-hosted journals | Local-first, open-source | Agent-native; optional local read-only Console; memory + reflection loop |
+| **TradeNote / Deltalytix** | Open-source self-hosted journals | Local-first, open-source | Agent-native; no human UI; memory + reflection loop |
 
 ## Borrowed patterns (and what they translate to)
 
@@ -155,7 +155,7 @@ From **ForecastBench / Manifold / Brier.fyi** (LLM forecasting):
 - Generic agent memory framework — Trade Trace's memory is trading-shaped.
 - Backtesting or market simulation engines.
 - Full tax accounting or broker-grade portfolio accounting.
-- Cloud-hosted product dashboard for human users. The local read-only Console (`trade-trace[console]`) supersedes the prior "static exports may be considered later" framing — see [`docs/CONSOLE.md`](./CONSOLE.md) and [`docs/architecture/console.md`](./architecture/console.md).
+- Cloud-hosted or local product dashboard for human users. The former local read-only Console UI has been hard-removed; current surfaces remain MCP, CLI, and library/reporting APIs.
 - Social / community / leaderboard features.
 - Any claim of profitability, edge, or financial advice.
 - Venue-specific product semantics — fields like Polymarket condition IDs, options Greeks, or futures contract specs live in `metadata_json`, not in the core schema.

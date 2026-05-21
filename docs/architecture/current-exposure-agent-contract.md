@@ -32,7 +32,7 @@ Human-facing titles may say “Open positions” or “Recent activity,” but J
 
 ## 3. Stable caveat and anomaly codes
 
-Current-exposure outputs should expose caveats as stable codes plus human hints. The same code set is suitable for MCP `tool.schema` descriptions, CLI help, and Console copy.
+Current-exposure outputs should expose caveats as stable codes plus human hints. The same code set is suitable for MCP `tool.schema` descriptions, CLI help, and library/reporting consumers.
 
 | Code | Trigger | Expected agent wording / hint |
 |---|---|---|

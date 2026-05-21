@@ -21,7 +21,7 @@ format convention, no file path layout, no redaction rule, and no
 single place a console or oncall reader can grep.
 
 This document fixes that. It is also a prerequisite for the
-Console Logs page (`trade-trace-jtec`); the Console is a *reader*
+historical Console Logs page plan (`trade-trace-jtec`); the removed Console was a *reader*
 of the contract — it does not extend it.
 
 ## Scope
@@ -38,7 +38,7 @@ In:
 Out:
 
 - Cloud log shipping or external aggregators.
-- The Console Logs page UX.
+- The removed Console Logs page UX.
 - Backfilling every existing tool call site (opportunistic).
 
 ## Format
@@ -178,7 +178,7 @@ on a per-row failure.
 ## Open questions
 
 - Time-based rotation (daily) may be more useful for human readers
-  than size-based; revisit after the Console Logs page lands and
+  than size-based; revisit if another log viewer lands and
   we see how operators actually grep these files.
 - Should the module register a JSON Schema for the line shape?
   Deferred — the contract above is the source of truth until a

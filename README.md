@@ -37,10 +37,8 @@ Requirements: Python 3.11+ and SQLite with FTS5 (see
 §2.1 for the build-dependency policy). MCP support is bundled by default.
 Optional vector recall installs with `trade-trace[embeddings]`
 (adds `sqlite-vec` and OS keyring support for local or API embeddings).
-The optional read-only **Console** dashboard installs with
-`trade-trace[console]` (FastAPI + Uvicorn serving a packaged
-React/Vite dashboard); see
-[`docs/CONSOLE.md`](./docs/CONSOLE.md).
+The former human-facing Console UI has been hard-removed; current supported
+surfaces are the CLI, MCP server, and Python/library reporting APIs.
 
 For development:
 
@@ -111,12 +109,9 @@ the auto-derived input schema; the registry is the source of truth.
 
 - Not a trade executor. No order signing, wallet handling, broker
   credentials, seed phrases, or trade routing.
-- Not a remote service or broker dashboard. The optional
-  `trade-trace[console]` extra ships a **local, read-only** review
-  dashboard at `http://127.0.0.1:8765` — it does not execute trades,
-  call broker APIs, or fetch market data; it reads the journal SQLite
-  file via a SQLite URI `mode=ro` handle. See
-  [`docs/CONSOLE.md`](./docs/CONSOLE.md).
+- Not a remote service, broker dashboard, or human-facing trading UI. The
+  removed Console dashboard is no longer shipped; use the CLI, MCP server,
+  and report/library surfaces for local read-only review.
 - Not a generic agent memory framework. The schema is trading-shaped.
 - Not a backtesting engine, tax accountant, social platform, or source
   of financial advice.
@@ -124,10 +119,9 @@ the auto-derived input schema; the registry is the source of truth.
 ## Security and privacy
 
 - **Outbound network is off by default.** A fresh `journal.init`, normal
-  local journal use, Console startup/use, and MCP stdio startup make zero
+  local journal use, and MCP stdio startup make zero
   outbound calls; the default boundary is verified by
-  `tests/security/test_no_network_default.py` and the Console/MCP security
-  tests.
+  `tests/security/test_no_network_default.py` and MCP security tests.
 - **Credentials are never persisted.** Every write tool silently drops
   credential-shaped args (`api_key`, `wallet_seed`, `private_key`,
   `mnemonic`, `broker_token`, …); verified by
@@ -164,9 +158,7 @@ how to report vulnerabilities via GitHub Security Advisories.
   [`docs/CLAUDE_DESKTOP.md`](./docs/CLAUDE_DESKTOP.md),
   [`docs/IDE_MCP_SETUP.md`](./docs/IDE_MCP_SETUP.md)
   — client setup recipes.
-- [`docs/CONSOLE.md`](./docs/CONSOLE.md)
-  — install/launch/page-map for the optional read-only Console
-  dashboard (`trade-trace[console]`).
+
 - [`docs/VISION.md`](./docs/VISION.md) — north star.
 - [`docs/PRD.md`](./docs/PRD.md) — working PRD and MVP scope.
 - [`docs/architecture/contracts.md`](./docs/architecture/contracts.md)
