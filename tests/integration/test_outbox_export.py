@@ -207,7 +207,7 @@ def test_drain_writes_imports_md_superset_shape(tmp_path: Path):
 
     home, db, writer = _journal(tmp_path)
     try:
-        writer.write(
+        record = writer.write(
             event_type="decision.created",
             subject_kind="decision",
             subject_id="d_1",
@@ -215,11 +215,13 @@ def test_drain_writes_imports_md_superset_shape(tmp_path: Path):
             actor_id="agent:default",
             idempotency_key="k1",
         )
+        expected_line = record.to_jsonl_line()
         result = drain_outbox(db.connection, home)
     finally:
         db.close()
 
     line = json.loads(result.exported_files[0].read_text())
+    assert line == expected_line
     assert line["tool"] == "decision.add"
     assert isinstance(line["args"], dict)
     assert line["args"]["instrument_id"] == "i_1"

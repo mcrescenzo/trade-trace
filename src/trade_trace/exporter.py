@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from trade_trace._permissions import chmod_user_only_dirs, chmod_user_only_file
+from trade_trace.events import EventRecord
 
 RESERVED_TRANSPORT_KEYS = frozenset(
     {"_event_id", "_event_type", "_actor_id", "_created_at", "_contract_version"}
@@ -160,8 +161,6 @@ def write_event_atomic(
     The importer reads `tool` + `args` directly and ignores transport keys.
     """
 
-    final = jsonl_path(home, event_type, event_id, created_at)
-    tmp = final.parent / (final.name + ".tmp")
     args = {k: v for k, v in payload.items() if not k.startswith("_")}
     resolved_tool = tool or resolve_tool_for_event(event_type, args)
     line: dict[str, Any] = {
@@ -173,6 +172,33 @@ def write_event_atomic(
         "_created_at": created_at,
         "_contract_version": contract_version,
     }
+    return write_jsonl_line_atomic(
+        home,
+        event_id=event_id,
+        event_type=event_type,
+        created_at=created_at,
+        line=line,
+    )
+
+
+def write_jsonl_line_atomic(
+    home: Path,
+    *,
+    event_id: int,
+    event_type: str,
+    created_at: str,
+    line: dict[str, Any],
+) -> Path:
+    """Atomically write an already-shaped JSONL event line.
+
+    This is the low-level file primitive shared by the legacy parameterized
+    writer and the production outbox drain. The drain obtains `line` from
+    `EventRecord.to_jsonl_line()`, making that public method the canonical
+    JSONL serialization path while keeping atomic file semantics here.
+    """
+
+    final = jsonl_path(home, event_type, event_id, created_at)
+    tmp = final.parent / (final.name + ".tmp")
     # Open with O_CREAT|O_WRONLY|O_TRUNC and explicit mode=0600 so the
     # tmp file is restrictive from the start (bead trade-trace-ljl9 /
     # DEBT-040). On POSIX the umask is masked against the mode bits;
@@ -330,18 +356,37 @@ def _read_outbox_pending(conn: sqlite3.Connection) -> list[tuple[int, int]]:
     return [(row[0], row[1]) for row in cur.fetchall()]
 
 
-def _load_event(conn: sqlite3.Connection, event_id: int) -> tuple[str, str, str, str] | None:
-    """Return `(event_type, actor_id, created_at, payload_json)` for the
-    event id, or None if missing (which would indicate FK corruption)."""
+def _load_event(conn: sqlite3.Connection, event_id: int) -> EventRecord | None:
+    """Return the event record, or None if missing (FK corruption)."""
 
     cur = conn.execute(
-        "SELECT event_type, actor_id, created_at, payload_json FROM events WHERE id = ?",
+        """
+        SELECT id, event_type, subject_kind, subject_id, payload_json,
+               actor_id, idempotency_key, created_at, request_id,
+               agent_id, model_id, environment, run_id
+        FROM events
+        WHERE id = ?
+        """,
         (event_id,),
     )
     row = cur.fetchone()
     if row is None:
         return None
-    return (row[0], row[1], row[2], row[3])
+    return EventRecord(
+        id=row[0],
+        event_type=row[1],
+        subject_kind=row[2],
+        subject_id=row[3],
+        payload_json=row[4],
+        actor_id=row[5],
+        idempotency_key=row[6],
+        created_at=row[7],
+        request_id=row[8],
+        agent_id=row[9],
+        model_id=row[10],
+        environment=row[11],
+        run_id=row[12],
+    )
 
 
 def drain_outbox(
@@ -392,9 +437,10 @@ def drain_outbox(
             )
             continue
 
-        event_type, actor_id, created_at, payload_json = event
+        event_type = event.event_type
+        created_at = event.created_at
         try:
-            payload = json.loads(payload_json)
+            payload = json.loads(event.payload_json)
         except (json.JSONDecodeError, TypeError) as exc:
             log.warning(
                 "outbox row payload failed to decode",
@@ -422,13 +468,12 @@ def drain_outbox(
             )
             continue
         try:
-            path = write_event_atomic(
+            path = write_jsonl_line_atomic(
                 home,
-                event_id=event_id,
-                event_type=event_type,
-                actor_id=actor_id,
-                created_at=created_at,
-                payload=payload,
+                event_id=event.id,
+                event_type=event.event_type,
+                created_at=event.created_at,
+                line=event.to_jsonl_line(),
             )
         except OSError as exc:
             conn.execute(
