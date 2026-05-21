@@ -12,7 +12,7 @@ Every **material** child bead under the
 | Child bead | Status | Artifact |
 |------------|--------|----------|
 | trade-trace-piav | closed | HEAD scrub policy: `.beads/`, root `audits/`, generated `docs/audits/`, and generated `docs/reviews/` stay excluded from public HEAD; release evidence is limited to curated summary/proof docs. |
-| trade-trace-ox5c | closed | `docs/RELEASE_HISTORY_REWRITE.md` — executable plan for the history rewrite + remote force-push. |
+| trade-trace-ox5c | closed | `docs/RELEASE_HISTORY_REWRITE.md` — historical rewrite plan now superseded by the selected clean public export/branch strategy. |
 | trade-trace-a468 | closed | `docs/RELEASE_PROOF.md` — full ruff / mypy / pytest / build / twine / fresh-install proof. |
 
 Owner decisions recorded under the bead are reflected in
@@ -59,7 +59,7 @@ entry point, optional extras, or browser/visual review are current.
 | `git ls-files \| grep -E '^(\.beads/\|audits/\|docs/audits/\|docs/reviews/)'` | empty — private/raw artifact roots absent from tracked HEAD |
 | `git ls-files docs/audits docs/reviews` | empty — generated audit/review run directories are internal and ignored |
 | `git grep -l <owner-email>` against tracked HEAD | empty |
-| `git grep -l '/home/hermes'` against tracked HEAD | empty |
+| `git grep -l '<local-home-path>'` against tracked HEAD | empty |
 | Wheel surface scan | only `trade_trace/storage/edge_audit.py` matches `audit` (intentional — it's the audit-policy module, not an audit export) |
 
 ## Remaining operator-gated actions
@@ -68,18 +68,16 @@ These are explicitly **NOT** done by the closure of this gate.
 They require the operator's explicit approval at execution
 time:
 
-1. **Execute the history rewrite** per
-   `docs/RELEASE_HISTORY_REWRITE.md`. Required to scrub
-   owner email/name and audit/review artifacts from *prior* commits;
-   private/raw artifact roots are already clean at HEAD.
-2. **Force-push** the rewritten history to `origin/main`.
-3. **Tag the release** (`git tag v0.0.1rc3 && git push --tags`).
-4. **Upload to PyPI** (via `twine upload` or the OIDC GitHub
-   Actions workflow in `.github/workflows/workflow.yml`).
+1. **Create or publish the clean public branch/export** from the approved
+   private HEAD after reviewing the export proof. This is the selected
+   public-history strategy; it avoids rewriting private `main`.
+2. **Tag the release** (`git tag v0.0.1rc3 && git push --tags`) only after
+   separate approval for the exact public candidate SHA.
+3. **Upload to PyPI** (via `twine upload` or the OIDC GitHub Actions
+   workflow in `.github/workflows/workflow.yml`) only after separate approval.
 
-Each step is reversible only with substantial effort
-(force-push) or not reversible at all (PyPI upload is
-write-once per version). The operator-approval boundary is
+Publishing a public branch, pushing a tag, and uploading to PyPI are shared
+state actions; PyPI upload is write-once per version. The operator-approval boundary is
 intentional and matches the project's CLAUDE.md guidance on
 destructive / shared-state actions.
 
@@ -98,14 +96,13 @@ This document records each of those criteria's status:
   above is historical evidence; rerun the checklist for current proof.
 - ✅ Tracked-HEAD scan clean for private/raw roots (`.beads/`, root
   `audits/`, generated `docs/audits/`, generated `docs/reviews/`).
-- ⏳ Full-history scan blocked on operator-approved rewrite.
+- ✅ Public-history strategy selected: clean single-commit export/branch with fresh reachable-history scan; no private-history rewrite or force-push is part of this path.
 - ✅ "No publish/force-push happens without explicit final
   approval" — the injunction is the policy; this gate honors
   it by not running those commands.
 
 This document is **not** current publish authority for any later
-HEAD by itself. After the operator runs the plan in
-`docs/RELEASE_HISTORY_REWRITE.md`, the exact commit that will be
+HEAD by itself. After the operator approves a public export candidate, the exact commit that will be
 tagged/uploaded must first have a fresh `docs/RELEASE_CHECKLIST.md`
 rerun recorded against that candidate SHA. The release becomes
 shippable only when that candidate-specific proof records the exact

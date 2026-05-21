@@ -1,14 +1,21 @@
-# Release History Rewrite Plan
+# Public History Strategy
 
-> Status: **prepared, awaiting owner execution + remote force-push
-> approval**. The plan below is the trade-trace-ox5c deliverable.
-> The local rewrite step is destructive (rewrites every commit
-> hash in the repo) and the remote force-push step is destructive
-> and shared (overwrites `origin/main`). Both are gated on
-> explicit operator approval at execution time per the bead's
-> safety boundary.
+> Status: **selected strategy is a clean public branch/export from current
+> HEAD**. The destructive `git filter-repo` rewrite described later in this
+> document is retained only as a historical alternative plan. It is **not**
+> the chosen path for the current public release unless the owner explicitly
+> changes strategy later.
 
-## Why we need to rewrite history
+For the current public release, publishable git history should be created as
+a fresh single-commit public export/branch from the approved private HEAD.
+This keeps private working history intact, avoids rewriting or force-pushing
+`main`, and makes the public reachable history exactly the curated export
+tree plus sanitized maintainer metadata.
+
+The proof artifact for the current export candidate is
+[`docs/architecture/release-public-export-proof.md`](architecture/release-public-export-proof.md).
+
+## Why public history must be clean
 
 `trade-trace-piav` removed tracked `.beads/`, `audits/`, and
 `docs/audits/` artifacts from HEAD; `trade-trace-jr9b` also removes
@@ -26,7 +33,32 @@ PyPI-targeted repo, the old commits must be unreachable so:
   `.beads/metadata.json`, etc.) is no longer carried in
   publicly-shipped history.
 
-## Pre-flight checks
+## Selected path: clean public export/branch
+
+The selected release-hygiene path is:
+
+1. Start from the approved private HEAD after HEAD-only scrub work.
+2. Create a clean export tree with `git archive HEAD` or equivalent.
+3. Initialize a fresh repository/branch from that tree.
+4. Commit the export as a single public commit using sanitized maintainer
+   identity, for example `Trade Trace Maintainer <noreply@example.com>`.
+5. Run reachable-history scans against the export repository for excluded
+   paths and private strings before any remote publication.
+6. Only after separate explicit approval, push the public branch/export and
+   later tag/publish the release candidate.
+
+This path does **not** rewrite private `main`, does **not** force-push
+`origin/main`, does **not** create a release tag, and does **not** upload to
+PyPI as part of the export proof.
+
+## Historical alternative: destructive rewrite plan, not selected
+
+The following `git filter-repo` plan is preserved for context from the prior
+rewrite-planning bead. It is not approved for the current release path unless
+the owner explicitly replaces the clean export strategy with a destructive
+history rewrite.
+
+## Historical pre-flight checks
 
 Run before the rewrite:
 

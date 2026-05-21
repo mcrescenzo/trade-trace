@@ -11,7 +11,7 @@ Decision: Gate can close for `trade-trace-o88k`; epic `trade-trace-29m9` should 
 
 ## Preflight findings
 
-- Repository: `/home/hermes/code/trade-trace`.
+- Repository: local Trade Trace checkout.
 - Branch: `main`.
 - Initial tracked/untracked status before this artifact write was clean by `git status --short` producing no paths.
 - Beads graph cycle check passed: `bd dep cycles` reported `✓ No dependency cycles detected`.

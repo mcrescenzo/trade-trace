@@ -1,10 +1,10 @@
 # Pre-Publish Release Proof
 
 > Status: **proof artifact** for trade-trace-a468. Recorded
-> 2026-05-19 against the post-piav commit. The actual PyPI
-> upload is gated on the operator running through
-> `docs/RELEASE_HISTORY_REWRITE.md` and approving the final
-> remote force-push.
+> 2026-05-19 against the post-piav commit. This is historical proof; the
+> current public-history strategy is a clean public export/branch from
+> approved HEAD, with separate approval required before any public branch,
+> tag, or PyPI publish action.
 
 ## Commands run and their outcomes
 
@@ -51,13 +51,13 @@ Run against tracked files at the intended release commit
 | Scan | Result |
 |------|--------|
 | `git ls-files \| grep -E '^\.beads/\|^audits/\|^docs/audits/'` | empty |
-| `git grep -l 'michaelcrescenzo@gmail.com'` | empty |
-| `git grep -l '/home/hermes'` | empty |
+| `git grep -l '<owner-email>'` | empty |
+| `git grep -l '<local-home-path>'` | empty |
 
 The above proves the **HEAD-only** scrub is complete. Old
-commits still hold the blobs — clearing those is the
-`trade-trace-ox5c` history rewrite that `docs/RELEASE_HISTORY_REWRITE.md`
-documents but does not execute. The PyPI upload itself ships
+private commits may still hold prior blobs. The selected public strategy is
+to publish a clean single-commit export/branch from approved HEAD rather
+than rewriting private history. The PyPI upload itself ships
 the wheel/sdist (which were never derived from the offending
 blobs); the rewrite affects only what someone sees if they
 `git clone` and `git log -p` through history.
@@ -68,11 +68,9 @@ The following destructive / shared-state actions remain
 operator-gated. The agent will not perform them without explicit
 approval:
 
-1. Execute the rewrite plan in
-   `docs/RELEASE_HISTORY_REWRITE.md`.
-2. Force-push the rewritten history to `origin/main`.
-3. Tag the release (`git tag v0.0.1rc3 && git push --tags`).
-4. Upload to PyPI (`twine upload dist/*` or the OIDC-gated GitHub
+1. Approve and publish the clean public export/branch candidate.
+2. Tag the release (`git tag v0.0.1rc3 && git push --tags`).
+3. Upload to PyPI (`twine upload dist/*` or the OIDC-gated GitHub
    Actions release workflow that lives in
    `.github/workflows/workflow.yml`).
 

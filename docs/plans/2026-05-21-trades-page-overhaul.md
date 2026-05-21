@@ -301,7 +301,7 @@ Close rule: close `trade-trace-g09k` first, then close `trade-trace-hbqs` only a
 Planning checks run before materialization:
 
 ```bash
-python3 ~/.hermes/skills/software-development/beads-program-planning/scripts/beads_plan_lint.py /tmp/trades-page-overhaul.graphspec.json --repo /home/hermes/code/trade-trace
+python3 ~/.hermes/skills/software-development/beads-program-planning/scripts/beads_plan_lint.py /tmp/trades-page-overhaul.graphspec.json --repo <repo-root>
 python3 ~/.hermes/skills/software-development/beads-program-planning/scripts/graphspec_cycle_check.py /tmp/trades-page-overhaul.graphspec.json
 ```
 

@@ -82,8 +82,9 @@ python -m venv /tmp/rc-smoke
 ```
 
 Scan refs intended for publication for leftover private/raw
-Beads/audit/review artifacts, personal info, or secret-shaped strings (see
-trade-trace-piav, trade-trace-ox5c):
+Beads/audit/review artifacts, personal info, or secret-shaped strings. For
+the current public release, use the selected clean public export/branch
+strategy and record reachable-history proof before any push:
 
 ```bash
 git ls-files | grep -E '^(\.beads/|audits/|docs/audits/|docs/reviews/)'  # must be empty
@@ -102,6 +103,12 @@ fresh result, or explicitly label any reused count as historical
 snapshot evidence.
 
 ## Cut a release
+
+Before cutting a public release from this private working history, create or
+select the clean public export/branch candidate and verify its proof. Do not
+force-push/rewrite private `main` as part of the selected path. Pushing the
+public branch/export, pushing a release tag, and PyPI publishing each require
+separate explicit approval for the exact candidate SHA.
 
 1. Bump `src/trade_trace/version.py` (`__version__`). `pyproject.toml`
    reads this dynamically; do not add a separate static project version.
