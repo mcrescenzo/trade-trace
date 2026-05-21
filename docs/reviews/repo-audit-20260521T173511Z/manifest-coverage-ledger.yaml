@@ -1,0 +1,2980 @@
+audit_run_id: repo-audit-20260521T173511Z
+scope_fingerprint: 1901b8097953e720
+tracked_files: 372
+rows:
+  - path_or_glob: ".claude/settings.json"
+    classification: config
+    owner_lane: build-package-ci-config
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:.claude/settings.json"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: ".codex/hooks.json"
+    classification: config
+    owner_lane: build-package-ci-config
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:.codex/hooks.json"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: ".github/workflows/_test.yml"
+    classification: deploy-service
+    owner_lane: build-package-ci-config
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:.github/workflows/_test.yml"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: ".github/workflows/ci.yml"
+    classification: deploy-service
+    owner_lane: build-package-ci-config
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:.github/workflows/ci.yml"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: ".github/workflows/workflow.yml"
+    classification: deploy-service
+    owner_lane: build-package-ci-config
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:.github/workflows/workflow.yml"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: ".gitignore"
+    classification: config
+    owner_lane: build-package-ci-config
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:.gitignore"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "AGENTS.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:AGENTS.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "CLAUDE.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:CLAUDE.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "LICENSE"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:LICENSE"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "README.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:README.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "SECURITY.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:SECURITY.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/AGENT_GUIDE.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/AGENT_GUIDE.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/AI_AGENT_MCP_GETTING_STARTED.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/AI_AGENT_MCP_GETTING_STARTED.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/CLAUDE_CODE.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/CLAUDE_CODE.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/CLAUDE_DESKTOP.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/CLAUDE_DESKTOP.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/CONSOLE.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/CONSOLE.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/IDE_MCP_SETUP.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/IDE_MCP_SETUP.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/PRD.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/PRD.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/RELEASE_CHECKLIST.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/RELEASE_CHECKLIST.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/RELEASE_FINAL_GATE.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/RELEASE_FINAL_GATE.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/RELEASE_HISTORY_REWRITE.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/RELEASE_HISTORY_REWRITE.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/RELEASE_PROOF.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/RELEASE_PROOF.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/VISION.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/VISION.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/agent-workbench-dogfood-evidence.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/agent-workbench-dogfood-evidence.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/console-final-product-qa.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/console-final-product-qa.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/console-ia-support-contract.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/console-ia-support-contract.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/console-release-gate.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/console-release-gate.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/console-review.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/console-review.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/console-visual-review.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/console-visual-review.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/console.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/console.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/contracts.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/contracts.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/docs-taxonomy.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/docs-taxonomy.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/dogfood-protocol.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/dogfood-protocol.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/forecastbench-compatibility.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/forecastbench-compatibility.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/http-sse-subscribe.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/http-sse-subscribe.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/imports.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/imports.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/jsonl-replay-taxonomy.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/jsonl-replay-taxonomy.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/logging.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/logging.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/market-scan-contract.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/market-scan-contract.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/memory-layer.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/memory-layer.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/migrations-split-investigation.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/migrations-split-investigation.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/operability.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/operability.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/opportunity-analysis.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/opportunity-analysis.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/persistence.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/persistence.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/position-reopen-semantics.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/position-reopen-semantics.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/release-gate-consolidation.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/release-gate-consolidation.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/reporting-product.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/reporting-product.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/reports.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/reports.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/review-bundle-decomposition-investigation.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/review-bundle-decomposition-investigation.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/risk-units.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/risk-units.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/schema-meta-diagnostics.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/schema-meta-diagnostics.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/schema-registry-investigation.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/schema-registry-investigation.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/scoring.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/scoring.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/security-adapter-investigation.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/security-adapter-investigation.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/security.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/security.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/architecture/semantic-key-policy.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/architecture/semantic-key-policy.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/advisor-review.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/advisor-review.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/bead-bodies/DC-20260520-001.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/bead-bodies/DC-20260520-001.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/bead-bodies/DC-20260520-002.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/bead-bodies/DC-20260520-002.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/bead-bodies/DC-20260520-005.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/bead-bodies/DC-20260520-005.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/bead-bodies/DC-20260520-006.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/bead-bodies/DC-20260520-006.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/bead-bodies/EPIC.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/bead-bodies/EPIC.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/bead-bodies/FINAL.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/bead-bodies/FINAL.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/body-integrity-readback.json"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/body-integrity-readback.json"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/candidate-matrix.json"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/candidate-matrix.json"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/coverage-ledger.jsonl"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/coverage-ledger.jsonl"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/domain-map.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/domain-map.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/evidence-snippets.txt"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/evidence-snippets.txt"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/final-readback-raw.txt"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/final-readback-raw.txt"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/final-summary.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/final-summary.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/lane-assignments.json"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/lane-assignments.json"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/lane-packets.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/lane-packets.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/materialized-id-map.json"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/materialized-id-map.json"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/mutation-audit.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/mutation-audit.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/mutation-command-log.json"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/mutation-command-log.json"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/post-push-status.txt"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/post-push-status.txt"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/preflight-truth.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/preflight-truth.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/deadcode-20260520T172715Z/tracked-manifest.json"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/deadcode-20260520T172715Z/tracked-manifest.json"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/all-new-bead-readbacks-and-git.txt"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/all-new-bead-readbacks-and-git.txt"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-004.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-004.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-005.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-005.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-009.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-009.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-011.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-011.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-012.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-012.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-017.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-017.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-019.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-019.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-020.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-020.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-021.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-021.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-022-023.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-022-023.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-029.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-029.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-FINAL.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-FINAL.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-REC.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/bead-bodies/SIMP20-REC.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/candidate-matrix.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/candidate-matrix.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/domain-map.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/domain-map.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/duplicate-disposition.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/duplicate-disposition.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/final-verification-transcript.txt"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/final-verification-transcript.txt"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/forecast-add-supersede-write-kernel-investigation.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/forecast-add-supersede-write-kernel-investigation.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_0.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_0.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_1.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_1.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_2.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_2.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_3.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_3.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_4.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_4.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_5.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/lane-reports/trade_trace_simplification_lane_5.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/materialize_simplification_beads_20260520.py"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/materialize_simplification_beads_20260520.py"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/materialized-id-map.json"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/materialized-id-map.json"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/memory-recall-decomposition-investigation.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/memory-recall-decomposition-investigation.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/mutation-audit.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/mutation-audit.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/mutation-command-log.json"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/mutation-command-log.json"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/preflight-truth.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/preflight-truth.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/readback-samples.txt"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/readback-samples.txt"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/residual-report-test-helper-reconciliation.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/residual-report-test-helper-reconciliation.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/audits/simplification-20260520T181054Z/trade-trace-alwf-helper-grouping.md"
+    classification: docs-historical
+    owner_lane: prior-audit-artifacts-reconciliation
+    inspection_depth: contract-checked
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/audits/simplification-20260520T181054Z/trade-trace-alwf-helper-grouping.md"
+    caveats: "Prior audit artifact; inspect for overlap/reconciliation, not as current runtime contract unless referenced by live docs."
+  - path_or_glob: "docs/plans/2026-05-21-trades-page-overhaul.md"
+    classification: docs-contract
+    owner_lane: docs-contract-release
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:docs/plans/2026-05-21-trades-page-overhaul.md"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/index.html"
+    classification: config
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/index.html"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/package-lock.json"
+    classification: generated-lockfile
+    owner_lane: grouped-assets-locks
+    inspection_depth: grouped-not-read-with-rationale
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/package-lock.json"
+    caveats: "Generated/packaged asset or lock artifact; review via provenance/package contract, not line-by-line."
+  - path_or_glob: "frontend/console/package.json"
+    classification: packaging
+    owner_lane: build-package-ci-config
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/package.json"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/api.ts"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/api.ts"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/main.tsx"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/main.tsx"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/routeCatalog.json"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/routeCatalog.json"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/routeCatalog.ts"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/routeCatalog.ts"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/styles.css"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/styles.css"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/test/setup.ts"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/test/setup.ts"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/ui/ChartPanel.tsx"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/ui/ChartPanel.tsx"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/ui/DataTable.test.tsx"
+    classification: test
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/ui/DataTable.test.tsx"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/ui/DataTable.tsx"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/ui/DataTable.tsx"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/ui/MetricCard.test.tsx"
+    classification: test
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/ui/MetricCard.test.tsx"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/ui/MetricCard.tsx"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/ui/MetricCard.tsx"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/ui/help.test.tsx"
+    classification: test
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/ui/help.test.tsx"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/src/ui/help.tsx"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/src/ui/help.tsx"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/tailwind.config.ts"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/tailwind.config.ts"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/tsconfig.json"
+    classification: packaging
+    owner_lane: build-package-ci-config
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/tsconfig.json"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/tsconfig.node.json"
+    classification: packaging
+    owner_lane: build-package-ci-config
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/tsconfig.node.json"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/vite.config.ts"
+    classification: packaging
+    owner_lane: build-package-ci-config
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/vite.config.ts"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "frontend/console/vitest.config.ts"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:frontend/console/vitest.config.ts"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "pyproject.toml"
+    classification: packaging
+    owner_lane: build-package-ci-config
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:pyproject.toml"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/__init__.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/_permissions.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/_permissions.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/cli.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/cli.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/clock.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/clock.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/__init__.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/endpoints.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/endpoints.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/logs.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/logs.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/pagination.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/pagination.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/reporting/__init__.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/reporting/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/reporting/adapter.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/reporting/adapter.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/reporting/filter_state.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/reporting/filter_state.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/reporting/metric_glossary.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/reporting/metric_glossary.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/reporting/position_rows.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/reporting/position_rows.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/reporting/trade_rows.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/reporting/trade_rows.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/route_catalog.json"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/route_catalog.json"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/security.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/security.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/serve.py"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/serve.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/console/static/app/assets/console.js"
+    classification: asset-binary
+    owner_lane: grouped-assets-locks
+    inspection_depth: grouped-not-read-with-rationale
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/static/app/assets/console.js"
+    caveats: "Generated/packaged asset or lock artifact; review via provenance/package contract, not line-by-line."
+  - path_or_glob: "src/trade_trace/console/static/app/assets/index.css"
+    classification: asset-binary
+    owner_lane: grouped-assets-locks
+    inspection_depth: grouped-not-read-with-rationale
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/static/app/assets/index.css"
+    caveats: "Generated/packaged asset or lock artifact; review via provenance/package contract, not line-by-line."
+  - path_or_glob: "src/trade_trace/console/static/app/index.html"
+    classification: asset-binary
+    owner_lane: grouped-assets-locks
+    inspection_depth: grouped-not-read-with-rationale
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/static/app/index.html"
+    caveats: "Generated/packaged asset or lock artifact; review via provenance/package contract, not line-by-line."
+  - path_or_glob: "src/trade_trace/console/static/app/provenance.json"
+    classification: asset-binary
+    owner_lane: grouped-assets-locks
+    inspection_depth: grouped-not-read-with-rationale
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/static/app/provenance.json"
+    caveats: "Generated/packaged asset or lock artifact; review via provenance/package contract, not line-by-line."
+  - path_or_glob: "src/trade_trace/console/static/favicon.svg"
+    classification: source
+    owner_lane: console-frontend-backend
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/console/static/favicon.svg"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/contracts/__init__.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/contracts/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/contracts/envelope.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/contracts/envelope.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/contracts/errors.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/contracts/errors.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/contracts/grammar.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/contracts/grammar.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/contracts/json_schema_derive.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/contracts/json_schema_derive.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/contracts/report_filter.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/contracts/report_filter.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/contracts/tool_registry.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/contracts/tool_registry.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/core.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/core.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/events/__init__.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/events/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/events/log.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/events/log.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/events/semantic_keys.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/events/semantic_keys.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/events/unit_of_work.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/events/unit_of_work.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/exporter.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/exporter.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/logging.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/logging.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/mcp_server.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/mcp_server.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/models/__init__.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/models/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/models/ledger.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/models/ledger.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/models/memory.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/models/memory.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/projections.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/projections.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/__init__.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/_envelope.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/_envelope.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/_filter_support.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/_filter_support.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/audit_readiness.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/audit_readiness.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/buckets.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/buckets.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/calibration.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/calibration.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/coach.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/coach.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/compare.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/compare.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/decision_velocity.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/decision_velocity.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/integrity.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/integrity.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/opportunity.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/opportunity.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/playbook_adherence.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/playbook_adherence.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/pnl.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/pnl.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/risk.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/risk.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/source_quality.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/source_quality.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/tag_aggregates.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/tag_aggregates.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/unscored.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/unscored.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/reports/watchlist.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/reports/watchlist.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/security/__init__.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/security/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/security/credential_keys.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/security/credential_keys.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/security/keyring.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/security/keyring.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/security/patterns.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/security/patterns.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/__init__.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/database.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/database.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/edge_audit.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/edge_audit.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/__init__.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/_runner.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/_runner.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/m001_meta.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/m001_meta.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/m002_events_outbox.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/m002_events_outbox.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/m003_m1_ledger.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/m003_m1_ledger.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/m004_p1_stub_columns.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/m004_p1_stub_columns.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/m005_signals.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/m005_signals.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/m006_memory_layer.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/m006_memory_layer.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/m007_strategies.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/m007_strategies.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/m008_playbooks.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/m008_playbooks.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/m009_events_append_only.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/m009_events_append_only.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/migrations/m010_strategy_id_new_row_triggers.py"
+    classification: source
+    owner_lane: reports-memory-playbook
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/migrations/m010_strategy_id_new_row_triggers.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/paths.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/paths.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/storage/policy.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/storage/policy.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/timestamps.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/timestamps.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/__init__.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/_examples.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/_examples.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/_helpers.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/_helpers.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/_report_filter_errors.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/_report_filter_errors.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/admin.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/admin.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/csv_import.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/csv_import.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/decision_matrix.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/decision_matrix.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/errors.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/errors.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/export.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/export.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/fixture.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/fixture.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/ideas.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/ideas.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/imports.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/imports.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/journal.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/journal.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/journal_bundle_status.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/journal_bundle_status.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/ledger.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/ledger.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/market_scan.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/market_scan.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/memory.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/memory.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/playbook.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/playbook.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/reflection.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/reflection.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/reports.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/reports.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/review_bundle.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/review_bundle.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/signals.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/signals.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/tools/strategy.py"
+    classification: source
+    owner_lane: cli-mcp-tooling
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/tools/strategy.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "src/trade_trace/version.py"
+    classification: source
+    owner_lane: core-storage-security
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:src/trade_trace/version.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/__init__.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/_direct_sql_builders.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/_direct_sql_builders.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/_mcp_helpers.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/_mcp_helpers.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/conftest.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/conftest.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/console_browser/__init__.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/console_browser/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/console_browser/conftest.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/console_browser/conftest.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/console_browser/test_overview_smoke.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/console_browser/test_overview_smoke.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/__init__.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_agent_ergonomics.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_agent_ergonomics.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_cli_command_help.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_cli_command_help.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_cli_name_uniqueness.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_cli_name_uniqueness.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_cli_parse_kv_args.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_cli_parse_kv_args.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_console_charting.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_console_charting.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_console_dashboard_a11y.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_console_dashboard_a11y.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_console_endpoints.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_console_endpoints.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_console_http_routes.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_console_http_routes.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_console_logs_page.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_console_logs_page.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_console_pagination.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_console_pagination.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_console_serve.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_console_serve.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_console_shell.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_console_shell.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_decision_add_matrix_guidance.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_decision_add_matrix_guidance.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_envelope.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_envelope.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_event_enum_coverage.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_event_enum_coverage.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_event_type_registry_alignment.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_event_type_registry_alignment.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_grammar.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_grammar.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_import_cycles.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_import_cycles.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_json_schema_derivation.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_json_schema_derivation.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_jsonl_replay_taxonomy.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_jsonl_replay_taxonomy.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_logging_contract.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_logging_contract.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_metric_glossary.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_metric_glossary.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_report_envelope_completeness.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_report_envelope_completeness.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_tool_schema_runtime_parity.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_tool_schema_runtime_parity.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_tool_self_describing_metadata.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_tool_self_describing_metadata.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/contracts/test_write_tools_have_schemas.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/contracts/test_write_tools_have_schemas.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/docs/test_agent_contract_examples_truthfulness.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/docs/test_agent_contract_examples_truthfulness.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/docs/test_markdown_links.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/docs/test_markdown_links.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/docs/test_release_docs_truthfulness.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/docs/test_release_docs_truthfulness.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/docs/test_status_headers.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/docs/test_status_headers.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/golden/__init__.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/golden/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/golden/test_cli_mcp_parity.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/golden/test_cli_mcp_parity.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/golden/test_journal_status_parity.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/golden/test_journal_status_parity.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/__init__.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_admin_tools.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_admin_tools.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_agent_guided_loops_qorh.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_agent_guided_loops_qorh.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_append_only.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_append_only.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_audit_readiness.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_audit_readiness.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_bucket_constants.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_bucket_constants.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_calibration_integrity.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_calibration_integrity.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_cli_no_writes.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_cli_no_writes.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_coach_override_outcomes.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_coach_override_outcomes.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_console_perf_baseline.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_console_perf_baseline.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_console_reporting_adapter.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_console_reporting_adapter.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_console_reporting_filter_state.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_console_reporting_filter_state.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_console_reporting_read_model.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_console_reporting_read_model.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_csv_import.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_csv_import.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_edge_endpoint_audit.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_edge_endpoint_audit.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_edges.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_edges.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_embeddings_sqlite_vec_substrate.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_embeddings_sqlite_vec_substrate.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_export_drain_public.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_export_drain_public.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_final_dogfood_verification.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_final_dogfood_verification.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_fixture_seed.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_fixture_seed.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_idea_capture.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_idea_capture.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_idempotency.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_idempotency.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_import_jsonl_replay.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_import_jsonl_replay.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_journal_bundle_status.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_journal_bundle_status.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_journal_init.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_journal_init.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_jsonl_atomic_write.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_jsonl_atomic_write.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_jsonl_contract.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_jsonl_contract.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_jsonl_replay_readiness.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_jsonl_replay_readiness.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_ledger_event_emission.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_ledger_event_emission.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_manual_ledger_flow.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_manual_ledger_flow.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_market_scan_dry_run.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_market_scan_dry_run.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_market_scan_guided_e2e.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_market_scan_guided_e2e.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_mcp_stdio_server.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_mcp_stdio_server.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_memory_layer.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_memory_layer.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_memory_link.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_memory_link.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_memory_recall_budgets.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_memory_recall_budgets.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_memory_retrieval_constants.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_memory_retrieval_constants.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_migration_policy.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_migration_policy.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_migrations.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_migrations.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_migrations_schema_hash.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_migrations_schema_hash.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_ndjson_streaming.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_ndjson_streaming.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_operability_drill.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_operability_drill.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_outbox_export.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_outbox_export.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_p1_stub_columns.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_p1_stub_columns.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_playbook_layer.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_playbook_layer.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_projection_rebuild.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_projection_rebuild.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_reflection_prompt.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_reflection_prompt.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_report_calibration.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_report_calibration.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_report_coach.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_report_coach.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_report_compare.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_report_compare.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_report_filter.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_report_filter.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_report_opportunity.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_report_opportunity.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_report_pnl_watchlist.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_report_pnl_watchlist.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_report_risk.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_report_risk.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_report_sample_warnings.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_report_sample_warnings.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_report_tag_aggregates.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_report_tag_aggregates.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_report_unscored_velocity.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_report_unscored_velocity.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_reproducibility_replay.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_reproducibility_replay.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_rescan_scoring_stub.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_rescan_scoring_stub.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_review_bundle_contract.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_review_bundle_contract.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_schema.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_schema.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_scoring_lifecycle.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_scoring_lifecycle.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_scoring_p1.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_scoring_p1.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_semantic_keys.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_semantic_keys.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_signal_scan.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_signal_scan.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_signals_schema.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_signals_schema.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_source_attach_to_memory_node.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_source_attach_to_memory_node.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_source_quality.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_source_quality.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_strategy_tools.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_strategy_tools.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/integration/test_transactions.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/integration/test_transactions.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/property/__init__.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/property/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/property/test_scoring_properties.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/property/test_scoring_properties.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/__init__.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/__init__.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/_schema_audit.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/_schema_audit.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/conftest.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/conftest.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_console_security_headers.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_console_security_headers.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_embeddings_api_keyring.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_embeddings_api_keyring.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_embeddings_off_by_default.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_embeddings_off_by_default.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_file_permissions.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_file_permissions.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_mcp_stdio_boundary.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_mcp_stdio_boundary.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_mvp_boundary_audit.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_mvp_boundary_audit.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_no_credentials.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_no_credentials.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_no_network_default.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_no_network_default.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_no_telemetry_packages.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_no_telemetry_packages.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_readonly_database.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_readonly_database.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_redacted_exports.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_redacted_exports.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_report_sql_filters.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_report_sql_filters.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_restore_manifest_paths.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_restore_manifest_paths.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/security/test_secret_pattern_writes.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/security/test_secret_pattern_writes.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/test_smoke.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/test_smoke.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
+  - path_or_glob: "tests/test_timestamps.py"
+    classification: test
+    owner_lane: tests-harness-contracts
+    inspection_depth: assigned-for-lane-direct-or-search-review
+    lenses_applied: []
+    candidate_ids_found: []
+    evidence_handle: "git ls-files@repo-audit-20260521T173511Z:tests/test_timestamps.py"
+    caveats: "Must be covered by assigned read-only lane via direct open, source-scoped search, or contract check."
