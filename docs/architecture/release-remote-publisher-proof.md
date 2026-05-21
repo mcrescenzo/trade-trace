@@ -1,8 +1,9 @@
 # Remote Publisher Settings Proof
 
-> Status: read-only remote inspection for `trade-trace-gcpp`.
-> No GitHub or PyPI settings were changed, no tag was pushed, and no package
-> was published.
+> Status: remote inspection and approved GitHub environment configuration for
+> `trade-trace-gcpp`. GitHub `pypi` environment protection was changed after
+> owner approval; PyPI trusted-publisher binding still requires owner-side
+> verification.
 
 ## GitHub repository
 
@@ -30,20 +31,25 @@ shape locally.
 
 ## GitHub environment `pypi`
 
-Read-only GitHub API inspection returned:
+Initial read-only GitHub API inspection found the `pypi` environment existed but
+had no protection rules. After owner approval, the environment was configured by
+GitHub API with release protections.
+
+Final readback:
 
 | Field | Result |
 |---|---|
 | Environment exists | yes |
 | Environment name | `pypi` |
-| `can_admins_bypass` | `true` |
-| `protection_rules` | empty list |
-| `deployment_branch_policy` | `null` |
+| `can_admins_bypass` | `false` |
+| Required reviewers | `mcrescenzo` user reviewer |
+| `prevent_self_review` | `false` |
+| `deployment_branch_policy` | `{protected_branches: false, custom_branch_policies: true}` |
+| Custom deployment policy | tag pattern `v*` only |
 
-Interpretation: the `pypi` environment exists, but it currently has no required
-reviewers, wait timer, or branch/tag deployment policy exposed by the GitHub API
-response. If release policy requires a protected PyPI environment, this setting
-is not yet sufficient.
+Interpretation: the GitHub `pypi` environment now requires an explicit reviewer
+approval for publish jobs and restricts environment deployments to `v*` tags.
+Admins cannot bypass the environment protection rules.
 
 ## PyPI project
 
@@ -65,6 +71,7 @@ an approved authenticated inspection path.
 
 ## Boundary
 
-This proof is inspection-only. It does not approve publishing. Changing GitHub
-environment protections, changing PyPI trusted-publisher settings, pushing a tag,
-or publishing to PyPI remain separate owner-approved actions.
+This proof records one approved GitHub settings change: the `pypi` environment
+now has reviewer protection, admin bypass disabled, and a `v*` tag deployment
+policy. It does not approve publishing. Changing PyPI trusted-publisher settings,
+pushing a tag, or publishing to PyPI remain separate owner-approved actions.
