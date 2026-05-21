@@ -36,6 +36,7 @@ import {
   EventRow,
   Page,
   PageQueryValue,
+  PositionRow,
   ReportPayload,
   StatusPayload,
   TradeRow,
@@ -113,7 +114,13 @@ function decodeFilter(value: string | null): ConsoleFilter {
 }
 
 function useConsoleFilter() {
-  const read = React.useCallback(() => decodeFilter(new URLSearchParams(window.location.search).get('f')), [])
+  const read = React.useCallback(() => {
+    const params = new URLSearchParams(window.location.search)
+    const decoded = decodeFilter(params.get('f'))
+    const view = params.get('view')
+    if (view === 'events' || view === 'decision-events') return stripEmptyFilter({ ...decoded, view: { mode: 'decision-events' } })
+    return decoded
+  }, [])
   const [filter, setFilterState] = React.useState<ConsoleFilter>(read)
   React.useEffect(() => {
     const onPop = () => setFilterState(read())
@@ -124,6 +131,7 @@ function useConsoleFilter() {
     const stripped = stripEmptyFilter(next)
     setFilterState(stripped)
     const url = new URL(window.location.href)
+    url.searchParams.delete('view')
     if (Object.keys(stripped).length === 0) url.searchParams.delete('f')
     else url.searchParams.set('f', encodeFilter(stripped))
     window.history.pushState({}, '', `${url.pathname}${url.search}${url.hash}`)
@@ -141,26 +149,36 @@ function tableFilterParams(filter: ConsoleFilter, supported: Array<'strategy_id'
   }
 }
 
-function FilterBar({ filter, onChange, supportsStrategy = true, supportsTradeViewDates = false }: { filter: ConsoleFilter; onChange: (filter: ConsoleFilter) => void; supportsStrategy?: boolean; supportsTradeViewDates?: boolean }) {
+function FilterBar({ filter, onChange, supportsStrategy = true, supportsTradeViewDates = false, supportsViewMode = false }: { filter: ConsoleFilter; onChange: (filter: ConsoleFilter) => void; supportsStrategy?: boolean; supportsTradeViewDates?: boolean; supportsViewMode?: boolean }) {
   const decisionTypes = filter.decision?.decision_type ?? []
   const instrumentId = filter.instrument?.instrument_id?.[0] ?? ''
   const strategyId = filter.strategy?.strategy_id ?? ''
+  const viewMode = filter.view?.mode === 'decision-events' ? 'decision-events' : 'positions'
   const update = (patch: ConsoleFilter) => onChange(stripEmptyFilter({ ...filter, ...patch }))
   return (
     <section className="mb-4 rounded border border-border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold">Supported filters</h3>
-          <p className="text-xs text-muted-foreground">URL-backed local fields: decision type, instrument ID, and strategy ID where supported.</p>
+          <p className="text-xs text-muted-foreground">URL-backed local fields. The Trades default is position lifecycle rows; decision type applies only to event mode.</p>
         </div>
         <button type="button" className="rounded border border-border px-3 py-1 text-sm" onClick={() => onChange({})}>Clear filters</button>
       </div>
+      {supportsViewMode ? <div className="mb-3 grid gap-3 md:grid-cols-3">
+        <label className="text-sm">Trades view
+          <select className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={viewMode} onChange={(event) => update({ view: { mode: event.target.value === 'decision-events' ? 'decision-events' : 'positions' } })}>
+            <option value="positions">Positions — lifecycle rows</option>
+            <option value="decision-events">Decision events — raw escape hatch</option>
+          </select>
+          <span className="mt-1 block text-xs text-muted-foreground">Positions use /api/console/positions. Event mode preserves the existing decision-event table.</span>
+        </label>
+      </div> : null}
       <div className="grid gap-3 md:grid-cols-3">
         <label className="text-sm">Decision type
           <select multiple className="mt-1 h-32 w-full rounded border border-border bg-background px-2 py-2" value={decisionTypes} onChange={(event) => update({ decision: { decision_type: Array.from(event.target.selectedOptions, (option) => option.value) } })}>
             {TRADE_DECISION_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
-          <span className="mt-1 block text-xs text-muted-foreground">Ctrl/Cmd-click to select multiple; none means any supported trade type.</span>
+          <span className="mt-1 block text-xs text-muted-foreground">Ctrl/Cmd-click to select multiple; ignored by the positions view unless switched to decision events.</span>
         </label>
         <label className="text-sm">Instrument ID
           <input className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={instrumentId} placeholder="Exact local instrument_id" onChange={(event) => update({ instrument: { instrument_id: event.target.value.trim() ? [event.target.value.trim()] : [] } })} />
@@ -563,9 +581,14 @@ function PageTable<T extends Record<string, unknown>>({
 }) {
   const [cursor, setCursor] = React.useState<string | null>(null)
   const [history, setHistory] = React.useState<string[]>([])
+  const filterKey = React.useMemo(() => JSON.stringify(filters), [filters])
+  React.useEffect(() => {
+    setCursor(null)
+    setHistory([])
+  }, [endpoint, filterKey])
   const limit = 100
   const query = useQuery({
-    queryKey: [queryKey, cursor, filters],
+    queryKey: [queryKey, cursor, filterKey],
     queryFn: () => fetchJson<Page<T>>(pageQuery(endpoint, { limit, cursor, ...filters }))
   })
   const nextCursor = query.data?.next_cursor ?? null
@@ -759,33 +782,102 @@ function PnlDashboardPage() {
   )
 }
 
+function humanizeToken(value: unknown) {
+  const text = String(value ?? '').trim()
+  return text ? text.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase()) : 'n/a'
+}
+
+function shortId(value: unknown) {
+  const text = String(value ?? '').trim()
+  if (!text) return 'n/a'
+  return text.length > 12 ? `${text.slice(0, 8)}…${text.slice(-4)}` : text
+}
+
+function formatNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 6 }) : 'n/a'
+}
+
+function formatWhen(value: unknown) {
+  if (typeof value !== 'string' || !value) return 'n/a'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const diffMs = Date.now() - date.getTime()
+  const abs = Math.abs(diffMs)
+  const units: Array<[number, string]> = [[86_400_000, 'd'], [3_600_000, 'h'], [60_000, 'm']]
+  const unit = units.find(([ms]) => abs >= ms)
+  const relative = unit ? `${Math.round(diffMs / unit[0])}${unit[1]} ago` : 'just now'
+  return `${date.toLocaleString()} (${relative})`
+}
+
+function positionSide(row: PositionRow) {
+  const side = String(row.side ?? '').toLowerCase()
+  if (side === 'yes') return 'Yes / long'
+  if (side === 'no') return 'No / short'
+  return humanizeToken(row.side)
+}
+
+function positionStrategy(row: PositionRow) {
+  const display = row.opening_strategy_name ?? row.opening_strategy_slug
+  if (display) return String(display)
+  if (row.opening_strategy_id) return `Strategy ${shortId(row.opening_strategy_id)}`
+  return 'No strategy recorded'
+}
+
+function positionStatus(row: PositionRow) {
+  return `${humanizeToken(row.status)} · ${humanizeToken(row.outcome)}`
+}
+
+function sizeEntry(row: PositionRow) {
+  const size = `${formatNumber(row.net_quantity)} net`
+  const entry = row.avg_entry_price == null ? 'entry n/a' : `avg entry ${formatNumber(row.avg_entry_price)}`
+  const activity = [`${row.add_count ?? 0} add`, `${row.reduce_count ?? 0} reduce`, `${row.event_count ?? 0} events`].join(' / ')
+  return `${size} · ${entry} · ${activity}`
+}
+
+function PositionIdCell({ row }: { row: PositionRow }) {
+  return <span title={`Position ${row.position_id}${row.opening_decision_id ? ` · opening decision ${row.opening_decision_id}` : ''}`}>{shortId(row.position_id)}</span>
+}
+
 function TradesPage() {
   const [filter, setFilter] = useConsoleFilter()
+  const eventMode = filter.view?.mode === 'decision-events'
   return (
     <>
-      <PageHeader eyebrow="Trades" title="Trade decisions and caveats" />
-      <PageExplainer answers="Which recorded trading decisions make up the trade history." data="/api/console/trades from journal decisions and position read models." read="Use filters to narrow rows; caveat chips explain missing risk, marks, sources, or other local limitations." mislead="Rows are journal-derived records, not broker statements; non-trading decisions are excluded here." />
-      <FilterBar filter={filter} onChange={setFilter} supportsTradeViewDates />
-      <PageTable<TradeRow>
+      <PageHeader eyebrow="Trades" title={eventMode ? 'Trade decision-event escape hatch' : 'Position lifecycle rows'} />
+      <PageExplainer answers={eventMode ? 'Which recorded trade decision events match the current local filters.' : 'Which local position lifecycle rows exist in the journal.'} data={eventMode ? '/api/console/trades decision-event rows. This is the preserved raw escape hatch.' : '/api/console/positions paginated position read model rows.'} read={eventMode ? 'Rows are the existing minimal event table; switch back to Positions for the human-readable lifecycle scan.' : 'One row represents one position. Size, entry price, lifecycle counts, status/outcome, strategy, and hygiene are backend-supplied fields only.'} mislead="Rows are journal-derived local records, not broker statements, live market data, write actions, or trading advice." />
+      <FilterBar filter={filter} onChange={setFilter} supportsTradeViewDates supportsViewMode />
+      {eventMode ? <PageTable<TradeRow>
         endpoint="/api/console/trades"
-        queryKey="trades"
+        queryKey="trade-events"
         filters={tableFilterParams(filter, ['strategy_id', 'instrument_id', 'decision_type', 'opened_from', 'opened_to'])}
         subjectKind="decision"
-        emptyMessage="No matching trades for the selected view."
+        emptyMessage="No matching decision-event rows for the selected filters. Switch to Positions for lifecycle rows."
         columns={[
           { key: 'decision_id', header: 'Decision', cell: (value) => <CopyId value={value} /> },
           { key: 'decision_type', header: 'Type', cell: (value) => <ChipList value={value} /> },
-          {
-            key: 'instrument',
-            header: 'Instrument',
-            accessor: (row) => row.instrument_symbol ?? row.instrument_title ?? row.instrument_id
-          },
-          { key: 'side', header: 'Side' },
+          { key: 'instrument', header: 'Instrument', accessor: (row) => row.instrument_symbol ?? row.instrument_title ?? row.instrument_id },
+          { key: 'side', header: 'Side', cell: (value) => humanizeToken(value) },
           { key: 'quantity', header: 'Qty' },
           { key: 'price', header: 'Price' },
           { key: 'caveats', header: 'Caveats', cell: (value) => <CaveatChips value={value} /> }
         ]}
-      />
+      /> : <PageTable<PositionRow>
+        endpoint="/api/console/positions"
+        queryKey="positions"
+        filters={tableFilterParams(filter, ['strategy_id', 'instrument_id', 'opened_from', 'opened_to'])}
+        subjectKind="position"
+        emptyMessage="No local position rows match this filter. This page only shows journal-derived positions; it does not fetch broker or live market data."
+        columns={[
+          { key: 'opened_at', header: 'When', cell: (value) => formatWhen(value) },
+          { key: 'instrument', header: 'Instrument', accessor: (row) => row.instrument_symbol ?? row.instrument_title ?? row.instrument_id },
+          { key: 'side', header: 'Side', accessor: (row) => `${positionSide(row)} · ${humanizeToken(row.kind)}` },
+          { key: 'size_entry', header: 'Size / Entry', accessor: sizeEntry },
+          { key: 'status_outcome', header: 'Status / Outcome', accessor: positionStatus },
+          { key: 'strategy', header: 'Strategy', accessor: positionStrategy },
+          { key: 'hygiene', header: 'Hygiene', accessor: (row) => row.caveats ?? [], cell: (value) => <CaveatChips value={value} /> },
+          { key: 'position_id', header: 'ID', cell: (_value, row) => <PositionIdCell row={row} /> }
+        ]}
+      />}
     </>
   )
 }

@@ -57,6 +57,36 @@ export type TradeRow = Record<string, unknown> & {
   caveats?: string[]
 }
 
+export type PositionCaveatEntry = Record<string, unknown> & {
+  code?: string
+  label?: string
+  message?: string
+}
+
+export type PositionRow = Record<string, unknown> & {
+  position_id: string
+  instrument_id: string
+  instrument_symbol?: string | null
+  instrument_title?: string | null
+  kind: string
+  side?: string | null
+  status: string
+  outcome: string
+  opened_at: string
+  closed_at?: string | null
+  net_quantity: number
+  avg_entry_price?: number | null
+  add_count: number
+  reduce_count: number
+  event_count: number
+  opening_decision_id?: string | null
+  opening_strategy_id?: string | null
+  opening_strategy_slug?: string | null
+  opening_strategy_name?: string | null
+  caveats?: string[]
+  caveat_entries?: PositionCaveatEntry[]
+}
+
 export type EventRow = Record<string, unknown> & {
   id: number
   event_type: string
