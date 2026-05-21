@@ -106,6 +106,38 @@ def test_keyring_revoke_tool_confirm_is_idempotent_when_absent(monkeypatch, tmp_
     assert fake.get_password(SERVICE, "api_key") is None
 
 
+def test_keyring_revoke_tool_confirmed_dry_run_does_not_touch_unavailable_keyring(
+    monkeypatch, tmp_path
+):
+    _install_fake_keyring(monkeypatch)
+    home = tmp_path / "home"
+    _init_home(home)
+
+    class ExplodingKeyring(types.SimpleNamespace):
+        def get_keyring(self):
+            raise AssertionError("dry-run must not inspect OS keyring backend")
+
+        def get_password(self, service: str, username: str):
+            raise AssertionError("dry-run must not read OS keyring entries")
+
+        def delete_password(self, service: str, username: str):
+            raise AssertionError("dry-run must not delete OS keyring entries")
+
+    monkeypatch.setitem(sys.modules, "keyring", ExplodingKeyring())
+
+    env = mcp_call("keyring.revoke", {"home": str(home), "_confirm": True, "_dry_run": True})
+    assert env.ok, env
+    assert env.meta.dry_run is True
+    assert env.meta.preview_only is not True
+    assert env.data == {
+        "preview_only": False,
+        "provider": "api:openai",
+        "credential_storage": "os_keyring",
+        "revoked": True,
+    }
+    assert "api_key" not in json.dumps(env.model_dump(mode="json"), sort_keys=True)
+
+
 def test_keyring_revoke_tool_schema_is_narrow_and_secret_free():
     env = mcp_call("tool.schema", {"tool": "keyring.revoke"})
     assert env.ok, env

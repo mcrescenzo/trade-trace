@@ -843,15 +843,19 @@ def _keyring_revoke(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             },
         }
 
-    from trade_trace.security.keyring import delete_api_key
-
-    delete_api_key(OPENAI_EMBEDDINGS_KEYRING_SERVICE)
-    return {
+    result = {
         "preview_only": False,
         "provider": "api:openai",
         "credential_storage": "os_keyring",
         "revoked": True,
     }
+    if args.get("_dry_run") is True:
+        return result
+
+    from trade_trace.security.keyring import delete_api_key
+
+    delete_api_key(OPENAI_EMBEDDINGS_KEYRING_SERVICE)
+    return result
 
 
 def register_admin_tools(registry: ToolRegistry) -> None:

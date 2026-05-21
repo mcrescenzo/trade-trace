@@ -179,9 +179,15 @@ _TRADE_BASE_SQL = f"""
         d.agent_id,
         (SELECT COUNT(*) FROM decision_tags dt WHERE dt.decision_id = d.id) AS tag_count,
         (SELECT COUNT(*) FROM edges e
-           WHERE e.edge_type = 'cites'
-             AND e.target_kind = 'decision'
-             AND e.target_id = d.id) AS source_count
+           WHERE e.target_kind = 'decision'
+             AND e.target_id = d.id
+             AND (
+                 e.edge_type = 'cites'
+                 OR (
+                     e.source_kind = 'source'
+                     AND e.edge_type IN ('about', 'supports', 'contradicts')
+                 )
+             )) AS source_count
     FROM decisions d
     JOIN instruments i ON i.id = d.instrument_id
     JOIN venues v ON v.id = i.venue_id

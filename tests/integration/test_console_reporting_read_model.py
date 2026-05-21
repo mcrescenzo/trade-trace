@@ -24,8 +24,10 @@ from trade_trace.console.reporting import (
 )
 from trade_trace.console.reporting.trade_rows import (
     CAVEAT_MISSING_RISK_BUDGET,
+    CAVEAT_NO_SOURCES,
     TRADING_DECISION_TYPES,
 )
+from trade_trace.contracts.envelope import SuccessEnvelope
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
@@ -163,6 +165,54 @@ def test_trade_detail_returns_named_decision(rich_home: Path) -> None:
         db.close()
     assert detail is not None
     assert detail.decision_id == target.decision_id
+
+
+def test_trade_detail_counts_direct_decision_source_attachment_about_edge(
+    rich_home: Path,
+) -> None:
+    db = open_database(db_path(rich_home), create_parent=False)
+    try:
+        target = db.connection.execute(
+            "SELECT id FROM decisions WHERE type = 'paper_enter' LIMIT 1",
+        ).fetchone()[0]
+        before = trade_detail(db.connection, target)
+    finally:
+        db.close()
+
+    assert before is not None
+    source = mcp_call("source.add", {
+        "home": str(rich_home),
+        "kind": "note",
+        "stance": "neutral",
+        "excerpt": "Direct attachment regression source for trade_detail.",
+        "idempotency_key": "00000000-0000-4000-8000-000000009701",
+    })
+    assert source.ok, source
+    assert isinstance(source, SuccessEnvelope)
+    attach = mcp_call("source.attach_to_decision", {
+        "home": str(rich_home),
+        "source_id": source.data["id"],
+        "target_id": target,
+        "idempotency_key": "00000000-0000-4000-8000-000000009702",
+    })
+    assert attach.ok, attach
+    assert isinstance(attach, SuccessEnvelope)
+    assert attach.data["edge_type"] == "about"
+
+    db = open_database(db_path(rich_home), create_parent=False)
+    try:
+        edge = db.connection.execute(
+            "SELECT source_kind, target_kind, edge_type FROM edges WHERE id = ?",
+            (attach.data["id"],),
+        ).fetchone()
+        after = trade_detail(db.connection, target)
+    finally:
+        db.close()
+
+    assert edge == ("source", "decision", "about")
+    assert after is not None
+    assert after.source_count == before.source_count + 1
+    assert CAVEAT_NO_SOURCES not in after.caveats
 
 
 def test_trade_detail_returns_none_for_unknown_id(rich_home: Path) -> None:
