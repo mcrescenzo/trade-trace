@@ -18,6 +18,7 @@ export type Column<T extends Record<string, unknown> = Record<string, unknown>> 
   header: string
   accessor?: (row: T) => unknown
   cell?: (value: unknown, row: T) => ReactNode
+  align?: 'left' | 'right'
 }
 
 function formatCell(value: unknown): string {
@@ -69,6 +70,16 @@ export function DataTable<T extends Record<string, unknown>>({
 
   const visibleRows = table.getRowModel().rows
   const tableLabel = columns.map((column) => column.header).join(', ')
+  const alignmentByKey = useMemo(
+    () =>
+      new Map(
+        columns.map((column) => [
+          column.key,
+          column.align ?? (/\b(qty|quantity|price|p&l|pnl|count|sample|n|r|risk|fees|slippage|entry|open|closed|trades|forecasts|records|examples|gap|mean|rate|score|ece|brier|payoff|coverage)\b/i.test(column.header) ? 'right' : 'left')
+        ])
+      ),
+    [columns]
+  )
 
   return (
     <div className="min-w-0 overflow-hidden rounded border border-border bg-card">
@@ -91,15 +102,15 @@ export function DataTable<T extends Record<string, unknown>>({
           <caption className="sr-only">
             {tableLabel}. {visibleRows.length === 0 ? emptyMessage : `${visibleRows.length} visible row${visibleRows.length === 1 ? '' : 's'}. Use column header buttons to sort.`}
           </caption>
-          <thead className="sticky top-0 bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <thead className="sticky top-0 z-10 bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {renderDetail ? <th className="border-b border-border px-3 py-2 font-medium">Detail</th> : null}
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="border-b border-border px-3 py-2 font-medium">
+                  <th key={header.id} className={`border-b border-border px-3 py-2 font-medium ${alignmentByKey.get(header.id) === 'right' ? 'text-right' : ''}`}>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 rounded text-left uppercase tracking-wide"
+                      className={`inline-flex items-center gap-1 rounded uppercase tracking-wide hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring ${alignmentByKey.get(header.id) === 'right' ? 'justify-end text-right' : 'text-left'}`}
                       onClick={header.column.getToggleSortingHandler()}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
@@ -117,12 +128,12 @@ export function DataTable<T extends Record<string, unknown>>({
           <tbody>
             {visibleRows.map((row) => (
               <Fragment key={row.id}>
-                <tr key={row.id} className="border-b border-border last:border-0">
+                <tr key={row.id} className="border-b border-border odd:bg-background even:bg-muted/20 hover:bg-accent/40 last:border-0">
                   {renderDetail ? (
                     <td className="px-3 py-2">
                       <button
                         type="button"
-                        className="rounded border border-border px-2 py-1 text-xs shadow-sm"
+                        className="rounded border border-border bg-background px-2 py-1 text-xs shadow-sm hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring"
                         aria-expanded={expandedRowId === row.id}
                         onClick={() => setExpandedRowId((current) => (current === row.id ? null : row.id))}
                       >
@@ -131,7 +142,7 @@ export function DataTable<T extends Record<string, unknown>>({
                     </td>
                   ) : null}
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="max-w-72 whitespace-nowrap px-3 py-2 align-top">
+                    <td key={cell.id} className={`max-w-72 whitespace-nowrap px-3 py-2 align-top ${alignmentByKey.get(cell.column.id) === 'right' ? 'text-right tabular-nums' : ''}`}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}

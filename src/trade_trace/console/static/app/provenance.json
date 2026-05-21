@@ -2,7 +2,7 @@
   "schema": 1,
   "generated_by": "npm --prefix frontend/console run build",
   "source_hashes": {
-    "src/main.tsx": "f72b1a0e898d44aeb229c2cd9ff06abaa1657ae226d8b33216a801e0c448909d",
+    "src/main.tsx": "b4ba6dc777a3775515860ee5630b8b9a82dbec834df1963731ea54b762918e1c",
     "src/routeCatalog.ts": "b0bfaf7287f3f031b582996629e4f1b472a9ca3ca099debe44793ebcfabf9fcb",
     "src/routeCatalog.json": "8aad0b2bbf595ff21520554d1fa8a209c88ca55415028a5f98b73f07cbbfc019",
     "../../src/trade_trace/console/route_catalog.json": "8aad0b2bbf595ff21520554d1fa8a209c88ca55415028a5f98b73f07cbbfc019",
@@ -11,8 +11,8 @@
     "vite.config.ts": "a935eb052e8d243db2979ae826bec092ede478cc137b0af532f2d623365f9d27"
   },
   "asset_hashes": {
-    "assets/console.js": "27831d8bf2a10d44566f5cef33e7b64fddbfecdef39508b66bd88d1821ef513b",
-    "assets/index.css": "9d21dfbc3826d9411b9ccd0cbb761787fa499b267f48cd8a86c626f7c72d0368",
+    "assets/console.js": "db3bbf7546e795264586705482065a8de7a109d4450503afcdd4b5c48799c24f",
+    "assets/index.css": "daf074976ab784a081e762e86fae400cb6a2dbfd2050de0aca1f6d0f0d123b49",
     "index.html": "c331864adf235d51f91e1b43d7cf358f5c50652c2895c623d7d4669d9a265100"
   }
 }

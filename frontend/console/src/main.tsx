@@ -12,6 +12,7 @@ import {
 } from '@tanstack/react-router'
 import {
   Activity,
+  AlertTriangle,
   BarChart3,
   BookOpen,
   Boxes,
@@ -572,7 +573,8 @@ function PageTable<T extends Record<string, unknown>>({
   emptyMessage,
   subjectKind,
   filters = {},
-  renderDetail
+  renderDetail,
+  renderSummary
 }: {
   endpoint: string
   queryKey: string
@@ -581,6 +583,7 @@ function PageTable<T extends Record<string, unknown>>({
   subjectKind?: string
   filters?: Record<string, PageQueryValue>
   renderDetail?: (row: T) => React.ReactNode
+  renderSummary?: (rows: T[], page: Page<T> | undefined) => React.ReactNode
 }) {
   const [cursor, setCursor] = React.useState<string | null>(null)
   const [history, setHistory] = React.useState<string[]>([])
@@ -601,6 +604,7 @@ function PageTable<T extends Record<string, unknown>>({
     <ErrorBlock error={query.error} />
   ) : (
     <div className="space-y-3">
+      {renderSummary ? renderSummary(query.data?.rows ?? [], query.data) : null}
       <DataTable
         rows={query.data?.rows ?? []}
         columns={columns}
@@ -847,6 +851,111 @@ function sizeEntry(row: PositionRow) {
   return `${size} · ${entry} · ${activity}`
 }
 
+type HygieneSummary = { total: number; warningRows: number; infoRows: number; okRows: number; warningEntries: number; infoEntries: number; top: Array<{ label: string; count: number }> }
+
+function caveatSeverity(entry: unknown): 'warning' | 'info' {
+  if (entry && typeof entry === 'object' && String((entry as { severity?: unknown }).severity ?? '').toLowerCase() === 'info') return 'info'
+  return 'warning'
+}
+
+function caveatLabel(entry: unknown): string {
+  if (entry && typeof entry === 'object') {
+    const item = entry as { label?: unknown; code?: unknown }
+    return String(item.label ?? item.code ?? 'Caveat')
+  }
+  return humanizeToken(entry)
+}
+
+function positionCaveatEntries(row: PositionRow): unknown[] {
+  return row.caveat_entries?.length ? row.caveat_entries : (row.caveats ?? []).map((code) => ({ code, label: humanizeToken(code), severity: 'warning' }))
+}
+
+function summarizeHygiene(rows: PositionRow[]): HygieneSummary {
+  const counts = new Map<string, number>()
+  let warningRows = 0
+  let infoRows = 0
+  let warningEntries = 0
+  let infoEntries = 0
+  for (const row of rows) {
+    const entries = positionCaveatEntries(row)
+    const hasWarning = entries.some((entry) => caveatSeverity(entry) === 'warning')
+    const hasInfo = entries.some((entry) => caveatSeverity(entry) === 'info')
+    if (hasWarning) warningRows += 1
+    else if (hasInfo) infoRows += 1
+    for (const entry of entries) {
+      if (caveatSeverity(entry) === 'info') infoEntries += 1
+      else warningEntries += 1
+      const label = caveatLabel(entry)
+      counts.set(label, (counts.get(label) ?? 0) + 1)
+    }
+  }
+  return { total: rows.length, warningRows, infoRows, okRows: rows.length - warningRows - infoRows, warningEntries, infoEntries, top: [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([label, count]) => ({ label, count })) }
+}
+
+function HygieneInline({ row }: { row: PositionRow }) {
+  const entries = positionCaveatEntries(row)
+  const warnings = entries.filter((entry) => caveatSeverity(entry) === 'warning')
+  const infos = entries.length - warnings.length
+  if (entries.length === 0) return <span className="inline-flex rounded border border-emerald-600/40 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-100">No caveats</span>
+  return <span className="text-xs text-muted-foreground"><span className={warnings.length ? 'font-medium text-amber-800 dark:text-amber-100' : 'font-medium text-sky-800 dark:text-sky-100'}>{warnings.length ? `${warnings.length} warning${warnings.length === 1 ? '' : 's'}` : `${infos} info`}</span>{infos && warnings.length ? ` · ${infos} info` : ''} · expand for details</span>
+}
+
+function HygieneMeter({ rows, page }: { rows: PositionRow[]; page?: Page<PositionRow> }) {
+  const summary = summarizeHygiene(rows)
+  const warningPct = summary.total ? Math.round((summary.warningRows / summary.total) * 100) : 0
+  const infoPct = summary.total ? Math.round((summary.infoRows / summary.total) * 100) : 0
+  const sampleNote = `Current page only: ${summary.total} of up to ${page?.limit ?? 100} loaded position rows${page?.next_cursor ? '; more pages exist' : ''}.`
+  return (
+    <section className="rounded border border-border bg-card p-4" aria-labelledby="hygiene-meter-title">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="hygiene-meter-title" className="font-semibold">Current-page hygiene</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Uses backend caveat labels, summaries, and info/warning severity when returned. Missing thesis/source/strategy context is summarized here instead of repeated as dominant table chips.</p>
+        </div>
+        <p className="text-xs text-muted-foreground">{sampleNote}</p>
+      </div>
+      <div className="mt-3 h-3 overflow-hidden rounded-full bg-muted" aria-label={`${summary.okRows} rows without caveats, ${summary.infoRows} info-only rows, ${summary.warningRows} warning rows`}>
+        <div className="h-full bg-amber-500" style={{ width: `${warningPct}%` }} />
+        <div className="-mt-3 h-full bg-sky-500" style={{ marginLeft: `${warningPct}%`, width: `${infoPct}%` }} />
+      </div>
+      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-4">
+        <div><p className="text-xs uppercase tracking-wide text-muted-foreground">No caveats</p><p className="font-semibold">{summary.okRows}</p></div>
+        <div><p className="text-xs uppercase tracking-wide text-muted-foreground">Warning rows</p><p className="font-semibold text-amber-800 dark:text-amber-100">{summary.warningRows}</p></div>
+        <div><p className="text-xs uppercase tracking-wide text-muted-foreground">Info-only rows</p><p className="font-semibold text-sky-800 dark:text-sky-100">{summary.infoRows}</p></div>
+        <div><p className="text-xs uppercase tracking-wide text-muted-foreground">Common caveats</p><p className="font-semibold">{summary.top.length ? summary.top.map((item) => `${item.label} (${item.count})`).join(', ') : 'None on page'}</p></div>
+      </div>
+    </section>
+  )
+}
+
+function looksLikeDemoData(rows: Array<PositionRow | TradeRow>) {
+  if (rows.length === 0) return false
+  const sample = rows.slice(0, 25).map((row) => Object.values(row).join(' ').toLowerCase()).join(' ')
+  const hits = ['demo', 'sample', 'fixture', 'paper', 'test', 'acme'].filter((token) => sample.includes(token)).length
+  return hits >= 2
+}
+
+function DemoDataBanner({ rows }: { rows: Array<PositionRow | TradeRow> }) {
+  if (!looksLikeDemoData(rows)) return null
+  return <section className="rounded border border-sky-600/40 bg-sky-50 p-4 text-sm text-sky-950 dark:bg-sky-400/10 dark:text-sky-100"><div className="flex gap-2"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden /><p><span className="font-semibold">Possible sample/demo data detected.</span> This is a local heuristic from row IDs/names/paper-style patterns, not proof. The Console is still showing journal rows only; it is not connected to a broker or live market feed.</p></div></section>
+}
+
+function TradesOnboardingStrip({ eventMode }: { eventMode: boolean }) {
+  return <section className="mb-4 rounded border border-border bg-card p-4 text-sm"><h3 className="font-semibold">How to use Trades</h3><p className="mt-1 text-muted-foreground">This page is a read-only projection of your local journal. The default Positions view groups lifecycle events into one row per position; the Decision events view is an audit escape hatch for flat trade-typed journal entries. Nothing here connects to a broker, fetches live prices, writes records, reconciles statements, or gives trading advice.</p><p className="mt-2 text-xs font-medium text-muted-foreground">Current mode: {eventMode ? 'Decision events escape hatch' : 'Position lifecycle rows'}.</p></section>
+}
+
+function CurrentPageKpis({ rows, eventMode }: { rows: Array<PositionRow | TradeRow>; eventMode: boolean }) {
+  const count = rows.length
+  const open = eventMode ? null : (rows as PositionRow[]).filter((row) => String(row.status ?? '').toLowerCase() === 'open').length
+  const closed = eventMode ? null : (rows as PositionRow[]).filter((row) => String(row.status ?? '').toLowerCase() === 'closed').length
+  const events = eventMode ? new Set((rows as TradeRow[]).map((row) => row.decision_type)).size : (rows as PositionRow[]).reduce((total, row) => total + Number(row.event_count ?? 0), 0)
+  return <section className="grid gap-3 sm:grid-cols-3"><div className="rounded border border-border bg-card p-3"><p className="text-xs uppercase tracking-wide text-muted-foreground">Rows on page</p><p className="text-2xl font-semibold">{count}</p><p className="text-xs text-muted-foreground">Not a global total</p></div><div className="rounded border border-border bg-card p-3"><p className="text-xs uppercase tracking-wide text-muted-foreground">{eventMode ? 'Event types' : 'Open / closed'}</p><p className="text-2xl font-semibold">{eventMode ? events : `${open} / ${closed}`}</p><p className="text-xs text-muted-foreground">Current page scope</p></div><div className="rounded border border-border bg-card p-3"><p className="text-xs uppercase tracking-wide text-muted-foreground">{eventMode ? 'Caveated rows' : 'Lifecycle events'}</p><p className="text-2xl font-semibold">{eventMode ? rows.filter((row) => Array.isArray(row.caveats) && row.caveats.length > 0).length : events}</p><p className="text-xs text-muted-foreground">Backend row fields only</p></div></section>
+}
+
+function TradesPageSummary({ rows, page, eventMode }: { rows: Array<PositionRow | TradeRow>; page?: Page<PositionRow | TradeRow>; eventMode: boolean }) {
+  return <div className="space-y-3"><DemoDataBanner rows={rows} /><CurrentPageKpis rows={rows} eventMode={eventMode} />{eventMode ? null : <HygieneMeter rows={rows as PositionRow[]} page={page as Page<PositionRow> | undefined} />}</div>
+}
+
 function PositionIdCell({ row }: { row: PositionRow }) {
   return <span title={`Position ${row.position_id}${row.opening_decision_id ? ` · opening decision ${row.opening_decision_id}` : ''}`}>{shortId(row.position_id)}</span>
 }
@@ -918,6 +1027,7 @@ function TradesPage() {
   return (
     <>
       <PageHeader eyebrow="Trades" title={eventMode ? 'Trade decision-event escape hatch' : 'Position lifecycle rows'} />
+      <TradesOnboardingStrip eventMode={eventMode} />
       <PageExplainer answers={eventMode ? 'Which recorded trade decision journal events match the current local filters.' : 'Which local position lifecycle rows exist in the journal.'} data={eventMode ? '/api/console/trades flat decision-event rows with copyable decision IDs and raw payload drilldown. This is the preserved audit escape hatch.' : '/api/console/positions paginated position read model rows.'} read={eventMode ? 'Each row is one journaled trade-typed decision event, not a grouped position outcome. Use Positions for lifecycle summaries and P&L/outcome context.' : 'One row represents one position. Size, entry price, lifecycle counts, status/outcome, strategy, and hygiene are backend-supplied fields only.'} mislead="Rows are journal-derived local records, not broker statements, live market data, write actions, or trading advice." />
       <FilterBar filter={filter} onChange={setFilter} supportsTradeViewDates supportsViewMode />
       {eventMode ? <PageTable<TradeRow>
@@ -925,6 +1035,7 @@ function TradesPage() {
         queryKey="trade-events"
         filters={tableFilterParams(filter, ['strategy_id', 'instrument_id', 'decision_type', 'opened_from', 'opened_to'])}
         subjectKind="decision"
+        renderSummary={(rows, page) => <TradesPageSummary rows={rows} page={page} eventMode />}
         emptyMessage="No matching decision-event rows for the selected filters. Switch to Positions for lifecycle rows."
         columns={[
           { key: 'decision_at', header: 'When', cell: (value) => formatWhen(value) },
@@ -941,6 +1052,7 @@ function TradesPage() {
         queryKey="positions"
         filters={tableFilterParams(filter, ['strategy_id', 'instrument_id', 'opened_from', 'opened_to'])}
         subjectKind="position"
+        renderSummary={(rows, page) => <TradesPageSummary rows={rows} page={page} eventMode={false} />}
         emptyMessage="No local position rows match this filter. This page only shows journal-derived positions; it does not fetch broker or live market data."
         renderDetail={(row) => <PositionDetailCard row={row} />}
         columns={[
@@ -950,7 +1062,7 @@ function TradesPage() {
           { key: 'size_entry', header: 'Size / Entry', accessor: sizeEntry },
           { key: 'status_outcome', header: 'Status / Outcome', accessor: positionStatus },
           { key: 'strategy', header: 'Strategy', accessor: positionStrategy },
-          { key: 'hygiene', header: 'Hygiene', accessor: (row) => row.caveats ?? [], cell: (value) => <CaveatChips value={value} /> },
+          { key: 'hygiene', header: 'Hygiene', accessor: (row) => row.caveats ?? [], cell: (_value, row) => <HygieneInline row={row} /> },
           { key: 'position_id', header: 'ID', cell: (_value, row) => <PositionIdCell row={row} /> }
         ]}
       />}

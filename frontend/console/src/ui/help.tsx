@@ -72,7 +72,7 @@ export function CaveatChips({ value }: { value: unknown }) {
   return (
     <span className="flex flex-wrap gap-1">
       {values.map((item) => (
-        <span key={String(item)} title={String(item)} className="inline-flex items-center gap-1 rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-xs text-warning">
+        <span key={String(item)} title={String(item)} className="inline-flex items-center gap-1 rounded border border-amber-500/50 bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:border-amber-300/50 dark:bg-amber-300/15 dark:text-amber-100">
           <AlertTriangle className="size-3" aria-hidden />
           {formatCaveatLabel(item)}
         </span>
