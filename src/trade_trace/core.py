@@ -36,6 +36,7 @@ from trade_trace.tools.imports import register_import_stubs
 from trade_trace.tools.journal import register_journal_tools
 from trade_trace.tools.journal_bundle_status import register_journal_bundle_status
 from trade_trace.tools.ledger import register_ledger_tools
+from trade_trace.tools.market_scan import register_market_scan_tools
 from trade_trace.tools.memory import register_memory_tools
 from trade_trace.tools.playbook import register_playbook_tools
 from trade_trace.tools.reflection import register_reflection_tools
@@ -61,6 +62,7 @@ def build_registry() -> ToolRegistry:
     register_journal_tools(registry)
     register_journal_bundle_status(registry)
     register_ledger_tools(registry)
+    register_market_scan_tools(registry)
     register_memory_tools(registry)
     register_playbook_tools(registry)
     register_reflection_tools(registry)
