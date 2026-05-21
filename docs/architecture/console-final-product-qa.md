@@ -1,3 +1,7 @@
+> Status: **decision document for trade-trace-o88k**
+>
+> Gate closure record for the React Console product overhaul.
+
 # React Console Final Product QA Gate
 
 Bead: `trade-trace-o88k`  

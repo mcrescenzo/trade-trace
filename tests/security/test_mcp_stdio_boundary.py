@@ -35,6 +35,46 @@ def _noop_handler(args: dict[str, Any], ctx: Any) -> dict[str, Any]:  # noqa: AR
     return {"ok": True}
 
 
+_ORIGINAL_ASYNCIO_RUN = asyncio.run
+
+
+def _run_coro(coro):
+    """Run a coroutine, tolerating a leaked event loop from upstream tests.
+
+    pytest-playwright's sync API may leave a running asyncio loop in the
+    main thread after console browser tests. ``asyncio.run()`` raises when
+    called inside a running loop, and ``run_until_complete`` on the
+    existing loop also fails because that loop is already running. We fall
+    back to running the coroutine in a fresh background-thread loop.
+    """
+    try:
+        return _ORIGINAL_ASYNCIO_RUN(coro)
+    except RuntimeError as exc:
+        if "cannot be called from a running event loop" in str(exc):
+            import threading
+
+            result = []
+            exception = []
+
+            def _target():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result.append(loop.run_until_complete(coro))
+                except Exception as e:  # noqa: BLE001
+                    exception.append(e)
+                finally:
+                    loop.close()
+
+            t = threading.Thread(target=_target)
+            t.start()
+            t.join()
+            if exception:
+                raise exception[0] from None
+            return result[0]
+        raise
+
+
 def test_serve_stdio_opens_no_tcp_listener_by_default(monkeypatch):
     """The MCP transport is stdio-only and must not bind/listen/connect.
 
@@ -54,6 +94,7 @@ def test_serve_stdio_opens_no_tcp_listener_by_default(monkeypatch):
         return None
 
     monkeypatch.setattr(mcp_server, "_serve_stdio_async", _stop_after_boundary_check)
+    monkeypatch.setattr(asyncio, "run", _run_coro)
 
     try:
         serve_stdio()
@@ -207,7 +248,7 @@ def test_stdio_schema_validation_failure_returns_trade_trace_error_envelope(monk
     )
     registry.validate()
 
-    result = asyncio.run(_stdio_call_result(_build_stdio_server(registry), "boundary.echo", {}))
+    result = _run_coro(_stdio_call_result(_build_stdio_server(registry), "boundary.echo", {}))
     structured = result.root.structuredContent
     assert structured is not None
 
@@ -228,7 +269,7 @@ def test_stdio_wrong_type_arguments_return_trade_trace_error_envelope(monkeypatc
     registry.register("boundary.echo", _noop_handler)
     registry.validate()
 
-    result = asyncio.run(
+    result = _run_coro(
         _stdio_call_result(_build_stdio_server(registry), "boundary.echo", ["not", "an", "object"])
     )
     structured = result.root.structuredContent

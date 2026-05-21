@@ -228,7 +228,7 @@ def _compare_pnl(conn: sqlite3.Connection, *, group_by: str, raw_filter: dict[st
     summary = {
             "base_report": "pnl",
             "group_by": group_by,
-            "sample_size": sum(g["sample_size"] for g in groups),
+            "sample_size": sum(cast("int", g["sample_size"]) for g in groups),
             "sample_warning": "one_or_more_groups_below_min_sample" if any_warning else None,
             "filter": applied_filter_view(rf, report="report.pnl") if rf.strategy.strategy_id is None else rf.model_dump(),
             "metrics": {"group_count": len(groups), "min_sample": min_sample},

@@ -45,6 +45,8 @@ PERMISSIONS_POLICY = (
 
 SECURITY_HEADERS: dict[str, str] = {
     "Content-Security-Policy": CSP,
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Embedder-Policy": "require-corp",
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",

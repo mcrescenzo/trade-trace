@@ -33,6 +33,7 @@ def _isolated_log_env(tmp_path, monkeypatch):
         if name.startswith("trade_trace"):
             logger = logging.getLogger(name)
             for handler in list(logger.handlers):
+                handler.close()
                 logger.removeHandler(handler)
             logger.handlers.clear()
     yield

@@ -1,3 +1,7 @@
+> Status: **decision document for trade-trace-lsi5**
+>
+> Investigation-only record; no production behavior changes.
+
 # review.bundle decomposition investigation (trade-trace-lsi5)
 
 Date: 2026-05-20

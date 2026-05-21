@@ -71,7 +71,12 @@ def jsonl_path(home: Path, event_type: str, event_id: int, created_at: str) -> P
     misnamed event type from escaping the date-bucket directory.
     """
 
-    ts = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    try:
+        ts = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise OSError(
+            f"invalid created_at for event {event_id!r}: {created_at!r}"
+        ) from exc
     base = home / "export" / "jsonl" / f"{ts.year:04d}" / f"{ts.month:02d}" / f"{ts.day:02d}"
     base.mkdir(parents=True, exist_ok=True)
     safe_event_type = _safe_event_type_for_filename(event_type)

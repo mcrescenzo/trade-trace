@@ -163,3 +163,33 @@ def test_readonly_does_not_run_migrations(tmp_path: Path):
     with pytest.raises(ReadOnlyDatabaseError) as excinfo:
         open_database_readonly(legacy)
     assert excinfo.value.reason == "unsupported_schema"
+
+
+def test_console_serve_module_uses_only_readonly_database_opener():
+    """The Console server must never import or call the writable
+    ``open_database`` factory. A future refactor could accidentally
+    switch to the writable path without failing any functional test;
+    this AST guard detects the import at the source level."""
+
+    import ast
+
+    serve_py = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "trade_trace"
+        / "console"
+        / "serve.py"
+    )
+    source = serve_py.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.module == "trade_trace.storage.database":
+                names = {alias.name for alias in node.names}
+                assert "open_database_readonly" in names, (
+                    "serve.py must import open_database_readonly"
+                )
+                assert "open_database" not in names, (
+                    "serve.py must not import the writable open_database"
+                )

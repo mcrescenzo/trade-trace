@@ -53,6 +53,8 @@ def test_apply_security_headers_mutates_dict_in_place():
     headers: dict[str, str] = {}
     apply_security_headers(headers)
     assert headers["Content-Security-Policy"] == CSP
+    assert headers["Cross-Origin-Opener-Policy"] == "same-origin"
+    assert headers["Cross-Origin-Embedder-Policy"] == "require-corp"
     assert headers["X-Frame-Options"] == "DENY"
     assert headers["X-Content-Type-Options"] == "nosniff"
     assert headers["Referrer-Policy"] == "no-referrer"
@@ -68,6 +70,8 @@ def test_security_headers_set_is_stable_and_minimal():
 
     expected = {
         "Content-Security-Policy",
+        "Cross-Origin-Opener-Policy",
+        "Cross-Origin-Embedder-Policy",
         "X-Frame-Options",
         "X-Content-Type-Options",
         "Referrer-Policy",

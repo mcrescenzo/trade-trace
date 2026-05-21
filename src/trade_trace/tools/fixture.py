@@ -23,7 +23,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
-from typing import Any
+from typing import Any, Literal
 
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
@@ -74,7 +74,7 @@ class _FrozenFixtureClock(AbstractContextManager[None]):
         exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
         traceback: TracebackType | None,
-    ) -> bool:
+    ) -> Literal[False]:
         CLOCK_OVERRIDE.reset(self._token)
         return False
 

@@ -61,8 +61,14 @@ SPA_ROUTES = [
     "/",
     "/trades",
     "/reports",
+    "/review",
     "/reports/pnl",
     "/reports/risk",
+    "/reports/performance",
+    "/reports/strategy",
+    "/reports/decisions",
+    "/process",
+    "/reports/compare",
     "/calibration",
     "/evidence",
     "/strategies",
@@ -78,6 +84,17 @@ def test_spa_route_serves_prebuilt_index(client: TestClient, route: str) -> None
     assert response.status_code == 200, response.text[:300]
     assert "text/html" in response.headers["content-type"]
     assert "/assets/console.js" in response.text
+
+
+def test_security_headers_present_on_http_responses(client: TestClient) -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.headers["Content-Security-Policy"]
+    assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+    assert response.headers["Cross-Origin-Embedder-Policy"] == "require-corp"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
 
 
 def test_status_endpoint_serves_documented_fields(client: TestClient) -> None:

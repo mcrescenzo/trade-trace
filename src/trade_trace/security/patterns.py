@@ -61,6 +61,18 @@ rate manageable on domain-style strings like `a.b.c`."""
 
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
+# Coarse ReDoS structural guard: reject groups that contain a quantifier
+# and are themselves quantified (e.g. (a+)+) or backreferences (\1).
+_REDOS_STRUCTURE_RE = re.compile(
+    r"\("                 # literal opening group
+    r"[^()]*"            # contents without nested groups
+    r"[*+?]"             # a quantifier inside
+    r"[^()]*"            # more contents
+    r"\)"                # literal closing group
+    r"[*+?]"             # the group itself is quantified
+    r"|\\[1-9]\d*"       # OR backreference
+)
+
 
 _compiled: dict[str, re.Pattern[str]] = {}
 
@@ -116,6 +128,13 @@ def register(name: str, regex: str | re.Pattern[str]) -> None:
     if not isinstance(name, str) or not _NAME_RE.match(name):
         raise SecretPatternError(
             f"pattern name must match {_NAME_RE.pattern!r}; got {name!r}"
+        )
+    source = regex.pattern if isinstance(regex, re.Pattern) else regex
+    if _REDOS_STRUCTURE_RE.search(source):
+        raise SecretPatternError(
+            f"pattern {name!r} contains a nested quantifier or backreference "
+            f"that can cause catastrophic backtracking (bead trade-trace-14iy ReDoS guard); "
+            f"rewrite the pattern without nested repetition or backreferences"
         )
     if isinstance(regex, re.Pattern):
         if len(regex.pattern) > MAX_REGEX_SOURCE_LENGTH:

@@ -381,6 +381,31 @@ def test_register_rejects_overlong_compiled_regex_source_per_redos_guard():
     assert "trade-trace-14iy" in msg
 
 
+def test_register_rejects_nested_quantifier_per_redos_guard():
+    """Per bead trade-trace-14iy / DEBT-041: register() rejects patterns
+    with nested quantifiers (e.g. (a+)+) that can cause catastrophic
+    backtracking."""
+
+    from trade_trace.security.patterns import SecretPatternError
+
+    with pytest.raises(SecretPatternError) as exc:
+        register("nested_plus", r"(a+)+")
+    assert "nested quantifier" in str(exc.value).lower() or "backtracking" in str(exc.value).lower()
+    assert "trade-trace-14iy" in str(exc.value)
+
+
+def test_register_rejects_backreference_per_redos_guard():
+    """Backreferences can also cause pathological backtracking and are
+    rejected by the structural guard."""
+
+    from trade_trace.security.patterns import SecretPatternError
+
+    with pytest.raises(SecretPatternError) as exc:
+        register("backref", r"(abc)\1")
+    assert "backreference" in str(exc.value).lower() or "backtracking" in str(exc.value).lower()
+    assert "trade-trace-14iy" in str(exc.value)
+
+
 def test_register_accepts_normal_custom_regex_and_scan_text_matches():
     """The ReDoS guard is scoped: normal custom secret patterns remain
     supported and take effect in scan_text()."""

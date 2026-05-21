@@ -155,7 +155,7 @@ def _build_app(home_path: str) -> Any:
         return {"rows": page.rows, "next_cursor": page.next_cursor, "limit": page.limit}
 
     def _jsonable(value: Any) -> Any:
-        if is_dataclass(value):
+        if is_dataclass(value) and not isinstance(value, type):
             return asdict(value)
         if isinstance(value, tuple):
             return [_jsonable(v) for v in value]
