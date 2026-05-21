@@ -1146,22 +1146,102 @@ def _watchlist_rows_for_current_exposure(watch_data: dict[str, Any]) -> list[dic
     return rows
 
 
-def _recent_trade_activity(connection: Any, *, recent_limit: int) -> list[dict[str, Any]]:
+def _watchlist_for_current_exposure(
+    connection: Any,
+    *,
+    instrument_id: str | None,
+    strategy_id: str | None,
+    kind: str | None,
+) -> list[dict[str, Any]]:
+    """Return watch rows scoped to current_exposure's packet-level filters."""
+
+    # Watch rows are explicitly not exposure and have no paper/actual/simulation kind.
+    # When a caller asks for a kind-scoped exposure packet, omitting watch rows is
+    # safer than leaking unkinded ideas into a supposedly scoped answer.
+    if kind is not None:
+        return []
+
+    clauses = ["d.type = 'watch'"]
+    params: list[Any] = []
+    if instrument_id is not None:
+        clauses.append("d.instrument_id = ?")
+        params.append(instrument_id)
+    if strategy_id is not None:
+        clauses.append("d.strategy_id = ?")
+        params.append(strategy_id)
+
+    rows = connection.execute(
+        f"""
+        SELECT d.id, d.instrument_id, d.strategy_id, d.reason, d.created_at, d.review_by
+        FROM decisions d
+        WHERE {' AND '.join(clauses)}
+        ORDER BY d.created_at DESC, d.id DESC
+        """,
+        tuple(params),
+    ).fetchall()
+    return [
+        {
+            "decision_id": row[0],
+            "instrument_id": row[1],
+            "strategy_id": row[2],
+            "reason": row[3],
+            "created_at": row[4],
+            "review_by": row[5],
+            "overdue": False,
+            "age_days": None,
+            "caveat_codes": ["WATCH_ONLY_IDEA"],
+            "exposure_hint": "Watch idea only; not counted as exposure.",
+        }
+        for row in rows
+    ]
+
+
+def _kind_decision_types(kind: str | None) -> tuple[str, ...]:
+    if kind == "paper":
+        return ("paper_enter", "paper_exit")
+    if kind == "actual":
+        return ("actual_enter", "actual_exit", "add", "reduce")
+    if kind == "simulation":
+        return ()
+    return ("paper_enter", "paper_exit", "actual_enter", "actual_exit", "add", "reduce")
+
+
+def _recent_trade_activity(
+    connection: Any,
+    *,
+    recent_limit: int,
+    instrument_id: str | None = None,
+    strategy_id: str | None = None,
+    kind: str | None = None,
+) -> list[dict[str, Any]]:
     if recent_limit == 0:
         return []
+    decision_types = _kind_decision_types(kind)
+    if not decision_types:
+        return []
+    clauses = [f"d.type IN ({','.join('?' for _ in decision_types)})"]
+    params: list[Any] = list(decision_types)
+    if instrument_id is not None:
+        clauses.append("d.instrument_id = ?")
+        params.append(instrument_id)
+    if strategy_id is not None:
+        clauses.append("d.strategy_id = ?")
+        params.append(strategy_id)
+    params.append(recent_limit)
+
     rows = connection.execute(
-        """
+        f"""
         SELECT d.id, d.instrument_id, d.thesis_id, d.forecast_id, d.snapshot_id,
                d.type, d.side, d.quantity, d.price, d.created_at, d.reason,
                d.strategy_id, d.run_id, COUNT(pe.id) AS event_count
         FROM decisions d
         LEFT JOIN position_events pe ON pe.decision_id = d.id
-        WHERE d.type IN ('paper_enter','paper_exit','actual_enter','actual_exit','add','reduce')
+        WHERE {' AND '.join(clauses)}
         GROUP BY d.id
         ORDER BY d.created_at DESC, d.id DESC
         LIMIT ?
         """,
-        (recent_limit,),
+        tuple(params),
     ).fetchall()
     activity = []
     for row in rows:
@@ -1187,6 +1267,71 @@ def _recent_trade_activity(connection: Any, *, recent_limit: int) -> list[dict[s
             "exposure_hint": "Recent journal activity is not canonical open exposure by itself; use open_positions for exposure.",
         })
     return activity
+
+
+def _filter_current_exposure_anomalies(
+    connection: Any,
+    anomalies: list[dict[str, Any]],
+    *,
+    instrument_id: str | None,
+    strategy_id: str | None,
+    kind: str | None,
+) -> list[dict[str, Any]]:
+    """Scope anomaly rows to current_exposure's packet-level filters."""
+
+    if instrument_id is None and strategy_id is None and kind is None:
+        return anomalies
+
+    decision_rows = connection.execute("SELECT id, instrument_id, strategy_id, type FROM decisions").fetchall()
+    decision_info = {row[0]: {"instrument_id": row[1], "strategy_id": row[2], "type": row[3]} for row in decision_rows}
+    position_rows = connection.execute(
+        """
+        SELECT p.id, p.instrument_id, p.kind, d.strategy_id
+        FROM positions p
+        LEFT JOIN position_events pe ON pe.position_id = p.id AND pe.event_type = 'open'
+        LEFT JOIN decisions d ON d.id = pe.decision_id
+        GROUP BY p.id
+        """
+    ).fetchall()
+    position_info = {row[0]: {"instrument_id": row[1], "kind": row[2], "strategy_id": row[3]} for row in position_rows}
+
+    def matches(anomaly: dict[str, Any]) -> bool:
+        affected = anomaly.get("affected_ids") or {}
+        evidence = anomaly.get("evidence") or {}
+        insts = set(affected.get("instruments") or [])
+        if evidence.get("instrument_id") is not None:
+            insts.add(evidence["instrument_id"])
+        decisions = set(affected.get("decisions") or [])
+        if evidence.get("decision_id") is not None:
+            decisions.add(evidence["decision_id"])
+        positions = set(affected.get("positions") or [])
+        if evidence.get("position_id") is not None:
+            positions.add(evidence["position_id"])
+
+        if instrument_id is not None:
+            related_insts = set(insts)
+            related_insts.update(info["instrument_id"] for did, info in decision_info.items() if did in decisions)
+            related_insts.update(info["instrument_id"] for pid, info in position_info.items() if pid in positions)
+            if instrument_id not in related_insts:
+                return False
+        if strategy_id is not None:
+            related_strategies = {info["strategy_id"] for did, info in decision_info.items() if did in decisions}
+            related_strategies.update(info["strategy_id"] for pid, info in position_info.items() if pid in positions)
+            if strategy_id not in related_strategies:
+                return False
+        if kind is not None:
+            related_kinds = {info["kind"] for pid, info in position_info.items() if pid in positions}
+            related_types = {info["type"] for did, info in decision_info.items() if did in decisions}
+            if not related_kinds and related_types:
+                if related_types <= {"paper_enter", "paper_exit"}:
+                    related_kinds.add("paper")
+                elif related_types <= {"actual_enter", "actual_exit", "add", "reduce"}:
+                    related_kinds.add("actual")
+            if kind not in related_kinds:
+                return False
+        return True
+
+    return [anomaly for anomaly in anomalies if matches(anomaly)]
 
 
 def _current_exposure_hints(open_count: int, watch_count: int, recent_count: int, anomaly_count: int) -> list[str]:
@@ -1220,18 +1365,34 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
 
     open_args = {k: v for k, v in args.items() if k in {"home", "limit", "kind", "instrument_id", "strategy_id", "stale_mark_threshold_days", "as_of"}}
     open_data = _report_open_positions(open_args, ctx)
-    watch_data = _report_watchlist({"home": args.get("home")}, ctx) if include_watchlist else None
     anomaly_args = {k: v for k, v in args.items() if k in {"home", "stale_mark_threshold_days", "as_of"}}
     anomaly_data = _report_exposure_anomalies(anomaly_args, ctx) if include_anomalies else None
 
     db = open_db_for_args(args)
     try:
-        recent_activity = _recent_trade_activity(db.connection, recent_limit=recent_limit)
+        watchlist = _watchlist_for_current_exposure(
+            db.connection,
+            instrument_id=args.get("instrument_id"),
+            strategy_id=args.get("strategy_id"),
+            kind=args.get("kind"),
+        ) if include_watchlist else []
+        recent_activity = _recent_trade_activity(
+            db.connection,
+            recent_limit=recent_limit,
+            instrument_id=args.get("instrument_id"),
+            strategy_id=args.get("strategy_id"),
+            kind=args.get("kind"),
+        )
+        anomalies = _filter_current_exposure_anomalies(
+            db.connection,
+            anomaly_data.get("projection_anomalies", []) if anomaly_data is not None else [],
+            instrument_id=args.get("instrument_id"),
+            strategy_id=args.get("strategy_id"),
+            kind=args.get("kind"),
+        )
     finally:
         db.close()
 
-    watchlist = _watchlist_rows_for_current_exposure(watch_data) if watch_data is not None else []
-    anomalies = anomaly_data.get("projection_anomalies", []) if anomaly_data is not None else []
     open_positions = open_data.get("open_positions", [])
     hints = _current_exposure_hints(len(open_positions), len(watchlist), len(recent_activity), len(anomalies))
     data = {

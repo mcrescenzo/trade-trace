@@ -34,17 +34,35 @@ def _instrument(home: Path) -> str:
     return inst["data"]["id"]
 
 
-def _insert_decision(home: Path, *, decision_id: str, instrument_id: str, type_: str, created_at: str, reason: str = "recent note") -> None:
+def _strategy(home: Path, slug: str) -> str:
+    strategy = dump_envelope(mcp_call(
+        "strategy.create",
+        {"home": str(home), "name": slug, "slug": slug, "idempotency_key": f"test-{slug}"},
+    ))
+    assert strategy["ok"] is True, strategy
+    return strategy["data"]["id"]
+
+
+def _insert_decision(
+    home: Path,
+    *,
+    decision_id: str,
+    instrument_id: str,
+    type_: str,
+    created_at: str,
+    reason: str = "recent note",
+    strategy_id: str | None = None,
+) -> None:
     db = open_database(db_path(home), create_parent=False)
     try:
         db.connection.execute(
             """
             INSERT INTO decisions(
                 id, instrument_id, type, side, quantity, price, reason,
-                run_id, metadata_json, created_at, actor_id
-            ) VALUES (?, ?, ?, 'yes', 1.0, 0.42, ?, 'run_current', '{}', ?, 'agent:test')
+                run_id, metadata_json, created_at, actor_id, strategy_id
+            ) VALUES (?, ?, ?, 'yes', 1.0, 0.42, ?, 'run_current', '{}', ?, 'agent:test', ?)
             """,
-            (decision_id, instrument_id, type_, reason, created_at),
+            (decision_id, instrument_id, type_, reason, created_at, strategy_id),
         )
         db.connection.commit()
     finally:
@@ -137,6 +155,107 @@ def test_current_exposure_recent_without_open_positions_warns_not_exposure(home:
     assert body["data"]["watchlist"] == []
     assert body["data"]["anomalies"] == []
     assert "Canonical open positions: zero; recent journal entries exist but are not open exposure." in body["data"]["agent_answer_hints"]
+
+
+def test_current_exposure_filters_scope_child_buckets(home: Path) -> None:
+    in_scope = _instrument(home)
+    out_scope = _instrument(home)
+    keep_strategy = _strategy(home, "strat-keep")
+    other_strategy = _strategy(home, "strat-other")
+    _insert_decision(
+        home,
+        decision_id="watch_in_scope",
+        instrument_id=in_scope,
+        type_="watch",
+        created_at="2026-05-19T00:00:00Z",
+        reason="watch in scope",
+        strategy_id=keep_strategy,
+    )
+    _insert_decision(
+        home,
+        decision_id="watch_out_scope",
+        instrument_id=out_scope,
+        type_="watch",
+        created_at="2026-05-19T00:01:00Z",
+        reason="watch out of scope",
+        strategy_id=other_strategy,
+    )
+    _insert_decision(
+        home,
+        decision_id="recent_in_scope",
+        instrument_id=in_scope,
+        type_="paper_enter",
+        created_at="2026-05-20T00:00:00Z",
+        strategy_id=keep_strategy,
+    )
+    _insert_decision(
+        home,
+        decision_id="recent_out_scope",
+        instrument_id=out_scope,
+        type_="actual_enter",
+        created_at="2026-05-21T00:00:00Z",
+        reason="record-only out of scope",
+        strategy_id=other_strategy,
+    )
+    _insert_decision(
+        home,
+        decision_id="anomaly_in_scope",
+        instrument_id=in_scope,
+        type_="paper_enter",
+        created_at="2026-05-21T00:01:00Z",
+        strategy_id=keep_strategy,
+    )
+
+    scoped = _call(home, {"instrument_id": in_scope, "strategy_id": keep_strategy, "recent_limit": 10})
+
+    assert scoped["ok"] is True
+    scoped_data = scoped["data"]
+    assert scoped_data["summary"]["filter"]["instrument_id"] == in_scope
+    assert scoped_data["summary"]["filter"]["strategy_id"] == keep_strategy
+    assert {row["decision_id"] for row in scoped_data["watchlist"]} == {"watch_in_scope"}
+    assert scoped_data["summary"]["watch_count"] == 1
+    assert "watch_out_scope" not in {row["decision_id"] for row in scoped_data["watchlist"]}
+    assert {row["decision_id"] for row in scoped_data["recent_trade_activity"]} == {
+        "anomaly_in_scope",
+        "recent_in_scope",
+    }
+    assert scoped_data["summary"]["recent_trade_decision_count"] == 2
+    assert all(
+        row["instrument_id"] == in_scope and row["strategy_id"] == keep_strategy
+        for row in scoped_data["recent_trade_activity"]
+    )
+    scoped_anomaly_decisions = {
+        decision_id
+        for row in scoped_data["anomalies"]
+        for decision_id in row["affected_ids"].get("decisions", [])
+    }
+    assert "anomaly_in_scope" in scoped_anomaly_decisions
+    assert "recent_out_scope" not in scoped_anomaly_decisions
+    assert all(in_scope in row["affected_ids"].get("instruments", []) for row in scoped_data["anomalies"])
+    assert scoped_data["summary"]["anomaly_count"] == len(scoped_data["anomalies"])
+
+    kind_scoped = _call(
+        home,
+        {"instrument_id": in_scope, "strategy_id": keep_strategy, "kind": "paper", "recent_limit": 10},
+    )
+
+    assert kind_scoped["ok"] is True
+    kind_data = kind_scoped["data"]
+    assert kind_data["summary"]["filter"]["kind"] == "paper"
+    assert kind_data["watchlist"] == []
+    assert kind_data["summary"]["watch_count"] == 0
+    assert {row["decision_id"] for row in kind_data["recent_trade_activity"]} == {
+        "anomaly_in_scope",
+        "recent_in_scope",
+    }
+    assert all(row["type"] == "paper_enter" for row in kind_data["recent_trade_activity"])
+    kind_anomaly_decisions = {
+        decision_id
+        for row in kind_data["anomalies"]
+        for decision_id in row["affected_ids"].get("decisions", [])
+    }
+    assert "anomaly_in_scope" in kind_anomaly_decisions
+    assert "recent_out_scope" not in kind_anomaly_decisions
 
 
 def test_current_exposure_schema_mentions_recommended_packet() -> None:
