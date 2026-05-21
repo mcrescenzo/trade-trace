@@ -32,6 +32,18 @@ def test_pnl_empty_db(home):
     assert env["data"]["summary"]["metrics"]["closed_position_count"] == 0
 
 
+def test_pnl_summary_points_to_current_exposure_reports(home):
+    env = _envelope(home, "report.pnl", {})
+    assert env["ok"] is True
+    summary = env["data"]["summary"]
+    assert summary["recommended_current_exposure_report"] == "report.current_exposure"
+    assert summary["open_position_detail_report"] == "report.open_positions"
+    hint = summary["agent_answer_hint"]
+    assert "For open trades/current exposure, run report.current_exposure" in hint
+    assert "row-level open-position detail, run report.open_positions" in hint
+    assert "does not execute trades or prove broker portfolio truth" in hint
+
+
 def test_pnl_rolls_up_positions(home):
     """Inject a closed position via the projection rebuild path so we
     exercise the same code reports consume in production."""

@@ -251,6 +251,53 @@ def test_report_schemas_advertise_defaulted_args_as_optional():
             assert key not in required
 
 
+def test_current_exposure_and_pnl_schema_discoverability_for_open_trades():
+    reg = default_registry()
+
+    current = reg.get("report.current_exposure")
+    assert current.json_schema is not None
+    current_text = " ".join(
+        [
+            current.description,
+            current.json_schema.get("description", ""),
+            current.metadata().get("usage_summary", ""),
+            " ".join(current.metadata().get("next_actions", [])),
+        ]
+    ).lower()
+    for phrase in (
+        "recommended trader-agent entry point",
+        "open trades/current exposure",
+        "open_positions",
+        "watchlist",
+        "recent_trade_activity",
+        "projection_anomalies",
+        "not canonical exposure",
+    ):
+        assert phrase in current_text
+
+    pnl = reg.get("report.pnl")
+    assert pnl.json_schema is not None
+    pnl_text = " ".join(
+        [
+            pnl.description,
+            pnl.json_schema.get("description", ""),
+            pnl.metadata().get("usage_summary", ""),
+            " ".join(pnl.metadata().get("next_actions", [])),
+            " ".join(pnl.metadata().get("examples", [])),
+        ]
+    ).lower()
+    for phrase in (
+        "lower-level p&l report",
+        "for open trades/current exposure",
+        "start with report.current_exposure",
+        "report.open_positions",
+        "summary.metrics.open_position_count > 0",
+        "does not execute trades",
+        "or prove broker portfolio truth",
+    ):
+        assert phrase in pnl_text
+
+
 def test_playbook_adherence_schema_requires_playbook_id_only():
     schema = _schema_for("playbook.adherence")
 

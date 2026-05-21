@@ -136,7 +136,17 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
     ),
     "report.mistakes": _schema({"filter": _FILTER_PROP}),
     "report.strengths": _schema({"filter": _FILTER_PROP}),
-    "report.pnl": _schema({"filter": _FILTER_PROP}),
+    "report.pnl": _schema(
+        {"filter": _FILTER_PROP},
+        description=(
+            "Lower-level P&L report over the local positions projection. Use for realized/unrealized/MTM P&L, "
+            "not as the first answer to 'open trades' or 'current exposure'. For open trades/current exposure, "
+            "start with report.current_exposure; for row-level open-position detail use report.open_positions. "
+            "If summary.metrics.open_position_count > 0, run report.current_exposure or report.open_positions before "
+            "answering exposure questions. Trade Trace records local journal/projection state only; it does not execute trades "
+            "or prove broker portfolio truth."
+        ),
+    ),
     "report.risk": _schema({"filter": _FILTER_PROP}),
     "report.opportunity": _schema(
         {
@@ -1460,10 +1470,26 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "Realized + unrealized + mark-to-market P&L over the positions "
             "projection. Per-instrument groups; summary carries "
             "open_mark_coverage (open positions with marks / open positions). "
-            "Reads the rebuildable positions "
-            "projection (trade-trace-5zg)."
+            "Reads the rebuildable positions projection (trade-trace-5zg). "
+            "This is a lower-level P&L report: for open trades/current exposure, "
+            "start with report.current_exposure; for row-level open-position detail, "
+            "use report.open_positions. Trade Trace records local journal/projection "
+            "state only; it does not execute trades or prove broker portfolio truth."
         ),
-        json_schema=_REPORT_SCHEMAS["report.pnl"]
+        json_schema=_REPORT_SCHEMAS["report.pnl"],
+        usage_summary=(
+            "Use for realized/unrealized/MTM P&L over local projection rows. Do not use as the first source for "
+            "open trades/current exposure; start with report.current_exposure or report.open_positions."
+        ),
+        examples=(
+            "tt report pnl --home <journal-home>",
+            "tt report current_exposure --home <journal-home>",
+            "tt report open_positions --home <journal-home>",
+        ),
+        next_actions=(
+            "If summary.metrics.open_position_count > 0, run report.current_exposure for the recommended agent packet or report.open_positions for row-level open-position detail.",
+            "State that P&L/open-position rows are local journal/projection records; Trade Trace does not execute trades or prove broker portfolio truth.",
+        ),
     )
     registry.register(
         "report.risk",

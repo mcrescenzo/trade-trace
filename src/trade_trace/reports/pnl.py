@@ -103,5 +103,12 @@ def report_pnl(
             "open_mark_coverage": round(open_mark_coverage, 6),
         },
         "caveats": [],
+        "recommended_current_exposure_report": "report.current_exposure",
+        "open_position_detail_report": "report.open_positions",
+        "agent_answer_hint": (
+            "P&L is a lower-level local projection report. For open trades/current exposure, run "
+            "report.current_exposure; for row-level open-position detail, run report.open_positions. "
+            "Trade Trace records local journal/projection state only and does not execute trades or prove broker portfolio truth."
+        ),
     }
     return standard_report_result(summary=summary, groups=groups)
