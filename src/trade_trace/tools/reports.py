@@ -1419,7 +1419,7 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
         "open_positions": open_positions,
         "watchlist": watchlist,
         "recent_trade_activity": recent_activity,
-        "anomalies": anomalies,
+        "projection_anomalies": anomalies,
         "agent_answer_hints": hints,
         "lower_level_reports": {
             "open_positions": "report.open_positions",

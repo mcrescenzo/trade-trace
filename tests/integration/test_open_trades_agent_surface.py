@@ -160,7 +160,7 @@ def test_cli_empty_journal_has_canonical_zero_open_positions_and_valid_json_enve
     assert data["open_positions"] == []
     assert data["watchlist"] == []
     assert data["recent_trade_activity"] == []
-    assert data["anomalies"] == []
+    assert data["projection_anomalies"] == []
     assert any(
         hint in data["agent_answer_hints"]
         for hint in ("Canonical open positions: zero.", "Canonical open positions: 0.")
@@ -193,7 +193,7 @@ def test_cli_golden_recent_journal_entry_is_not_open_exposure(home: Path) -> Non
     recent = {row["decision_id"]: row for row in data["recent_trade_activity"]}
     assert "JOURNAL_ACTIVITY_NOT_CANONICAL_EXPOSURE" in recent["dec_recent_actual_only"]["caveat_codes"]
     assert "RECORD_ONLY_ACTUAL" in recent["dec_recent_actual_only"]["caveat_codes"]
-    anomaly_codes = {row["code"] for row in data["anomalies"]}
+    anomaly_codes = {row["code"] for row in data["projection_anomalies"]}
     assert {"RECORD_ONLY_ACTUAL", "ENTRY_DECISION_WITHOUT_POSITION_EVENT"} <= anomaly_codes
 
 
@@ -303,7 +303,7 @@ def test_cli_duplicate_missing_projection_and_stale_missing_marks_surface_stable
     assert rows["pos_stale_mark"]["latest_mark"]["snapshot_id"] == "snap_stale"
     assert "STALE_MARK" in rows["pos_stale_mark"]["caveat_codes"]
 
-    anomaly_codes = {row["code"] for row in data["anomalies"]}
+    anomaly_codes = {row["code"] for row in data["projection_anomalies"]}
     assert {"DUPLICATE_DECISIONS", "ENTRY_DECISION_WITHOUT_POSITION_EVENT", "MISSING_MARK", "STALE_MARK"} <= anomaly_codes
     assert data["summary"]["anomaly_count"] >= 4
     assert any("Projection anomalies" in hint for hint in data["agent_answer_hints"])

@@ -102,6 +102,10 @@ def test_current_exposure_clean_empty_is_positive(home: Path) -> None:
     data = body["data"]
     assert data["summary"]["bucket"] == "current_exposure"
     assert data["summary"]["buckets"] == ["open_positions", "watchlist", "recent_trade_activity", "projection_anomalies"]
+    for bucket in data["summary"]["buckets"]:
+        assert bucket in data
+    assert "anomalies" not in data
+    assert data["lower_level_reports"]["projection_anomalies"] == "report.exposure_anomalies"
     assert data["summary"]["open_position_count"] == 0
     assert data["summary"]["watch_count"] == 0
     assert data["summary"]["recent_trade_decision_count"] == 0
@@ -109,7 +113,7 @@ def test_current_exposure_clean_empty_is_positive(home: Path) -> None:
     assert data["open_positions"] == []
     assert data["watchlist"] == []
     assert data["recent_trade_activity"] == []
-    assert data["anomalies"] == []
+    assert data["projection_anomalies"] == []
     assert any("No watch ideas" in hint for hint in data["agent_answer_hints"])
 
 
@@ -140,7 +144,7 @@ def test_current_exposure_combines_open_watch_recent_and_anomalies(home: Path) -
     assert recent["dec_record_only_current"]["strategy_id"] is None
     assert recent["dec_record_only_current"]["run_id"] == "run_current"
     assert "RECORD_ONLY_ACTUAL" in recent["dec_record_only_current"]["caveat_codes"]
-    assert any(row["code"] == "RECORD_ONLY_ACTUAL" for row in data["anomalies"])
+    assert any(row["code"] == "RECORD_ONLY_ACTUAL" for row in data["projection_anomalies"])
     assert any("Recent trade activity" in hint for hint in data["agent_answer_hints"])
 
 
@@ -153,7 +157,7 @@ def test_current_exposure_recent_without_open_positions_warns_not_exposure(home:
     assert body["data"]["summary"]["open_position_count"] == 0
     assert body["data"]["summary"]["recent_trade_decision_count"] == 1
     assert body["data"]["watchlist"] == []
-    assert body["data"]["anomalies"] == []
+    assert body["data"]["projection_anomalies"] == []
     assert "Canonical open positions: zero; recent journal entries exist but are not open exposure." in body["data"]["agent_answer_hints"]
 
 
@@ -226,13 +230,13 @@ def test_current_exposure_filters_scope_child_buckets(home: Path) -> None:
     )
     scoped_anomaly_decisions = {
         decision_id
-        for row in scoped_data["anomalies"]
+        for row in scoped_data["projection_anomalies"]
         for decision_id in row["affected_ids"].get("decisions", [])
     }
     assert "anomaly_in_scope" in scoped_anomaly_decisions
     assert "recent_out_scope" not in scoped_anomaly_decisions
-    assert all(in_scope in row["affected_ids"].get("instruments", []) for row in scoped_data["anomalies"])
-    assert scoped_data["summary"]["anomaly_count"] == len(scoped_data["anomalies"])
+    assert all(in_scope in row["affected_ids"].get("instruments", []) for row in scoped_data["projection_anomalies"])
+    assert scoped_data["summary"]["anomaly_count"] == len(scoped_data["projection_anomalies"])
 
     kind_scoped = _call(
         home,
@@ -251,7 +255,7 @@ def test_current_exposure_filters_scope_child_buckets(home: Path) -> None:
     assert all(row["type"] == "paper_enter" for row in kind_data["recent_trade_activity"])
     kind_anomaly_decisions = {
         decision_id
-        for row in kind_data["anomalies"]
+        for row in kind_data["projection_anomalies"]
         for decision_id in row["affected_ids"].get("decisions", [])
     }
     assert "anomaly_in_scope" in kind_anomaly_decisions
