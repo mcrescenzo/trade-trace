@@ -235,6 +235,7 @@ def test_memory_recall_schema_matches_runtime_required_query_and_optional_knobs(
 def test_report_schemas_advertise_defaulted_args_as_optional():
     expected_optional = {
         "report.watchlist": ("filter", "mode", "stale_threshold_days"),
+        "report.open_positions": ("limit", "cursor", "kind", "instrument_id", "strategy_id"),
         "report.source_quality": ("stale_threshold_days",),
         "report.unscored_forecasts": ("filter",),
         "report.coach": ("filter", "stale_threshold_days"),

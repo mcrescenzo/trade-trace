@@ -15,6 +15,7 @@ trade-trace-77z; the coach lands in trade-trace-2g2.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pydantic import ValidationError
@@ -42,6 +43,7 @@ from trade_trace.reports import (
     report_watchlist,
 )
 from trade_trace.reports._filter_support import UnsupportedFilterError
+from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
 from trade_trace.tools._helpers import open_db_for_args
 from trade_trace.tools._report_filter_errors import (
     report_filter_validation_to_tool_error,
@@ -173,10 +175,198 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "stale_threshold_days": {"type": "integer", "minimum": 0},
         }
     ),
+    "report.open_positions": _schema(
+        {
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Maximum open-position rows to return; defaults to the positions page default.",
+            },
+            "cursor": {
+                "type": "string",
+                "description": "Opaque pagination cursor from a previous report.open_positions response.",
+            },
+            "kind": {
+                "type": "string",
+                "enum": ["paper", "actual", "simulation"],
+                "description": "Optional position kind filter. Omit to include all open exposure kinds.",
+            },
+            "instrument_id": {"type": "string"},
+            "strategy_id": {"type": "string"},
+            "stale_mark_threshold_days": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Age threshold in days for latest snapshot/mark caveats; defaults to 14.",
+            },
+            "as_of": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Optional ISO timestamp used to evaluate stale latest marks; defaults to current UTC.",
+            },
+        },
+        description=(
+            "Read-only current-exposure report: canonical row-level open positions "
+            "from the positions projection/position_events lineage. Defaults to open "
+            "and partial positions only; closed positions and unclosed decisions are not "
+            "current exposure. Includes latest snapshot mark metadata when available and "
+            "flags stale marks by stale_mark_threshold_days. Do not infer open trades from "
+            "decisions or watches."
+        ),
+    ),
     "report.coach": _schema(
         {"filter": _FILTER_PROP, "stale_threshold_days": {"type": "integer", "minimum": 0}}
     ),
 }
+
+_CURRENT_EXPOSURE_CAVEAT_MAP = {"open_no_mark": "MISSING_MARK"}
+
+
+def _position_current_exposure_codes(row: Any) -> list[str]:
+    codes: list[str] = []
+    if row.kind == "paper":
+        codes.append("OPEN_PAPER_POSITION")
+    elif row.kind == "actual":
+        codes.append("OPEN_ACTUAL_RECORDED_POSITION")
+    for caveat in row.caveats:
+        mapped = _CURRENT_EXPOSURE_CAVEAT_MAP.get(caveat)
+        if mapped is not None and mapped not in codes:
+            codes.append(mapped)
+    return codes
+
+
+def _parse_report_timestamp(value: str, *, field: str) -> datetime:
+    try:
+        normalized = to_utc_iso8601(value, field=field)
+    except TimestampValidationError as exc:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            str(exc),
+            details={"field": field, "value": value},
+        ) from exc
+    return datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+
+
+def _snapshot_latest_mark(snapshot: Any) -> dict[str, Any]:
+    fields = {
+        "id": snapshot[0],
+        "captured_at": snapshot[1],
+        "source": snapshot[2],
+        "source_url": snapshot[3],
+        "price": snapshot[4],
+        "bid": snapshot[5],
+        "ask": snapshot[6],
+        "mid": snapshot[7],
+        "implied_probability": snapshot[8],
+    }
+    value_type = None
+    value = None
+    for candidate in ("price", "mid", "bid", "ask", "implied_probability"):
+        candidate_value = fields[candidate]
+        if candidate_value is not None:
+            value_type = candidate
+            value = candidate_value
+            break
+    return {
+        "snapshot_id": fields["id"],
+        "captured_at": fields["captured_at"],
+        "source": fields["source"],
+        "source_url": fields["source_url"],
+        "value_type": value_type,
+        "value": value,
+        "price": fields["price"],
+        "bid": fields["bid"],
+        "ask": fields["ask"],
+        "mid": fields["mid"],
+        "implied_probability": fields["implied_probability"],
+    }
+
+
+def _latest_snapshot_mark_by_instrument(connection: Any, instrument_ids: set[str]) -> dict[str, dict[str, Any]]:
+    marks: dict[str, dict[str, Any]] = {}
+    for instrument_id in instrument_ids:
+        snapshot = connection.execute(
+            """
+            SELECT id, captured_at, source, source_url, price, bid, ask, mid, implied_probability
+            FROM snapshots
+            WHERE instrument_id = ?
+              AND (price IS NOT NULL OR bid IS NOT NULL OR ask IS NOT NULL
+                   OR mid IS NOT NULL OR implied_probability IS NOT NULL)
+            ORDER BY captured_at DESC, id DESC
+            LIMIT 1
+            """,
+            (instrument_id,),
+        ).fetchone()
+        if snapshot is not None:
+            marks[instrument_id] = _snapshot_latest_mark(snapshot)
+    return marks
+
+
+def _position_row_payload(row: Any, latest_mark: dict[str, Any] | None, *, stale_cutoff: datetime) -> dict[str, Any]:
+    caveat_codes = _position_current_exposure_codes(row)
+    mark_state = "missing"
+    if latest_mark is not None:
+        captured_at = _parse_report_timestamp(latest_mark["captured_at"], field="snapshots.captured_at")
+        mark_state = "stale" if captured_at < stale_cutoff else "available"
+        if mark_state == "stale" and "STALE_MARK" not in caveat_codes:
+            caveat_codes.append("STALE_MARK")
+        if "MISSING_MARK" in caveat_codes:
+            caveat_codes.remove("MISSING_MARK")
+    elif "MISSING_MARK" not in caveat_codes:
+        mark_state = "missing"
+    return {
+        "position_id": row.position_id,
+        "instrument_id": row.instrument_id,
+        "instrument_symbol": row.instrument_symbol,
+        "instrument_title": row.instrument_title,
+        "venue_id": row.venue_id,
+        "venue_kind": row.venue_kind,
+        "kind": row.kind,
+        "side": row.side,
+        "status": row.status,
+        "outcome": row.outcome,
+        "net_quantity": row.net_quantity,
+        "avg_entry_price": row.avg_entry_price,
+        "opened_at": row.opened_at,
+        "updated_at": row.updated_at,
+        "closed_at": row.closed_at,
+        "realized_pnl": row.realized_pnl,
+        "unrealized_pnl": row.unrealized_pnl,
+        "realized_r_multiple": row.realized_r_multiple,
+        "unrealized_r_multiple": row.unrealized_r_multiple,
+        "initial_risk_amount": row.initial_risk_amount,
+        "opening_decision_id": row.opening_decision_id,
+        "opening_strategy_id": row.opening_strategy_id,
+        "opening_strategy_slug": row.opening_strategy_slug,
+        "opening_playbook_version_id": row.opening_playbook_version_id,
+        "event_counts": {
+            "add": row.add_count,
+            "reduce": row.reduce_count,
+            "total": row.event_count,
+        },
+        "latest_mark": latest_mark,
+        "mark_state": mark_state,
+        "caveat_codes": caveat_codes,
+        "read_model_caveats": list(row.caveats),
+        "caveats": [
+            {"code": entry.code, "label": entry.label, "summary": entry.summary, "severity": entry.severity}
+            for entry in row.caveat_entries
+        ],
+    }
+
+
+def _open_position_hints(count: int, caveat_codes: list[str]) -> list[str]:
+    if count == 0:
+        return ["Canonical open positions: zero."]
+    hints = [
+        f"Canonical open positions: {count} row(s) from positions projection, not inferred from decisions.",
+    ]
+    if "MISSING_MARK" in caveat_codes:
+        hints.append("Some open positions are missing mark/P&L data; avoid summarizing unrealized P&L as complete.")
+    if "STALE_MARK" in caveat_codes:
+        hints.append("Some open positions have stale latest snapshot marks; treat mark-dependent exposure/P&L as caveated.")
+    if "OPEN_ACTUAL_RECORDED_POSITION" in caveat_codes:
+        hints.append("Actual-recorded rows are current exposure only because they have linked position projection/events.")
+    return hints
 
 
 def _unsupported_filter_to_tool_error(exc: UnsupportedFilterError) -> ToolError:
@@ -585,6 +775,102 @@ def _report_watchlist(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     return data
 
 
+def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.open_positions` — row-level current open exposure."""
+
+    limit = args.get("limit")
+    if limit is not None and (not isinstance(limit, int) or limit < 1):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "limit must be a positive integer",
+            details={"field": "limit", "value": limit},
+        )
+    kind = args.get("kind")
+    if kind is not None and kind not in ("paper", "actual", "simulation"):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "kind must be one of: paper, actual, simulation",
+            details={"field": "kind", "value": kind, "allowed": ["paper", "actual", "simulation"]},
+        )
+    stale_mark_threshold_days = args.get("stale_mark_threshold_days", 14)
+    if not isinstance(stale_mark_threshold_days, int) or stale_mark_threshold_days < 0:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "stale_mark_threshold_days must be a non-negative integer",
+            details={"field": "stale_mark_threshold_days", "value": stale_mark_threshold_days},
+        )
+    as_of_raw = args.get("as_of")
+    if as_of_raw is None:
+        as_of = datetime.now(UTC)
+    elif isinstance(as_of_raw, str):
+        as_of = _parse_report_timestamp(as_of_raw, field="as_of")
+    else:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "as_of must be an ISO timestamp string",
+            details={"field": "as_of", "value": as_of_raw},
+        )
+    stale_cutoff = as_of - timedelta(days=stale_mark_threshold_days)
+    db = open_db_for_args(args)
+    try:
+        from trade_trace.console.reporting.position_rows import list_positions
+
+        page = list_positions(
+            db.connection,
+            cursor=args.get("cursor"),
+            limit=limit if limit is not None else 100,
+            status=("open", "partial"),
+            kind=kind,
+            instrument_id=args.get("instrument_id"),
+            strategy_id=args.get("strategy_id"),
+        )
+        latest_marks = _latest_snapshot_mark_by_instrument(
+            db.connection,
+            {row.instrument_id for row in page.rows},
+        )
+    finally:
+        db.close()
+
+    rows = [
+        _position_row_payload(
+            row,
+            latest_marks.get(row.instrument_id),
+            stale_cutoff=stale_cutoff,
+        )
+        for row in page.rows
+    ]
+    caveat_codes = sorted({code for row in rows for code in row["caveat_codes"]})
+    if not rows:
+        caveat_codes = ["NO_OPEN_POSITIONS"]
+    hints = _open_position_hints(len(rows), caveat_codes)
+    data = {
+        "summary": {
+            "bucket": "open_positions",
+            "count": len(rows),
+            "open_position_count": len(rows),
+            "filter": {
+                "status": ["open", "partial"],
+                "kind": kind,
+                "instrument_id": args.get("instrument_id"),
+                "strategy_id": args.get("strategy_id"),
+                "limit": page.limit,
+                "cursor": args.get("cursor"),
+                "stale_mark_threshold_days": stale_mark_threshold_days,
+                "as_of": to_utc_iso8601(as_of),
+            },
+            "caveat_codes": caveat_codes,
+            "agent_answer_hints": hints,
+        },
+        "groups": [],
+        "open_positions": rows,
+        "agent_answer_hints": hints,
+        "truncated": page.next_cursor is not None,
+        "next_cursor": page.next_cursor,
+    }
+    _propagate_report_meta(ctx, data)
+    return data
+
+
 def _report_coach(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`report.coach` — synthesized decision-support packet. No LLM, no
     network, no trade advice."""
@@ -875,6 +1161,33 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}, "mode": "all", "stale_threshold_days": 14},
         optional_keys=("filter", "mode", "stale_threshold_days"),
         json_schema=_REPORT_SCHEMAS["report.watchlist"]
+    )
+    registry.register(
+        "report.open_positions",
+        _report_open_positions,
+        description=(
+            "Row-level open trades/current exposure from the canonical "
+            "positions projection and position_events lineage. Defaults to "
+            "open/partial positions only; closed positions are excluded. "
+            "Agents must not infer current exposure from unclosed decisions, "
+            "watch decisions, or record-only actual decisions without a linked "
+            "position projection/event. Returns positive empty results with "
+            "count=0 and NO_OPEN_POSITIONS."
+        ),
+        example_minimal={"limit": 100},
+        optional_keys=(
+            "limit",
+            "cursor",
+            "kind",
+            "instrument_id",
+            "strategy_id",
+            "stale_mark_threshold_days",
+            "as_of",
+        ),
+        json_schema=_REPORT_SCHEMAS["report.open_positions"],
+        usage_summary="List canonical row-level open positions/current exposure; do not query or infer from decisions.",
+        examples=("tt report open_positions --home <journal-home>",),
+        next_actions=("Use these rows directly to summarize open exposure; do not run raw SQLite for open positions.",),
     )
     registry.register(
         "report.coach",
