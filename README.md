@@ -123,9 +123,11 @@ the auto-derived input schema; the registry is the source of truth.
 
 ## Security and privacy
 
-- **Outbound network is unconditionally off by default.** A fresh
-  `journal.init` makes zero outbound calls; the boundary is verified by
-  `tests/security/test_no_network_default.py`.
+- **Outbound network is off by default.** A fresh `journal.init`, normal
+  local journal use, Console startup/use, and MCP stdio startup make zero
+  outbound calls; the default boundary is verified by
+  `tests/security/test_no_network_default.py` and the Console/MCP security
+  tests.
 - **Credentials are never persisted.** Every write tool silently drops
   credential-shaped args (`api_key`, `wallet_seed`, `private_key`,
   `mnemonic`, `broker_token`, …); verified by
@@ -143,7 +145,11 @@ the auto-derived input schema; the registry is the source of truth.
 - **Backups** carry a SHA-256 manifest; restore verifies every file's
   digest before copying and rejects path-traversal entries (see
   `tests/security/test_restore_manifest_paths.py`).
-- **No telemetry.** Anything that looks like network access is a bug.
+- **No telemetry.** Trade Trace does not phone home, send usage analytics,
+  auto-update, fetch market data, or call broker APIs. Outbound network is a
+  bug unless the operator explicitly invokes a documented opt-in feature such
+  as local embedding model download/import/warm or API embeddings (for
+  example OpenAI), which are never enabled by default.
 
 See [`SECURITY.md`](./SECURITY.md) for the supported-version policy and
 how to report vulnerabilities via GitHub Security Advisories.

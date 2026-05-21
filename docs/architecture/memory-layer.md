@@ -236,7 +236,7 @@ Strategy context composes with `query` (full-text terms still apply within the s
 
 The base wheel does not require vector dependencies. Install `trade-trace[embeddings]` (or `pip install -e '.[embeddings]'` from a checkout) to use `sqlite-vec` vector storage, local model import/warm, API-provider keyring storage, and `memory.reindex`. **No model weights are downloaded on `journal.init`.** A fresh install runs fully offline; recall uses BM25 + temporal (+ graph if requested).
 
-This is the load-bearing change from earlier drafts: VISION §safety promises "MVP makes no outbound network calls" and is air-gappable on first run, which a default-on lazy download breaks. Defaulting vectors off keeps that promise; opting in is one config line.
+This is the load-bearing change from earlier drafts: VISION §safety promises the default first-run path makes no outbound network calls and is air-gappable, which a default-on lazy download would break. Defaulting vectors off keeps that promise; opting in is one config line.
 
 Rationale for an optional extra: the vector path is useful but not required for the manual learning loop, and keeping the base install small preserves the local/offline default. The model weights are large and are never fetched without explicit operator opt-in.
 
@@ -265,7 +265,7 @@ Two outbound paths exist in trade-trace; both opt-in:
 - **Local model weight download** (§8.2): one-time, weights only, no journal data.
 - **API embedding provider** (§8.3): per-call, sends memory text outbound.
 
-No other path makes outbound network calls. No telemetry, no usage analytics, no auto-update, no webhook.
+No other intended path makes outbound network calls. No telemetry, no usage analytics, no auto-update, no webhook.
 
 ### 8.4 Re-embed on provider change
 

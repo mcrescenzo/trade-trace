@@ -52,9 +52,9 @@ Trade Trace never queries external venues, broker APIs, or market data providers
 
 The `snapshots.source` and `outcomes.source` columns are free-form strings. MVP only writes `'manual'`. The columns exist so future imports (CSV, JSONL, dogfooded research scripts) have a place to land without migration; no connector type taxonomy is implied or reserved.
 
-#### 2.4.1 The single permitted outbound-network path
+#### 2.4.1 Explicit opt-in outbound-network paths
 
-One — and only one — path in Trade Trace makes outbound network calls: the optional local embedding model download for the `SEMANTIC` recall strategy. It is:
+Trade Trace makes no outbound network calls by default. The documented outbound-network paths are explicit opt-in embeddings features. The optional local embedding model download for the `SEMANTIC` recall strategy is:
 
 - **Off by default in MVP.** A fresh `journal.init` does not download anything. `memory.recall` runs with BM25 + temporal (+ graph if requested) and returns valid results without vectors. The "air-gappable on first run" promise (VISION §safety) holds out of the box.
 - **Opt-in via explicit config.** The agent or operator runs `tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` to authorize the one-time model download. The download targets only the local model's host (no telemetry, no metrics, no API key submission). (An earlier proposal documented `journal.init --enable-embeddings` as a one-shot alternative; the live registry does not expose that flag — `config_set` is the canonical surface, per trade-trace-mehh.)
@@ -63,7 +63,7 @@ One — and only one — path in Trade Trace makes outbound network calls: the o
 
 Remote embedding *providers* (OpenAI, etc.) are a separate, also-opt-in path covered in [`memory-layer.md`](./architecture/memory-layer.md) §8.3. They DO send memory text outward and carry an explicit warning at configure time. They are never enabled by default.
 
-This is the complete outbound-network surface. There is no telemetry, no usage analytics, no auto-update, no webhook, no broker integration, no market-data fetch.
+Together, local model download/import/warm and remote API embedding providers are the complete intended outbound-network surface. There is no telemetry, no usage analytics, no auto-update, no webhook, no broker integration, no market-data fetch.
 
 ### 2.5 Forecast model
 
@@ -90,7 +90,7 @@ No background scheduler or daemon exists in MVP. Write-triggered signals may be 
 
 The core never accepts, stores, logs, or prompts for trading credentials. Wallet, broker, order-signing, and seed credentials are never supported, never read from any source, and never appear in any API surface. Because there is no trading-data fetching (§2.4), there is no execution path, no broker trust model, and no market-data network surface in MVP.
 
-The single permitted outbound path (§2.4.1, optional local embedding download) is off by default, opt-in, scoped to model weights, and carries no trading data. API embedding providers (memory-layer.md §8.3) are similarly opt-in and store any provider key in the OS keyring, never in the database or plaintext config.
+The local embedding download path (§2.4.1) is off by default, opt-in, scoped to model weights, and carries no trading data. API embedding providers (memory-layer.md §8.3) are similarly opt-in and store any provider key in the OS keyring, never in the database or plaintext config.
 
 ### 2.9 Tags
 
