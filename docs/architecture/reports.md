@@ -9,8 +9,8 @@ report.calibration_integrity, report.source_quality, report.mistakes,
 report.strengths, report.pnl, report.watchlist,
 report.unscored_forecasts, report.decision_velocity,
 report.playbook_adherence, report.coach, report.filter_schema,
-report.compare, report.strategy_performance. Deferred (P1): report.risk,
-report.opportunity. review.bundle ships as a contract-only stub
+report.compare, report.strategy_performance, report.audit_readiness.
+Deferred (P1): report.risk, report.opportunity. review.bundle ships as a contract-only stub
 (UNSUPPORTED_CAPABILITY); the §5 spec is the binding contract for the P1
 implementation.
 
@@ -366,6 +366,58 @@ hygiene is a journal-level signal, not a per-strategy slice. No external
 fetching, no credibility scoring.
 
 Source: bead trade-trace-l9q.
+
+### 4.10 `report.audit_readiness` (prediction/event-market readiness)
+
+Read-only local audit diagnostics for prediction/event-market journal arcs.
+The report is deterministic SQL over existing journal tables: it never
+fetches market data, never scores source credibility, and never gives
+trading advice.
+
+Inputs:
+
+- `stale_snapshot_threshold_days`: non-negative integer, default `1`.
+- `stale_source_threshold_days`: non-negative integer, default `7`.
+
+Output:
+
+```jsonc
+{
+  "summary": {
+    "sample_size": 1,              // actual_enter + paper_enter decisions
+    "blocking_count": 2,
+    "warning_count": 3,
+    "info_count": 1,
+    "ready": false,               // true only when sample_size > 0 and no blocking issues
+    "sample_warning": null,        // "no_data" when no entered decisions exist
+    "stale_snapshot_threshold_days": 1,
+    "stale_source_threshold_days": 7
+  },
+  "issues": [
+    {
+      "check": "missing_resolution_rule_provenance",
+      "severity": "blocking",     // blocking | warning | info
+      "count": 1,
+      "sample_ids": {"forecasts": ["fc_..."]},
+      "samples": [/* bounded examples with contributing IDs */],
+      "truncated": false
+    }
+  ]
+}
+```
+
+Current checks:
+
+- `blocking`: missing resolution-rule/criteria provenance for
+  `prediction_market` / `event_market` forecasts, missing snapshot on
+  entered decisions, weak decision provenance, and contradictory thesis
+  sources.
+- `warning`: stale linked snapshots, missing bid/ask/spread/depth market
+  microstructure, and stale attached sources.
+- `info`: missing source retrieval metadata and missing agent/model/run
+  segmentation metadata.
+
+Source: bead trade-trace-r566.
 
 ## 5. `review.bundle`
 

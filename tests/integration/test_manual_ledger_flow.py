@@ -9,11 +9,14 @@ every M1 write tool.
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
 
 from trade_trace.mcp_server import mcp_call
+from trade_trace.projections import rebuild_positions
+from trade_trace.storage.paths import db_path
 
 
 def _envelope(home: Path, tool: str, args: dict, **kwargs):
@@ -251,6 +254,68 @@ def test_decision_add_paper_enter_full(home):
     })
     assert env["ok"] is True
     assert env["data"]["tags"] == ["good-skip", "liquidity-ignored"]
+
+
+def test_decision_add_paper_enter_creates_position_event_and_live_projection(home):
+    inst_id, thesis_id = _setup_thesis(home)
+    env = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "thesis_id": thesis_id,
+        "type": "paper_enter",
+        "side": "no",
+        "quantity": 7,
+        "price": 0.42,
+        "fees": 0.03,
+        "slippage": 0.01,
+    })
+    assert env["ok"] is True, env
+    assert env["data"]["position_id"].startswith("pos_")
+    assert env["data"]["position_event_id"].startswith("pev_")
+
+    with sqlite3.connect(db_path(home)) as conn:
+        pe = conn.execute(
+            "SELECT id, position_id, instrument_id, decision_id, event_type, "
+            "quantity_delta, price, fees, slippage FROM position_events"
+        ).fetchone()
+        assert pe == (
+            env["data"]["position_event_id"], env["data"]["position_id"],
+            inst_id, env["data"]["id"], "open", -7.0, 0.42, 0.03, 0.01,
+        )
+        pos = conn.execute(
+            "SELECT id, instrument_id, kind, side, status, avg_entry_price "
+            "FROM positions WHERE id = ?", (env["data"]["position_id"],)
+        ).fetchone()
+        assert pos == (env["data"]["position_id"], inst_id, "paper", "no", "open", 0.42)
+
+
+def test_decision_add_paper_enter_replay_is_idempotent_and_rebuild_parity(home):
+    inst_id, thesis_id = _setup_thesis(home)
+    key = "00000000-0000-4000-8000-00000000pe01"
+    args = {
+        "instrument_id": inst_id,
+        "thesis_id": thesis_id,
+        "type": "paper_enter",
+        "side": "yes",
+        "quantity": 5,
+        "price": 0.2,
+        "idempotency_key": key,
+    }
+    first = _envelope(home, "decision.add", args)
+    second = _envelope(home, "decision.add", args)
+    assert first["ok"] is True, first
+    assert second["ok"] is True, second
+    assert second["data"]["id"] == first["data"]["id"]
+    assert second["data"]["position_id"] == first["data"]["position_id"]
+    assert second["data"]["position_event_id"] == first["data"]["position_event_id"]
+    assert second["meta"]["idempotent_replay"] is True
+
+    with sqlite3.connect(db_path(home)) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM position_events").fetchone()[0] == 1
+        assert conn.execute("SELECT quantity_delta FROM position_events").fetchone()[0] == 5.0
+        live = conn.execute("SELECT * FROM positions ORDER BY id").fetchall()
+        rebuild_positions(conn)
+        rebuilt = conn.execute("SELECT * FROM positions ORDER BY id").fetchall()
+        assert rebuilt == live
 
 
 def test_decision_add_review_requires_review_by(home):

@@ -1,5 +1,6 @@
 """Deterministic reports per docs/architecture/reports.md."""
 
+from trade_trace.reports.audit_readiness import report_audit_readiness
 from trade_trace.reports.buckets import (
     CONFIDENCE_LABELS,
     LIQUIDITY_BUCKET_THRESHOLDS,
@@ -82,5 +83,6 @@ __all__ = [
     "report_unscored_forecasts",
     "report_watchlist",
     "spread_bucket",
+    "report_audit_readiness",
     "volume_bucket",
 ]

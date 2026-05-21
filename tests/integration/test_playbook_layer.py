@@ -248,6 +248,65 @@ def test_show_returns_version_history(home):
     assert env.data["versions"][0]["description"] == "first"
 
 
+def test_show_and_list_versions_include_linked_rule_summaries_and_guidance(home):
+    pb = _mcp(home, "playbook.create", {
+        "name": "PB-RuleDiscover", "idempotency_key": "00000000-0000-4000-8000-pb-rd-pb1",
+    }).data["id"]
+    ref = _seed_reflection(home, idem_suffix="rd1")
+    version = _mcp(home, "playbook.propose_version", {
+        "playbook_id": pb, "provenance_reflection_node_id": ref,
+        "description": "discoverable rules",
+        "idempotency_key": "00000000-0000-4000-8000-pb-rd-v1",
+    }).data["id"]
+    rule = _seed_rule_node(home, idem_suffix="rd-linked")
+    decision = _seed_decision(home, idem_suffix="rd-linked")
+    _mcp(home, "decision.record_adherence", {
+        "decision_id": decision,
+        "playbook_version_id": version,
+        "rule_node_id": rule,
+        "status": "considered",
+        "idempotency_key": "00000000-0000-4000-8000-pb-rd-adh1",
+    })
+
+    for tool, container in (("playbook.show", "versions"), ("playbook.list_versions", "items")):
+        env = _mcp(home, tool, {"playbook_id": pb})
+        assert env.ok, env
+        item = env.data[container][0]
+        assert item["playbook_rule_count"] == 1
+        assert item["playbook_rule_summaries"] == [{
+            "id": rule,
+            "title": None,
+            "body": "Rule: do not enter when spread > 8% (idem rd-linked)",
+        }]
+        assert "decision.record_adherence" in item["next_call_guidance"]
+        assert "memory.recall" in item["next_call_guidance"]
+
+
+def test_propose_version_returns_empty_rule_discoverability_on_create_and_replay(home):
+    pb = _mcp(home, "playbook.create", {
+        "name": "PB-ProposeGuidance", "idempotency_key": "00000000-0000-4000-8000-pb-pg-pb1",
+    }).data["id"]
+    ref = _seed_reflection(home, idem_suffix="pg1")
+    args = {
+        "playbook_id": pb,
+        "provenance_reflection_node_id": ref,
+        "description": "new version has no linked rules yet",
+        "idempotency_key": "00000000-0000-4000-8000-pb-pg-v1",
+    }
+
+    first = _mcp(home, "playbook.propose_version", args)
+    replay = _mcp(home, "playbook.propose_version", args)
+
+    for env in (first, replay):
+        assert env.ok, env
+        assert env.data["playbook_rule_count"] == 0
+        assert env.data["playbook_rule_summaries"] == []
+        assert "memory.retain" in env.data["next_call_guidance"]
+        assert "node_type='playbook_rule'" in env.data["next_call_guidance"]
+        assert "decision.record_adherence" in env.data["next_call_guidance"]
+    assert replay.data == first.data
+
+
 def test_show_not_found(home):
     env = _mcp(home, "playbook.show", {"playbook_id": "pbk_nope"})
     assert env.ok is False

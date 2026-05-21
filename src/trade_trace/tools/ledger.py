@@ -19,6 +19,7 @@ from typing import Any
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
+from trade_trace.projections import rebuild_positions
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
     common_metadata,
@@ -896,6 +897,30 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             details={"field": "expected_edge_after_costs"},
         )
 
+    def _paper_enter_quantity_delta() -> float:
+        quantity = float(require(args, "quantity"))
+        side = require(args, "side")
+        return -quantity if side in {"no", "short"} else quantity
+
+    def _linked_position_ids(conn, decision_id: str) -> dict[str, Any]:
+        row = conn.execute(
+            "SELECT id, position_id FROM position_events WHERE decision_id = ? "
+            "AND event_type = 'open' ORDER BY created_at ASC, id ASC LIMIT 1",
+            (decision_id,),
+        ).fetchone()
+        if row is None:
+            return {}
+        return {"position_event_id": row[0], "position_id": row[1]}
+
+    def _response(conn, decision_id: str, created_at_value: str, review_by_value: str | None) -> dict[str, Any]:
+        data = {"id": decision_id, "type": decision_type,
+                "instrument_id": args.get("instrument_id"),
+                "snapshot_id": args.get("snapshot_id"), "tags": tags,
+                "created_at": created_at_value, "review_by": review_by_value}
+        if decision_type == "paper_enter":
+            data.update(_linked_position_ids(conn, decision_id))
+        return data
+
     def _payload(did: str) -> dict[str, Any]:
         return {
             "id": did,
@@ -941,11 +966,7 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     "SELECT created_at, review_by FROM decisions WHERE id = ?",
                     (decision_id,),
                 ).fetchone()
-                return {"id": decision_id, "type": decision_type,
-                        "instrument_id": args.get("instrument_id"),
-                        "snapshot_id": args.get("snapshot_id"),
-                        "tags": tags, "created_at": row[0],
-                        "review_by": row[1]}
+                return _response(uow.conn, decision_id, row[0], row[1])
 
             decision_id = args.get("id") or new_id("dec")
             created_at = now_iso()
@@ -983,12 +1004,27 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 payload=_payload(decision_id),
                 actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
             )
+            if decision_type == "paper_enter":
+                position_id = new_id("pos")
+                position_event_id = new_id("pev")
+                uow.execute(
+                    "INSERT INTO position_events(id, position_id, instrument_id, decision_id, "
+                    "event_type, quantity_delta, price, fees, slippage, metadata_json, "
+                    "created_at, actor_id, initial_risk_amount) "
+                    "VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, '{}', ?, ?, ?)",
+                    (
+                        position_event_id, position_id, args.get("instrument_id"), decision_id,
+                        _paper_enter_quantity_delta(), args.get("price"), args.get("fees"),
+                        args.get("slippage"), created_at, ctx.actor_id, declared_risk_amount,
+                    ),
+                )
+                rebuild_positions(uow.conn)
+                result = _response(uow.conn, decision_id, created_at, review_by)
+            else:
+                result = _response(uow.conn, decision_id, created_at, review_by)
     finally:
         db.close()
-    return {"id": decision_id, "type": decision_type,
-            "instrument_id": args.get("instrument_id"),
-            "snapshot_id": args.get("snapshot_id"), "tags": tags,
-            "created_at": created_at, "review_by": review_by}
+    return result
 
 
 # -- outcome.add / resolve.record ------------------------------------------
@@ -2086,7 +2122,10 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
         "decision.add — runtime decision matrix in decision_matrix.py "
         "enforces per-`type` required/forbidden fields and returns a "
         "VALIDATION_ERROR envelope on violation. Use x-decision-matrix "
-        "for per-type required/optional/forbidden fields."
+        "for per-type required/optional/forbidden fields. For `paper_enter`, "
+        "the tool appends one linked position_events.open row, refreshes "
+        "positions, and returns position_id/position_event_id; actual_* and "
+        "paper_exit remain journal records only for projection purposes."
     ),
     "x-decision-matrix": _DECISION_MATRIX_CONTRACT,
     "x-decision-examples": {

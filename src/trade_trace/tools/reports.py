@@ -24,6 +24,7 @@ from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.reports import (
     TradingAdvicePhraseError,
+    report_audit_readiness,
     report_calibration,
     report_calibration_integrity,
     report_coach,
@@ -117,6 +118,13 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "sources.freshness_at (evidence-current time) versus decision.created_at; "
             "retrieved_at is retrieval/provenance time only and does not trigger stale diagnostics."
         ),
+    ),
+    "report.audit_readiness": _schema(
+        {
+            "stale_snapshot_threshold_days": {"type": "integer", "minimum": 0},
+            "stale_source_threshold_days": {"type": "integer", "minimum": 0},
+        },
+        description="Read-only local prediction/event-market audit-readiness diagnostics; no network, no advice.",
     ),
     "report.calibration_integrity": _EMPTY_SCHEMA,
     "report.unscored_forecasts": _schema({"filter": _FILTER_PROP}),
@@ -349,6 +357,34 @@ def _report_source_quality(
     try:
         data = report_source_quality(
             db.connection, stale_threshold_days=stale_threshold_days,
+        )
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_audit_readiness(
+    args: dict[str, Any], ctx: ToolContext,
+) -> dict[str, Any]:
+    stale_snapshot_threshold_days = args.get("stale_snapshot_threshold_days", 1)
+    stale_source_threshold_days = args.get("stale_source_threshold_days", 7)
+    for field, value in (
+        ("stale_snapshot_threshold_days", stale_snapshot_threshold_days),
+        ("stale_source_threshold_days", stale_source_threshold_days),
+    ):
+        if not isinstance(value, int) or value < 0:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"{field} must be a non-negative integer",
+                details={"field": field, "value": value},
+            )
+    db = open_db_for_args(args)
+    try:
+        data = report_audit_readiness(
+            db.connection,
+            stale_snapshot_threshold_days=stale_snapshot_threshold_days,
+            stale_source_threshold_days=stale_source_threshold_days,
         )
     finally:
         db.close()
@@ -671,6 +707,19 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"stale_threshold_days": 7},
         optional_keys=("stale_threshold_days",),
         json_schema=_REPORT_SCHEMAS["report.source_quality"]
+    )
+    registry.register(
+        "report.audit_readiness",
+        _report_audit_readiness,
+        description=(
+            "Read-only prediction/event-market audit-readiness diagnostics: "
+            "resolution-rule provenance, snapshot age, market microstructure, "
+            "source freshness/contradictions, and decision provenance. "
+            "Deterministic local report; no network and no trading advice."
+        ),
+        example_minimal={"stale_snapshot_threshold_days": 1, "stale_source_threshold_days": 7},
+        optional_keys=("stale_snapshot_threshold_days", "stale_source_threshold_days"),
+        json_schema=_REPORT_SCHEMAS["report.audit_readiness"],
     )
     registry.register(
         "report.calibration_integrity",

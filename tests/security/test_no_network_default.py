@@ -108,6 +108,7 @@ _NO_NETWORK_SMOKE_ROWS: list[tuple[str, str]] = [
     ("report.decision_velocity", "noop"),
     ("report.coach", "noop"),
     ("report.source_quality", "noop"),
+    ("report.audit_readiness", "noop"),
     ("report.calibration_integrity", "noop"),
     ("report.playbook_adherence", "noop"),
     ("review.bundle", "noop"),

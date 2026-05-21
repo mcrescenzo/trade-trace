@@ -198,6 +198,7 @@ SHIPPED_REPORTS = {
     "report.calibration",
     "report.calibration_integrity",
     "report.source_quality",
+    "report.audit_readiness",
     "report.mistakes",
     "report.strengths",
     "report.pnl",

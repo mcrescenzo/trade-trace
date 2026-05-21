@@ -239,6 +239,65 @@ def _playbook_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 # -- playbook.show -------------------------------------------------
 
 
+def _playbook_rule_guidance(*, has_rules: bool) -> str:
+    if has_rules:
+        return (
+            "Linked playbook_rule nodes are discoverable below. Next: use "
+            "decision.record_adherence with this playbook_version_id and a "
+            "rule_node_id when evaluating a decision; use memory.recall to "
+            "retrieve broader playbook_rule context."
+        )
+    return (
+        "No playbook_rule nodes are linked to this version yet. Next: use "
+        "memory.retain(node_type='playbook_rule') to create rule memory, "
+        "then decision.record_adherence with playbook_version_id and "
+        "rule_node_id to establish the existing read-side linkage."
+    )
+
+
+def _rule_summaries_by_version(conn: Any, version_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    if not version_ids:
+        return {}
+    placeholders = ",".join("?" for _ in version_ids)
+    rows = conn.execute(
+        "SELECT DISTINCT dpr.playbook_version_id, mn.id, mn.title, mn.body "
+        "FROM decision_playbook_rules dpr "
+        "JOIN memory_nodes mn ON mn.id = dpr.rule_node_id "
+        f"WHERE dpr.playbook_version_id IN ({placeholders}) "
+        "AND mn.node_type = 'playbook_rule' "
+        "ORDER BY dpr.playbook_version_id, mn.created_at, mn.id",
+        tuple(version_ids),
+    ).fetchall()
+    summaries: dict[str, list[dict[str, Any]]] = {version_id: [] for version_id in version_ids}
+    for row in rows:
+        summaries.setdefault(row[0], []).append({
+            "id": row[1],
+            "title": row[2],
+            "body": row[3],
+        })
+    return summaries
+
+
+def _enrich_version(row: Any, rule_summaries: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    summaries = rule_summaries or []
+    return {
+        "id": row[0], "version": row[1], "parent_version_id": row[2],
+        "provenance_reflection_node_id": row[3], "description": row[4],
+        "created_at": row[5],
+        "playbook_rule_summaries": summaries,
+        "playbook_rule_count": len(summaries),
+        "next_call_guidance": _playbook_rule_guidance(has_rules=bool(summaries)),
+    }
+
+
+def _empty_rule_discoverability_fields() -> dict[str, Any]:
+    return {
+        "playbook_rule_summaries": [],
+        "playbook_rule_count": 0,
+        "next_call_guidance": _playbook_rule_guidance(has_rules=False),
+    }
+
+
 def _playbook_show(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     playbook_id = require(args, "playbook_id")
     db = open_db_for_args(args)
@@ -260,17 +319,15 @@ def _playbook_show(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "FROM playbook_versions WHERE playbook_id = ? "
             "ORDER BY version", (playbook_id,),
         ).fetchall()
+        rules_by_version = _rule_summaries_by_version(
+            db.connection, [v[0] for v in versions],
+        )
     finally:
         db.close()
     return {
         "id": row[0], "name": row[1], "description": row[2],
         "status": row[3], "created_at": row[4],
-        "versions": [
-            {"id": v[0], "version": v[1], "parent_version_id": v[2],
-             "provenance_reflection_node_id": v[3], "description": v[4],
-             "created_at": v[5]}
-            for v in versions
-        ],
+        "versions": [_enrich_version(v, rules_by_version.get(v[0], [])) for v in versions],
     }
 
 
@@ -298,14 +355,12 @@ def _playbook_list_versions(args: dict[str, Any], ctx: ToolContext) -> dict[str,
             "FROM playbook_versions WHERE playbook_id = ? "
             "ORDER BY version", (playbook_id,),
         ).fetchall()
+        rules_by_version = _rule_summaries_by_version(
+            db.connection, [r[0] for r in rows],
+        )
     finally:
         db.close()
-    items = [
-        {"id": r[0], "version": r[1], "parent_version_id": r[2],
-         "provenance_reflection_node_id": r[3], "description": r[4],
-         "created_at": r[5]}
-        for r in rows
-    ]
+    items = [_enrich_version(r, rules_by_version.get(r[0], [])) for r in rows]
     return {"items": items, "count": len(items)}
 
 
@@ -430,6 +485,7 @@ def _playbook_propose_version(
                     "version": row[0], "parent_version_id": row[1],
                     "provenance_reflection_node_id": reflection_node_id,
                     "description": row[2], "created_at": row[3],
+                    **_empty_rule_discoverability_fields(),
                 }
 
             # Auto-increment version number; auto-link parent.
@@ -495,6 +551,7 @@ def _playbook_propose_version(
         "version": next_version, "parent_version_id": parent_version_id,
         "provenance_reflection_node_id": reflection_node_id,
         "description": description, "created_at": created_at,
+        **_empty_rule_discoverability_fields(),
     }
 
 
