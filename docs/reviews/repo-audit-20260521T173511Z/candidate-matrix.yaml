@@ -429,10 +429,11 @@
       "sibling_route": "report-only-await-user",
       "prior_match_status": "supersedes-closed",
       "coordinator_disposition": "defer",
-      "disposition_reason": "Downgraded after advisor gate: valid simplification lead but not enough proven failure mode/public reachability to spend a standalone Bead after SIMP-009; retain in report-only matrix.",
+      "disposition_reason": "Downgraded after advisor gate: valid simplification lead but not enough proven failure mode/public reachability to spend a standalone Bead after SIMP-009; retain in report-only matrix. Promotion trigger: Promote only if direct-SQL builder sprawl causes a concrete flaky/incorrect fixture, blocks a specific test refactor, or a follow-up simplification pass chooses to consolidate it with SIMP-009-style fixture cleanup. Current evidence is maintenance taste/size signal without a bounded failure mode.",
       "artifact_refs": [
         "/home/hermes/code/trade-trace/docs/reviews/repo-audit-20260521T173511Z/candidate-matrix.json"
-      ]
+      ],
+      "promotion_trigger": "Promote only if direct-SQL builder sprawl causes a concrete flaky/incorrect fixture, blocks a specific test refactor, or a follow-up simplification pass chooses to consolidate it with SIMP-009-style fixture cleanup. Current evidence is maintenance taste/size signal without a bounded failure mode."
     },
     {
       "id": "DCR-20260521-001",
@@ -589,10 +590,11 @@
       "sibling_route": "delta-only",
       "prior_match_status": "new",
       "coordinator_disposition": "defer",
-      "disposition_reason": "Valid but below standalone repo-audit Bead threshold unless paired with nearby docs/source-contract cleanup.",
+      "disposition_reason": "Valid but below standalone repo-audit Bead threshold unless paired with nearby docs/source-contract cleanup. Promotion trigger: Promote only if stale memory-model docstrings/contracts mislead a public API/docs consumer, conflict with generated API docs, or can be bundled with a broader source-contract cleanup. Current evidence is a localized docstring drift below standalone investigation/task threshold.",
       "artifact_refs": [
         "/home/hermes/code/trade-trace/docs/reviews/repo-audit-20260521T173511Z/candidate-matrix.json"
-      ]
+      ],
+      "promotion_trigger": "Promote only if stale memory-model docstrings/contracts mislead a public API/docs consumer, conflict with generated API docs, or can be bundled with a broader source-contract cleanup. Current evidence is a localized docstring drift below standalone investigation/task threshold."
     },
     {
       "id": "CLI-MCP-OBS-001",
@@ -666,10 +668,11 @@
       "sibling_route": "merge-into-existing",
       "prior_match_status": "covered-by-closed",
       "coordinator_disposition": "reject",
-      "disposition_reason": "Current source/tests indicate prior schema-help work landed; no additive issue.",
+      "disposition_reason": "Current source/tests indicate prior schema-help work landed; no additive issue. Proof: Readback trade-trace-3i33 closes write-tool schema/help work; current source derives schemas from example_minimal in tool_registry.py/json_schema_derive.py and lane validation passed 68 CLI/MCP/schema tests.",
       "artifact_refs": [
         "/home/hermes/code/trade-trace/docs/reviews/repo-audit-20260521T173511Z/candidate-matrix.json"
-      ]
+      ],
+      "coverage_proof": "Readback trade-trace-3i33 closes write-tool schema/help work; current source derives schemas from example_minimal in tool_registry.py/json_schema_derive.py and lane validation passed 68 CLI/MCP/schema tests."
     },
     {
       "id": "CAND-BPCI-001",
@@ -743,10 +746,11 @@
       "sibling_route": "merge-into-existing",
       "prior_match_status": "covered-by-closed",
       "coordinator_disposition": "reject",
-      "disposition_reason": "Non-additive optional hardening; existing provenance guard/backlog covers material risk.",
+      "disposition_reason": "Non-additive optional hardening; existing provenance guard/backlog covers material risk. Proof: Readback trade-trace-10x6 closes route/static provenance guard; current tests/contracts/test_console_shell.py verifies provenance source/asset hashes. Optional direct frontend build in GitHub Actions remains non-additive hardening.",
       "artifact_refs": [
         "/home/hermes/code/trade-trace/docs/reviews/repo-audit-20260521T173511Z/candidate-matrix.json"
-      ]
+      ],
+      "coverage_proof": "Readback trade-trace-10x6 closes route/static provenance guard; current tests/contracts/test_console_shell.py verifies provenance source/asset hashes. Optional direct frontend build in GitHub Actions remains non-additive hardening."
     },
     {
       "id": "CAND-BPCI-002",
@@ -814,10 +818,11 @@
       "sibling_route": "merge-into-existing",
       "prior_match_status": "covered-by-closed",
       "coordinator_disposition": "reject",
-      "disposition_reason": "Existing closed bug is resolved in current workflow.",
+      "disposition_reason": "Existing closed bug is resolved in current workflow. Proof: Readback trade-trace-nkfz closes dynamic-version publish bug; current .github/workflows/workflow.yml reads src/trade_trace/version.py rather than pyproject[project][version].",
       "artifact_refs": [
         "/home/hermes/code/trade-trace/docs/reviews/repo-audit-20260521T173511Z/candidate-matrix.json"
-      ]
+      ],
+      "coverage_proof": "Readback trade-trace-nkfz closes dynamic-version publish bug; current .github/workflows/workflow.yml reads src/trade_trace/version.py rather than pyproject[project][version]."
     },
     {
       "id": "CAND-BPCI-003",
@@ -883,10 +888,11 @@
       "sibling_route": "merge-into-existing",
       "prior_match_status": "covered-by-closed",
       "coordinator_disposition": "reject",
-      "disposition_reason": "Specific prior dead dependencies are absent from current manifest.",
+      "disposition_reason": "Specific prior dead dependencies are absent from current manifest. Proof: Readback trade-trace-hdlx closes unused deps; current frontend/console/package.json has no @radix-ui/react-tabs or @tanstack/react-virtual direct dependency.",
       "artifact_refs": [
         "/home/hermes/code/trade-trace/docs/reviews/repo-audit-20260521T173511Z/candidate-matrix.json"
-      ]
+      ],
+      "coverage_proof": "Readback trade-trace-hdlx closes unused deps; current frontend/console/package.json has no @radix-ui/react-tabs or @tanstack/react-virtual direct dependency."
     }
   ],
   "materialization": {
