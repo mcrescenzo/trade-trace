@@ -69,7 +69,7 @@ The shipped React Console owns these routes:
 | Route | Purpose |
 |---|---|
 | `/` | Overview rollup for journal counts, P&L, and risk. |
-| `/trades` | Trade-typed decisions with caveats; this is a list page, not a per-trade detail route. |
+| `/trades` | Position lifecycle rows by default, backed by `/api/console/positions`; `/trades?view=events` preserves the flat trade-decision event audit view backed by `/api/console/trades`. |
 | `/reports` | Safe report catalog and links into report pages. |
 | `/review` | Local period / edge review summary over existing aggregates. |
 | `/reports/pnl` | P&L analytics. |
@@ -89,10 +89,14 @@ The shipped React Console owns these routes:
 
 The currently implemented global filter bar is URL-backed via
 `f=<base64url-json>` and exposes only fields the Console can pass to
-current backend contracts: decision type, exact instrument ID, and
-strategy ID where the page supports them. Empty filters mean "all local
-rows". The frontend does not add hidden filter axes; broader filter
-facets require backend `ReportFilter` contracts before they can be
+current backend contracts: decision type, exact instrument ID, strategy
+ID, and `/trades` date/view controls where the page supports them. Empty
+filters mean "all local rows". For table endpoints, repeated array
+params are preserved instead of truncated (for example repeated
+`decision_type` in event view and repeated `instrument_id` where
+supported), and date ranges map to explicit `opened_from` / `opened_to`
+query params. The frontend does not add hidden filter axes; broader
+filter facets require backend `ReportFilter` contracts before they can be
 truthfully exposed.
 
 Report pages re-run backend `report.*` tools when filters change. The
@@ -104,7 +108,8 @@ empty-state conditions as caveats instead of silently zero-filling.
 
 Record drilldowns stay local and read-only: journal event detail,
 related decisions/forecasts/outcomes/sources, raw event payloads,
-trade rows, and position detail all render existing database contents.
+trade decision-event rows, position lifecycle rows, and position detail
+all render existing database contents.
 `trade_trace.console.reporting.trade_detail(conn, decision_id)` is a
 supported external Python read-model helper for single trade rows, but
 the shipped Console intentionally does not expose a per-trade HTTP
@@ -124,6 +129,7 @@ The frontend calls these local JSON endpoints:
 - `GET /api/console/record-events`
 - `GET /api/console/decisions`
 - `GET /api/console/trades`
+- `GET /api/console/positions`
 - `GET /api/console/positions/{id}`
 - `GET /api/console/strategies`
 - `GET /api/console/playbooks`

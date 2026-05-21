@@ -1,23 +1,23 @@
 # Trades Page Overhaul Plan
 
 **Date:** 2026-05-21  
-**Status:** revised implementation plan; Beads program materialized under `trade-trace-hbqs`  
+**Status:** implemented architecture note; Beads program materialized under `trade-trace-hbqs`  
 **Primary Beads label:** `trades-page-overhaul`  
 **Scope:** Console `/trades` route, the existing `/api/console/trades` decision-event endpoint, a new `/api/console/positions` position-list endpoint, and the existing `/api/console/positions/{position_id}` detail endpoint.
 
 ---
 
-## 1. Readiness verdict
+## 1. Implementation verdict
 
-This overhaul is implementation-ready **as a contract-first Beads program**, not as a one-shot frontend task.
+This overhaul has shipped as a contract-first Beads program rather than a one-shot frontend task.
 
 The previous sketch correctly identified the UX problem, but it was not implementation-ready because it blurred three things the codebase keeps separate:
 
 1. **Trade decision rows** — the existing `/api/console/trades` endpoint returns trade-typed decisions (`paper_enter`, `actual_exit`, `add`, `reduce`, etc.).
-2. **Position lifecycle rows** — the human-friendly default view should be one row per position/round-trip lifecycle, backed by the `positions` projection plus event lineage.
-3. **Position detail** — the current detail read model carries lifecycle metrics and events, but not enough linked strategy/thesis/source/tag/caveat metadata for the proposed card without frontend N+1 calls.
+2. **Position lifecycle rows** — the human-friendly default view needed to be one row per position/round-trip lifecycle, backed by the `positions` projection plus event lineage.
+3. **Position detail** — the detail read model needed enough linked strategy/thesis/source/tag/caveat metadata for the proposed card without frontend N+1 calls.
 
-The revised plan locks those boundaries before implementation:
+The shipped implementation preserves those boundaries:
 
 - Keep `/trades` as the **human-facing route**.
 - Default `/trades` to **position rows** from a new `/api/console/positions` endpoint.
@@ -28,17 +28,18 @@ The revised plan locks those boundaries before implementation:
 
 ---
 
-## 2. Current code facts this plan relies on
+## 2. Current implementation facts
 
 | Fact | Evidence |
 | --- | --- |
-| Current Trades page renders flat decision rows. | `frontend/console/src/main.tsx` `TradesPage` uses `endpoint="/api/console/trades"` and columns `decision_id`, `decision_type`, `instrument`, `side`, `quantity`, `price`, `caveats`. |
-| Existing `/api/console/trades` is a decision-event list endpoint. | `src/trade_trace/console/serve.py` binds `/api/console/trades` to `list_trades(...)` with `strategy_id`, `instrument_id`, and scalar `decision_type`. |
-| There is no positions list endpoint. | `serve.py` exposes `/api/console/positions/{position_id}` only. |
-| Current `PositionDetail` is useful but not sufficient for the proposed card. | `src/trade_trace/console/reporting/position_rows.py` includes lifecycle metrics/events and opening IDs, but not strategy slug/name, thesis snippets, full source/tag summaries, or caveat metadata objects. |
-| Frontend filter helpers currently lose array values. | `tableFilterParams` in `frontend/console/src/main.tsx` returns `instrument_id?.[0]` and `decision_type?.[0]`; `pageQuery` in `frontend/console/src/api.ts` serializes only scalar values. |
-| Caveat severity already exists and is constrained. | `CAVEAT_GLOSSARY` in `metric_glossary.py` uses `info` / `warning`; `tests/contracts/test_metric_glossary.py` asserts that supported set. |
-| Position table has no quantity column. | `positions` migration has status/prices/P&L/risk fields; size/net quantity must be derived from `position_events.quantity_delta`. |
+| `/trades` now defaults to position lifecycle rows. | `frontend/console/src/main.tsx` renders `TradesPage` position mode against `endpoint="/api/console/positions"` unless the view filter selects decision events. |
+| `/trades?view=events` preserves flat decision-event audit rows. | `TradesPage` event mode renders `endpoint="/api/console/trades"` and states that rows are trade-typed journal decisions, not grouped position outcomes. |
+| Existing `/api/console/trades` remains decision-event oriented. | `src/trade_trace/console/serve.py` binds `/api/console/trades` to `list_trades(...)`; repeated `strategy_id`, `instrument_id`, and `decision_type` query params are accepted, with `opened_from` / `opened_to` date filters. |
+| `GET /api/console/positions` exists. | `serve.py` exposes a paginated positions list endpoint with repeated `status`, `kind`, `instrument_id`, `strategy_id`, and `outcome` params plus `opened_from` / `opened_to`. |
+| `GET /api/console/positions/{position_id}` powers one detail card call. | The route returns `position_detail(...)`; the frontend detail card renders event lineage, strategy/thesis/source/tag summaries, risk rollup, caveat entries, and raw JSON under a collapsed detail block from that response. |
+| Frontend filter helpers preserve repeated array values for table endpoints. | `tableFilterParams` passes arrays for supported axes and `pageQuery` appends each array item as a repeated query param. |
+| Caveat severity remains constrained. | `CAVEAT_GLOSSARY` in `metric_glossary.py` uses `info` / `warning`; `tests/contracts/test_metric_glossary.py` asserts that supported set. There is no `error` caveat severity. |
+| Trades-page KPI/hygiene summaries are current-page scoped. | `TradesPageSummary` renders `CurrentPageKpis` / `HygieneMeter` over the fetched page rows. Global P&L, R-multiple, win-rate, and report math remain backend report output, not JavaScript recomputation. |
 
 ---
 
@@ -83,10 +84,10 @@ The event-level audit view remains available:
 
 Purpose: flat audit list of trade-typed decisions.
 
-Required changes:
+Implemented behavior:
 
 - Keep existing row semantics.
-- Add `decision_at_from` / `decision_at_to` filters.
+- Accept opened-date range filters (`opened_from` / `opened_to`) used by the Console table controls.
 - Change `decision_type` from scalar-only to array-capable query parsing.
 - Preserve pagination/cursor contract.
 
@@ -152,9 +153,9 @@ caveat_entries           # code, label, summary, severity from CAVEAT_GLOSSARY
 
 ### 5.3 Enriched position detail endpoint
 
-`GET /api/console/positions/{position_id}` already exists. Extend its read model so one response can render the detail card.
+`GET /api/console/positions/{position_id}` returns an enriched read model so one response can render the detail card.
 
-Add bounded fields; do not fetch unbounded source bodies:
+The response uses bounded fields; it does not fetch unbounded source bodies:
 
 ```text
 strategy_slug / strategy_name
@@ -230,7 +231,13 @@ Position-row expansion should show:
 
 ---
 
-## 7. Implementation sequence
+## 7. Implementation sequence status
+
+The sequence below is historical. The shipped behavior now implements the
+contract boundaries above: position-first `/trades`, event-mode escape
+hatch, position list/detail APIs, repeated table query params, and
+glossary-backed caveat entries. Remaining limitations should be tracked as
+follow-up beads rather than inferred in frontend-only code.
 
 1. Lock contract and docs language.
 2. Add `/api/console/positions` and enriched position detail fields.

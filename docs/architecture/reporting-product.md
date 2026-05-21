@@ -85,7 +85,7 @@ event detail, raw payload views, `/api/console/logs`, and
 | Section | Page | Shipped behavior |
 |---|---|---|
 | **Dashboard** | Overview (`/`) | Local overview rollup over journal counts, P&L, risk, recent activity, and caveats. |
-| **Trades / Positions** | All Trades (`/trades`) | Filterable trade-typed decisions with caveats; position detail is opened from trade/position links, not a primary-nav item. |
+| **Trades / Positions** | All Trades (`/trades`) | Filterable position lifecycle rows by default, backed by `GET /api/console/positions`; `/trades?view=events` is the flat trade-typed decision-event audit escape hatch backed by `GET /api/console/trades`. Position detail is opened from position rows, not a primary-nav item. |
 | **Reports** | Report Browser (`/reports`) | Safe report catalog with links into report pages and export packet affordances. |
 | | Period / Edge Review (`/review`) | Local review surface over existing aggregates; packet-style backend contracts are deferred to trade-trace-2vq5. |
 | | P&L (`/reports/pnl`) | Dashboard for `report.pnl`. |
@@ -111,8 +111,9 @@ endpoint a nav destination:
   Performance / Strategy / Decision intelligence / Calibration / Evidence).
   Optimized for the Tradervue-like reading experience.
 - **Developer / audit lane**: Journal, event detail/raw payload,
-  related-record drilldowns, Decisions, trade/position detail, and local
-  JSON endpoints for logs/raw. Optimized for inspection and provenance.
+  related-record drilldowns, Decisions, `/trades?view=events` trade
+  decision-event rows, position detail, and local JSON endpoints for
+  logs/raw. Optimized for inspection and provenance.
 
 Top navigation lists shipped top-level pages from the shared route
 catalog. `/integrity`, `/logs`, and `/raw` are not current React routes;
