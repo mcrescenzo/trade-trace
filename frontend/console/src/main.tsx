@@ -36,6 +36,7 @@ import {
   EventRow,
   Page,
   PageQueryValue,
+  PositionDetail,
   PositionRow,
   ReportPayload,
   StatusPayload,
@@ -570,7 +571,8 @@ function PageTable<T extends Record<string, unknown>>({
   columns,
   emptyMessage,
   subjectKind,
-  filters = {}
+  filters = {},
+  renderDetail
 }: {
   endpoint: string
   queryKey: string
@@ -578,6 +580,7 @@ function PageTable<T extends Record<string, unknown>>({
   emptyMessage: string
   subjectKind?: string
   filters?: Record<string, PageQueryValue>
+  renderDetail?: (row: T) => React.ReactNode
 }) {
   const [cursor, setCursor] = React.useState<string | null>(null)
   const [history, setHistory] = React.useState<string[]>([])
@@ -602,7 +605,7 @@ function PageTable<T extends Record<string, unknown>>({
         rows={query.data?.rows ?? []}
         columns={columns}
         emptyMessage={emptyMessage}
-        renderDetail={(row) => <RecordDetail row={row} subjectKind={subjectKind} />}
+        renderDetail={renderDetail ?? ((row) => <RecordDetail row={row} subjectKind={subjectKind} />)}
       />
       <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
         <span>
@@ -838,6 +841,67 @@ function PositionIdCell({ row }: { row: PositionRow }) {
   return <span title={`Position ${row.position_id}${row.opening_decision_id ? ` · opening decision ${row.opening_decision_id}` : ''}`}>{shortId(row.position_id)}</span>
 }
 
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return <p className="rounded border border-dashed border-border bg-background/70 p-3 text-sm text-muted-foreground">{children}</p>
+}
+
+function DetailMetric({ label, value, hint }: { label: string; value: unknown; hint?: string }) {
+  return <div className="rounded border border-border p-3"><p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value == null || value === '' ? 'unknown' : String(value)}</p>{hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}</div>
+}
+
+function PositionDetailCard({ row }: { row: PositionRow }) {
+  const detail = useQuery({
+    queryKey: ['position-detail', row.position_id],
+    queryFn: () => fetchJson<PositionDetail>(`/api/console/positions/${encodeURIComponent(row.position_id)}`)
+  })
+  if (detail.isLoading) return <LoadingBlock label="Loading position detail" />
+  if (detail.isError) return <ErrorBlock error={detail.error} />
+  const data = detail.data
+  if (!data) return <EmptyState>No position detail was returned for this row.</EmptyState>
+  const instrument = data.instrument_symbol ?? data.instrument_title ?? data.instrument_id
+  const risk = data.risk_rollup ?? {}
+  const events = data.events ?? []
+  const sources = data.sources ?? []
+  const tags = data.tags ?? []
+  const thesis = data.thesis
+  const strategy = data.strategy
+  return (
+    <article className="space-y-4 rounded border border-border bg-card p-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Position detail</p>
+          <h3 className="text-lg font-semibold">{instrument} · {humanizeToken(data.side)} {humanizeToken(data.kind)}</h3>
+          <p className="text-sm text-muted-foreground">{humanizeToken(data.status)} · opened {formatWhen(data.opened_at)}{data.closed_at ? ` · closed ${formatWhen(data.closed_at)}` : ''}</p>
+        </div>
+        <div className="text-right text-xs text-muted-foreground"><p>Position <CopyId value={data.position_id} /></p>{data.opening_decision_id ? <p>Opening decision <CopyId value={data.opening_decision_id} /></p> : null}</div>
+      </header>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <DetailMetric label="Strategy" value={strategy?.name ?? data.opening_strategy_name ?? strategy?.slug ?? data.opening_strategy_slug ?? 'No strategy recorded'} hint={strategy?.id ?? data.opening_strategy_id ?? undefined} />
+        <DetailMetric label="Playbook version" value={data.opening_playbook_version_id ?? 'No playbook linked'} />
+        <DetailMetric label="Venue" value={data.venue_id ? `${data.venue_id} (${humanizeToken(data.venue_kind)})` : 'unknown'} />
+        <DetailMetric label="Decision lineage" value={(data.decision_ids ?? []).length ? (data.decision_ids ?? []).map(shortId).join(', ') : 'No linked decisions'} />
+      </section>
+
+      <section className="space-y-2">
+        <h4 className="font-semibold">Lifecycle timeline</h4>
+        {events.length === 0 ? <EmptyState>No position events were returned for this position.</EmptyState> : <div className="space-y-2">{events.map((event) => <div key={event.id} className="rounded border border-border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-medium">{humanizeToken(event.event_type)}</p><p className="text-xs text-muted-foreground">{formatWhen(event.created_at)}</p></div><div className="mt-2 grid gap-2 text-sm md:grid-cols-3 xl:grid-cols-6"><span>Qty Δ: {formatNumber(event.quantity_delta)}</span><span>Price: {formatNumber(event.price)}</span><span>Fees: {formatNumber(event.fees)}</span><span>Slippage: {formatNumber(event.slippage)}</span><span>Decision: {event.decision_id ? <CopyId value={event.decision_id} /> : 'n/a'}</span><span>Event: {shortId(event.id)}</span></div></div>)}</div>}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <div className="space-y-2"><h4 className="font-semibold">Thesis</h4>{thesis ? <div className="rounded border border-border p-3"><p className="text-sm"><span className="text-muted-foreground">ID:</span> <CopyId value={thesis.id} /></p><p className="text-sm"><span className="text-muted-foreground">Side:</span> {humanizeToken(thesis.side)}</p><p className="text-sm"><span className="text-muted-foreground">Created:</span> {formatWhen(thesis.created_at)}</p><p className="mt-2 text-sm">{thesis.body_snippet || 'No thesis body snippet was recorded.'}</p></div> : <EmptyState>No thesis is linked to the opening decision.</EmptyState>}</div>
+        <div className="space-y-2"><h4 className="font-semibold">Sources and tags</h4>{sources.length ? <div className="space-y-2">{sources.map((source) => <div key={`${source.id}-${source.edge_type ?? ''}`} className="rounded border border-border p-3 text-sm"><p className="font-medium">{source.title ?? source.ref ?? source.uri ?? source.id}</p><p className="text-xs text-muted-foreground">{[source.kind, source.stance, source.edge_type].filter(Boolean).map(humanizeToken).join(' · ') || 'source metadata unavailable'}</p>{source.uri ? <p className="break-all text-xs text-muted-foreground">URI: {source.uri}</p> : null}<p className="mt-2 text-sm text-muted-foreground">{source.excerpt ?? 'No excerpt returned.'}</p></div>)}</div> : <EmptyState>No sources are linked to decisions in this position.</EmptyState>}<div className="pt-1">{tags.length ? <ChipList value={tags.map((tag) => tag.tag)} /> : <EmptyState>No tags are linked to decisions in this position.</EmptyState>}</div></div>
+      </section>
+
+      <section className="space-y-2"><h4 className="font-semibold">Risk, costs, and P&L</h4><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><DetailMetric label="Realized P&L" value={formatNumber(data.realized_pnl)} /><DetailMetric label="Unrealized P&L" value={formatNumber(data.unrealized_pnl)} /><DetailMetric label="Avg entry" value={formatNumber(data.avg_entry_price)} /><DetailMetric label="Initial risk" value={formatNumber(risk.initial_risk_amount ?? data.initial_risk_amount)} /><DetailMetric label="Declared risk" value={risk.declared_risk_amount == null ? 'unknown' : `${formatNumber(risk.declared_risk_amount)} ${risk.declared_risk_unit ?? ''}`.trim()} /><DetailMetric label="Realized R" value={formatNumber(risk.realized_r_multiple ?? data.realized_r_multiple)} /><DetailMetric label="Unrealized R" value={formatNumber(risk.unrealized_r_multiple ?? data.unrealized_r_multiple)} /><DetailMetric label="Fees / slippage" value={`${formatNumber(risk.total_fees)} / ${formatNumber(risk.total_slippage)}`} /></div></section>
+
+      <section className="space-y-2"><h4 className="font-semibold">Caveats</h4><CaveatChips value={data.caveats ?? []} />{data.caveat_entries?.length ? <div className="space-y-2">{data.caveat_entries.map((entry, index) => <div key={`${entry.code ?? 'caveat'}-${index}`} className="rounded border border-warning/30 bg-warning/10 p-2 text-sm"><p className="font-medium">{entry.label ?? entry.code ?? 'Caveat'}</p><p className="text-muted-foreground">{String(entry.summary ?? JSON.stringify(entry))}</p>{entry.severity ? <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">{String(entry.severity)}</p> : null}</div>)}</div> : <EmptyState>No caveat details were returned.</EmptyState>}</section>
+
+      <details className="rounded border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Raw position detail JSON for engineers</summary><div className="mt-2"><JsonBlock value={data} /></div></details>
+    </article>
+  )
+}
+
 function TradesPage() {
   const [filter, setFilter] = useConsoleFilter()
   const eventMode = filter.view?.mode === 'decision-events'
@@ -867,6 +931,7 @@ function TradesPage() {
         filters={tableFilterParams(filter, ['strategy_id', 'instrument_id', 'opened_from', 'opened_to'])}
         subjectKind="position"
         emptyMessage="No local position rows match this filter. This page only shows journal-derived positions; it does not fetch broker or live market data."
+        renderDetail={(row) => <PositionDetailCard row={row} />}
         columns={[
           { key: 'opened_at', header: 'When', cell: (value) => formatWhen(value) },
           { key: 'instrument', header: 'Instrument', accessor: (row) => row.instrument_symbol ?? row.instrument_title ?? row.instrument_id },

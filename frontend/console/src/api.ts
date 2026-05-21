@@ -60,7 +60,8 @@ export type TradeRow = Record<string, unknown> & {
 export type PositionCaveatEntry = Record<string, unknown> & {
   code?: string
   label?: string
-  message?: string
+  summary?: string
+  severity?: string
 }
 
 export type PositionRow = Record<string, unknown> & {
@@ -85,6 +86,76 @@ export type PositionRow = Record<string, unknown> & {
   opening_strategy_name?: string | null
   caveats?: string[]
   caveat_entries?: PositionCaveatEntry[]
+}
+
+export type PositionEvent = Record<string, unknown> & {
+  id: string
+  event_type: string
+  quantity_delta?: number | null
+  price?: number | null
+  fees?: number | null
+  slippage?: number | null
+  created_at?: string | null
+  decision_id?: string | null
+}
+
+export type PositionThesisSummary = Record<string, unknown> & {
+  id: string
+  side?: string | null
+  created_at?: string | null
+  body_snippet?: string | null
+}
+
+export type PositionSourceSummary = Record<string, unknown> & {
+  id: string
+  kind?: string | null
+  title?: string | null
+  ref?: string | null
+  uri?: string | null
+  stance?: string | null
+  edge_type?: string | null
+  excerpt?: string | null
+}
+
+export type PositionTagSummary = Record<string, unknown> & {
+  tag: string
+  decision_id?: string | null
+}
+
+export type PositionStrategySummary = Record<string, unknown> & {
+  id: string
+  slug?: string | null
+  name?: string | null
+}
+
+export type PositionRiskRollup = Record<string, unknown> & {
+  initial_risk_amount?: number | null
+  declared_risk_amount?: number | null
+  declared_risk_unit?: string | null
+  realized_r_multiple?: number | null
+  unrealized_r_multiple?: number | null
+  total_fees?: number | null
+  total_slippage?: number | null
+}
+
+export type PositionDetail = PositionRow & {
+  venue_id?: string | null
+  venue_kind?: string | null
+  updated_at?: string | null
+  realized_pnl?: number | null
+  unrealized_pnl?: number | null
+  initial_risk_amount?: number | null
+  realized_r_multiple?: number | null
+  unrealized_r_multiple?: number | null
+  opening_playbook_version_id?: string | null
+  opening_thesis_id?: string | null
+  thesis?: PositionThesisSummary | null
+  strategy?: PositionStrategySummary | null
+  sources?: PositionSourceSummary[]
+  tags?: PositionTagSummary[]
+  decision_ids?: string[]
+  risk_rollup?: PositionRiskRollup | null
+  events?: PositionEvent[]
 }
 
 export type EventRow = Record<string, unknown> & {
