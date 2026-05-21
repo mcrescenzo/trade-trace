@@ -1,6 +1,6 @@
 # Guided market-scan dry-run/promote contract
 
-Status: design/operation contract expanded through bead `trade-trace-ebc1.6`. The `market.scan.dry_run` and `market.scan.promote` tools are implemented; this document specifies their public contract and the Polymarket-style caller-supplied mapping/workflow.
+> Status: **shipped** — `market.scan.dry_run` and `market.scan.promote` are implemented; this document specifies their public contract and the Polymarket-style caller-supplied mapping/workflow.
 
 ## 1. Purpose and public surface
 
