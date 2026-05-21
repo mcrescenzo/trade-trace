@@ -4,8 +4,8 @@ import json
 import sqlite3
 from pathlib import Path
 
-from trade_trace.cli import main as cli_main
 import trade_trace.core as core
+from trade_trace.cli import main as cli_main
 from trade_trace.contracts.envelope import Meta, error_envelope
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.core import default_registry, dispatch

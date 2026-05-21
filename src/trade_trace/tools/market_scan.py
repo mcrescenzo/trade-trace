@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -167,7 +167,7 @@ def _market_scan_dry_run(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
     if (parsed.snapshot or {}).get("source_url"):
         checks.append(_check("info", "source_url_not_fetched", "snapshot.source_url", "Snapshot source_url is stored as caller-supplied provenance only and is not fetched."))
 
-    now = _iso_parse(parsed.current_time) if parsed.current_time else datetime.now(timezone.utc)
+    now = _iso_parse(parsed.current_time) if parsed.current_time else datetime.now(UTC)
     if parsed.current_time and (not now or not _is_timezone_aware(now)):
         checks.append(_check("blocking", "invalid_timestamp", "current_time", "current_time must be an ISO timestamp with timezone."))
         now = None
@@ -236,46 +236,55 @@ def _market_scan_dry_run(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
     keys: dict[str, str] = {}
     calls: list[dict[str, Any]] = []
     if parsed.venue and not parsed.venue.get("venue_id"):
-        key = f"{parent}:venue"; keys["venue"] = key
+        key = f"{parent}:venue"
+        keys["venue"] = key
         calls.append(_call("venue.add", "Create/reuse caller-supplied venue row.", {**_copy_args(parsed.venue, {"venue_id"}), "idempotency_key": key}, "venue_id", key))
     instr_id = parsed.instrument.get("instrument_id") or _placeholder("instrument_id")
     if not parsed.instrument.get("instrument_id"):
-        key = f"{parent}:instrument"; keys["instrument"] = key
+        key = f"{parent}:instrument"
+        keys["instrument"] = key
         iargs = _copy_args(parsed.instrument, {"instrument_id"})
         iargs.setdefault("venue_id", (parsed.venue or {}).get("venue_id") or _placeholder("venue_id"))
         iargs["idempotency_key"] = key
         calls.append(_call("instrument.add", "Create/reuse caller-supplied instrument row.", iargs, "instrument_id", key))
     if parsed.snapshot and not parsed.snapshot.get("snapshot_id"):
-        key = f"{parent}:snapshot"; keys["snapshot"] = key
+        key = f"{parent}:snapshot"
+        keys["snapshot"] = key
         sargs = {**_copy_args(parsed.snapshot, {"snapshot_id"}), "instrument_id": instr_id, "idempotency_key": key}
         calls.append(_call("snapshot.add", "Record caller-supplied snapshot; no venue fetch is performed.", sargs, "snapshot_id", key))
     for idx, source in enumerate(parsed.sources):
         if source.get("source_id"):
             continue
-        key = f"{parent}:source:{idx}"; keys[f"source:{idx}"] = key
+        key = f"{parent}:source:{idx}"
+        keys[f"source:{idx}"] = key
         calls.append(_call("source.add", "Store caller-supplied source metadata/content only.", {**_copy_args(source, {"source_id"}), "idempotency_key": key}, "source_id", key))
     if parsed.thesis and not parsed.thesis.get("thesis_id"):
-        key = f"{parent}:thesis"; keys["thesis"] = key
+        key = f"{parent}:thesis"
+        keys["thesis"] = key
         calls.append(_call("thesis.add", "Create/reuse caller-authored thesis.", {**_copy_args(parsed.thesis, {"thesis_id"}), "instrument_id": instr_id, "idempotency_key": key}, "thesis_id", key))
     attach_to = parsed.attachments.get("attach_sources_to", []) or []
     for idx, source in enumerate(parsed.sources):
         for target in ("thesis",):
             if target in attach_to and parsed.thesis:
-                key = f"{parent}:source:{idx}:attach:{target}"; keys[f"source_attach:{idx}:{target}"] = key
+                key = f"{parent}:source:{idx}:attach:{target}"
+                keys[f"source_attach:{idx}:{target}"] = key
                 calls.append(_call("source.attach_to_thesis", "Attach source to thesis.", {"source_id": source.get("source_id") or _placeholder("source_id"), "target_id": parsed.thesis.get("thesis_id") or _placeholder("thesis_id"), "idempotency_key": key}, "edge_id", key))
     if parsed.forecast and not parsed.forecast.get("forecast_id"):
-        key = f"{parent}:forecast"; keys["forecast"] = key
+        key = f"{parent}:forecast"
+        keys["forecast"] = key
         calls.append(_call("forecast.add", "Create/reuse caller-supplied forecast.", {**_copy_args(parsed.forecast, {"forecast_id"}), "thesis_id": (parsed.thesis or {}).get("thesis_id") or _placeholder("thesis_id"), "idempotency_key": key}, "forecast_id", key))
     for idx, source in enumerate(parsed.sources):
         for target in ("forecast",):
             if target in attach_to and parsed.forecast:
-                key = f"{parent}:source:{idx}:attach:{target}"; keys[f"source_attach:{idx}:{target}"] = key
+                key = f"{parent}:source:{idx}:attach:{target}"
+                keys[f"source_attach:{idx}:{target}"] = key
                 calls.append(_call("source.attach_to_forecast", "Attach source to forecast.", {"source_id": source.get("source_id") or _placeholder("source_id"), "target_id": parsed.forecast.get("forecast_id") or _placeholder("forecast_id"), "idempotency_key": key}, "edge_id", key))
     keys[f"decision:{action}"] = dkey
     calls.append(_call("decision.add", f"Record caller-selected {action} decision using existing decision.add matrix.", decision_args, "decision_id", dkey))
     for idx, source in enumerate(parsed.sources):
         if "decision" in attach_to:
-            key = f"{parent}:source:{idx}:attach:decision"; keys[f"source_attach:{idx}:decision"] = key
+            key = f"{parent}:source:{idx}:attach:decision"
+            keys[f"source_attach:{idx}:decision"] = key
             calls.append(_call("source.attach_to_decision", "Attach source to decision.", {"source_id": source.get("source_id") or _placeholder("source_id"), "target_id": _placeholder("decision_id"), "idempotency_key": key}, "edge_id", key))
 
     normalized_bundle = parsed.model_dump(exclude_none=True, exclude={"home"})

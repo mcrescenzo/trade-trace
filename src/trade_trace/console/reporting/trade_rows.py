@@ -27,8 +27,9 @@ position/event/raw detail routes only.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
 from trade_trace.console.pagination import (
     DEFAULT_LIMIT,
