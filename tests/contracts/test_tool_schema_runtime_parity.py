@@ -12,7 +12,12 @@ an empty payload when the runtime supports defaults.
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 from trade_trace.core import default_registry
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _schema_for(tool_name: str) -> dict:
@@ -113,6 +118,57 @@ def test_report_opportunity_schema_treats_defaulted_args_as_optional():
             f"{advertised!r} is a documented knob; advertise it in "
             "properties even though it's optional."
         )
+
+
+def test_snapshot_add_schema_advertises_optional_market_state_fields():
+    schema = _schema_for("snapshot.add")
+    properties = schema.get("properties", {})
+    required = schema.get("required", [])
+
+    assert "instrument_id" in required
+    assert "captured_at" in required
+    for key in (
+        "price",
+        "source",
+        "source_url",
+        "bid",
+        "ask",
+        "mid",
+        "spread",
+        "volume",
+        "open_interest",
+        "implied_probability",
+        "liquidity_depth_json",
+        "metadata_json",
+    ):
+        assert key in properties
+        assert key not in required
+
+
+def test_snapshot_add_cli_help_lists_optional_market_state_flags():
+    proc = subprocess.run(
+        [str(ROOT / ".venv/bin/tt"), "snapshot", "add", "--help"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    help_text = proc.stdout
+
+    for flag in (
+        "--source",
+        "--source-url",
+        "--bid",
+        "--ask",
+        "--mid",
+        "--spread",
+        "--volume",
+        "--open-interest",
+        "--implied-probability",
+        "--liquidity-depth-json",
+        "--metadata-json",
+    ):
+        assert flag in help_text
 
 
 def test_agent_critical_read_report_playbook_tools_advertise_json_schemas():

@@ -2093,7 +2093,26 @@ def register_ledger_tools(registry: ToolRegistry) -> None:
 
     registry.register("venue.add", _venue_add, is_write=True, **_examples_for("venue.add"))
     registry.register("instrument.add", _instrument_add, is_write=True, **_examples_for("instrument.add"))
-    registry.register("snapshot.add", _snapshot_add, is_write=True, **_examples_for("snapshot.add"))
+    registry.register(
+        "snapshot.add",
+        _snapshot_add,
+        is_write=True,
+        optional_keys=(
+            "price",
+            "source",
+            "source_url",
+            "bid",
+            "ask",
+            "mid",
+            "spread",
+            "volume",
+            "open_interest",
+            "implied_probability",
+            "liquidity_depth_json",
+            "metadata_json",
+        ),
+        **_examples_for("snapshot.add"),
+    )
     registry.register("thesis.add", _thesis_add, is_write=True, **_examples_for("thesis.add"))
     registry.register("forecast.add", _forecast_add, is_write=True, **_examples_for("forecast.add"))
     registry.register("forecast.supersede", _forecast_supersede, is_write=True, **_examples_for("forecast.supersede"))

@@ -142,7 +142,7 @@ Recall telemetry (`recall_count`, `last_recalled_at`) lives in `memory_node_stat
 
 ## 7. Multi-strategy retrieval
 
-`memory.recall(query?, context?, strategies?, k?, max_chars?, compact?, include_body?, include_provenance?, min_confidence?, node_types?, mode?, as_of?)` runs each enabled retrieval strategy, fuses scores via Reciprocal Rank Fusion (when `mode = 'fused'`, the default) or returns the per-strategy lists side-by-side (when `mode = 'per_strategy'`), and shapes the result to fit the caller's context budget.
+`memory.recall(query, context?, strategies?, k?, max_chars?, compact?, include_body?, include_provenance?, min_confidence?, node_types?, mode?, as_of?)` runs each enabled retrieval strategy, fuses scores via Reciprocal Rank Fusion (when `mode = 'fused'`, the default) or returns the per-strategy lists side-by-side (when `mode = 'per_strategy'`), and shapes the result to fit the caller's context budget. `query` is required by the live schema; optional `context` narrows graph/provenance ranking metadata and is not a substitute for `query`.
 
 The default `strategies` value is `["bm25", "temporal", "semantic"]` when a semantic provider is configured, and `["bm25", "temporal"]` otherwise. Callers can explicitly request `"graph"` to add graph traversal.
 
@@ -287,7 +287,7 @@ Lazy re-embed at recall time is rejected because the vector index needs a fixed 
 All operations are exposed as MCP tools and CLI subcommands with semantic parity (see `contracts.md`).
 
 - **`memory.retain(node_type, body, *, title?, tags?, meta_json?, importance?, confidence_base?, decay_rate_per_day?, valid_from?, valid_to?, edges?)`** — write a memory node. `node_type ∈ {observation, reflection, playbook_rule}`. The `edges` parameter lets the caller specify outgoing edges in the same call so reflection-without-edges never happens.
-- **`memory.recall(query?, context?, strategies?, k?, max_chars?, compact?, include_body?, include_provenance?, min_confidence?, node_types?, mode?, as_of?)`** — read with multi-strategy retrieval, context-budget shaping, and optional bi-temporal `as_of` filtering.
+- **`memory.recall(query, context?, strategies?, k?, max_chars?, compact?, include_body?, include_provenance?, min_confidence?, node_types?, mode?, as_of?)`** — read with required `query`, multi-strategy retrieval, context-budget shaping, and optional bi-temporal `as_of` filtering. Optional `context` narrows ranking/provenance; it does not replace `query`.
 - **`memory.reflect(target, body, *, importance?, ...)`** — sugar over `retain(node_type=reflection, ...)` that auto-wires the required `about` edge to `target`. The live schema does not accept `derived_from`; add supporting/provenance edges separately with `memory.link` or `memory.retain(edges=...)`.
 - **`memory.link(from, to, edge_type, *, weight?)`** — explicit edge creation between two existing endpoints. Validates endpoint kind and ID.
 - **`reflection.prompt_for_outcome(outcome_id, *, include_forecast?, include_thesis?, include_prior_reflections?)`** — deterministic, no-LLM tool. Returns a structured packet: the resolved outcome, the original thesis and forecast it resolved, prior reflections on the same instrument/strategy, and the calibration delta (forecast probability vs. realized indicator). The caller (a separate LLM) decides what to write back via `memory.reflect`. The system never auto-generates reflections; this tool packages evidence for the reviewer.

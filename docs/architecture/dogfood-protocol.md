@@ -294,7 +294,7 @@ and `5`. `meta.contract_version == "1.0"` is set.
 `{N_S1_a, N_S1_b, N_S1_c}` whose `meta_json` scopes back to `S1`
 indirectly (via decision/thesis `strategy_id`), NOT via direct edges
 to the strategy endpoint. A later thesis `T_S1_next` in strategy `S1`
-created **after** a `memory.recall(context={kind:"strategy", id:S1})`
+created **after** a `memory.recall(query, context={kind:"strategy", id:S1})`
 returns at least one of `{N_S1_a, N_S1_b, N_S1_c}`; `T_S1_next` carries
 a `supports` or `derived_from` edge to the returned node.
 (b) `measurable assertion`: the relevant `memory_recall_events` row

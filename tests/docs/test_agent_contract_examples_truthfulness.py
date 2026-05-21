@@ -8,6 +8,7 @@ made canonical, update the docs and this list together.
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[2]
 DOC_PATHS = [
@@ -37,3 +38,40 @@ def test_agent_facing_docs_do_not_publish_stale_cli_or_schema_examples():
                 offenders.append(f"{path.relative_to(ROOT)} contains {snippet!r}")
 
     assert not offenders, "stale agent-facing docs examples found:\n" + "\n".join(offenders)
+
+
+def test_agent_guide_memory_recall_example_matches_query_required_schema():
+    text = (ROOT / "docs" / "AGENT_GUIDE.md").read_text(encoding="utf-8")
+
+    assert '"tool":"memory.recall"' in text
+    assert re.search(r'"tool":"memory\.recall","args":\{[^}]*"query"\s*:', text)
+    assert "Use optional `context` only" in text
+    assert "not a substitute for `query`" in text
+    assert '"tool":"memory.recall","args":{"context"' not in text
+
+
+def test_prd_memory_recall_contract_marks_query_required_and_context_optional():
+    text = (ROOT / "docs" / "PRD.md").read_text(encoding="utf-8")
+
+    assert "`memory.recall(query, context?" in text
+    assert "`query` is required" in text
+    assert "optional `context`" in text
+    assert "does not replace `query`" in text
+    assert "`memory.recall(query?, context?" not in text
+
+
+def test_agent_facing_docs_do_not_imply_context_only_memory_recall_is_valid():
+    offenders: list[str] = []
+    stale_patterns = (
+        "memory.recall(query?, context?",
+        "memory.recall(context:",
+        "memory.recall(context=",
+        '"tool":"memory.recall","args":{"context"',
+    )
+    for path in DOC_PATHS:
+        text = path.read_text(encoding="utf-8")
+        for pattern in stale_patterns:
+            if pattern in text:
+                offenders.append(f"{path.relative_to(ROOT)} contains {pattern!r}")
+
+    assert not offenders, "memory.recall context-only docs found:\n" + "\n".join(offenders)

@@ -46,10 +46,10 @@ If you only have an unstructured market thought, start with `idea.capture` to cr
 {"tool":"outcome.add","args":{"instrument_id":"ins_...","outcome_label":"NO","outcome_value":0,"status":"resolved_final","resolved_at":"2026-06-30T00:00:00Z","idempotency_key":"agent-run-42:outcome:event-x"}}
 ```
 
-7. `memory.recall` — before writing the next thesis, retrieve relevant reflections, observations, and playbook rules by instrument or strategy context.
+7. `memory.recall` — before writing the next thesis, retrieve relevant reflections, observations, and playbook rules with a required natural-language `query`. Use optional `context` only to narrow graph/provenance ranking metadata such as instrument or strategy; it is not a substitute for `query`.
 
 ```json
-{"tool":"memory.recall","args":{"context":{"kind":"strategy","id":"str_..."},"node_types":["observation","reflection","playbook_rule"],"k":10,"max_chars":6000,"compact":true}}
+{"tool":"memory.recall","args":{"query":"prior lessons about event X and spread-adjusted edge","context":{"kind":"strategy","id":"str_..."},"node_types":["observation","reflection","playbook_rule"],"k":10,"max_chars":6000,"compact":true}}
 ```
 
 8. `memory.reflect` — after the outcome, write the lesson and bind it to the row it is about. Prefer this safe helper over raw `memory.retain` for retrospective learning.
