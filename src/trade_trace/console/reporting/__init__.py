@@ -8,8 +8,9 @@ reporting dashboards (trade-trace-3o4a EPIC). The contract is set in
 
 Modules:
 
-- `trade_rows`: paginated trades index + single-trade detail with
-  evidence coverage and missing-data caveats.
+- `trade_rows`: paginated trades index plus an exported Python-only
+  single-trade detail helper with evidence coverage and missing-data
+  caveats. `trade_detail` is not a Console HTTP/UI route.
 - `position_rows`: single-position detail with lifecycle metrics +
   linked decision/instrument data.
 """

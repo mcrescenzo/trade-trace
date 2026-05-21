@@ -69,7 +69,7 @@ The shipped React Console owns these routes:
 | Route | Purpose |
 |---|---|
 | `/` | Overview rollup for journal counts, P&L, and risk. |
-| `/trades` | Trade-typed decisions with caveats. |
+| `/trades` | Trade-typed decisions with caveats; this is a list page, not a per-trade detail route. |
 | `/reports` | Safe report catalog and links into report pages. |
 | `/review` | Local period / edge review summary over existing aggregates. |
 | `/reports/pnl` | P&L analytics. |
@@ -105,6 +105,10 @@ empty-state conditions as caveats instead of silently zero-filling.
 Record drilldowns stay local and read-only: journal event detail,
 related decisions/forecasts/outcomes/sources, raw event payloads,
 trade rows, and position detail all render existing database contents.
+`trade_trace.console.reporting.trade_detail(conn, decision_id)` is a
+supported external Python read-model helper for single trade rows, but
+the shipped Console intentionally does not expose a per-trade HTTP
+endpoint or React route.
 There is no server-side comment, annotation, preference, or saved-filter
 write path in the Console.
 

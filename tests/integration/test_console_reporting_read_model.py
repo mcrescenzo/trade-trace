@@ -1,8 +1,9 @@
 """Console reporting read model contract tests per trade-trace-bbww.
 
-The read model lives in `src/trade_trace/console/reporting/` and is
-consumed by the upcoming Trades index (trade-trace-q2li) and Position
-detail (trade-trace-svp2) pages. These tests pin the row shape, the
+The read model lives in `src/trade_trace/console/reporting/`. The
+shipped Console UI consumes the Trades index and Position detail pages;
+`trade_detail` remains an exported external Python read-model helper,
+not a Console HTTP/UI route. These tests pin the row shape, the
 pagination contract, and the missing-data caveat surface.
 """
 
@@ -12,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+import trade_trace.console.reporting as reporting
 from trade_trace.console.reporting import (
     CAVEAT_OPEN_NO_MARK,
     PositionDetail,
@@ -145,6 +147,10 @@ def test_list_trades_includes_missing_data_caveats(rich_home: Path) -> None:
 
 
 # -- trade_detail ----------------------------------------------------
+
+
+def test_trade_detail_remains_exported_python_read_model_api() -> None:
+    assert reporting.trade_detail is trade_detail
 
 
 def test_trade_detail_returns_named_decision(rich_home: Path) -> None:

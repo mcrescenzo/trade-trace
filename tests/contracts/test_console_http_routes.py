@@ -139,6 +139,17 @@ def test_catalog_endpoint_exposes_spa_routes_and_report_allowlist(client: TestCl
     assert "/raw" not in body["routes"]
 
 
+def test_trade_detail_is_not_exposed_as_console_http_route(rich_client: TestClient) -> None:
+    """`trade_detail()` is an external Python read-model API only.
+
+    The Console intentionally exposes `/api/console/trades` for the list
+    contract, but no HTTP/UI trade-detail route is implied today.
+    """
+
+    response = rich_client.get("/api/console/trades/dec_does_not_exist")
+    assert response.status_code == 404
+
+
 def test_journal_events_support_local_audit_filters_and_related_context(rich_client: TestClient) -> None:
     first_page = rich_client.get("/api/console/events?limit=10")
     assert first_page.status_code == 200, first_page.text[:300]

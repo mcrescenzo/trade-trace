@@ -334,7 +334,9 @@ state) and `src/trade_trace/console/static/` (chart scaffold).
    - `trade_detail(conn, decision_id) -> TradeRow | None` — single
      trade by decision_id; returns `None` for unknown ids and for
      non-trading decision types (the `watch`/`skip` lane never
-     surfaces here).
+     surfaces here). This is a supported external Python read-model
+     helper exported from `trade_trace.console.reporting`; it is
+     intentionally not a Console HTTP endpoint or React route today.
    - `position_detail(conn, position_id) -> PositionDetail | None`
      — lifecycle projection row joined to instrument/venue, plus
      the chronological `position_events` lineage and the opening

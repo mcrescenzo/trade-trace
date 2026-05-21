@@ -1,4 +1,4 @@
-"""Trade row enumeration + detail for the reporting product
+"""Trade row enumeration + external detail helper for the reporting product
 (trade-trace-bbww).
 
 A *trade* per
@@ -16,6 +16,12 @@ silently zero-filled").
 
 Pagination uses the shared cursor helper in
 `trade_trace.console.pagination`.
+
+`trade_detail(conn, decision_id)` is a supported exported Python
+read-model API for callers that already have a database connection. It
+is intentionally not wired as a Console HTTP endpoint or React route;
+the shipped Console UI currently exposes the paginated trades list and
+position/event/raw detail routes only.
 """
 
 from __future__ import annotations
@@ -252,8 +258,12 @@ def list_trades(
 
 
 def trade_detail(conn: sqlite3.Connection, decision_id: str) -> TradeRow | None:
-    """Return one `TradeRow` by decision id, or `None` if not found
-    or the decision is not a trading type."""
+    """Return one `TradeRow` by decision id for Python read-model callers.
+
+    Returns `None` if the id is unknown or if the decision is not a
+    trading type. This helper is exported from
+    `trade_trace.console.reporting`; it is not a Console HTTP/UI route.
+    """
 
     sql = _TRADE_BASE_SQL + " AND d.id = ?"
     params = (*TRADING_DECISION_TYPES, decision_id)
