@@ -958,9 +958,9 @@ def register_admin_tools(registry: ToolRegistry) -> None:
         is_write=True,
         **_examples_for("keyring.revoke"),
         description=(
-            "Revoke the stored OpenAI embeddings credential from the validated "
-            "secure OS keyring. Requires --confirm; without it returns "
+            "Revoke the stored OpenAI embeddings key from the validated OS "
+            "keyring. Requires --confirm; without it returns "
             "meta.preview_only=true. This narrow admin path is idempotent and "
-            "does not accept or return secret material."
+            "does not accept or return key material."
         ),
     )
