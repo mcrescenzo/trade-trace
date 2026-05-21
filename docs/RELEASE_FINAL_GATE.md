@@ -39,7 +39,11 @@ shipped surfaces:
 
 The command results below are preserved as a dated snapshot from the
 original gate run. They are not a live/current proof for later HEADs;
-rerun the commands in `docs/RELEASE_CHECKLIST.md` before publishing.
+rerun the commands in `docs/RELEASE_CHECKLIST.md` before publishing. In
+particular, this historical snapshot predates the explicit Console gate
+and full fresh-wheel script parity now required by the checklist, so it
+must not be treated as evidence that the Console gate, `trade-trace`
+entry point, optional extras, or browser/visual review are current.
 
 | Gate | Result |
 |------|--------|
@@ -108,3 +112,9 @@ rerun recorded against that candidate SHA. The release becomes
 shippable only when that candidate-specific proof records the exact
 SHA and the outcomes of the checklist commands, and the operator then
 approves the publish workflow for that same candidate.
+
+The tag-triggered workflow is also not complete release proof by itself:
+it runs the shared Python ruff/mypy/pytest gate, verifies package/tag
+versions, builds, and checks distribution metadata, but it does not run
+the Console Node/Vite gate, browser smoke, visual review, or install the
+freshly built wheel for script/extra parity before upload.
