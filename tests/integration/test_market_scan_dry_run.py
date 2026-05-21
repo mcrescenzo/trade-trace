@@ -5,6 +5,9 @@ import sqlite3
 from pathlib import Path
 
 from trade_trace.cli import main as cli_main
+import trade_trace.core as core
+from trade_trace.contracts.envelope import Meta, error_envelope
+from trade_trace.contracts.errors import ErrorCode
 from trade_trace.core import default_registry, dispatch
 from trade_trace.mcp_server import mcp_call, mcp_tool_specs
 
@@ -183,3 +186,126 @@ def test_market_scan_dry_run_does_not_mutate_db(home: Path):
     after_counts = {name: conn.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0] for (name,) in before if not name.startswith("sqlite_")}
     conn.close()
     assert after_counts == before_counts
+
+
+def test_market_scan_promote_registered_mcp_and_schema():
+    reg = default_registry().get("market.scan.promote")
+    assert reg.is_write is True
+    assert reg.json_schema and "promote_hash" in reg.json_schema["properties"]
+    assert "_fail_after_step" not in reg.json_schema["properties"]
+    assert any(spec["name"] == "market.scan.promote" for spec in mcp_tool_specs())
+    env = mcp_call("tool.schema", {"tool": "market.scan.promote"}, actor_id="agent:test")
+    assert env.ok
+    assert env.data["is_write"] is True
+    rejected = dispatch("market.scan.promote", {**_bundle("watch"), "_fail_after_step": 1}, actor_id="agent:test")
+    assert not rejected.ok
+
+
+def test_market_scan_promote_watch_materializes_and_replay_is_stable(home: Path):
+    args = {**_bundle("watch"), "home": str(home)}
+    args["attachments"] = {**args["attachments"], "reflection": {"enabled": True, "body": "Post-scan reflection."}}
+    dry = dispatch("market.scan.dry_run", args, actor_id="agent:test")
+    assert dry.ok
+    args["promote_hash"] = dry.data["promote_hash"]
+    first = dispatch("market.scan.promote", args, actor_id="agent:test")
+    second = dispatch("market.scan.promote", args, actor_id="agent:test")
+    assert first.ok, first.error if not first.ok else None
+    assert second.ok, second.error if not second.ok else None
+    assert first.data["bundle_status"] == second.data["bundle_status"]
+    assert first.data["bundle_status"]
+    assert first.data["bundle_status"] == first.data["final_check"]["status"]
+    assert second.data["bundle_status"] == second.data["final_check"]["status"]
+    assert first.data["ids"] == second.data["ids"]
+    assert first.data["created_ids"]
+    assert first.data["created_ids"]["decision_id"] == first.data["ids"]["decision_id"]
+    assert not first.data["reused_ids"]
+    assert second.data["reused_ids"]
+    assert second.data["reused_ids"]["decision_id"] == second.data["ids"]["decision_id"]
+    assert not second.data["created_ids"]
+    assert first.data["reflection_result"]["id"] == second.data["reflection_result"]["id"]
+    assert first.data["ids"]["decision_id"].startswith("dec_")
+
+
+def test_market_scan_promote_reports_all_source_and_attachment_ids(home: Path):
+    args = {**_bundle("watch"), "idempotency_key": "promote-multi-source", "home": str(home)}
+    args["sources"] = [
+        {"kind": "url", "stance": "supports", "uri": "https://example.invalid/source-a", "title": "Evidence A", "summary": "Caller supplied A."},
+        {"kind": "url", "stance": "contradicts", "uri": "https://example.invalid/source-b", "title": "Evidence B", "summary": "Caller supplied B."},
+    ]
+
+    first = dispatch("market.scan.promote", args, actor_id="agent:test")
+    second = dispatch("market.scan.promote", args, actor_id="agent:test")
+
+    assert first.ok, first.error if not first.ok else None
+    assert second.ok, second.error if not second.ok else None
+    assert len(first.data["ids"]["source_ids"]) == 2
+    assert len(first.data["created_ids"]["source_ids"]) == 2
+    assert first.data["ids"]["source_ids"] == first.data["created_ids"]["source_ids"]
+    assert len(first.data["ids"]["edge_ids"]) == 6
+    assert len(first.data["created_ids"]["edge_ids"]) == 6
+    assert first.data["ids"]["edge_ids"] == first.data["created_ids"]["edge_ids"]
+    for idx in range(2):
+        assert first.data["ids"][f"source:{idx}"] in first.data["ids"]["source_ids"]
+        for target in ("thesis", "forecast", "decision"):
+            key = f"source_attach:{idx}:{target}"
+            assert first.data["ids"][key] in first.data["ids"]["edge_ids"]
+    assert second.data["ids"] == first.data["ids"]
+    assert second.data["created_ids"] == {}
+    assert second.data["reused_ids"]["source_ids"] == second.data["ids"]["source_ids"]
+    assert second.data["reused_ids"]["edge_ids"] == second.data["ids"]["edge_ids"]
+
+
+def test_market_scan_promote_supports_skip_and_paper_enter(home: Path):
+    for action in ("skip", "paper_enter"):
+        args = {**_bundle(action), "idempotency_key": f"promote-{action}", "home": str(home)}
+        env = dispatch("market.scan.promote", args, actor_id="agent:test")
+        assert env.ok, env.error if not env.ok else None
+        assert env.data["normalized_action"] == action
+        decision = next(r for r in env.data["primitive_results"] if r["tool"] == "decision.add")["data"]
+        assert decision["type"] == action
+
+
+def test_market_scan_promote_hash_and_blocking_fail_before_writes(home: Path):
+    conn = sqlite3.connect(home / "trade-trace.sqlite")
+    before = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+    conn.close()
+    bad_hash = {**_bundle("watch"), "home": str(home), "promote_hash": "sha256:bad"}
+    env = dispatch("market.scan.promote", bad_hash, actor_id="agent:test")
+    assert not env.ok
+    blocked = {**_bundle("watch"), "home": str(home)}
+    blocked["snapshot"] = {**blocked["snapshot"], "captured_at": "2026-05-21T12:00:00"}
+    env2 = dispatch("market.scan.promote", blocked, actor_id="agent:test")
+    assert not env2.ok
+    conn = sqlite3.connect(home / "trade-trace.sqlite")
+    after = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+    conn.close()
+    assert after == before
+
+
+def test_market_scan_promote_partial_failure_replays_to_convergence(home: Path, monkeypatch):
+    args = {**_bundle("watch"), "idempotency_key": "promote-partial", "home": str(home)}
+    original_dispatch = core.dispatch
+    calls = {"count": 0}
+
+    def fail_after_first_child(tool_name, call_args, *, actor_id="cli:default", request_id=None, registry=None):
+        env = original_dispatch(tool_name, call_args, actor_id=actor_id, request_id=request_id, registry=registry)
+        calls["count"] += 1
+        if calls["count"] == 1:
+            meta = Meta(tool=tool_name, actor_id=actor_id, request_id=request_id or "injected-failure")
+            return error_envelope(meta, ErrorCode.VALIDATION_ERROR, "injected test-only child failure", {"injected": True})
+        return env
+
+    monkeypatch.setattr(core, "dispatch", fail_after_first_child)
+    failed = dispatch("market.scan.promote", args, actor_id="agent:test")
+    assert not failed.ok
+    assert failed.error.details["step"] == 1
+    conn = sqlite3.connect(home / "trade-trace.sqlite")
+    assert conn.execute("SELECT COUNT(*) FROM venues").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM decisions").fetchone()[0] == 0
+    conn.close()
+    monkeypatch.setattr(core, "dispatch", original_dispatch)
+    complete = dispatch("market.scan.promote", args, actor_id="agent:test")
+    replay = dispatch("market.scan.promote", args, actor_id="agent:test")
+    assert complete.ok and replay.ok
+    assert complete.data["ids"] == replay.data["ids"]
+    assert complete.data["transaction_semantics"] == "logical_replay_safe_child_idempotency_not_physical_rollback"

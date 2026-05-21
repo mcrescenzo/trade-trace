@@ -53,6 +53,12 @@ class MarketScanDryRunInput(BaseModel):
     home: str | None = Field(default=None, description="Accepted for transport parity; dry-run does not open the DB.")
 
 
+class MarketScanPromoteInput(MarketScanDryRunInput):
+    """Input contract for market.scan.promote."""
+
+    promote_hash: str | None = None
+
+
 _EXAMPLE_MINIMAL = {
     "idempotency_key": "run-42:market-scan:pm:event-x:v1",
     "venue": {"name": "Polymarket", "kind": "prediction_market"},
@@ -94,6 +100,15 @@ _SCHEMA: dict[str, Any] = {
     "description": "Read-only validator/planner for caller-supplied market scan bundles. No external fetch, no advice, no trade execution, no DB writes.",
     "examples": [_EXAMPLE_MINIMAL, _EXAMPLE_RICH],
     "x-decision-matrix": {k: decision_matrix_contract()[k] for k in sorted(_ALLOWED_ACTIONS)},
+}
+
+_PROMOTE_SCHEMA: dict[str, Any] = {
+    **_SCHEMA,
+    "properties": {
+        **_SCHEMA["properties"],
+        "promote_hash": {"type": "string", "description": "Optional dry-run promote_hash guard; mismatches fail before writes."},
+    },
+    "description": "Write-capable materializer for market.scan.dry_run plans using deterministic child idempotency keys.",
 }
 
 
@@ -227,7 +242,7 @@ def _market_scan_dry_run(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
     if not parsed.instrument.get("instrument_id"):
         key = f"{parent}:instrument"; keys["instrument"] = key
         iargs = _copy_args(parsed.instrument, {"instrument_id"})
-        iargs.setdefault("venue_id", parsed.venue.get("venue_id") if parsed.venue else _placeholder("venue_id"))
+        iargs.setdefault("venue_id", (parsed.venue or {}).get("venue_id") or _placeholder("venue_id"))
         iargs["idempotency_key"] = key
         calls.append(_call("instrument.add", "Create/reuse caller-supplied instrument row.", iargs, "instrument_id", key))
     if parsed.snapshot and not parsed.snapshot.get("snapshot_id"):
@@ -282,6 +297,159 @@ def _market_scan_dry_run(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
     }
 
 
+def _replace_placeholders(value: Any, ids: dict[str, Any], *, source_idx: int | None = None) -> Any:
+    if isinstance(value, str) and value.startswith("<") and value.endswith(">"):
+        name = value[1:-1]
+        if name == "source_id" and source_idx is not None:
+            return ids.get(f"source:{source_idx}", value)
+        return ids.get(name, value)
+    if isinstance(value, list):
+        return [_replace_placeholders(v, ids, source_idx=source_idx) for v in value]
+    if isinstance(value, dict):
+        return {k: _replace_placeholders(v, ids, source_idx=source_idx) for k, v in value.items()}
+    return value
+
+
+def _source_idx_from_key(key: str | None) -> int | None:
+    if not key:
+        return None
+    parts = key.split(":")
+    try:
+        pos = parts.index("source")
+        return int(parts[pos + 1])
+    except (ValueError, IndexError):
+        return None
+
+
+def _append_unique_id(container: dict[str, Any], key: str, rid: Any) -> None:
+    values = container.setdefault(key, [])
+    if rid not in values:
+        values.append(rid)
+
+
+def _record_promote_id(ids: dict[str, Any], bucket: dict[str, Any], creates: str, rid: Any, child_key: str | None) -> None:
+    """Record a child ID without collapsing repeated source/edge resources."""
+    if creates == "source_id":
+        sidx = _source_idx_from_key(child_key)
+        if sidx is not None:
+            ids[f"source:{sidx}"] = rid
+            bucket[f"source:{sidx}"] = rid
+        ids.setdefault("source_id", rid)
+        bucket.setdefault("source_id", rid)
+        _append_unique_id(ids, "source_ids", rid)
+        _append_unique_id(bucket, "source_ids", rid)
+        return
+    if creates == "edge_id":
+        if child_key:
+            parts = child_key.split(":")
+            try:
+                pos = parts.index("source")
+                stable_key = f"source_attach:{parts[pos + 1]}:{parts[pos + 3]}"
+                ids[stable_key] = rid
+                bucket[stable_key] = rid
+            except (ValueError, IndexError):
+                pass
+        _append_unique_id(ids, "edge_ids", rid)
+        _append_unique_id(bucket, "edge_ids", rid)
+        return
+    ids[creates] = rid
+    if creates.endswith("_id"):
+        ids.setdefault(creates[:-3], rid)
+    bucket[creates] = rid
+
+
+def _market_scan_promote(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    try:
+        parsed = MarketScanPromoteInput.model_validate(args)
+    except ValidationError as exc:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, f"market.scan.promote input validation failed: {exc.errors()}", details={"validation_errors": exc.errors()}) from exc
+
+    dry_args = parsed.model_dump(exclude_none=True, exclude={"promote_hash"})
+    dry_run = _market_scan_dry_run(dry_args, ctx)
+    if parsed.promote_hash and parsed.promote_hash != dry_run["promote_hash"]:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "promote_hash does not match current market.scan.dry_run plan", details={"field": "promote_hash", "expected": dry_run["promote_hash"], "actual": parsed.promote_hash})
+    blocking = [c for c in dry_run["checks"] if c.get("severity") == "blocking"]
+    if blocking:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "market.scan.promote blocked by dry-run validation checks", details={"checks": blocking, "promote_hash": dry_run["promote_hash"]})
+
+    from trade_trace.core import dispatch  # Lazy import avoids import cycle.
+
+    ids: dict[str, Any] = {}
+    for key in ("venue_id", "instrument_id", "snapshot_id"):
+        container = key[:-3]
+        if isinstance(dry_args.get(container), dict) and dry_args[container].get(key):
+            ids[key] = dry_args[container][key]
+    for idx, source in enumerate(dry_args.get("sources") or []):
+        if source.get("source_id"):
+            ids[f"source:{idx}"] = source["source_id"]
+            ids.setdefault("source_id", source["source_id"])
+            _append_unique_id(ids, "source_ids", source["source_id"])
+    for key in ("thesis_id", "forecast_id"):
+        container = key[:-3]
+        if isinstance(dry_args.get(container), dict) and dry_args[container].get(key):
+            ids[key] = dry_args[container][key]
+
+    primitive_results: list[dict[str, Any]] = []
+    created_ids: dict[str, Any] = {}
+    reused_ids: dict[str, Any] = {}
+    for step_no, planned in enumerate(dry_run["ordered_calls"], start=1):
+        ckey = planned.get("child_idempotency_key")
+        call_args = _replace_placeholders(planned["args"], ids, source_idx=_source_idx_from_key(ckey))
+        if parsed.home:
+            call_args.setdefault("home", parsed.home)
+        env = dispatch(planned["tool"], call_args, actor_id=ctx.actor_id)
+        primitive_results.append({"step": step_no, "tool": planned["tool"], "ok": env.ok, "args": call_args, "data": env.data if env.ok else None, "error": None if env.ok else env.error.model_dump(mode="json")})
+        if not env.ok:
+            raise ToolError(env.error.code, f"market.scan.promote child step {step_no} {planned['tool']} failed: {env.error.message}", details={"step": step_no, "tool": planned["tool"], "child_error": env.error.model_dump(mode="json"), "primitive_results": primitive_results})
+        rid = env.data.get("id") if isinstance(env.data, dict) else None
+        if rid:
+            creates = planned["creates"]
+            if env.meta.idempotent_replay is True:
+                _record_promote_id(ids, reused_ids, creates, rid, ckey)
+            else:
+                _record_promote_id(ids, created_ids, creates, rid, ckey)
+
+    reflection_result = None
+    reflection = (dry_args.get("attachments") or {}).get("reflection") or {}
+    if reflection.get("enabled") and (reflection.get("body") or reflection.get("insight")):
+        target_kind = reflection.get("target_kind") or "decision"
+        target_id = reflection.get("target_id") or ids.get(f"{target_kind}_id")
+        rargs = {k: v for k, v in reflection.items() if k not in {"enabled", "target_kind", "target_id"} and v is not None}
+        rargs.update({"target_kind": target_kind, "target_id": target_id, "idempotency_key": f"{parsed.idempotency_key}:reflection"})
+        if parsed.home:
+            rargs["home"] = parsed.home
+        env = dispatch("memory.reflect", rargs, actor_id=ctx.actor_id)
+        reflection_result = env.data if env.ok else None
+        if not env.ok:
+            raise ToolError(env.error.code, f"market.scan.promote memory.reflect failed: {env.error.message}", details={"child_error": env.error.model_dump(mode="json"), "primitive_results": primitive_results})
+        if reflection_result and reflection_result.get("id"):
+            ids["memory_node_id"] = reflection_result["id"]
+            if env.meta.idempotent_replay is True:
+                reused_ids["memory_node_id"] = reflection_result["id"]
+            else:
+                created_ids["memory_node_id"] = reflection_result["id"]
+
+    status_args = {k: ids[k] for k in ("decision_id", "forecast_id", "thesis_id", "instrument_id", "source_id", "memory_node_id") if ids.get(k)}
+    if parsed.home:
+        status_args["home"] = parsed.home
+    final_env = dispatch("journal.bundle.status", status_args, actor_id=ctx.actor_id)
+    if not final_env.ok:
+        raise ToolError(final_env.error.code, f"market.scan.promote final journal.bundle.status failed: {final_env.error.message}", details={"child_error": final_env.error.model_dump(mode="json"), "status_args": status_args})
+    return {
+        "plan_state": "promoted",
+        "promote_hash": dry_run["promote_hash"],
+        "normalized_action": dry_run["normalized_action"],
+        "created_ids": created_ids,
+        "reused_ids": reused_ids,
+        "ids": ids,
+        "primitive_results": primitive_results,
+        "reflection_result": reflection_result,
+        "final_check": final_env.data,
+        "bundle_status": final_env.data.get("status"),
+        "transaction_semantics": "logical_replay_safe_child_idempotency_not_physical_rollback",
+    }
+
+
 def register_market_scan_tools(registry: ToolRegistry) -> None:
     registry.register(
         "market.scan.dry_run",
@@ -295,5 +463,19 @@ def register_market_scan_tools(registry: ToolRegistry) -> None:
         examples=("tt market scan dry_run --idempotency-key run-42 --instrument-json '{...}' --decision-json '{\"action\":\"watch\"}'",),
         enum_notes={"decision.action": "Caller supplied; one of watch, skip, paper_enter. Maps to decision.add type."},
         common_failures=("missing_resolution_criteria", "decision_matrix_violation", "missing_source", "stale_snapshot"),
-        next_actions=("Review checks, then pass promote_payload_hint/promote_hash to future market.scan.promote when implemented.",),
+        next_actions=("Review checks, then call market.scan.promote with the same payload and optional promote_hash guard.",),
+    )
+    registry.register(
+        "market.scan.promote",
+        _market_scan_promote,
+        is_write=True,
+        json_schema=_PROMOTE_SCHEMA,
+        example_minimal={**_EXAMPLE_MINIMAL, "promote_hash": "sha256:<optional dry-run hash>"},
+        example_rich={**_EXAMPLE_RICH, "promote_hash": "sha256:<optional dry-run hash>"},
+        description="Write-capable replay-safe materializer for market.scan.dry_run primitive plans.",
+        usage_summary="Promote a caller-supplied watch/skip/paper_enter market scan into local journal rows using deterministic child idempotency keys.",
+        examples=("tt market scan promote --idempotency-key run-42 --instrument-json '{...}' --decision-json '{\"action\":\"watch\"}'",),
+        enum_notes={"decision.action": "Caller supplied; one of watch, skip, paper_enter. Maps to decision.add type."},
+        common_failures=("promote_hash mismatch", "blocking dry-run checks", "child primitive validation error"),
+        next_actions=("Inspect final_check/journal.bundle.status and suggested_next_calls.",),
     )
