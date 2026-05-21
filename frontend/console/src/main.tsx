@@ -171,13 +171,13 @@ function FilterBar({ filter, onChange, supportsStrategy = true, supportsTradeVie
             <option value="positions">Positions — lifecycle rows</option>
             <option value="decision-events">Decision events — raw escape hatch</option>
           </select>
-          <span className="mt-1 block text-xs text-muted-foreground">Positions use /api/console/positions. Event mode preserves the existing decision-event table.</span>
+          <span className="mt-1 block text-xs text-muted-foreground">Positions use /api/console/positions. Event mode preserves the flat /api/console/trades decision journal escape hatch.</span>
         </label>
       </div> : null}
       <div className="grid gap-3 md:grid-cols-3">
         <label className="text-sm">Decision type
           <select multiple className="mt-1 h-32 w-full rounded border border-border bg-background px-2 py-2" value={decisionTypes} onChange={(event) => update({ decision: { decision_type: Array.from(event.target.selectedOptions, (option) => option.value) } })}>
-            {TRADE_DECISION_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
+            {TRADE_DECISION_TYPES.map((item) => <option key={item} value={item}>{humanizeToken(item)}</option>)}
           </select>
           <span className="mt-1 block text-xs text-muted-foreground">Ctrl/Cmd-click to select multiple; ignored by the positions view unless switched to decision events.</span>
         </label>
@@ -189,10 +189,10 @@ function FilterBar({ filter, onChange, supportsStrategy = true, supportsTradeVie
         </label> : null}
       </div>
       {supportsTradeViewDates ? <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <label className="text-sm">Opened from
+        <label className="text-sm">{viewMode === 'decision-events' ? 'Decision from' : 'Opened from'}
           <input type="date" className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={filter.date?.opened_from ?? ''} onChange={(event) => update({ date: { ...filter.date, opened_from: event.target.value || null } })} />
         </label>
-        <label className="text-sm">Opened to
+        <label className="text-sm">{viewMode === 'decision-events' ? 'Decision to' : 'Opened to'}
           <input type="date" className="mt-1 w-full rounded border border-border bg-background px-2 py-2" value={filter.date?.opened_to ?? ''} onChange={(event) => update({ date: { ...filter.date, opened_to: event.target.value || null } })} />
         </label>
       </div> : null}
@@ -812,11 +812,21 @@ function formatWhen(value: unknown) {
   return `${date.toLocaleString()} (${relative})`
 }
 
-function positionSide(row: PositionRow) {
-  const side = String(row.side ?? '').toLowerCase()
+function humanSide(value: unknown) {
+  const side = String(value ?? '').toLowerCase()
   if (side === 'yes') return 'Yes / long'
   if (side === 'no') return 'No / short'
-  return humanizeToken(row.side)
+  return humanizeToken(value)
+}
+
+function decisionEventType(value: unknown) {
+  const label = humanizeToken(value)
+  const raw = String(value ?? '').trim()
+  return raw && label !== raw ? `${label} (${raw})` : label
+}
+
+function positionSide(row: PositionRow) {
+  return humanSide(row.side)
 }
 
 function positionStrategy(row: PositionRow) {
@@ -908,7 +918,7 @@ function TradesPage() {
   return (
     <>
       <PageHeader eyebrow="Trades" title={eventMode ? 'Trade decision-event escape hatch' : 'Position lifecycle rows'} />
-      <PageExplainer answers={eventMode ? 'Which recorded trade decision events match the current local filters.' : 'Which local position lifecycle rows exist in the journal.'} data={eventMode ? '/api/console/trades decision-event rows. This is the preserved raw escape hatch.' : '/api/console/positions paginated position read model rows.'} read={eventMode ? 'Rows are the existing minimal event table; switch back to Positions for the human-readable lifecycle scan.' : 'One row represents one position. Size, entry price, lifecycle counts, status/outcome, strategy, and hygiene are backend-supplied fields only.'} mislead="Rows are journal-derived local records, not broker statements, live market data, write actions, or trading advice." />
+      <PageExplainer answers={eventMode ? 'Which recorded trade decision journal events match the current local filters.' : 'Which local position lifecycle rows exist in the journal.'} data={eventMode ? '/api/console/trades flat decision-event rows with copyable decision IDs and raw payload drilldown. This is the preserved audit escape hatch.' : '/api/console/positions paginated position read model rows.'} read={eventMode ? 'Each row is one journaled trade-typed decision event, not a grouped position outcome. Use Positions for lifecycle summaries and P&L/outcome context.' : 'One row represents one position. Size, entry price, lifecycle counts, status/outcome, strategy, and hygiene are backend-supplied fields only.'} mislead="Rows are journal-derived local records, not broker statements, live market data, write actions, or trading advice." />
       <FilterBar filter={filter} onChange={setFilter} supportsTradeViewDates supportsViewMode />
       {eventMode ? <PageTable<TradeRow>
         endpoint="/api/console/trades"
@@ -917,12 +927,13 @@ function TradesPage() {
         subjectKind="decision"
         emptyMessage="No matching decision-event rows for the selected filters. Switch to Positions for lifecycle rows."
         columns={[
-          { key: 'decision_id', header: 'Decision', cell: (value) => <CopyId value={value} /> },
-          { key: 'decision_type', header: 'Type', cell: (value) => <ChipList value={value} /> },
+          { key: 'decision_at', header: 'When', cell: (value) => formatWhen(value) },
+          { key: 'decision_id', header: 'Decision ID', cell: (value) => <CopyId value={value} /> },
+          { key: 'decision_type', header: 'Decision type', cell: (value) => decisionEventType(value) },
           { key: 'instrument', header: 'Instrument', accessor: (row) => row.instrument_symbol ?? row.instrument_title ?? row.instrument_id },
-          { key: 'side', header: 'Side', cell: (value) => humanizeToken(value) },
-          { key: 'quantity', header: 'Qty' },
-          { key: 'price', header: 'Price' },
+          { key: 'side', header: 'Side', cell: (value) => humanSide(value) },
+          { key: 'quantity', header: 'Qty', cell: (value) => formatNumber(value) },
+          { key: 'price', header: 'Price', cell: (value) => formatNumber(value) },
           { key: 'caveats', header: 'Caveats', cell: (value) => <CaveatChips value={value} /> }
         ]}
       /> : <PageTable<PositionRow>
