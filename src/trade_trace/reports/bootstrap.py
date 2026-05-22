@@ -19,6 +19,7 @@ from trade_trace.reports.memory_usefulness import report_memory_usefulness
 from trade_trace.reports.recall_receipts import report_recall_receipts
 from trade_trace.reports.strategy_health import report_strategy_health
 from trade_trace.reports.work_queue import report_work_queue
+from trade_trace.storage.database import read_snapshot
 from trade_trace.timestamps import to_utc_iso8601
 from trade_trace.tools._helpers import now_iso
 
@@ -96,22 +97,27 @@ def compose_bootstrap_packet(
     effective_budgets = _effective_budgets(budgets or {})
     report_filter = _report_filter(requested_filter, resolved_as_of)
 
-    source_tools: list[str] = []
-    work = report_work_queue(conn, raw_filter=report_filter, as_of=resolved_as_of)
-    source_tools.append("report.work_queue")
-    lifecycle = report_lifecycle(conn, raw_filter=report_filter, as_of=resolved_as_of)
-    source_tools.append("report.lifecycle")
-    try:
-        strategy = report_strategy_health(conn, raw_filter=report_filter, status="all", as_of=resolved_as_of)
-        source_tools.append("report.strategy_health")
-    except ValueError as exc:
-        strategy = {"summary": {"sample_warning": "section_unavailable", "caveats": [str(exc)]}, "groups": []}
-    recall = report_recall_receipts(conn, **_receipt_kwargs(requested_filter, resolved_as_of, effective_budgets["sections"]["memory_context"]["max_items"]))
-    source_tools.append("report.recall_receipts")
-    memory = report_memory_usefulness(conn, **_receipt_kwargs(requested_filter, resolved_as_of, effective_budgets["sections"]["memory_context"]["max_items"]))
-    source_tools.append("report.memory_usefulness")
-    forecast = report_forecast_diagnostics(conn, raw_filter=report_filter)
-    source_tools.append("report.forecast_diagnostics")
+    # Pin one read snapshot for every sub-report so the bootstrap packet is
+    # internally consistent under concurrent writes (trade-trace-d8lu). The
+    # nested report functions are no-ops on the snapshot helper because the
+    # connection is already in a transaction here.
+    with read_snapshot(conn):
+        source_tools: list[str] = []
+        work = report_work_queue(conn, raw_filter=report_filter, as_of=resolved_as_of)
+        source_tools.append("report.work_queue")
+        lifecycle = report_lifecycle(conn, raw_filter=report_filter, as_of=resolved_as_of)
+        source_tools.append("report.lifecycle")
+        try:
+            strategy = report_strategy_health(conn, raw_filter=report_filter, status="all", as_of=resolved_as_of)
+            source_tools.append("report.strategy_health")
+        except ValueError as exc:
+            strategy = {"summary": {"sample_warning": "section_unavailable", "caveats": [str(exc)]}, "groups": []}
+        recall = report_recall_receipts(conn, **_receipt_kwargs(requested_filter, resolved_as_of, effective_budgets["sections"]["memory_context"]["max_items"]))
+        source_tools.append("report.recall_receipts")
+        memory = report_memory_usefulness(conn, **_receipt_kwargs(requested_filter, resolved_as_of, effective_budgets["sections"]["memory_context"]["max_items"]))
+        source_tools.append("report.memory_usefulness")
+        forecast = report_forecast_diagnostics(conn, raw_filter=report_filter)
+        source_tools.append("report.forecast_diagnostics")
 
     broadening = _broadening(requested_filter)
     current_scope = _current_scope(requested_filter, resolved_as_of, broadening)

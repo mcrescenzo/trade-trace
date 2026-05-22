@@ -21,6 +21,7 @@ from trade_trace.reports.calibration import (
     _placeholders,
     _resolve_p_yes_and_y,
 )
+from trade_trace.storage.database import read_snapshot
 
 REPORT_NAME = "report.forecast_diagnostics"
 WIDE_SPREAD_THRESHOLD = 0.10
@@ -36,6 +37,15 @@ def report_forecast_diagnostics(
 
     rf = ReportFilter.model_validate(raw_filter or {})
     enforce_supported_filter(rf, report=REPORT_NAME)
+    # Pin a single read snapshot across all SELECTs so panels and exclusion
+    # counts can't disagree under concurrent writes (trade-trace-d8lu).
+    with read_snapshot(conn):
+        return _compose_forecast_diagnostics(conn, rf, min_sample)
+
+
+def _compose_forecast_diagnostics(
+    conn: sqlite3.Connection, rf: ReportFilter, min_sample: int,
+) -> dict[str, Any]:
     loaded = _load_rows(conn, rf)
     included = [r for r in loaded["included"] if rf.outcome.include_late_recorded or not r["late_recorded"]]
     late_excluded = sum(1 for r in loaded["included"] if r["late_recorded"] and not rf.outcome.include_late_recorded)

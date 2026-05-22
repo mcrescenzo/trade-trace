@@ -99,6 +99,34 @@ class Database:
             raise
 
 
+@contextmanager
+def read_snapshot(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    """Pin a single consistent read snapshot for a multi-query report
+    composition (trade-trace-d8lu).
+
+    Without an explicit transaction, each SELECT on a Python sqlite3
+    connection acts as its own implicit read transaction. In WAL mode
+    that means concurrent commits between SELECTs leak into the report
+    body — two sections of the same report can disagree about how many
+    decisions exist or which strategies are active.
+
+    `BEGIN DEFERRED` starts a read transaction whose snapshot is fixed at
+    the first SELECT after the BEGIN, so every subsequent SELECT in the
+    block sees the same database state. The helper is a no-op when the
+    connection is already inside a transaction (e.g., nested report
+    composition) and always commits to release the snapshot.
+    """
+
+    if conn.in_transaction:
+        yield conn
+        return
+    conn.execute("BEGIN DEFERRED")
+    try:
+        yield conn
+    finally:
+        conn.commit()
+
+
 class ReadOnlyDatabaseError(RuntimeError):
     """Raised by `open_database_readonly` when the requested DB
     cannot be opened cleanly (trade-trace-1kkv.3). Carries a

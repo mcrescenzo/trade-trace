@@ -13,6 +13,7 @@ from typing import Any
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
 from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
+from trade_trace.storage.database import read_snapshot
 from trade_trace.tools._helpers import now_iso
 
 REPORT_NAME = "report.strategy_health"
@@ -175,21 +176,25 @@ def report_strategy_health(
     resolved_as_of = _iso(_parse_ts(as_of or now_iso()))
     rf = ReportFilter.model_validate(raw_filter or {})
     filter_view = process_filter(rf, report=REPORT_NAME)
-    strategy_value = _resolve_strategy_filter(conn, rf.strategy.strategy_id)
-    if strategy_value == STRATEGY_NONE_SENTINEL:
-        raise ValueError("report.strategy_health requires concrete strategy rows; strategy_id='__none__' is unsupported")
+    # Pin a single read snapshot so per-strategy SELECTs and the top-level
+    # strategies SELECT can't disagree under concurrent writes
+    # (trade-trace-d8lu).
+    with read_snapshot(conn):
+        strategy_value = _resolve_strategy_filter(conn, rf.strategy.strategy_id)
+        if strategy_value == STRATEGY_NONE_SENTINEL:
+            raise ValueError("report.strategy_health requires concrete strategy rows; strategy_id='__none__' is unsupported")
 
-    sql = "SELECT id, slug, name, status FROM strategies WHERE 1=1"
-    params: list[Any] = []
-    if status != "all":
-        sql += " AND status = ?"
-        params.append(status)
-    if strategy_value is not None:
-        sql += " AND id = ?"
-        params.append(strategy_value)
-    sql += " ORDER BY status, slug, id"
-    strategies = conn.execute(sql, tuple(params)).fetchall()
-    groups = [_strategy_group(conn, row, rf, as_of=resolved_as_of, min_sample=min_sample) for row in strategies]
+        sql = "SELECT id, slug, name, status FROM strategies WHERE 1=1"
+        params: list[Any] = []
+        if status != "all":
+            sql += " AND status = ?"
+            params.append(status)
+        if strategy_value is not None:
+            sql += " AND id = ?"
+            params.append(strategy_value)
+        sql += " ORDER BY status, slug, id"
+        strategies = conn.execute(sql, tuple(params)).fetchall()
+        groups = [_strategy_group(conn, row, rf, as_of=resolved_as_of, min_sample=min_sample) for row in strategies]
     groups.sort(key=lambda g: (g["metrics"]["review_priority"], g["metrics"]["slug"], g["key"]))
 
     totals = {"review_due": 0, "low_n": 0, "open_unresolved_forecasts": 0, "source_quality_issues": 0, "repeated_overrides": 0, "policy_candidates": 0}
