@@ -1,6 +1,7 @@
 """Deterministic reports per docs/architecture/reports.md."""
 
 from trade_trace.reports.audit_readiness import report_audit_readiness
+from trade_trace.reports.bootstrap import BOOTSTRAP_CONTRACT_VERSION, compose_bootstrap_packet
 from trade_trace.reports.buckets import (
     CONFIDENCE_LABELS,
     LIQUIDITY_BUCKET_THRESHOLDS,
@@ -59,6 +60,7 @@ from trade_trace.reports.work_queue import agent_next_actions, report_work_queue
 
 __all__ = [
     "CONFIDENCE_LABELS",
+    "BOOTSTRAP_CONTRACT_VERSION",
     "DEFAULT_ADHERENCE_MIN_SAMPLE",
     "DEFAULT_BIN_POLICY",
     "DEFAULT_HEALTH_MIN_SAMPLE",
@@ -76,6 +78,7 @@ __all__ = [
     "VOLUME_BUCKET_THRESHOLDS",
     "VOLUME_BUCKET_VALUES",
     "agent_next_actions",
+    "compose_bootstrap_packet",
     "confidence_bucket",
     "liquidity_bucket",
     "report_calibration",
