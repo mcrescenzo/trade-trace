@@ -23,6 +23,7 @@ from trade_trace.reports.calibration import (
 )
 
 REPORT_NAME = "report.forecast_diagnostics"
+WIDE_SPREAD_THRESHOLD = 0.10
 
 
 def report_forecast_diagnostics(
@@ -219,6 +220,8 @@ def _market_reference_panel(rows: list[dict[str, Any]]) -> dict[str, Any]:
         caveats.append("missing_market_reference")
     if any(r["spread"] is None for r in rows):
         caveats.append("missing_spread")
+    if any(r["spread"] is not None and float(r["spread"]) > WIDE_SPREAD_THRESHOLD for r in rows):
+        caveats.append("wide_spread")
     if any(r["volume"] is None and r["open_interest"] is None and (not r["liquidity_depth_json"] or r["liquidity_depth_json"] == "{}") for r in rows):
         caveats.append("missing_liquidity_context")
     return {
@@ -232,6 +235,7 @@ def _market_reference_panel(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "spread_coverage_count": sum(1 for r in rows if r["spread"] is not None),
         "liquidity_context_coverage_count": sum(1 for r in rows if r["volume"] is not None or r["open_interest"] is not None or (r["liquidity_depth_json"] and r["liquidity_depth_json"] != "{}")),
         "caveat_codes": caveats,
+        "wide_spread_threshold": WIDE_SPREAD_THRESHOLD,
     }
 
 

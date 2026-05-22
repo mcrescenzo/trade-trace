@@ -1,12 +1,25 @@
 from __future__ import annotations
 
 import json
+import re
+import socket
 import sqlite3
+import urllib.request
 
 from tests._direct_sql_builders import insert_instrument, insert_venue
 from tests._mcp_helpers import mcp_default as _mcp
 from trade_trace.core import default_registry
 from trade_trace.storage.paths import db_path
+
+
+def _assert_no_advice_profit_ranking_text(payload: object, *, description: str = "") -> None:
+    text = (json.dumps(payload, sort_keys=True) + " " + description).lower()
+    forbidden = re.compile(
+        r"\b(buy recommendation|sell recommendation|trade recommendation|recommended trade|"
+        r"best strategy|trade more|profitable|profit ranking|ranked by profit|"
+        r"guaranteed profit|buy now|sell now)\b"
+    )
+    assert forbidden.findall(text) == []
 
 
 def test_strategy_health_registered_and_schema():
@@ -17,6 +30,39 @@ def test_strategy_health_registered_and_schema():
     text = json.dumps(tool.json_schema) + " " + tool.description
     for phrase in ("best strategy", "trade more", "profitable"):
         assert phrase not in text.lower()
+
+
+def test_strategy_health_does_not_open_network_and_keeps_low_n_skip_watch_local(home, monkeypatch):
+    active_env = _mcp(home, "strategy.create", {"name": "Local Health", "slug": "local-health", "idempotency_key": "00000000-0000-4000-8000-health-net"})
+    assert active_env.ok
+    active = active_env.data["id"]
+    conn = sqlite3.connect(db_path(home))
+    try:
+        insert_venue(conn, venue_id="vh_net")
+        insert_instrument(conn, instrument_id="ih_net", venue_id="vh_net")
+        conn.execute("INSERT INTO decisions(id, instrument_id, type, strategy_id, review_by, created_at, actor_id) VALUES ('dh_skip','ih_net','skip',?,NULL,'2026-01-02T00:00:00Z','actor-a')", (active,))
+        conn.execute("INSERT INTO decisions(id, instrument_id, type, strategy_id, review_by, created_at, actor_id) VALUES ('dh_watch','ih_net','watch',?,'2026-01-05T00:00:00Z','2026-01-03T00:00:00Z','actor-a')", (active,))
+        conn.execute("INSERT INTO theses(id, instrument_id, side, body, strategy_id, created_at, actor_id) VALUES ('th_missing_ref','ih_net','yes','missing local source ref',?,'2026-01-01T00:00:00Z','actor-a')", (active,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    def fail_network(*args, **kwargs):  # pragma: no cover - assertion helper
+        raise AssertionError("strategy health must not fetch live data")
+
+    monkeypatch.setattr(socket, "socket", fail_network)
+    monkeypatch.setattr(urllib.request, "urlopen", fail_network)
+    env = _mcp(home, "report.strategy_health", {"as_of": "2026-01-10T00:00:00Z", "min_sample": 5})
+    assert env.ok, env
+    group = env.data["groups"][0]
+    assert group["key"] == active
+    assert group["sections"]["decisions"]["record_ids"] == ["dh_skip", "dh_watch"]
+    assert group["sections"]["review_due"]["record_ids"] == ["dh_watch"]
+    assert group["sections"]["source_quality_issues"]["record_ids"] == ["th_missing_ref"]
+    assert "low_n_decisions" in group["caveats"]
+    assert "thesis_source_coverage_only_missing_refs" in group["caveats"]
+    tool = default_registry().get("report.strategy_health")
+    _assert_no_advice_profit_ranking_text(env.data, description=tool.description)
 
 
 def test_strategy_health_surfaces_process_signals_and_filters(home):

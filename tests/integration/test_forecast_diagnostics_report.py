@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
+import socket
+import urllib.request
 from pathlib import Path
 
 from tests._mcp_helpers import envelope_default as _envelope
@@ -14,18 +17,31 @@ def _init_home(tmp_path) -> Path:
     return home
 
 
+def _assert_no_fetch_or_advice_text(payload: object, *, description: str = "") -> None:
+    text = (json.dumps(payload, sort_keys=True) + " " + description).lower()
+    forbidden = re.compile(
+        r"\b(buy recommendation|sell recommendation|trade recommendation|recommended trade|"
+        r"best strategy|trade more|profitable|profit ranking|ranked by profit|"
+        r"guaranteed profit|buy now|sell now)\b"
+    )
+    assert forbidden.findall(text) == []
+
+
 def _seed_binary_case(
     home: Path,
     *,
     implied_probability: float | None = 0.55,
     decision_type: str = "skip",
     strategy_id: str | None = None,
+    snapshot_overrides: dict | None = None,
 ) -> dict[str, str]:
     venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
     inst = _envelope(home, "instrument.add", {"venue_id": venue["data"]["id"], "asset_class": "prediction_market", "title": "X"})
     snap_args = {"instrument_id": inst["data"]["id"], "captured_at": "2026-05-18T14:00:00Z", "spread": 0.03, "volume": 100.0}
     if implied_probability is not None:
         snap_args["implied_probability"] = implied_probability
+    if snapshot_overrides:
+        snap_args.update(snapshot_overrides)
     snap = _envelope(home, "snapshot.add", snap_args)
     thesis_args = {"instrument_id": inst["data"]["id"], "side": "yes", "body": "retrospective case"}
     if strategy_id:
@@ -128,12 +144,64 @@ def test_non_binary_excluded_and_missing_reference_low_n_caveats(tmp_path):
     assert ids["snapshot"] in data["groups"][0]["record_ids"]["snapshots"]
 
 
+def test_missing_implied_probability_is_not_inferred_from_price_bid_ask_mid(tmp_path):
+    home = _init_home(tmp_path)
+    _seed_binary_case(
+        home,
+        implied_probability=None,
+        decision_type="watch",
+        snapshot_overrides={"price": 0.42, "bid": 0.40, "ask": 0.44, "mid": 0.42, "spread": 0.04},
+    )
+
+    data = _envelope(home, "report.forecast_diagnostics", {"min_sample": 1})["data"]
+    market = data["summary"]["market_reference"]
+
+    assert market["count_with_recorded_implied_probability"] == 0
+    assert market["count_missing_recorded_implied_probability"] == 1
+    assert market["mean_recorded_market_reference_gap"] is None
+    assert market["max_abs_recorded_market_reference_gap"] is None
+    assert "missing_market_reference" in market["caveat_codes"]
+
+
+def test_wide_spread_and_skipped_opportunity_caveats_are_explicit(tmp_path):
+    home = _init_home(tmp_path)
+    ids = _seed_binary_case(
+        home,
+        implied_probability=0.55,
+        decision_type="skip",
+        snapshot_overrides={"spread": 0.25, "volume": None, "open_interest": None},
+    )
+
+    data = _envelope(home, "report.forecast_diagnostics", {})["data"]
+    market = data["summary"]["market_reference"]
+
+    assert data["summary"]["sample_size"] == 1
+    assert data["summary"]["sample_warning"] is not None
+    assert "low_n" in data["summary"]["caveat_codes"]
+    assert "wide_spread" in market["caveat_codes"]
+    assert "wide_spread" in data["summary"]["caveat_codes"]
+    assert market["wide_spread_threshold"] == 0.10
+    assert data["summary"]["decision_coverage"]["by_decision_type"]["skip"]["decision_ids"] == [ids["decision"]]
+
+
 def test_output_avoids_forbidden_advice_fetch_profit_ranking_phrases(tmp_path):
     home = _init_home(tmp_path)
     _seed_binary_case(home, implied_probability=0.55)
     registry = default_registry()
     desc = registry.get("report.forecast_diagnostics").description
-    payload = json.dumps(_envelope(home, "report.forecast_diagnostics", {})["data"]).lower() + " " + desc.lower()
-    forbidden = ["buy ", "sell ", "best strategy", "alpha", "edge proof", "trade more", "fetch live", "profit ranking"]
-    assert not any(term in payload for term in forbidden)
-    assert "no external fetching" in payload
+    data = _envelope(home, "report.forecast_diagnostics", {})["data"]
+    _assert_no_fetch_or_advice_text(data, description=desc)
+    assert "no external fetching" in (json.dumps(data).lower() + " " + desc.lower())
+
+
+def test_forecast_diagnostics_does_not_open_network_paths(tmp_path, monkeypatch):
+    home = _init_home(tmp_path)
+    _seed_binary_case(home, implied_probability=0.55)
+
+    def fail_network(*args, **kwargs):  # pragma: no cover - assertion helper
+        raise AssertionError("forecast diagnostics must not fetch live data")
+
+    monkeypatch.setattr(socket, "socket", fail_network)
+    monkeypatch.setattr(urllib.request, "urlopen", fail_network)
+    env = _envelope(home, "report.forecast_diagnostics", {"min_sample": 1})
+    assert env["ok"] is True
