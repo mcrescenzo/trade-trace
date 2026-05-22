@@ -52,7 +52,7 @@ Representative case shape:
 
 ```json
 {
-  "case_id": "derived:lifecycle:decision:dec_123",
+  "case_id": "derived:decision:dec_123:lifecycle",
   "state": "reflection_due",
   "status": "reflection_due",
   "reason_codes": ["resolved_evidence_missing_reflection"],

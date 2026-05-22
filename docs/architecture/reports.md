@@ -460,12 +460,12 @@ Case snippet:
 
 ```json
 {
-  "case_id": "derived:lifecycle:forecast:fc_123",
+  "case_id": "derived:forecast:fc_123:lifecycle",
   "state": "pending_review",
   "source_refs": [{"kind": "forecast", "id": "fc_123"}, {"kind": "instrument", "id": "ins_456"}],
   "due_at": "2026-05-21T00:00:00Z",
-  "reason_codes": ["forecast_resolution_due"],
-  "caveat_codes": ["requires_caller_supplied_outcome"]
+  "reason_codes": ["forecast_scoring_state:pending", "resolution_at_due_without_score"],
+  "caveat_codes": ["missing_source_ref"]
 }
 ```
 
