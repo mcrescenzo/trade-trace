@@ -207,6 +207,11 @@ def _resolve_binary_probability(conn: sqlite3.Connection, forecast_id: str, yes_
     rows = conn.execute("SELECT outcome_label, probability FROM forecast_outcomes WHERE forecast_id = ?", (forecast_id,)).fetchall()
     if len(rows) != 2:
         return None, None
+    # NULL outcome_label is a schema invariant violation (forecast_outcomes
+    # declares the column NOT NULL); guard so corrupt rows surface as an
+    # excludable forecast instead of crashing the report (trade-trace-rpb8).
+    if any(r[0] is None for r in rows):
+        return None, None
     labels = {r[0].strip().lower(): float(r[1]) for r in rows}
     yes_norm = yes_label.strip().lower() if yes_label else ("yes" if "yes" in labels else "true" if "true" in labels else None)
     return (labels.get(yes_norm), None) if yes_norm else (None, None)

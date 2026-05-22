@@ -206,7 +206,7 @@ def _materialize_scored_row(
     outcome_id: str,
     metadata_json: str | None,
     yes_label: str | None,
-    outcome_label: str,
+    outcome_label: str | None,
 ) -> _ScoredRow | None:
     """Shared post-fetch reconstruction (trade-trace-qnxt). Returns None
     when the p_yes/y pair can't be resolved (the original loaders both
@@ -280,17 +280,25 @@ def _resolve_p_yes_and_y(
     *,
     forecast_id: str,
     yes_label: str | None,
-    outcome_label: str,
+    outcome_label: str | None,
 ) -> tuple[float | None, int | None]:
     """Return `(p_yes, y)` for a scored binary forecast. Identifies the YES
     label via the same heuristic as the auto-scorer (scoring.md §3.2)."""
 
+    # `outcomes.outcome_label` and `forecast_outcomes.outcome_label` are
+    # declared NOT NULL, but historical / migration-drift data can carry
+    # NULLs. Exclude the row instead of crashing the report
+    # (trade-trace-rpb8).
+    if outcome_label is None:
+        return None, None
     cur = conn.execute(
         "SELECT outcome_label, probability FROM forecast_outcomes WHERE forecast_id = ?",
         (forecast_id,),
     )
     rows = cur.fetchall()
     if len(rows) != 2:
+        return None, None
+    if any(r[0] is None for r in rows):
         return None, None
     labels = {r[0].strip().lower(): r[1] for r in rows}
     resolved_norm = outcome_label.strip().lower()
