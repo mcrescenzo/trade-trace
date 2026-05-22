@@ -15,10 +15,6 @@ def _conn(home):
 def test_memory_usefulness_negative_controls_are_caveated_and_read_only(home):
     with _conn(home) as conn:
         _seed(conn)
-        conn.execute(
-            "INSERT INTO edges VALUES (?,?,?,?,?,?,?,?,?,?)",
-            ("e-violate", "review", "rev", "memory_node", "mem-used", "violates", None, "{}", "2026-01-01T00:07:00Z", "actor"),
-        )
         before = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         report = report_memory_usefulness(conn, recall_id="recall-1", as_of="2026-01-02T00:00:00Z")
         after = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -37,21 +33,28 @@ def test_memory_usefulness_negative_controls_are_caveated_and_read_only(home):
         "missing_expected_memory",
         "overfit_harmful",
     }
-    assert controls["recalled_unused"]["node_ids"] == ["mem-ignored", "mem-stale"]
+    assert controls["recalled_unused"]["node_ids"] == ["mem-contradicted", "mem-ignored", "mem-stale"]
     assert controls["stale_retrieved"]["node_ids"] == ["mem-stale"]
-    assert controls["overfit_harmful"]["node_ids"] == ["mem-used"]
-    assert controls["high_confidence_bad_outcome"]["node_ids"] == ["mem-stale", "mem-used"]
+    assert controls["used_contradicted"]["node_ids"] == []
+    assert controls["overfit_harmful"]["node_ids"] == ["mem-harmful"]
+    assert controls["high_confidence_bad_outcome"]["node_ids"] == ["mem-contradicted", "mem-harmful"]
     assert controls["missing_expected_memory"]["measurability"] == "not_measurable"
     assert controls["missing_expected_memory"]["sample_warning"] == "insufficient_evidence"
     diagnostics = {item["node_id"]: item for item in report["memory_diagnostics"]}
-    assert diagnostics["mem-used"]["strategy_id"] == "strat"
-    assert diagnostics["mem-used"]["agent_id"] == "agent"
-    assert diagnostics["mem-used"]["model_id"] == "model"
-    assert diagnostics["mem-used"]["run_id"] == "run"
-    assert diagnostics["mem-used"]["memory_kind"] == "observation"
-    assert diagnostics["mem-used"]["confidence_base"] == 1.0
-    assert diagnostics["mem-used"]["age_days_at_recall"] == 0.002083
-    assert diagnostics["mem-used"]["outcome_impact"] == "not_measurable_from_current_receipt_evidence"
+    assert diagnostics["mem-helpful"]["strategy_id"] == "strat"
+    assert diagnostics["mem-helpful"]["agent_id"] == "agent"
+    assert diagnostics["mem-helpful"]["model_id"] == "model"
+    assert diagnostics["mem-helpful"]["run_id"] == "run"
+    assert diagnostics["mem-helpful"]["memory_kind"] == "observation"
+    assert diagnostics["mem-helpful"]["confidence_base"] == 1.0
+    assert diagnostics["mem-helpful"]["age_days_at_recall"] == 0.002083
+    assert diagnostics["mem-helpful"]["outcome_impact"] == "not_measurable_from_current_receipt_evidence"
+    assert diagnostics["mem-ignored"]["used"] is False
+    assert diagnostics["mem-ignored"]["edge_evidence"] == []
+    assert diagnostics["mem-stale"]["stale"] is True
+    assert "STALE_OR_INVALIDATED_MEMORY" in diagnostics["mem-stale"]["caveat_codes"]
+    assert diagnostics["mem-contradicted"]["contradicted"] is True
+    assert diagnostics["mem-harmful"]["harmful_edge_based"] is True
     group_keys = {group["key"] for group in report["groups"]}
     assert "strategy:strat" in group_keys
     assert "retrieval_strategy:bm25" in group_keys
@@ -74,6 +77,25 @@ def test_memory_usefulness_tool_filters_memory_kind_and_context(home):
     dumped = result.model_dump(mode="json", exclude_none=True)
     assert dumped["ok"] is True, dumped
     data = dumped["data"]
-    assert data["summary"]["metrics"]["retrieved_item_count"] == 3
-    assert data["summary"]["metrics"]["used_count"] == 1
+    assert data["summary"]["metrics"]["retrieved_item_count"] == 5
+    assert data["summary"]["metrics"]["used_count"] == 2
     assert data["negative_controls"][0]["name"] == "recalled_unused"
+
+
+def test_memory_usefulness_does_not_claim_impact_or_use_without_evidence(home):
+    with _conn(home) as conn:
+        _seed(conn)
+        report = report_memory_usefulness(conn, recall_id="recall-1", consumer_kind="decision", consumer_id="dec")
+
+    assert "OUTCOME_IMPACT_NOT_INFERRED" in report["summary"]["caveat_codes"]
+    assert "DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM" in report["summary"]["caveat_codes"]
+    metrics = report["summary"]["metrics"]
+    assert metrics["retrieved_item_count"] == 5
+    assert metrics["used_count"] == 2
+    diagnostics = {item["node_id"]: item for item in report["memory_diagnostics"]}
+    for diagnostic in diagnostics.values():
+        assert diagnostic["outcome_impact"] == "not_measurable_from_current_receipt_evidence"
+    assert diagnostics["mem-ignored"]["used"] is False
+    assert diagnostics["mem-ignored"]["edge_evidence"] == []
+    assert diagnostics["mem-stale"]["used"] is False
+    assert diagnostics["mem-stale"]["stale"] is True
