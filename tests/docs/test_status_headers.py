@@ -29,6 +29,11 @@ STATUS_LINE_RE = re.compile(
     r"|design — not implemented"
     r"|partial — .+"
     r"|decision document for trade-trace-[a-z0-9]+"
+    # `contract precursor` and `contract draft` cover docs that define
+    # the durable contract a future surface must implement, before any
+    # corresponding tool/table/CLI ships. Tracked in docs-taxonomy.md.
+    r"|contract precursor"
+    r"|contract draft"
     r")\*\*",
 )
 

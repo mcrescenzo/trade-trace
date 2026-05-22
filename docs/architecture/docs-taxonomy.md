@@ -60,6 +60,14 @@ Three categories, each with a top-of-file header line:
   workstreams already fit this pattern — they get a status header
   that names the bead and links to the follow-up implementation
   bead if any.
+- `> Status: **contract precursor** for <epic/scope>` or
+  `> Status: **contract draft** for <epic/scope>` for docs that
+  define the durable contract a future tool/report/table must
+  implement, before that surface ships. Examples already in use:
+  the bootstrap packet contract for Epic B, the policy promotion
+  evidence bundle contract for Epic G. These are stricter than
+  decision docs — they pin contract shape — but lighter than
+  shipped capability docs.
 
 The header is a markdown blockquote so it renders inline on GitHub
 and PyPI without any extra theme.
