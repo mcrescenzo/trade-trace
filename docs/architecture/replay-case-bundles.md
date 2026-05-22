@@ -312,6 +312,160 @@ Accepted candidate outputs are machine-readable and task-specific: forecast prob
 
 Any violation should fail bundle generation or mark the case `eligibility_status="quarantined"` with a blocker caveat. Evaluators should treat candidate outputs that cite excluded labels, later rule text, current strategy state, or unstored facts as leakage failures before scoring process quality.
 
+## Fixture cookbook / safe workflow
+
+Use replay fixtures as deterministic process-regression evidence for prompt,
+model, exporter, and playbook changes. A fixture captures the local recorded
+context available to a candidate at one explicit point in time; the candidate is
+run outside Trade Trace; `replay.evaluate_output` then checks the caller-supplied
+candidate output against the bundle contract and rubric. The workflow is for
+process diagnostics only, not for showing realized profitability or ranking
+market choices.
+
+### Safe use
+
+A safe replay fixture workflow has these properties:
+
+1. Select local rows intentionally. Use explicit `case_selection.case_ids`,
+   `source_refs`, and supported filters instead of broad current-state queries.
+   Keep the selected `case_id` values and source refs with the fixture so later
+   audits can explain exactly which local artifacts were used.
+2. Pin a fixed UTC `as_of` with an explicit `Z` or offset. Do not let fixture
+   selection depend on wall-clock time, current due/stale status, or mutable
+   current policy state unless that state is reconstructed and caveated as of
+   the boundary.
+3. Export a deterministic `replay.case_bundle` from local recorded data only.
+   Budget and redaction options should be fixed with the fixture. Do not fetch
+   URLs, files, market data, outcomes, or external memories while exporting.
+4. Save the JSON bundle intentionally when a regression fixture is needed.
+   Treat it as a test artifact containing candidate prompt material; apply the
+   same redaction/sensitivity review used for other repo-public fixtures.
+5. Run the candidate prompt/model/playbook process separately, using only
+   `cases[].point_in_time_context`, `candidate_task`, allowed source refs, and
+   other non-label bundle metadata needed to format the task.
+6. Submit the externally produced `candidate_output` together with the bundle to
+   `replay.evaluate_output`. The evaluator should receive the candidate output
+   as data; Trade Trace must not host or invoke the model as part of replay.
+7. Inspect `criteria_results` and retain machine-readable PASS/FAIL/AMBIGUOUS
+   evidence for bundle validity, metadata coverage, case coverage, citations,
+   caveats, forbidden boundary language, leakage checks, and any
+   later-scoring-applicable process criteria.
+
+Abstract request shapes, using the documented tool names without implying a
+specific CLI subcommand:
+
+```jsonc
+{
+  "kind": "replay.case_bundle",
+  "contract_version": "replay.case_bundle.v0",
+  "as_of": "2026-05-22T00:00:00Z",
+  "case_selection": {
+    "case_ids": ["derived:decision:dec_123:replay:v0"],
+    "source_refs": [{"kind": "decision", "id": "dec_123"}],
+    "filter": {
+      "time_window": {"created_at_lt": "2026-05-22T00:00:00Z"},
+      "actors": {"environment": ["paper"]}
+    },
+    "max_cases": 1
+  },
+  "task": {
+    "mode": "blind_decision",
+    "candidate_output_contract_version": "replay.candidate_output.v0",
+    "rubric_version": "replay.rubric.v0",
+    "include_evaluation_labels": false
+  },
+  "budgets": {
+    "include_source_bodies": false,
+    "include_memory_bodies": false,
+    "redaction_policy": "metadata_and_snippets_only"
+  }
+}
+```
+
+```jsonc
+{
+  "kind": "replay.evaluate_output",
+  "contract_version": "replay.evaluate_output.v0",
+  "case_bundle": {
+    "kind": "replay.case_bundle",
+    "contract_version": "replay.case_bundle.v0",
+    "bundle_id": "sha256:...",
+    "as_of_boundary": {"as_of": "2026-05-22T00:00:00Z"},
+    "case_index": [{"case_id": "derived:decision:dec_123:replay:v0"}],
+    "cases": [
+      {
+        "case_id": "derived:decision:dec_123:replay:v0",
+        "point_in_time_context": {
+          "sources": [{"source_id": "src_123"}],
+          "forecasts": [{"forecast_id": "fc_123"}]
+        },
+        "source_refs": [{"kind": "source", "id": "src_123"}],
+        "caveat_codes": ["insufficient_context_where_applicable"]
+      }
+    ],
+    "candidate_task": {
+      "mode": "blind_decision",
+      "candidate_metadata_required": ["agent_id", "model_id", "prompt_id_or_hash", "environment", "candidate_run_id", "tool_policy_id", "recall_policy_id", "playbook_version_id"]
+    },
+    "evaluation_labels": {"status": "withheld"}
+  },
+  "candidate_output": {
+    "contract_version": "replay.candidate_output.v0",
+    "metadata": {
+      "agent_id": "external-agent",
+      "model_id": "model-or-local-run-id",
+      "prompt_id_or_hash": "sha256:...",
+      "environment": "local-fixture",
+      "candidate_run_id": "run_001",
+      "tool_policy_id": "tools-disabled-or-pinned",
+      "recall_policy_id": "recall-policy-v1",
+      "playbook_version_id": "playbook-v1"
+    },
+    "case_id": "derived:decision:dec_123:replay:v0",
+    "decision": {"decision_type": "watch"},
+    "forecast": {"forecast_id": "fc_123"},
+    "citations": [{"kind": "source", "id": "src_123"}],
+    "caveats": ["insufficient_context_where_applicable"]
+  }
+}
+```
+
+### Unsupported use and leakage caveats
+
+Do not use replay fixtures as a model runner, agent host, scheduler, backtest,
+market simulation, price-path reconstruction, fill/execution simulator, profit
+proof, advice system, ranking system, or live-fetch surface. Candidate outputs
+must not contain orders, fill assumptions, realized-profit claims, or assertions
+that an alternative process was executable in the market.
+
+Keep evaluator-only material out of candidate prompts:
+
+- `evaluation_labels` are for evaluator/internal use only. Never feed them to a
+  candidate process, even if a local fixture includes them for a separate
+  evaluator test.
+- Future outcome IDs, score IDs, later review/reflection IDs, and post-`as_of`
+  source/playbook/strategy IDs must not appear in candidate context or candidate
+  prompts.
+- `excluded_artifacts` is an audit trail explaining what was withheld. It is not
+  candidate prompt material and must not be used as a hint about hidden labels.
+- Recall, memory, strategy, and playbook state is only as reliable as the local
+  as-of reconstruction. Preserve `caveat_codes` such as mutable strategy or
+  scoring-state reconstruction caveats, and require candidates to acknowledge
+  material uncertainty when the bundle marks it.
+
+### Updating prompt/model/playbook regressions
+
+When changing a prompt, model, exporter, recall policy, or playbook, compare the
+candidate process outputs and evaluator criteria, not realized profits. Useful
+regression evidence includes stable `bundle_id` values, selected `case_id`
+values, source refs, candidate metadata, prompt hashes, and
+`criteria_results` statuses. If a new run reveals leakage, missing source refs,
+unsafe boundary wording, current-policy exposure, or other contract drift, add or
+update tests that fail on that boundary before accepting the new fixture. Preserve
+old and new bundle/evaluation identifiers when possible so reviewers can audit
+whether a changed result came from fixture selection, exporter behavior,
+candidate behavior, or evaluator criteria.
+
 ## Current v0 implementation notes
 
 The shipped v0 exporter supports decision and forecast cases from existing local
