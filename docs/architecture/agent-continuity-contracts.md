@@ -63,6 +63,14 @@ Nullable provenance fields are explicit: missing means the caller did not provid
 | `PlaybookAdherence` | `decision_playbook_rules` / adherence write surface | Append-only evidence row linking decision to rule/version | `followed`, `violated`, `not_applicable`, `unknown` as implemented by adherence contract | `actor_id`; decision/rule/version rows carry their own run metadata | `decision.record_adherence` uses idempotency | Direct record of a decision-rule relationship; aggregate reports are derived | Playbook adherence reports, strategy diagnostics, bootstrap caveats |
 | `ReplayCase` | Future local replay-case artifact/table; not present in Epic A | Append-only case definitions; results append-only | Proposed states: captured, runnable, run_complete, quarantined; exact states deferred to replay epic | Must cite source record IDs, recall receipts, agent/model/run metadata | Must be idempotent by source selection/case ID | Derived from local records and receipts; no market fetch/backtest engine | Regression evaluation, bootstrap packet validation, reflection quarantine |
 
+Current shipped continuity projections for the work-queue precursor are
+`report.lifecycle`, `report.work_queue`, and `agent.next_actions`. They
+are derived/read-only over local rows and cite `source_refs`,
+`allowed_actions`, `forbidden_actions`, `closure_condition`, and caveats
+where applicable. They do not implement `DerivedWorkItem` persistence,
+claiming, assignment, notification, scheduling, human dashboard workflow,
+fetching, execution, broker/wallet state, or financial advice.
+
 ## Implementation rules for future roadmap work
 
 1. New write paths must accept `agent_id`, `model_id`, `environment`, and `run_id` only when they persist or explicitly reject them. Silent discard is not allowed.

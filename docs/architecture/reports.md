@@ -10,7 +10,8 @@ report.unscored_forecasts, report.decision_velocity,
 report.playbook_adherence, report.coach, report.filter_schema,
 report.compare, report.strategy_performance, report.audit_readiness,
 report.risk, report.opportunity, review.bundle, report.current_exposure,
-report.exposure_anomalies, and report.open_positions. Deferred (P1+):
+report.exposure_anomalies, report.open_positions, report.lifecycle,
+report.work_queue, and agent.next_actions. Deferred (P1+):
 trading-native forecast-vs-market edge reports, calibration-by-liquidity-bucket,
 skipped-positive-edge review, and broader replay/evaluation surfaces.
 
@@ -426,6 +427,104 @@ Current checks:
   segmentation metadata.
 
 Source: bead trade-trace-r566.
+
+### 4.11 `report.lifecycle` (derived decision/non-action lifecycle)
+
+Read-only derived cases over local journal rows. This report cites source
+refs and reason/caveat codes so a stateless agent can inspect unfinished
+local process state before adding another thesis, forecast, decision,
+outcome, reflection, or adherence row. It never persists lifecycle state,
+fetches outcomes, checks broker/exchange truth, schedules follow-up, or
+produces advice.
+
+Inputs:
+
+- `as_of`: UTC read boundary for deterministic due/stale checks.
+- `stale_threshold_days`: non-negative integer; default follows the
+  watchlist stale threshold.
+- `states`: optional list of lifecycle states. CLI uses `--states-json`.
+- `filter`: supported `ReportFilter` fields are applied; unsupported
+  non-empty fields are rejected.
+
+Examples:
+
+```bash
+tt report lifecycle --home <journal-home> --as-of 2026-05-22T00:00:00Z --states-json '["pending_review","stale"]'
+```
+
+```json
+{"tool":"report.lifecycle","args":{"as_of":"2026-05-22T00:00:00Z","states":["pending_review","stale"],"filter":{"instrument":{"instrument_id":["ins_..."]}}}}
+```
+
+Case snippet:
+
+```json
+{
+  "case_id": "derived:lifecycle:forecast:fc_123",
+  "state": "pending_review",
+  "source_refs": [{"kind": "forecast", "id": "fc_123"}, {"kind": "instrument", "id": "ins_456"}],
+  "due_at": "2026-05-21T00:00:00Z",
+  "reason_codes": ["forecast_resolution_due"],
+  "caveat_codes": ["requires_caller_supplied_outcome"]
+}
+```
+
+Forbidden interpretations: not a durable lifecycle table, scheduler,
+daemon, reminder, assignment queue, human dashboard workflow, trading
+signal/ranking/advice, profit claim, broker truth, wallet/execution path,
+or permission to fetch live market/source/outcome data.
+
+### 4.12 `report.work_queue` and `agent.next_actions`
+
+`report.work_queue` projects selected lifecycle states into transient
+process-obligation items. `agent.next_actions` is an agent-facing alias /
+projection over the same local report, with the same read-only semantics.
+Both surfaces are for external agents/orchestrators to inspect and choose
+from; Trade Trace does not claim, assign, schedule, notify, retry, or
+execute the items.
+
+Inputs:
+
+- `as_of`, `stale_threshold_days`, and `filter` as above.
+- `kinds`: optional list of work kinds. CLI uses `--kinds-json`.
+
+Examples:
+
+```bash
+tt report work_queue --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["resolve_due_forecast","record_reflection"]'
+tt agent next_actions --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["review_due_watch","record_playbook_adherence"]'
+```
+
+```json
+{"tool":"report.work_queue","args":{"as_of":"2026-05-22T00:00:00Z","kinds":["resolve_due_forecast"],"filter":{"actors":{"run_id":["run-2026-05-22"]}}}}
+```
+
+```json
+{"tool":"agent.next_actions","args":{"as_of":"2026-05-22T00:00:00Z","kinds":["record_reflection","record_playbook_adherence"]}}
+```
+
+Item snippet:
+
+```json
+{
+  "item_id": "derived:work_queue:record_reflection:decision:dec_123",
+  "kind": "record_reflection",
+  "priority": "due",
+  "source_refs": [{"kind": "decision", "id": "dec_123"}, {"kind": "outcome", "id": "out_456"}],
+  "allowed_actions": ["inspect_outcome_review_and_source_context", "record_reflection_memory_if_caller_accepts_lesson"],
+  "forbidden_actions": ["schedule_job", "assign_owner", "fetch_market_data", "fetch_outcome", "trading_execution"],
+  "closure_condition": "Closes when a reflection memory is linked about decision dec_123 or the source is superseded/closed.",
+  "caveat": ["derived_read_only", "local_rows_only", "no_external_fetch_or_market_lookup", "no_trading_advice_or_signal"]
+}
+```
+
+Allowed actions are local process verbs only: inspect cited rows, record a
+caller-supplied outcome/source/review/reflection/adherence row when the
+caller has evidence, or document that input is missing. Forbidden
+interpretations are the same as lifecycle plus no task-manager semantics:
+no scheduler/daemon/reminder, no assignment/claiming, no notification, no
+dashboard workflow, no advice/signal/ranking/profit language, no broker or
+wallet action, and no source/market/outcome fetching.
 
 ## 5. `review.bundle`
 

@@ -2,7 +2,7 @@
 
 > Status: **partial — public report shipped, internal substrate documented** for `trade-trace-03b6`; `report.lifecycle` is a public read-only report while the derived lifecycle substrate remains an internal implementation note.
 
-`trade_trace.reports.lifecycle.derive_lifecycle_cases(conn, as_of=..., stale_threshold_days=...)` derives lifecycle cases from existing SQLite rows only. It does not create lifecycle tables, durable work items, scheduler state, advice, source fetches, or public report payload shapes.
+`trade_trace.reports.lifecycle.derive_lifecycle_cases(conn, as_of=..., stale_threshold_days=...)` derives lifecycle cases from existing SQLite rows only. The public `report.lifecycle` surface exposes those cases as a read-only report. It does not create lifecycle tables, durable work items, scheduler state, advice, source fetches, or dashboard payloads.
 
 ## Scope
 
@@ -35,3 +35,31 @@ For decision cases the current internal precedence is:
 10. otherwise open.
 
 Forecast cases use supersession/scoring/outcome/due/open precedence. These are derived interpretations, not persisted lifecycle facts.
+
+## Public usage
+
+Agents can inspect lifecycle state before adding new trading records:
+
+```bash
+tt report lifecycle --home <journal-home> --as-of 2026-05-22T00:00:00Z --states-json '["pending_review","stale","reflection_due","adherence_due"]'
+```
+
+```json
+{"tool":"report.lifecycle","args":{"as_of":"2026-05-22T00:00:00Z","states":["pending_review","stale"],"filter":{"strategy":{"strategy_id":"str_..."}}}}
+```
+
+Representative case shape:
+
+```json
+{
+  "case_id": "derived:lifecycle:decision:dec_123",
+  "state": "reflection_due",
+  "status": "reflection_due",
+  "reason_codes": ["resolved_evidence_missing_reflection"],
+  "source_refs": [{"kind": "decision", "id": "dec_123"}, {"kind": "outcome", "id": "out_456"}],
+  "threshold_basis": {"as_of": "2026-05-22T00:00:00Z"},
+  "caveat_codes": ["missing_source_ref"]
+}
+```
+
+`report.work_queue` and `agent.next_actions` are projections over this lifecycle substrate. They may turn `pending_review`, `stale`, `reflection_due`, or `adherence_due` cases into process-obligation items, but they remain derived/read-only and close only when source journal rows change or are superseded. They must not be interpreted as scheduler state, assignments, human dashboard tickets, market signals, advice, broker truth, or permission to fetch outcomes/market data.

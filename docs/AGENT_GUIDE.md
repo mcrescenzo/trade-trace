@@ -8,7 +8,22 @@ Install MCP support locally with `pip install -e .` from the repository, initial
 
 A minimal agent loop is ordered so every later record can point back to the evidence it used. Use `tool.schema` first if you need exact current fields for any call.
 
-If you only have an unstructured market thought, start with `idea.capture` to create a local draft source/observation and promote it later. When a run is partially complete, call `journal.bundle.status` with the known `instrument_id`, `thesis_id`, `forecast_id`, `decision_id`, `source_id`, or `memory_node_id`; it is read-only and returns concrete `next_calls` for missing local journal steps.
+For a fresh/stateless session, inspect the local continuity surfaces before creating a new thesis, forecast, or decision. These are read-only/process-only views over caller-supplied journal rows; they do not fetch market data, verify broker truth, schedule work, assign tasks, or recommend trades.
+
+```bash
+tt tool schema --home <journal-home> --tool agent.next_actions
+tt agent next_actions --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["resolve_due_forecast","record_reflection"]'
+tt report work_queue --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["review_due_watch","review_stale_record"]'
+tt report lifecycle --home <journal-home> --as-of 2026-05-22T00:00:00Z --states-json '["pending_review","stale","reflection_due","adherence_due"]'
+```
+
+```json
+{"tool":"agent.next_actions","args":{"as_of":"2026-05-22T00:00:00Z","filter":{"instrument":{"instrument_id":["ins_..."]}},"kinds":["resolve_due_forecast","record_reflection"]}}
+```
+
+Use returned `source_refs`, `allowed_actions`, `forbidden_actions`, `closure_condition`, and `caveat` fields to decide what local evidence to inspect next. Resolve/review/reflect/adherence/source gaps only when the caller supplies the missing evidence or process judgment. Forbidden interpretations: not a scheduler/daemon/reminder, not a human dashboard queue, not task assignment, not advice/signals/ranking/profit proof, not broker/exchange/wallet state, and not live market/source/outcome fetching.
+
+If you only have an unstructured market thought after checking continuity surfaces, start with `idea.capture` to create a local draft source/observation and promote it later. When a run is partially complete, call `journal.bundle.status` with the known `instrument_id`, `thesis_id`, `forecast_id`, `decision_id`, `source_id`, or `memory_node_id`; it is read-only and returns concrete `next_calls` for missing local journal steps.
 
 1. `venue.add` — create or identify the source venue.
 
