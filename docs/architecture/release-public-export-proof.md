@@ -1,9 +1,9 @@
 # Public Export Proof
 
-> Status: proof for the selected clean public branch/export strategy for
-> `trade-trace-5rrw`. This document records a local-only export candidate;
-> no branch was pushed, no tag was created, no package was published, and no
-> private history was rewritten.
+> Status: **decision document for trade-trace-5rrw** — proof for the
+> selected clean public branch/export strategy. This document records a
+> local-only export candidate; no branch was pushed, no tag was created, no
+> package was published, and no private history was rewritten.
 
 ## Candidate
 

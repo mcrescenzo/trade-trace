@@ -1,9 +1,9 @@
 # Remote Publisher Settings Proof
 
-> Status: remote inspection and approved GitHub environment configuration for
-> `trade-trace-gcpp`. GitHub `pypi` environment protection was changed after
-> owner approval; PyPI trusted-publisher binding still requires owner-side
-> verification.
+> Status: **decision document for trade-trace-gcpp** — remote inspection and
+> approved GitHub environment configuration. GitHub `pypi` environment
+> protection was changed after owner approval; PyPI trusted-publisher binding
+> still requires owner-side verification.
 
 ## GitHub repository
 
