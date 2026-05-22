@@ -11,7 +11,7 @@ report.playbook_adherence, report.coach, report.filter_schema,
 report.compare, report.strategy_performance, report.audit_readiness,
 report.risk, report.opportunity, review.bundle, report.current_exposure,
 report.exposure_anomalies, report.open_positions, report.lifecycle,
-report.recall_receipts, report.work_queue, and agent.next_actions. Deferred (P1+):
+report.recall_receipts, report.memory_usefulness, report.work_queue, and agent.next_actions. Deferred (P1+):
 trading-native forecast-vs-market edge reports, calibration-by-liquidity-bucket,
 skipped-positive-edge review, and broader replay/evaluation surfaces.
 
