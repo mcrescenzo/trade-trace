@@ -363,7 +363,16 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
     "strategy.create": {
         "minimal": {
             "name": "earnings-momentum",
+            "slug": "earnings-momentum",
+            "idempotency_key": _IDEM,
+        },
+        "rich": {
+            "name": "earnings-momentum",
+            "slug": "earnings-momentum",
             "description": "Buy ahead of earnings beats >= 2σ.",
+            "hypothesis": "Post-earnings drift compresses faster on consensus beats.",
+            "status": "active",
+            "meta_json": {"sizing": "fixed"},
             "idempotency_key": _IDEM,
         },
     },

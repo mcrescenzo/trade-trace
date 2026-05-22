@@ -624,6 +624,8 @@ def register_strategy_tools(registry: ToolRegistry) -> None:
     registry.register(
         "strategy.list",
         _strategy_list,
+        example_minimal={"status": "active", "limit": 100},
+        optional_keys=("status", "limit"),
         description=(
             "List strategies. Default returns active rows. Pass "
             "status='archived', 'both', or 'all' to broaden. limit defaults to 100."

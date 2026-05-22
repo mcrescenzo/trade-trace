@@ -170,6 +170,87 @@ def test_snapshot_add_schema_advertises_optional_market_state_fields():
         assert key not in required
 
 
+# trade-trace-l6ot: new-surface schema-runtime parity blocks. The
+# handlers for strategy/report tools have runtime defaults and required
+# inputs; the advertised JSON schemas must match so schema-validating
+# clients can call the tools without surprises.
+
+
+def test_strategy_create_schema_requires_name_and_slug_only():
+    schema = _schema_for("strategy.create")
+    required = schema.get("required", [])
+
+    # Runtime mandates: name, slug, idempotency_key. Drift would silently
+    # break schema-validating MCP clients.
+    for runtime_required in ("name", "slug", "idempotency_key"):
+        assert runtime_required in required, (
+            f"runtime requires {runtime_required!r} for strategy.create; "
+            "schema must list it (check tools/_examples.py minimal payload)."
+        )
+
+
+def test_strategy_show_schema_does_not_falsely_require_either_identifier():
+    schema = _schema_for("strategy.show")
+    required = schema.get("required", [])
+
+    # strategy.show accepts either strategy_id OR slug; neither must be
+    # advertised as schema-level required, otherwise schema-validating
+    # clients are blocked from calling with just the alternative.
+    for ident in ("strategy_id", "slug"):
+        assert ident not in required, (
+            f"{ident!r} must not be marked required on strategy.show; the "
+            "handler accepts the alternative identifier."
+        )
+
+
+def test_strategy_update_schema_keeps_name_and_slug_off_the_write_surface():
+    schema = _schema_for("strategy.update")
+    required = schema.get("required", [])
+    properties = schema.get("properties", {})
+
+    # name and slug are immutable post-create; they must not be writable
+    # via strategy.update.
+    for immutable in ("name", "slug"):
+        assert immutable not in properties, (
+            f"{immutable!r} is immutable on strategy.update; remove it from "
+            "example_minimal so the derived schema stops advertising it."
+        )
+    for runtime_required in ("strategy_id", "idempotency_key"):
+        assert runtime_required in required, (
+            f"runtime requires {runtime_required!r} for strategy.update"
+        )
+
+
+def test_report_bootstrap_schema_keeps_filter_optional():
+    """report.bootstrap accepts an empty {} payload; no runtime arg is
+    required. Schema must not regress to requiring filter or as_of."""
+    schema = _schema_for("report.bootstrap")
+    required = schema.get("required", [])
+    for defaulted in ("filter", "budgets", "as_of"):
+        assert defaulted not in required, (
+            f"{defaulted!r} has a runtime default in report.bootstrap; "
+            "schema must not mark it required."
+        )
+
+
+def test_report_forecast_diagnostics_schema_keeps_filter_optional():
+    schema = _schema_for("report.forecast_diagnostics")
+    required = schema.get("required", [])
+    for defaulted in ("filter", "min_sample"):
+        assert defaulted not in required, (
+            f"{defaulted!r} has a runtime default in report.forecast_diagnostics"
+        )
+
+
+def test_report_strategy_health_schema_keeps_status_and_min_sample_optional():
+    schema = _schema_for("report.strategy_health")
+    required = schema.get("required", [])
+    for defaulted in ("filter", "status", "as_of", "min_sample"):
+        assert defaulted not in required, (
+            f"{defaulted!r} has a runtime default in report.strategy_health"
+        )
+
+
 def test_snapshot_add_cli_help_lists_optional_market_state_flags():
     proc = subprocess.run(
         [sys.executable, "-m", "trade_trace.cli", "snapshot", "add", "--help"],

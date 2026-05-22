@@ -138,3 +138,105 @@ def test_parity_invariant_violation_binary_forecast(home):
     # Exit code 3 for INVARIANT_VIOLATION per trade-trace-5tf CLI mapping.
     assert rc == 3
     assert mcp["error"]["code"] == cli["error"]["code"] == "INVARIANT_VIOLATION"
+
+
+# trade-trace-l6ot: parity coverage for the new strategy/report surfaces.
+# The parity helpers above normalize generated IDs, request_id, and
+# transport hints so the only thing being asserted is contract surface.
+
+
+def test_parity_strategy_create(home):
+    mcp = _mcp(home, "strategy.create", {
+        "name": "Parity Strategy",
+        "slug": "parity-strategy",
+        "idempotency_key": "00000000-0000-4000-8000-strat-par-mcp1",
+    })
+    rc, cli = _cli(home, [
+        "strategy", "create",
+        "--name", "Parity Strategy CLI",
+        "--slug", "parity-strategy-cli",
+        "--idempotency-key", "00000000-0000-4000-8000-strat-par-cli1",
+    ])
+    assert rc == 0
+    assert mcp["meta"]["tool"] == cli["meta"]["tool"] == "strategy.create"
+    # Different slugs because strategy.create is uniqueness-constrained, but the
+    # envelope shape must match: same data keys and meta tool.
+    assert set(mcp["data"]) == set(cli["data"])
+
+
+def test_parity_strategy_list_empty(home):
+    mcp = _mcp(home, "strategy.list", {})
+    rc, cli = _cli(home, ["strategy", "list"])
+    assert rc == 0
+    assert mcp["data"]["items"] == cli["data"]["items"]
+    assert mcp["meta"]["tool"] == cli["meta"]["tool"] == "strategy.list"
+
+
+def test_parity_strategy_show_not_found(home):
+    mcp = _mcp(home, "strategy.show", {"strategy_id": "strat-missing"})
+    rc, cli = _cli(home, [
+        "strategy", "show",
+        "--strategy-id", "strat-missing",
+    ])
+    # NOT_FOUND falls through the CLI exit-code mapping to the generic
+    # non-zero fallback (1); the contract carries the typed code in the
+    # envelope.
+    assert rc == 1
+    assert mcp["error"]["code"] == cli["error"]["code"] == "NOT_FOUND"
+
+
+def test_parity_strategy_list_invalid_status(home):
+    mcp = _mcp(home, "strategy.list", {"status": "banana"})
+    rc, cli = _cli(home, ["strategy", "list", "--status", "banana"])
+    assert rc == 2
+    assert mcp["error"]["code"] == cli["error"]["code"] == "VALIDATION_ERROR"
+    assert mcp["error"]["details"]["field"] == cli["error"]["details"]["field"] == "status"
+
+
+def test_parity_report_forecast_diagnostics_empty_db(home):
+    mcp = _mcp(home, "report.forecast_diagnostics", {})
+    rc, cli = _cli(home, ["report", "forecast_diagnostics"])
+    assert rc == 0
+    assert mcp["data"]["summary"]["sample_size"] == cli["data"]["summary"]["sample_size"] == 0
+    assert mcp["meta"]["tool"] == cli["meta"]["tool"] == "report.forecast_diagnostics"
+
+
+def test_parity_report_strategy_health_empty_db(home):
+    mcp = _mcp(home, "report.strategy_health", {})
+    rc, cli = _cli(home, ["report", "strategy_health"])
+    assert rc == 0
+    assert mcp["data"]["summary"]["sample_size"] == cli["data"]["summary"]["sample_size"] == 0
+
+
+def test_parity_report_strategy_health_invalid_status(home):
+    mcp = _mcp(home, "report.strategy_health", {"status": "banana"})
+    rc, cli = _cli(home, ["report", "strategy_health", "--status", "banana"])
+    assert rc == 2
+    assert mcp["error"]["code"] == cli["error"]["code"] == "VALIDATION_ERROR"
+    assert mcp["error"]["details"]["field"] == cli["error"]["details"]["field"] == "status"
+
+
+def test_parity_report_bootstrap_empty_db(home):
+    mcp = _mcp(home, "report.bootstrap", {"as_of": "2026-01-20T00:00:00Z"})
+    rc, cli = _cli(home, [
+        "report", "bootstrap",
+        "--as-of", "2026-01-20T00:00:00Z",
+    ])
+    assert rc == 0, cli
+    assert mcp["data"]["kind"] == cli["data"]["kind"] == "agent.bootstrap"
+    assert mcp["meta"]["tool"] == cli["meta"]["tool"] == "report.bootstrap"
+
+
+def test_parity_report_bootstrap_unsupported_filter_validation(home):
+    bad = {
+        "as_of": "2026-01-20T00:00:00Z",
+        "filter": {"symbols": ["ABC"]},
+    }
+    mcp = _mcp(home, "report.bootstrap", bad)
+    rc, cli = _cli(home, [
+        "report", "bootstrap",
+        "--as-of", bad["as_of"],
+        "--filter-json", json.dumps(bad["filter"]),
+    ])
+    assert rc == 2
+    assert mcp["error"]["code"] == cli["error"]["code"] == "VALIDATION_ERROR"
