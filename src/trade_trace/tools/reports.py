@@ -34,6 +34,7 @@ from trade_trace.reports import (
     report_compare,
     report_decision_velocity,
     report_lifecycle,
+    report_memory_usefulness,
     report_mistakes,
     report_opportunity,
     report_playbook_adherence,
@@ -218,6 +219,24 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "limit": {"type": "integer", "minimum": 1},
         },
         description="Read-only computed recall receipts over memory_recall_events, memory_nodes, and typed edge evidence.",
+    ),
+    "report.memory_usefulness": _schema(
+        {
+            "recall_id": {"type": "string"},
+            "node_id": {"type": "string"},
+            "consumer_kind": {"type": "string", "enum": ["decision", "thesis", "forecast", "outcome", "review", "playbook_version"]},
+            "consumer_id": {"type": "string"},
+            "run_id": {"type": "string"},
+            "agent_id": {"type": "string"},
+            "model_id": {"type": "string"},
+            "environment": {"type": "string"},
+            "instrument_id": {"type": "string"},
+            "strategy_id": {"type": "string"},
+            "memory_kind": {"type": "string", "enum": ["observation", "reflection", "playbook_rule"]},
+            "as_of": {"type": "string", "format": "date-time"},
+            "limit": {"type": "integer", "minimum": 1},
+        },
+        description="Read-only diagnostic memory usefulness projection with explicit negative controls and no causal/profit/advice claims.",
     ),
     "report.work_queue": _schema(
         {
@@ -950,6 +969,46 @@ def _report_recall_receipts(args: dict[str, Any], ctx: ToolContext) -> dict[str,
                 environment=args.get("environment"),
                 instrument_id=args.get("instrument_id"),
                 strategy_id=args.get("strategy_id"),
+                as_of=args.get("as_of"),
+                limit=limit,
+            )
+        finally:
+            connection.close()
+        _propagate_report_meta(ctx, data)
+        return data
+    except ValueError as exc:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
+
+
+def _report_memory_usefulness(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.memory_usefulness` — diagnostic memory usefulness with controls."""
+
+    limit = args.get("limit", 100)
+    if not isinstance(limit, int) or limit < 1:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "limit must be a positive integer", details={"field": "limit", "value": limit})
+    for field in ("recall_id", "node_id", "consumer_kind", "consumer_id", "run_id", "agent_id", "model_id", "environment", "instrument_id", "strategy_id", "memory_kind", "as_of"):
+        if args.get(field) is not None and not isinstance(args[field], str):
+            raise ToolError(ErrorCode.VALIDATION_ERROR, f"{field} must be a string", details={"field": field, "value": args[field]})
+    try:
+        home = resolve_home(args.get("home"))
+        path = db_path(home)
+        if not path.exists():
+            raise ToolError(ErrorCode.STORAGE_ERROR, "journal not initialized; run `tt journal init` first", details={"home": str(home), "db_path": str(path)})
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            data = report_memory_usefulness(
+                connection,
+                recall_id=args.get("recall_id"),
+                node_id=args.get("node_id"),
+                consumer_kind=args.get("consumer_kind"),
+                consumer_id=args.get("consumer_id"),
+                run_id=args.get("run_id"),
+                agent_id=args.get("agent_id"),
+                model_id=args.get("model_id"),
+                environment=args.get("environment"),
+                instrument_id=args.get("instrument_id"),
+                strategy_id=args.get("strategy_id"),
+                memory_kind=args.get("memory_kind"),
                 as_of=args.get("as_of"),
                 limit=limit,
             )
@@ -1948,6 +2007,19 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"recall_id": "recall_..."},
         optional_keys=("recall_id", "node_id", "consumer_kind", "consumer_id", "run_id", "agent_id", "model_id", "environment", "instrument_id", "strategy_id", "as_of", "limit"),
         json_schema=_REPORT_SCHEMAS["report.recall_receipts"],
+    )
+    registry.register(
+        "report.memory_usefulness",
+        _report_memory_usefulness,
+        description=(
+            "Read-only diagnostic projection over recall receipts and typed edge evidence. "
+            "Includes negative controls: recalled-unused, used-contradicted, stale-retrieved, "
+            "high-confidence bad-outcome (edge-based only), missing-expected-memory (caveated), "
+            "and overfit/harmful (edge-based only). No causal memory value, profit, signal, or advice claims."
+        ),
+        example_minimal={"recall_id": "recall_...", "as_of": "2026-01-20T00:00:00Z"},
+        optional_keys=("recall_id", "node_id", "consumer_kind", "consumer_id", "run_id", "agent_id", "model_id", "environment", "instrument_id", "strategy_id", "memory_kind", "as_of", "limit"),
+        json_schema=_REPORT_SCHEMAS["report.memory_usefulness"],
     )
     registry.register(
         "report.work_queue",

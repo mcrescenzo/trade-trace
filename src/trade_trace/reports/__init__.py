@@ -31,6 +31,7 @@ from trade_trace.reports.integrity import (
     report_calibration_integrity,
 )
 from trade_trace.reports.lifecycle import report_lifecycle
+from trade_trace.reports.memory_usefulness import report_memory_usefulness
 from trade_trace.reports.opportunity import (
     DEFAULT_OPPORTUNITY_MIN_SAMPLE,
     report_opportunity,
@@ -74,6 +75,7 @@ __all__ = [
     "report_calibration",
     "report_calibration_integrity",
     "report_lifecycle",
+    "report_memory_usefulness",
     "report_coach",
     "report_compare",
     "report_decision_velocity",

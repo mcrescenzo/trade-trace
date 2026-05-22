@@ -215,8 +215,8 @@ def _receipt_for_event(conn: sqlite3.Connection, event: dict[str, Any], *, node_
 def _memory_item(conn: sqlite3.Connection, node_id: str, *, rank: int, edge_evidence: list[dict[str, Any]], as_of: str | None) -> dict[str, Any]:
     row = conn.execute(
         """
-        SELECT id, node_type, title, importance, valid_from, valid_to,
-               invalidated_at, invalidated_by
+        SELECT id, node_type, title, importance, confidence_base, decay_rate_per_day,
+               valid_from, valid_to, invalidated_at, invalidated_by, created_at
         FROM memory_nodes WHERE id = ?
         """,
         (node_id,),
@@ -224,7 +224,7 @@ def _memory_item(conn: sqlite3.Connection, node_id: str, *, rank: int, edge_evid
     caveats: list[str] = []
     if row is None:
         return {"id": node_id, "rank": rank, "status": "missing_node", "edge_evidence": edge_evidence, "source_refs": [], "caveat_codes": ["RETURNED_NODE_MISSING"]}
-    node = dict(zip(("id", "node_type", "title", "importance", "valid_from", "valid_to", "invalidated_at", "invalidated_by"), row, strict=True))
+    node = dict(zip(("id", "node_type", "title", "importance", "confidence_base", "decay_rate_per_day", "valid_from", "valid_to", "invalidated_at", "invalidated_by", "created_at"), row, strict=True))
     if node["valid_to"] is not None or node["invalidated_at"] is not None:
         caveats.append("STALE_OR_INVALIDATED_MEMORY")
     if as_of is not None and node["valid_to"] is not None and node["valid_to"] <= as_of:

@@ -491,7 +491,26 @@ Item conventions mirror [memory-layer.md §9.1](memory-layer.md#91-downstream-re
 
 Forbidden interpretations: not a generic transcript memory store, durable receipt table, task queue, dashboard workflow, trading signal/ranking/advice, profit claim, broker/execution/wallet path, or permission to fetch live/external data.
 
-### 4.13 `report.work_queue` and `agent.next_actions`
+### 4.13 `report.memory_usefulness`
+
+Read-only diagnostic projection over `report.recall_receipts` plus returned memory-node metadata and downstream typed edge evidence. It is a caveated evidence view only: it does not estimate causal memory value, optimize memory, score agents/models, rank trades, make profit claims, or provide advice.
+
+Inputs mirror `report.recall_receipts` and add `memory_kind` (`observation`, `reflection`, `playbook_rule`) for node-type slicing. Supported slices/groups include strategy and instrument from recall context; agent, model, run, and retrieval strategy from the recall event; memory kind; confidence bucket; age bucket; and citation/use status. Age/decay/confidence fields are emitted when available on `memory_nodes`; outcome impact is reported as not measurable unless explicit local edge evidence supports a narrow caveated control.
+
+The report always includes explicit negative controls:
+
+- `recalled_unused`: returned memories without downstream use/citation edge evidence.
+- `used_contradicted`: used memories that also have downstream contradiction evidence.
+- `stale_retrieved`: invalidated or stale memories returned by recall.
+- `high_confidence_bad_outcome`: edge-based only; flagged from high-confidence memories with explicit contradictory/harmful edge evidence, not from inferred outcomes.
+- `missing_expected_memory`: currently `not_measurable` unless a local expected-memory signal exists; no expectation is invented.
+- `overfit_harmful`: edge-based only from explicit harmful/violation edge evidence.
+
+Outputs include `summary.metrics`, `groups`, `memory_diagnostics`, `negative_controls`, `source_refs`/receipt refs, and `caveat_codes` such as `DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM`, `OUTCOME_IMPACT_NOT_INFERRED`, `NO_EXPECTED_MEMORY_SIGNAL`, and edge-specific caveats.
+
+Forbidden interpretations: not a durable usefulness table, generic memory framework, reward/scoring signal, model optimization target, task queue, dashboard workflow, trading signal/ranking/advice, profit claim, broker/execution/wallet path, or external/live fetch path.
+
+### 4.14 `report.work_queue` and `agent.next_actions`
 
 `report.work_queue` projects selected lifecycle states into transient
 process-obligation items. `agent.next_actions` is an agent-facing alias /
