@@ -19,7 +19,8 @@ skipped-positive-edge review, and broader replay/evaluation surfaces.
 
 Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
-[contracts.md](contracts.md), [memory-layer.md](memory-layer.md).
+[contracts.md](contracts.md), [memory-layer.md](memory-layer.md),
+and [replay-case-bundles.md](replay-case-bundles.md).
 
 ## 1. Purpose
 

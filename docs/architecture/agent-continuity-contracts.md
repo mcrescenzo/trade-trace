@@ -17,6 +17,7 @@ This contract defines the canonical source of truth and invariants for the entit
 - `docs/research/agentic-trade-trace/concepts/decision-non-action-lifecycle.md`
 - `docs/research/agentic-trade-trace/concepts/strategy-state-lifecycle.md`
 - `docs/research/agentic-trade-trace/concepts/replay-regression-evaluation-substrate.md`
+- [`replay-case-bundles.md`](replay-case-bundles.md)
 
 ## Non-negotiable product boundaries
 
