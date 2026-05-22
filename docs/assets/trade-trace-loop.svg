@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Trade Trace agent learning loop</title>
+  <desc id="desc">A local LLM trading agent writes decisions to Trade Trace, which stores an auditable SQLite journal, produces deterministic reports, records reflections and playbook updates, and recalls lessons into the next decision.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="1" stop-color="#10243b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#55d6be"/>
+      <stop offset="1" stop-color="#7aa7ff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#8ed8ff"/>
+    </marker>
+    <style>
+      .label{font:700 24px ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;fill:#f7fbff}
+      .small{font:500 15px ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;fill:#b8c7d9}
+      .tiny{font:600 13px ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;fill:#8fa3ba;letter-spacing:.04em}
+      .card{fill:#132842;stroke:#2b4b6d;stroke-width:1.5;rx:24;filter:url(#shadow)}
+      .pill{fill:#0c1c30;stroke:#2b4b6d;stroke-width:1.2;rx:18}
+      .line{fill:none;stroke:#8ed8ff;stroke-width:3;marker-end:url(#arrow);opacity:.9}
+    </style>
+  </defs>
+  <rect width="1200" height="420" rx="34" fill="url(#bg)"/>
+  <circle cx="110" cy="80" r="120" fill="#55d6be" opacity="0.08"/>
+  <circle cx="1090" cy="350" r="150" fill="#7aa7ff" opacity="0.09"/>
+
+  <text x="60" y="72" class="tiny">LOCAL • OPEN SOURCE • AGENT-NATIVE</text>
+  <text x="60" y="110" class="label" style="font-size:34px">Trade Trace</text>
+  <text x="60" y="140" class="small">Journal, memory, and calibration substrate for LLM trading agents.</text>
+
+  <rect x="60" y="190" width="210" height="112" class="card"/>
+  <text x="86" y="228" class="label">1. Record</text>
+  <text x="86" y="258" class="small">theses, forecasts,</text>
+  <text x="86" y="280" class="small">decisions, sources</text>
+
+  <rect x="350" y="190" width="210" height="112" class="card"/>
+  <text x="376" y="228" class="label">2. Resolve</text>
+  <text x="376" y="258" class="small">outcomes trigger</text>
+  <text x="376" y="280" class="small">Brier scoring</text>
+
+  <rect x="640" y="190" width="210" height="112" class="card"/>
+  <text x="666" y="228" class="label">3. Review</text>
+  <text x="666" y="258" class="small">deterministic reports</text>
+  <text x="666" y="280" class="small">with drill-down IDs</text>
+
+  <rect x="930" y="190" width="210" height="112" class="card"/>
+  <text x="956" y="228" class="label">4. Recall</text>
+  <text x="956" y="258" class="small">reflections + playbooks</text>
+  <text x="956" y="280" class="small">feed next session</text>
+
+  <path d="M275 246 H340" class="line"/>
+  <path d="M565 246 H630" class="line"/>
+  <path d="M855 246 H920" class="line"/>
+  <path d="M1035 306 C1035 380 165 382 165 314" class="line"/>
+
+  <rect x="380" y="342" width="440" height="42" class="pill"/>
+  <text x="421" y="369" class="small">SQLite + JSON contracts + append-only audit log — no execution surface</text>
+
+  <rect x="816" y="58" width="322" height="82" class="pill"/>
+  <text x="842" y="91" class="small">Supported surfaces: MCP stdio, CLI, Python reports</text>
+  <text x="842" y="118" class="small">Not a broker, dashboard, data fetcher, or advisor</text>
+  <rect x="60" y="360" width="165" height="8" rx="4" fill="url(#accent)"/>
+</svg>
