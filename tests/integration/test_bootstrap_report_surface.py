@@ -5,7 +5,8 @@ import subprocess
 import sys
 
 from tests.integration.test_bootstrap_read_model import _counts, _seed_base
-from trade_trace.core import dispatch
+from trade_trace.core import default_registry, dispatch
+from trade_trace.mcp_server import mcp_call, mcp_tool_specs
 from trade_trace.storage.paths import db_path
 
 
@@ -173,6 +174,53 @@ def test_report_bootstrap_cli_list_filter_json_is_validation_envelope_without_tr
     assert body["error"]["code"] == "VALIDATION_ERROR"
     assert "bootstrap filter must be an object" in body["error"]["message"]
     assert "Traceback" not in combined
+
+
+def test_agent_bootstrap_registry_schema_and_mcp_parity(home):
+    import sqlite3
+
+    with sqlite3.connect(db_path(home)) as conn:
+        _seed_base(conn)
+        before = _counts(conn)
+
+    reg = default_registry()
+    agent = reg.get("agent.bootstrap")
+    report = reg.get("report.bootstrap")
+    assert agent.handler is report.handler
+    assert agent.json_schema == report.json_schema
+    assert agent.is_write is False
+    assert report.is_write is False
+
+    specs = {spec["name"]: spec for spec in mcp_tool_specs(reg)}
+    assert specs["agent.bootstrap"]["is_write"] is False
+    assert specs["agent.bootstrap"]["input_schema"] == specs["report.bootstrap"]["input_schema"]
+    assert "bootstrap.v0" in specs["agent.bootstrap"]["description"]
+    assert "transport_hint" not in json.dumps(specs["agent.bootstrap"]).lower()
+
+    schema_env = mcp_call("tool.schema", {"home": str(home), "tool": "agent.bootstrap"})
+    assert schema_env.ok, schema_env
+    schema_body = _dump(schema_env)["data"]
+    assert schema_body["tool"] == "agent.bootstrap"
+    assert schema_body["json_schema"] == report.json_schema
+    assert schema_body["is_write"] is False
+
+    args = {"home": str(home), "as_of": "2026-01-20T00:00:00Z", "filter": {}}
+    agent_env = mcp_call("agent.bootstrap", args, request_id="agent-bootstrap-mcp-request")
+    report_env = mcp_call("report.bootstrap", args, request_id="report-bootstrap-mcp-request")
+    agent_body = _dump(agent_env)
+    report_body = _dump(report_env)
+
+    with sqlite3.connect(db_path(home)) as conn:
+        after = _counts(conn)
+
+    assert after == before
+    assert agent_body["ok"] is True
+    assert report_body["ok"] is True
+    assert agent_body["meta"]["tool"] == "agent.bootstrap"
+    assert report_body["meta"]["tool"] == "report.bootstrap"
+    assert agent_body["data"] == report_body["data"]
+    assert agent_body["data"]["kind"] == "agent.bootstrap"
+    assert agent_body["data"]["metadata"]["side_effects"] == []
 
 
 def test_report_bootstrap_cli_help_and_invocation(home):

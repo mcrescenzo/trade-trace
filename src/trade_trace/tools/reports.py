@@ -1841,7 +1841,7 @@ def _report_coach(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 
 def _report_bootstrap(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    """`report.bootstrap` — JSON-first bootstrap packet surface."""
+    """`report.bootstrap` / `agent.bootstrap` — JSON-first bootstrap packet surface."""
 
     db = open_db_for_args(args)
     try:
@@ -1858,7 +1858,7 @@ def _report_bootstrap(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             raise ToolError(
                 ErrorCode.VALIDATION_ERROR,
                 str(exc),
-                details={"tool": "report.bootstrap", "field": "bootstrap_request"},
+                details={"tool": ctx.tool, "field": "bootstrap_request"},
             ) from exc
     finally:
         db.close()
@@ -1938,6 +1938,39 @@ def register_report_tools(registry: ToolRegistry) -> None:
         examples=(
             "tt report bootstrap --home <journal-home> --as-of 2026-01-20T00:00:00Z --filter-json '{}'",
             "tt report bootstrap --home <journal-home> --filter-json '{\"run_id\":\"run-a\",\"strategy_ids\":[\"strat-a\"]}' --budgets-json '{\"max_chars_total\":24000}'",
+        ),
+        common_failures=(
+            "Non-empty unsupported bootstrap filters are rejected with VALIDATION_ERROR instead of being ignored.",
+            "strategy_ids must contain exactly one strategy id when supplied.",
+            "Too-small max_chars_total returns VALIDATION_ERROR if required metadata cannot fit.",
+        ),
+        next_actions=(
+            "Use source_refs and suggested_process_calls for local drilldowns; callers choose whether to run any follow-up.",
+            "Treat partial/truncated sections as absence-unsafe; check truncation and omitted_counts before relying on missing items.",
+        ),
+    )
+    registry.register(
+        "agent.bootstrap",
+        _report_bootstrap,
+        description=(
+            "Agent-facing MCP/CLI alias for the same read-only bootstrap.v0 contract as report.bootstrap. "
+            "Returns kind='agent.bootstrap' and composes only caller-supplied local journal state and local reports; "
+            "no fetch, no market/source/outcome fetching, no broker/exchange access, no order preparation, no execution, "
+            "no scheduler/daemon/alert creation, and no trading advice or market ranking/return-claim semantics."
+        ),
+        example_minimal={"as_of": "2026-01-20T00:00:00Z", "filter": {}},
+        example_rich={
+            "as_of": "2026-01-20T00:00:00Z",
+            "filter": {"run_id": "run-a", "strategy_ids": ["strat-a"]},
+            "sections": ["current_scope", "obligations", "memory_context", "caveats"],
+            "budgets": {"max_chars_total": 24000, "default_max_items_per_section": 10, "include_memory_body": False},
+        },
+        optional_keys=("as_of", "filter", "sections", "budgets"),
+        json_schema=_REPORT_SCHEMAS["report.bootstrap"],
+        usage_summary="Agent-facing alias that generates the same deterministic JSON bootstrap packet as report.bootstrap; no writes, fetches, execution, scheduling, or advice.",
+        examples=(
+            "tt agent bootstrap --home <journal-home> --as-of 2026-01-20T00:00:00Z --filter-json '{}'",
+            "tt agent bootstrap --home <journal-home> --filter-json '{\"run_id\":\"run-a\",\"strategy_ids\":[\"strat-a\"]}' --budgets-json '{\"max_chars_total\":24000}'",
         ),
         common_failures=(
             "Non-empty unsupported bootstrap filters are rejected with VALIDATION_ERROR instead of being ignored.",
