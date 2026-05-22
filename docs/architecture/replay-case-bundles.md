@@ -1,6 +1,6 @@
 # Replay Case Bundle Contract
 
-> Status: **contract precursor** for future replay/regression work. This document defines the JSON contract and invariants for a future `replay.case_bundle` surface. It does not implement replay, evaluate candidate outputs, run models, fetch data, execute trades, or backtest.
+> Status: **shipped** — v0 local export. `replay.case_bundle` is available as a read-only deterministic MCP/CLI tool surface for decision/forecast case bundles. This document remains the contract for the current v0 exporter and future replay/regression work. It does not implement replay evaluation, run models, fetch data, execute trades, or backtest.
 
 ## Purpose
 
@@ -311,6 +311,29 @@ Accepted candidate outputs are machine-readable and task-specific: forecast prob
 ```
 
 Any violation should fail bundle generation or mark the case `eligibility_status="quarantined"` with a blocker caveat. Evaluators should treat candidate outputs that cite excluded labels, later rule text, current strategy state, or unstored facts as leakage failures before scoring process quality.
+
+## Current v0 implementation notes
+
+The shipped v0 exporter supports decision and forecast cases from existing local
+journal rows via `case_selection.case_ids`, `source_refs`, and a conservative
+subset of safe filters (`time_window`, actors, strategy_id, instrument_id,
+instrument symbol, decision_type, and has_forecast). Deterministic `case_ids`
+round-trip only for IDs produced by this v0 format for the same `as_of` and task
+mode. Forecast selection applies supported time/actor/strategy/instrument filters
+through the linked thesis/instrument rows and requires both forecast and thesis
+validity windows to cover `as_of`. Decision context omits linked theses or
+forecasts whose `valid_from`/`valid_to`/`invalidated_at` windows do not cover
+`as_of`, with explicit excluded-artifact entries. `recall_event` source refs are
+accepted only when the local `memory_recall_events` row exists and was created at
+or before `as_of`; otherwise explicit selection fails validation rather than
+emitting a fake runnable case. Verified recall refs still produce only minimal
+source-ref cases with a caveat until broader recall replay reconstruction lands.
+Unsupported non-empty filters are validation errors rather than silently
+broadened queries. Forecast `scoring_state` is a mutable current field and is not
+exposed as candidate context; v0 emits
+`scoring_state_as_of_caveat="not_reconstructed_v0"` instead.
+Evaluation labels are withheld by default and, when explicitly requested, remain
+structurally separate in top-level `evaluation_labels`.
 
 ## Implementation test plan for future F2/F3/F4 work
 

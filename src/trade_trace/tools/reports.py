@@ -29,6 +29,7 @@ from trade_trace.reports import (
     TradingAdvicePhraseError,
     agent_next_actions,
     compose_bootstrap_packet,
+    export_case_bundle,
     report_audit_readiness,
     report_calibration,
     report_calibration_integrity,
@@ -150,6 +151,22 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "Read-only local bootstrap packet for stateless agent continuity. JSON-first, no fetch, no execution, "
             "no scheduler, no trading advice, and no market ranking or return-claim semantics. Returns kind='agent.bootstrap' "
             "per shared contract alias policy."
+        ),
+    ),
+    "replay.case_bundle": _schema(
+        {
+            "kind": {"type": "string", "const": "replay.case_bundle"},
+            "contract_version": {"type": "string", "const": "replay.case_bundle.v0"},
+            "as_of": {"type": "string", "format": "date-time", "description": "Required point-in-time UTC boundary; response normalizes to Z."},
+            "case_selection": {"type": "object", "description": "Select deterministic v0 case_ids, explicit decision/forecast/recall_event source_refs, or safe filters plus max_cases. Unsupported non-empty filters are rejected."},
+            "task": {"type": "object", "description": "Task mode; defaults blind_decision. include_evaluation_labels defaults false and, when true, labels are top-level only."},
+            "budgets": {"type": "object", "description": "Hard local output/redaction budgets echoed as effective budgets."},
+        },
+        required=["as_of"],
+        description=(
+            "Read-only deterministic local replay case bundle export over caller-supplied journal rows. "
+            "No fetch, no model runner, no market simulator, no backtester, no broker/execution path, "
+            "no profit proof, and no trading advice. Future outcomes/labels are withheld from candidate context."
         ),
     ),
     "report.filter_schema": _schema(
@@ -1875,6 +1892,26 @@ def _report_bootstrap(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     return data
 
 
+def _replay_case_bundle(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`replay.case_bundle` — deterministic point-in-time local case export."""
+    try:
+        home = resolve_home(args.get("home"))
+        path = db_path(home)
+        if not path.exists():
+            raise ToolError(ErrorCode.STORAGE_ERROR, "journal not initialized; run `tt journal init` first", details={"home": str(home), "db_path": str(path)})
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            data = export_case_bundle(connection, args)
+        finally:
+            connection.close()
+    except (ValueError, TimestampValidationError) as exc:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc), details={"tool": ctx.tool, "field": "replay.case_bundle_request"}) from exc
+    ctx.meta_hints["replay_contract_version"] = data.get("contract_version")
+    ctx.meta_hints["bundle_id"] = data.get("bundle_id")
+    ctx.meta_hints["truncated"] = bool(data.get("truncation", {}).get("is_partial"))
+    return data
+
+
 def _report_filter_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """Return the canonical Pydantic-generated JSON Schema for ReportFilter.
 
@@ -1981,6 +2018,20 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "Use source_refs and suggested_process_calls for local drilldowns; callers choose whether to run any follow-up.",
             "Treat partial/truncated sections as absence-unsafe; check truncation and omitted_counts before relying on missing items.",
         ),
+    )
+    registry.register(
+        "replay.case_bundle",
+        _replay_case_bundle,
+        description=(
+            "Read-only deterministic local replay.case_bundle export for process regression. Packages only caller-supplied "
+            "journal rows available at as_of; hides future outcomes/scores/reflections from candidate context unless "
+            "evaluation labels are explicitly requested, and then labels are top-level evaluator-only. No fetch, model runner, "
+            "market simulator, backtester, broker/execution path, profit proof, or trading advice."
+        ),
+        example_minimal={"as_of": "2026-01-20T00:00:00Z", "case_selection": {"max_cases": 10}},
+        optional_keys=("kind", "contract_version", "case_selection", "task", "budgets"),
+        json_schema=_REPORT_SCHEMAS["replay.case_bundle"],
+        usage_summary="Export deterministic local point-in-time replay cases; no writes, fetches, model runs, simulation, or advice.",
     )
     registry.register(
         "report.filter_schema",
