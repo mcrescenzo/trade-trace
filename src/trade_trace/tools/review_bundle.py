@@ -31,6 +31,10 @@ from trade_trace.reports._filter_support import (
     enforce_supported_filter,
 )
 from trade_trace.reports.calibration import report_calibration
+from trade_trace.reports.recall_receipts import (
+    ATTRIBUTION_CONVENTIONS,
+    report_recall_receipts,
+)
 from trade_trace.security.patterns import redact_for_log
 from trade_trace.tools._helpers import open_db_for_args
 from trade_trace.tools._report_filter_errors import (
@@ -41,6 +45,7 @@ from trade_trace.tools.errors import ToolError
 
 REVIEW_BUNDLE_REPORT = "review.bundle"
 CONTRACT_VERSION = "1.0"
+RECALL_RECEIPTS_MAX_BLOCKS = 50
 
 _SOURCE_REDACTED_DROPPED_FIELDS = ("body", "extracted_text", "excerpt",
                                    "summary", "note")
@@ -62,6 +67,7 @@ class ReviewBundleInput(BaseModel):
     include_sources: bool = True
     include_reflections: bool = True
     include_playbook: bool = True
+    include_recall_receipts: bool = True
     max_examples_per_record: int = Field(default=3, ge=0, le=20)
     home: str | None = None  # forwarded to open_db_for_args
 
@@ -77,6 +83,7 @@ class ReviewBundleOutput(BaseModel):
     reflections: list[dict[str, Any]] = Field(default_factory=list)
     playbook_versions: list[dict[str, Any]] = Field(default_factory=list)
     report_summaries: dict[str, Any] = Field(default_factory=dict)
+    recall_receipts: dict[str, Any] = Field(default_factory=dict)
     caveats: list[str] = Field(default_factory=list)
     suggested_prompts: list[str] = Field(default_factory=list)
     bundle_hash: str
@@ -519,6 +526,100 @@ def _report_summaries(
     return report_summaries, calibration_summary
 
 
+def _gather_recall_receipt_blocks(
+    conn: sqlite3.Connection,
+    *,
+    decision_ids: list[str],
+    include_recall_receipts: bool,
+) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "status": "included",
+        "consumer_scope": "selected_decisions",
+        "receipt_refs": [],
+        "blocks": [],
+        "caveat_codes": [],
+        "omissions": [],
+        "truncated": False,
+        "attribution_conventions": ATTRIBUTION_CONVENTIONS,
+    }
+    if not include_recall_receipts:
+        return {**base, "status": "omitted", "omissions": ["omitted_by_input_flag"]}
+    if not decision_ids:
+        return {**base, "status": "omitted", "omissions": ["omitted_no_selected_consumers"]}
+
+    blocks_by_receipt_id: dict[str, dict[str, Any]] = {}
+    caveat_codes: set[str] = set()
+    truncated = False
+    for decision_id in decision_ids:
+        remaining = RECALL_RECEIPTS_MAX_BLOCKS - len(blocks_by_receipt_id)
+        if remaining <= 0:
+            truncated = True
+            break
+        report = report_recall_receipts(
+            conn,
+            consumer_kind="decision",
+            consumer_id=decision_id,
+            limit=remaining + 1,
+        )
+        receipts = report.get("recall_receipts", [])
+        if len(receipts) > remaining:
+            truncated = True
+            receipts = receipts[:remaining]
+        for receipt in receipts:
+            block = _recall_receipt_block(receipt, consumer_id=decision_id)
+            blocks_by_receipt_id.setdefault(block["receipt_id"], block)
+            caveat_codes.update(block["caveat_codes"])
+
+    blocks = [blocks_by_receipt_id[key] for key in sorted(blocks_by_receipt_id)]
+    omissions: list[str] = []
+    if not blocks:
+        omissions.append("no_recall_receipts")
+    if truncated:
+        omissions.append("truncated")
+        caveat_codes.add("RECALL_RECEIPTS_TRUNCATED")
+    return {
+        **base,
+        "status": "included" if blocks else "omitted",
+        "receipt_refs": [
+            {"receipt_id": block["receipt_id"], "recall_id": block["recall_id"]}
+            for block in blocks
+        ],
+        "blocks": blocks,
+        "caveat_codes": sorted(caveat_codes),
+        "omissions": omissions,
+        "truncated": truncated,
+    }
+
+
+def _recall_receipt_block(receipt: dict[str, Any], *, consumer_id: str) -> dict[str, Any]:
+    item_caveats = sorted({
+        code
+        for item in receipt.get("items", [])
+        for code in item.get("caveat_codes", [])
+    })
+    caveats = sorted(set(receipt.get("caveat_codes", [])) | set(item_caveats))
+    return {
+        "receipt_id": receipt["receipt_id"],
+        "recall_id": receipt["recall_id"],
+        "consumer": {"kind": "decision", "id": consumer_id},
+        "node_ids_returned": receipt.get("node_ids_returned", []),
+        "node_ids_used": receipt.get("node_ids_used", []),
+        "node_ids_ignored_or_unattributed": receipt.get("node_ids_ignored_or_unattributed", []),
+        "caveat_codes": caveats,
+        "item_caveats": [
+            {
+                "node_id": item.get("id"),
+                "status": item.get("status"),
+                "attribution_status": item.get("attribution_status"),
+                "caveat_codes": item.get("caveat_codes", []),
+            }
+            for item in receipt.get("items", [])
+            if item.get("caveat_codes")
+        ],
+        "source_refs": receipt.get("source_refs", []),
+    }
+
+
 def _build_caveats(
     *,
     calibration_summary: dict[str, Any],
@@ -547,9 +648,10 @@ def _apply_redaction_sweep(
     sources: list[dict[str, Any]],
     reflections: list[dict[str, Any]],
     playbook_versions: list[dict[str, Any]],
+    recall_receipts: dict[str, Any],
     caveats: list[str],
 ) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]],
-           list[dict[str, Any]], list[dict[str, Any]]]:
+           list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     secret_counter = {"replacements": 0}
     selected = _redact_strings_in_place(selected, counter=secret_counter)
     sources = _redact_strings_in_place(sources, counter=secret_counter)
@@ -557,13 +659,16 @@ def _apply_redaction_sweep(
     playbook_versions = _redact_strings_in_place(
         playbook_versions, counter=secret_counter
     )
+    recall_receipts = _redact_strings_in_place(
+        recall_receipts, counter=secret_counter
+    )
     if secret_counter["replacements"]:
         caveats.append(
             f"{secret_counter['replacements']} secret-shaped value(s) "
             f"replaced with REDACTED-* tokens (security.md §8)"
         )
 
-    return selected, sources, reflections, playbook_versions
+    return selected, sources, reflections, playbook_versions, recall_receipts
 
 
 def _assemble_bundle(
@@ -574,6 +679,7 @@ def _assemble_bundle(
     reflections: list[dict[str, Any]],
     playbook_versions: list[dict[str, Any]],
     report_summaries: dict[str, Any],
+    recall_receipts: dict[str, Any],
     caveats: list[str],
 ) -> dict[str, Any]:
     data: dict[str, Any] = {
@@ -583,6 +689,7 @@ def _assemble_bundle(
         "reflections": reflections,
         "playbook_versions": playbook_versions,
         "report_summaries": report_summaries,
+        "recall_receipts": recall_receipts,
         "caveats": caveats,
         "suggested_prompts": _suggested_prompts(selected),
         "contract_version": CONTRACT_VERSION,
@@ -607,6 +714,11 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
         report_summaries, calibration_summary = _report_summaries(
             conn, filter_view=filter_view,
         )
+        recall_receipts = _gather_recall_receipt_blocks(
+            conn,
+            decision_ids=decision_ids,
+            include_recall_receipts=parsed.include_recall_receipts,
+        )
     finally:
         db.close()
 
@@ -615,11 +727,12 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
         omitted_sensitive=omitted_sensitive,
         redacted_sources=redacted_sources,
     )
-    selected, sources, reflections, playbook_versions = _apply_redaction_sweep(
+    selected, sources, reflections, playbook_versions, recall_receipts = _apply_redaction_sweep(
         selected=selected,
         sources=sources,
         reflections=reflections,
         playbook_versions=playbook_versions,
+        recall_receipts=recall_receipts,
         caveats=caveats,
     )
     data = _assemble_bundle(
@@ -629,6 +742,7 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
         reflections=reflections,
         playbook_versions=playbook_versions,
         report_summaries=report_summaries,
+        recall_receipts=recall_receipts,
         caveats=caveats,
     )
 

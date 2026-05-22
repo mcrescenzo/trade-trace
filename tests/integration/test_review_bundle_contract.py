@@ -26,6 +26,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 from tests._mcp_helpers import mcp_default as _mcp
+from tests.integration.test_recall_receipts import _seed as _seed_recall_receipts
 from trade_trace.cli import main as cli_main
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
@@ -78,6 +79,7 @@ def test_review_bundle_output_schema_carries_bundle_hash_and_contract_version():
     assert "contract_version" in schema["properties"]
     assert "selected" in schema["properties"]
     assert "caveats" in schema["properties"]
+    assert "recall_receipts" in schema["properties"]
 
 
 # -- empty DB ----------------------------------------------------------
@@ -91,6 +93,8 @@ def test_empty_db_returns_zero_records_with_stable_hash(home):
     assert data["sources"] == []
     assert data["reflections"] == []
     assert data["playbook_versions"] == []
+    assert data["recall_receipts"]["status"] == "omitted"
+    assert data["recall_receipts"]["omissions"] == ["omitted_no_selected_consumers"]
     assert data["bundle_hash"].startswith("sha256:")
     assert data["contract_version"] == CONTRACT_VERSION
 
@@ -142,6 +146,7 @@ def test_bundle_hash_uses_canonical_key_order_not_insertion_order(home):
         "reflections",
         "playbook_versions",
         "report_summaries",
+        "recall_receipts",
         "caveats",
         "suggested_prompts",
         "contract_version",
@@ -280,6 +285,69 @@ def test_include_sources_false_drops_sources(home):
     env = _mcp(home, "review.bundle", {"include_sources": False})
     assert env.ok
     assert env.data["sources"] == []
+
+
+# -- recall receipts ---------------------------------------------------
+
+
+def test_review_bundle_omits_recall_receipts_explicitly_when_absent(home):
+    _seed_decision(home)
+    env = _mcp(home, "review.bundle", {})
+    assert env.ok, env
+    receipt_block = env.data["recall_receipts"]
+    assert receipt_block["status"] == "omitted"
+    assert receipt_block["omissions"] == ["no_recall_receipts"]
+    assert receipt_block["blocks"] == []
+    assert receipt_block["truncated"] is False
+
+
+def test_review_bundle_carries_decision_recall_receipt_caveats(home):
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        _seed_recall_receipts(db.connection)
+        db.connection.execute(
+            "INSERT INTO edges VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (
+                "e-stale-decision",
+                "decision",
+                "dec",
+                "memory_node",
+                "mem-stale",
+                "violates",
+                None,
+                "{}",
+                "2026-01-01T00:07:00Z",
+                "actor",
+            ),
+        )
+        db.connection.commit()
+    finally:
+        db.close()
+
+    env = _mcp(home, "review.bundle", {})
+    assert env.ok, env
+    receipt_block = env.data["recall_receipts"]
+    assert receipt_block["status"] == "included"
+    assert receipt_block["receipt_refs"] == [
+        {"receipt_id": "recall_receipt:recall-1", "recall_id": "recall-1"}
+    ]
+    assert receipt_block["truncated"] is False
+    assert "STALE_OR_INVALIDATED_MEMORY" in receipt_block["caveat_codes"]
+    assert "HARMFUL_DOWNSTREAM" in receipt_block["caveat_codes"]
+    assert receipt_block["blocks"][0]["consumer"] == {"kind": "decision", "id": "dec"}
+    item_caveats = {
+        item["node_id"]: item for item in receipt_block["blocks"][0]["item_caveats"]
+    }
+    assert "STALE_OR_INVALIDATED_MEMORY" in item_caveats["mem-stale"]["caveat_codes"]
+    assert item_caveats["mem-stale"]["status"] == "cited_or_used"
+
+
+def test_review_bundle_can_omit_recall_receipts_by_flag(home):
+    _seed_decision(home)
+    env = _mcp(home, "review.bundle", {"include_recall_receipts": False})
+    assert env.ok, env
+    assert env.data["recall_receipts"]["status"] == "omitted"
+    assert env.data["recall_receipts"]["omissions"] == ["omitted_by_input_flag"]
 
 
 # -- CLI/MCP parity ---------------------------------------------------

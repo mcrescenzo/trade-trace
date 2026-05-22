@@ -16,6 +16,7 @@ from trade_trace.reports._envelope import standard_report_result
 USE_EDGE_TYPES: Final[set[str]] = {"supports", "derived_from", "about", "follows", "violates"}
 CONTRADICTION_EDGE_TYPES: Final[set[str]] = {"contradicts"}
 SUPERSESSION_EDGE_TYPES: Final[set[str]] = {"supersedes"}
+HARMFUL_EDGE_TYPES: Final[set[str]] = {"violates"}
 CONSUMER_KINDS: Final[set[str]] = {"decision", "thesis", "forecast", "outcome", "review", "playbook_version"}
 ATTRIBUTION_CONVENTIONS: Final[dict[str, Any]] = {
     "use_link_direction": "consumer -> memory_node",
@@ -233,6 +234,8 @@ def _memory_item(conn: sqlite3.Connection, node_id: str, *, rank: int, edge_evid
         caveats.append("CONTRADICTED_DOWNSTREAM")
     if any(ev["edge_type"] in SUPERSESSION_EDGE_TYPES for ev in edge_evidence):
         caveats.append("SUPERSEDED_DOWNSTREAM")
+    if any(ev["edge_type"] in HARMFUL_EDGE_TYPES for ev in edge_evidence):
+        caveats.append("HARMFUL_DOWNSTREAM")
     used = any(ev["edge_type"] in USE_EDGE_TYPES for ev in edge_evidence)
     contradicted = any(ev["edge_type"] in CONTRADICTION_EDGE_TYPES for ev in edge_evidence)
     superseded = any(ev["edge_type"] in SUPERSESSION_EDGE_TYPES for ev in edge_evidence)

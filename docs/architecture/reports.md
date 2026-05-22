@@ -604,6 +604,16 @@ the system emits the data, not an opinion.
       "calibration": { /* same shape as report.calibration's data */ },
       "playbook_adherence": { /* ... */ }
     },
+    "recall_receipts": {
+      "status": "included",              // or "omitted"
+      "consumer_scope": "selected_decisions",
+      "receipt_refs": [{"receipt_id": "recall_receipt:...", "recall_id": "..."}],
+      "blocks": [/* computed receipt summaries scoped to selected decisions */],
+      "caveat_codes": ["STALE_OR_INVALIDATED_MEMORY"],
+      "omissions": [],                   // e.g. no_recall_receipts, omitted_no_selected_consumers, truncated
+      "truncated": false,
+      "attribution_conventions": { /* same conventions as report.recall_receipts */ }
+    },
     "caveats": [
       "sample_size 18 below recommended 20 for calibration",
       "3 sources omitted (redaction_status = sensitive)"
@@ -624,6 +634,17 @@ the system emits the data, not an opinion.
 `bundle_hash` is a SHA-256 of the canonical JSON of `data`; same DB
 state and same filter produces the same hash, so reviewers can detect
 "this is the same case set I already reviewed."
+
+Replay/bootstrap consumers should read the bundle's `recall_receipts` block
+instead of persisting duplicate receipt state. The block is computed from
+`report.recall_receipts` for the selected decision consumers and carries
+receipt IDs, node IDs used/ignored, source refs, and caveat codes (including
+stale/invalidated, contradicted, superseded, and `HARMFUL_DOWNSTREAM`/violation edge cases).
+If no decisions are selected, no scoped receipts exist, the caller disables the
+section, or the bounded receipt cap is reached, `status`, `omissions`, and
+`truncated` make that explicit. Fresh-session bootstrap is the composition of
+`agent.next_actions`/`report.work_queue` with `report.recall_receipts`; no
+separate durable bootstrap packet or receipt table is implied.
 
 ### 5.3 Redaction rules
 
