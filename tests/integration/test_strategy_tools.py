@@ -114,6 +114,18 @@ def test_strategy_list_with_archived_filter(home):
     assert slugs == ["a-strat"]
 
 
+@pytest.mark.parametrize("bad_limit", ["abc", "1.5", "", None, [], {}])
+def test_strategy_list_rejects_non_integer_limit(home, bad_limit):
+    """trade-trace-tek2: a non-numeric `limit` used to raise ValueError, which
+    escaped past the dispatcher's typed-envelope contract. The handler must
+    translate to a VALIDATION_ERROR envelope."""
+    env = _mcp(home, "strategy.list", {"limit": bad_limit})
+    assert env.ok is False, env
+    err = env.error.model_dump(mode="json")
+    assert err["code"] == "VALIDATION_ERROR", err
+    assert err["details"]["field"] == "limit"
+
+
 # -- strategy.show ----------------------------------------------
 
 

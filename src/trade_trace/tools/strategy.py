@@ -375,7 +375,17 @@ def _strategy_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     archived / both / all). Default returns active only."""
 
     status_filter = args.get("status")
-    limit = int(args.get("limit", 100))
+    raw_limit = args.get("limit", 100)
+    try:
+        limit = int(raw_limit)
+    except (TypeError, ValueError) as exc:
+        # trade-trace-tek2: raw int() lets ValueError escape past the
+        # dispatcher's typed envelope contract. Translate to VALIDATION_ERROR.
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "limit must be an integer in [1, 1000]",
+            details={"field": "limit", "value": raw_limit},
+        ) from exc
     if limit < 1 or limit > 1000:
         raise ToolError(
             ErrorCode.VALIDATION_ERROR,
