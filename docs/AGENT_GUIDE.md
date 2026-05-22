@@ -8,22 +8,76 @@ Install MCP support locally with `pip install -e .` from the repository, initial
 
 A minimal agent loop is ordered so every later record can point back to the evidence it used. Use `tool.schema` first if you need exact current fields for any call.
 
-For a fresh/stateless session, inspect the local continuity surfaces before creating a new thesis, forecast, or decision. These are read-only/process-only views over caller-supplied journal rows; they do not fetch market data, verify broker truth, schedule work, assign tasks, or recommend trades.
+### 2.1 Bootstrap-first loop for fresh/stateless sessions
+
+For a fresh/stateless run, start with the local bootstrap packet before creating a new thesis, forecast, decision, outcome, or reflection. Bootstrap and its follow-up reports are read-only/process-only views over caller-supplied local journal rows. They do **not** fetch market data, verify broker truth, fetch outcomes, schedule work, assign tasks, execute anything, or provide a trading recommendation, market ranking, or return claim.
+
+1. Inspect the current schema for `agent.bootstrap` (or its report alias `report.bootstrap`) before calling it.
+2. Call `agent.bootstrap` with a fixed `as_of`, the narrowest supported `filter`, and explicit `sections`/`budgets` when the packet could be large.
+3. Inspect `truncation`, `omitted_counts`, `caveats`, `source_refs`, and `suggested_process_calls`. If a section is partial or omitted, do not treat missing items as absent.
+4. Before any new write, make targeted local read calls such as `report.lifecycle`, `report.work_queue` / `agent.next_actions`, `report.recall_receipts`, `review.bundle`, or another specific report/drilldown suggested by the packet.
+5. Only then write new thesis/decision/outcome/reflection rows, and only when supported by local evidence or caller-supplied evidence that you can cite with source IDs.
+
+Safe CLI examples:
 
 ```bash
-tt tool schema --home <journal-home> --tool agent.next_actions
-tt agent next_actions --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["resolve_due_forecast","record_reflection"]'
-tt report work_queue --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["review_due_watch","review_stale_record"]'
-tt report lifecycle --home <journal-home> --as-of 2026-05-22T00:00:00Z --states-json '["pending_review","stale","reflection_due","adherence_due"]'
+tt tool schema --home <journal-home> --tool agent.bootstrap
+tt agent bootstrap --home <journal-home> \
+  --as-of 2026-05-22T00:00:00Z \
+  --filter-json '{"run_id":"run-2026-05-22","strategy_ids":["strat-a"]}' \
+  --sections-json '["current_scope","obligations","memory_context","caveats","suggested_process_calls"]' \
+  --budgets-json '{"max_chars_total":24000,"default_max_items_per_section":10,"include_memory_body":false}'
 ```
+
+```bash
+tt tool schema --home <journal-home> --tool report.bootstrap
+tt report bootstrap --home <journal-home> \
+  --as-of 2026-05-22T00:00:00Z \
+  --filter-json '{}' \
+  --budgets-json '{"max_chars_total":16000,"include_sensitive_sources":false}'
+```
+
+After reading the packet, use targeted process/read surfaces rather than jumping straight to writes:
+
+```bash
+tt report lifecycle --home <journal-home> --as-of 2026-05-22T00:00:00Z --states-json '["pending_review","stale","reflection_due","adherence_due"]'
+tt report work_queue --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["resolve_due_forecast","record_reflection"]'
+tt agent next_actions --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["review_due_watch","record_playbook_adherence"]'
+tt report recall_receipts --home <journal-home> --as-of 2026-05-22T00:00:00Z --run-id run-2026-05-22 --limit 25
+tt review bundle --home <journal-home> --filter-json '{"strategy":{"strategy_id":"strat-a"}}' --max-records 25
+```
+
+MCP JSON example for bootstrap:
 
 ```json
-{"tool":"agent.next_actions","args":{"as_of":"2026-05-22T00:00:00Z","filter":{"instrument":{"instrument_id":["ins_..."]}},"kinds":["resolve_due_forecast","record_reflection"]}}
+{
+  "tool": "agent.bootstrap",
+  "args": {
+    "as_of": "2026-05-22T00:00:00Z",
+    "filter": {"run_id": "run-2026-05-22", "strategy_ids": ["strat-a"]},
+    "sections": ["current_scope", "obligations", "memory_context", "caveats", "suggested_process_calls"],
+    "budgets": {
+      "max_chars_total": 24000,
+      "default_max_items_per_section": 10,
+      "include_memory_body": false,
+      "include_sensitive_sources": false
+    }
+  }
+}
 ```
 
-Use returned `source_refs`, `allowed_actions`, `forbidden_actions`, `closure_condition`, and `caveat` fields to decide what local evidence to inspect next. Resolve/review/reflect/adherence/source gaps only when the caller supplies the missing evidence or process judgment. Forbidden interpretations: not a scheduler/daemon/reminder, not a human dashboard queue, not task assignment, not advice/trading signals/ranking/profit proof, not broker/exchange/wallet state, and not live market/source/outcome fetching.
+Use returned `source_refs`, `allowed_actions`, `forbidden_actions`, `closure_condition`, `caveat`/`caveats`, `hard_constraints`, and `suggested_process_calls` to decide what local evidence to inspect next. Resolve/review/reflect/adherence/source gaps only when the caller supplies the missing evidence or process judgment.
 
-If you only have an unstructured market thought after checking continuity surfaces, start with `idea.capture` to create a local draft source/observation and promote it later. When a run is partially complete, call `journal.bundle.status` with the known `instrument_id`, `thesis_id`, `forecast_id`, `decision_id`, `source_id`, or `memory_node_id`; it is read-only and returns concrete `next_calls` for missing local journal steps.
+Anti-patterns for bootstrap and continuity reports:
+
+- Do not interpret bootstrap, lifecycle, work queue, next actions, recall receipts, or review bundles as trading advice, a market ranking, or a return claim.
+- Do not ask these surfaces to fetch market prices, broker/exchange/wallet state, source content, or outcome truth; they summarize only local caller-supplied rows.
+- Do not schedule, assign, claim, notify, retry, route orders, prepare orders, sign, or execute from `suggested_process_calls` or work-queue items.
+- Do not assume an item is absent when `truncation.is_partial=true`, a section has omitted counts, counts are unavailable, or a section was not requested.
+- Do not start a stateless run with writes; inspect bootstrap, lifecycle/work-queue, and targeted recall/review/report drilldowns first.
+- Do not invent memory, citations, outcomes, or lessons not backed by returned `source_refs`, recall IDs, memory node IDs, or caller-supplied evidence.
+
+If you only have an unstructured market thought after checking bootstrap and continuity surfaces, start with `idea.capture` to create a local draft source/observation and promote it later. When a run is partially complete, call `journal.bundle.status` with the known `instrument_id`, `thesis_id`, `forecast_id`, `decision_id`, `source_id`, or `memory_node_id`; it is read-only and returns concrete `next_calls` for missing local journal steps.
 
 1. `venue.add` — create or identify the source venue.
 
