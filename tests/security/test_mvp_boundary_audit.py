@@ -195,6 +195,7 @@ def test_no_credential_columns_in_schema(tmp_path):
 
 
 SHIPPED_REPORTS = {
+    "report.bootstrap",
     "report.calibration",
     "report.calibration_integrity",
     "report.source_quality",

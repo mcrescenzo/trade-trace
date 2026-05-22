@@ -12,7 +12,8 @@ report.compare, report.strategy_performance, report.audit_readiness,
 report.risk, report.opportunity, review.bundle, report.current_exposure,
 report.exposure_anomalies, report.open_positions, report.lifecycle,
 report.recall_receipts, report.strategy_health, report.memory_usefulness,
-report.forecast_diagnostics, report.work_queue, and agent.next_actions. Deferred (P1+):
+report.forecast_diagnostics, report.work_queue, agent.next_actions, and
+report.bootstrap. Deferred (P1+):
 trading-native calibration-by-liquidity-bucket,
 skipped-positive-edge review, and broader replay/evaluation surfaces.
 
@@ -756,11 +757,16 @@ trade-trace report calibration --filter-json filter.json
 trade-trace report compare --base-report calibration --group-by model_id --filter-json filter.json
 trade-trace review bundle --filter-json filter.json --max-records 25 --no-include-sources
 trade-trace report filter_schema    # prints the JSON schema for ReportFilter
+trade-trace report bootstrap --as-of 2026-01-20T00:00:00Z --filter-json '{}' --budgets-json '{"max_chars_total":24000}'
 ```
 
 CLI and MCP accept identical filter shapes per
 [contracts.md](contracts.md) §2 (schema-equal, error-equal,
 envelope-equal). NDJSON streaming applies to truncated/cursored reports.
+`report.bootstrap` is the CLI/report-surface alias for the bootstrap v0 packet;
+it returns `data.kind="agent.bootstrap"`, composes only local read models, and
+does not persist packets, fetch external data, schedule follow-up work, prepare
+orders, or generate trading recommendations.
 
 ## 8. Open Questions
 

@@ -80,7 +80,7 @@ def compose_bootstrap_packet(
     conn: sqlite3.Connection,
     *,
     as_of: str | None = None,
-    raw_filter: dict[str, Any] | None = None,
+    raw_filter: Any = None,
     sections: list[str] | None = None,
     budgets: dict[str, Any] | None = None,
     kind: str = "agent.bootstrap",
@@ -88,7 +88,7 @@ def compose_bootstrap_packet(
     """Return a deterministic bootstrap packet over local state only."""
 
     resolved_as_of = to_utc_iso8601(as_of or now_iso(), field="as_of")
-    requested_filter = _normalize_filter(raw_filter or {})
+    requested_filter = _normalize_filter(raw_filter)
     requested_sections = list(DEFAULT_SECTIONS if sections is None else sections)
     unknown_sections = sorted(set(requested_sections) - OPTIONAL_SECTIONS)
     if unknown_sections:
@@ -187,7 +187,11 @@ def compose_bootstrap_packet(
     return packet
 
 
-def _normalize_filter(raw: dict[str, Any]) -> dict[str, Any]:
+def _normalize_filter(raw: Any) -> dict[str, Any]:
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError("bootstrap filter must be an object")
     unsupported = sorted(
         k for k, v in raw.items() if k in RECOGNIZED_BUT_UNSUPPORTED_FILTER_KEYS and v not in (None, [], {})
     )

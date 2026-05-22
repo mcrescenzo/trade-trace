@@ -25,8 +25,10 @@ from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.reports import (
+    BOOTSTRAP_CONTRACT_VERSION,
     TradingAdvicePhraseError,
     agent_next_actions,
+    compose_bootstrap_packet,
     report_audit_readiness,
     report_calibration,
     report_calibration_integrity,
@@ -91,8 +93,65 @@ _FILTER_PROP = {
     ),
 }
 
+_BOOTSTRAP_FILTER_PROP = {
+    "type": "object",
+    "description": (
+        "Bootstrap request filter. Currently supported by the composed read model: "
+        "run_id and exactly one strategy_ids entry. Contract-recognized filters "
+        "such as actor_id, agent_id, model_id, environment, symbols, tags, since, "
+        "and until are rejected when non-empty until all composed local reports support them."
+    ),
+    "properties": {
+        "run_id": {"type": "string"},
+        "strategy_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 1},
+        "actor_id": {"type": "string"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "symbols": {"type": "array", "items": {"type": "string"}},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "since": {"type": "string", "format": "date-time"},
+        "until": {"type": "string", "format": "date-time"},
+    },
+}
+
+_BOOTSTRAP_BUDGETS_PROP = {
+    "type": "object",
+    "description": "Hard output budgets for bootstrap packet sections and total serialized size.",
+    "properties": {
+        "max_chars_total": {"type": "integer", "minimum": 1},
+        "default_max_items_per_section": {"type": "integer", "minimum": 0},
+        "default_max_chars_per_section": {"type": "integer", "minimum": 1},
+        "sections": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "object",
+                "properties": {
+                    "max_items": {"type": "integer", "minimum": 0},
+                    "max_chars": {"type": "integer", "minimum": 1},
+                },
+            },
+        },
+        "include_memory_body": {"type": "boolean"},
+        "include_sensitive_sources": {"type": "boolean"},
+    },
+}
+
 
 _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
+    "report.bootstrap": _schema(
+        {
+            "as_of": {"type": "string", "format": "date-time", "description": "Deterministic read boundary echoed in data.metadata.as_of."},
+            "filter": _BOOTSTRAP_FILTER_PROP,
+            "sections": {"type": "array", "items": {"type": "string"}, "description": "Optional bootstrap sections to include; omitted sections remain present with omission caveats."},
+            "budgets": _BOOTSTRAP_BUDGETS_PROP,
+        },
+        description=(
+            "Read-only local bootstrap packet for stateless agent continuity. JSON-first, no fetch, no execution, "
+            "no scheduler, no trading advice, and no market ranking or return-claim semantics. Returns kind='agent.bootstrap' "
+            "per shared contract alias policy."
+        ),
+    ),
     "report.filter_schema": _schema(
         {"mode": {"type": "string", "enum": ["validation", "serialization"]}},
         description=(
@@ -1781,6 +1840,41 @@ def _report_coach(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     return data
 
 
+def _report_bootstrap(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.bootstrap` — JSON-first bootstrap packet surface."""
+
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = compose_bootstrap_packet(
+                db.connection,
+                as_of=args.get("as_of"),
+                raw_filter=args.get("filter"),
+                sections=args.get("sections"),
+                budgets=args.get("budgets"),
+                kind="agent.bootstrap",
+            )
+        except (ValueError, TimestampValidationError) as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                str(exc),
+                details={"tool": "report.bootstrap", "field": "bootstrap_request"},
+            ) from exc
+    finally:
+        db.close()
+
+    from trade_trace.version import __version__
+
+    metadata = data.get("metadata", {})
+    ctx.meta_hints["generated_at"] = metadata.get("generated_at")
+    ctx.meta_hints["package_version"] = __version__
+    ctx.meta_hints["bootstrap_contract_version"] = BOOTSTRAP_CONTRACT_VERSION
+    ctx.meta_hints["truncated"] = bool(data.get("truncation", {}).get("is_partial"))
+    ctx.meta_hints["normalized_filter"] = data.get("filter")
+    ctx.meta_hints["bootstrap_kind"] = data.get("kind")
+    return data
+
+
 def _report_filter_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """Return the canonical Pydantic-generated JSON Schema for ReportFilter.
 
@@ -1821,6 +1915,40 @@ def register_report_tools(registry: ToolRegistry) -> None:
     Currently registers only `report.filter_schema`; the 7 deterministic
     reports + the coach are wired in their dedicated beads."""
 
+    registry.register(
+        "report.bootstrap",
+        _report_bootstrap,
+        description=(
+            "Read-only local bootstrap packet for stateless agent continuity/session start. "
+            "Composes only caller-supplied local journal state and local reports; no fetch, no market/source/outcome fetching, "
+            "no broker/exchange access, no order preparation, no execution, no scheduler/daemon/alert creation, "
+            "and no trading advice or market ranking/return-claim semantics. This report.* alias returns "
+            "kind='agent.bootstrap' so the bootstrap.v0 contract is not forked."
+        ),
+        example_minimal={"as_of": "2026-01-20T00:00:00Z", "filter": {}},
+        example_rich={
+            "as_of": "2026-01-20T00:00:00Z",
+            "filter": {"run_id": "run-a", "strategy_ids": ["strat-a"]},
+            "sections": ["current_scope", "obligations", "memory_context", "caveats"],
+            "budgets": {"max_chars_total": 24000, "default_max_items_per_section": 10, "include_memory_body": False},
+        },
+        optional_keys=("as_of", "filter", "sections", "budgets"),
+        json_schema=_REPORT_SCHEMAS["report.bootstrap"],
+        usage_summary="Generate a deterministic JSON bootstrap packet from local read models for agent continuity; no writes, fetches, execution, scheduling, or advice.",
+        examples=(
+            "tt report bootstrap --home <journal-home> --as-of 2026-01-20T00:00:00Z --filter-json '{}'",
+            "tt report bootstrap --home <journal-home> --filter-json '{\"run_id\":\"run-a\",\"strategy_ids\":[\"strat-a\"]}' --budgets-json '{\"max_chars_total\":24000}'",
+        ),
+        common_failures=(
+            "Non-empty unsupported bootstrap filters are rejected with VALIDATION_ERROR instead of being ignored.",
+            "strategy_ids must contain exactly one strategy id when supplied.",
+            "Too-small max_chars_total returns VALIDATION_ERROR if required metadata cannot fit.",
+        ),
+        next_actions=(
+            "Use source_refs and suggested_process_calls for local drilldowns; callers choose whether to run any follow-up.",
+            "Treat partial/truncated sections as absence-unsafe; check truncation and omitted_counts before relying on missing items.",
+        ),
+    )
     registry.register(
         "report.filter_schema",
         _report_filter_schema,
