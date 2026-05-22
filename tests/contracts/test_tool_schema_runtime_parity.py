@@ -201,6 +201,8 @@ def test_agent_critical_read_report_playbook_tools_advertise_json_schemas():
         "memory.recall",
         "report.watchlist",
         "report.lifecycle",
+        "report.work_queue",
+        "agent.next_actions",
         "report.source_quality",
         "report.unscored_forecasts",
         "report.coach",
@@ -237,6 +239,8 @@ def test_report_schemas_advertise_defaulted_args_as_optional():
     expected_optional = {
         "report.watchlist": ("filter", "mode", "stale_threshold_days"),
         "report.lifecycle": ("filter", "states", "status", "as_of", "stale_threshold_days"),
+        "report.work_queue": ("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
+        "agent.next_actions": ("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
         "report.open_positions": ("limit", "cursor", "kind", "instrument_id", "strategy_id"),
         "report.current_exposure": ("recent_limit", "include_watchlist", "include_anomalies", "kind", "instrument_id", "strategy_id"),
         "report.source_quality": ("stale_threshold_days",),

@@ -214,6 +214,7 @@ SHIPPED_REPORTS = {
     "report.exposure_anomalies",
     "report.filter_schema",
     "report.lifecycle",
+    "report.work_queue",
     "report.open_positions",
     "report.strategy_performance",
 }

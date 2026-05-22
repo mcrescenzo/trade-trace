@@ -26,6 +26,7 @@ from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.reports import (
     TradingAdvicePhraseError,
+    agent_next_actions,
     report_audit_readiness,
     report_calibration,
     report_calibration_integrity,
@@ -43,6 +44,7 @@ from trade_trace.reports import (
     report_strengths,
     report_unscored_forecasts,
     report_watchlist,
+    report_work_queue,
 )
 from trade_trace.reports._filter_support import UnsupportedFilterError
 from trade_trace.storage import resolve_home
@@ -198,6 +200,26 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "stale_threshold_days": {"type": "integer", "minimum": 0},
         },
         description="Read-only derived lifecycle cases; filter by ReportFilter plus states/status, as_of, and stale threshold.",
+    ),
+    "report.work_queue": _schema(
+        {
+            "filter": _FILTER_PROP,
+            "as_of": {"type": "string", "format": "date-time"},
+            "stale_threshold_days": {"type": "integer", "minimum": 0},
+            "kinds": {"type": "array", "items": {"type": "string"}},
+            "kind": {"type": "string"},
+        },
+        description="Read-only derived process-obligation queue; not a scheduler, assignment, broker, execution, fetch, or advice path.",
+    ),
+    "agent.next_actions": _schema(
+        {
+            "filter": _FILTER_PROP,
+            "as_of": {"type": "string", "format": "date-time"},
+            "stale_threshold_days": {"type": "integer", "minimum": 0},
+            "kinds": {"type": "array", "items": {"type": "string"}},
+            "kind": {"type": "string"},
+        },
+        description="Safe projection/alias over report.work_queue; process actions only, no planner or execution semantics.",
     ),
     "report.open_positions": _schema(
         {
@@ -880,6 +902,54 @@ def _report_lifecycle(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         raise _unsupported_filter_to_tool_error(exc) from exc
     except ValueError as exc:
         raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
+
+
+def _work_queue_common(args: dict[str, Any], ctx: ToolContext, *, surface: str) -> dict[str, Any]:
+    stale_threshold_days = args.get("stale_threshold_days", 14)
+    if not isinstance(stale_threshold_days, int) or stale_threshold_days < 0:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "stale_threshold_days must be a non-negative integer", details={"field": "stale_threshold_days", "value": stale_threshold_days})
+    kinds = args.get("kinds")
+    kind = args.get("kind")
+    if kind is not None:
+        if not isinstance(kind, str):
+            raise ToolError(ErrorCode.VALIDATION_ERROR, "kind must be a string", details={"field": "kind", "value": kind})
+        kinds = [*(kinds or []), kind]
+    if kinds is not None and (not isinstance(kinds, list) or not all(isinstance(item, str) for item in kinds)):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "kinds must be a list of strings", details={"field": "kinds", "value": kinds})
+    as_of_raw = args.get("as_of")
+    if as_of_raw is not None and not isinstance(as_of_raw, str):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "as_of must be an ISO timestamp string", details={"field": "as_of", "value": as_of_raw})
+    try:
+        home = resolve_home(args.get("home"))
+        path = db_path(home)
+        if not path.exists():
+            raise ToolError(ErrorCode.STORAGE_ERROR, "journal not initialized; run `tt journal init` first", details={"home": str(home), "db_path": str(path)})
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            fn = agent_next_actions if surface == "agent.next_actions" else report_work_queue
+            data = fn(connection, raw_filter=args.get("filter"), as_of=as_of_raw, stale_threshold_days=stale_threshold_days, kinds=kinds)
+        finally:
+            connection.close()
+        _propagate_report_meta(ctx, data)
+        return data
+    except ValidationError as exc:
+        raise report_filter_validation_to_tool_error(exc) from exc
+    except UnsupportedFilterError as exc:
+        raise _unsupported_filter_to_tool_error(exc) from exc
+    except (ValueError, TimestampValidationError) as exc:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
+
+
+def _report_work_queue(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.work_queue` — derived read-only process obligations."""
+
+    return _work_queue_common(args, ctx, surface="report.work_queue")
+
+
+def _agent_next_actions(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`agent.next_actions` — projection/alias over report.work_queue."""
+
+    return _work_queue_common(args, ctx, surface="agent.next_actions")
 
 
 def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -1807,6 +1877,27 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}, "states": ["pending_review"], "as_of": "2026-01-20T00:00:00Z", "stale_threshold_days": 14},
         optional_keys=("filter", "states", "status", "as_of", "stale_threshold_days"),
         json_schema=_REPORT_SCHEMAS["report.lifecycle"],
+    )
+    registry.register(
+        "report.work_queue",
+        _report_work_queue,
+        description=(
+            "Read-only derived process-obligation report over lifecycle cases. Each item includes kind, priority, caveat, source_refs, reason, allowed_actions, forbidden_actions, and closure_condition. "
+            "No writes, no durable tasks, no scheduling, no assignment, no external fetching, no broker/execution path, and no trading advice."
+        ),
+        example_minimal={"filter": {}, "as_of": "2026-01-20T00:00:00Z", "stale_threshold_days": 14},
+        optional_keys=("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
+        json_schema=_REPORT_SCHEMAS["report.work_queue"],
+    )
+    registry.register(
+        "agent.next_actions",
+        _agent_next_actions,
+        description=(
+            "Safe projection/alias over report.work_queue for agent session startup. Returns process-safe allowed_actions only; not a planner, scheduler, daemon, assignment system, broker/execution path, fetcher, or advice surface."
+        ),
+        example_minimal={"filter": {}, "as_of": "2026-01-20T00:00:00Z", "stale_threshold_days": 14},
+        optional_keys=("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
+        json_schema=_REPORT_SCHEMAS["agent.next_actions"],
     )
     registry.register(
         "report.open_positions",

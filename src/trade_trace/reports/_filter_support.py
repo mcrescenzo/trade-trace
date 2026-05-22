@@ -80,6 +80,11 @@ SUPPORTED_FILTER_FIELDS: dict[str, frozenset[str]] = {
         "time_window.decision_at_gte",
         "time_window.decision_at_lt",
     }),
+    "report.work_queue": frozenset({
+        "actors.run_id",
+        "instrument.instrument_id",
+        "strategy.strategy_id",
+    }),
     "report.unscored_forecasts": frozenset(),
     "report.playbook_adherence": frozenset(),
     # The coach composes other reports; it inherits their support

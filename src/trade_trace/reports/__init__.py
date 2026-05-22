@@ -48,6 +48,7 @@ from trade_trace.reports.source_quality import (
 from trade_trace.reports.tag_aggregates import report_mistakes, report_strengths
 from trade_trace.reports.unscored import report_unscored_forecasts
 from trade_trace.reports.watchlist import report_watchlist
+from trade_trace.reports.work_queue import agent_next_actions, report_work_queue
 
 __all__ = [
     "CONFIDENCE_LABELS",
@@ -66,6 +67,7 @@ __all__ = [
     "TradingAdvicePhraseError",
     "VOLUME_BUCKET_THRESHOLDS",
     "VOLUME_BUCKET_VALUES",
+    "agent_next_actions",
     "confidence_bucket",
     "liquidity_bucket",
     "report_calibration",
@@ -84,6 +86,7 @@ __all__ = [
     "report_strengths",
     "report_unscored_forecasts",
     "report_watchlist",
+    "report_work_queue",
     "spread_bucket",
     "report_audit_readiness",
     "volume_bucket",
