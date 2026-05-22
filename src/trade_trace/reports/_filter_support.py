@@ -87,6 +87,16 @@ SUPPORTED_FILTER_FIELDS: dict[str, frozenset[str]] = {
     }),
     "report.unscored_forecasts": frozenset(),
     "report.playbook_adherence": frozenset(),
+    "report.strategy_health": frozenset({
+        "actors.actor_id",
+        "actors.agent_id",
+        "actors.model_id",
+        "actors.environment",
+        "actors.run_id",
+        "strategy.strategy_id",
+        "time_window.created_at_gte",
+        "time_window.created_at_lt",
+    }),
     # The coach composes other reports; it inherits their support
     # contract by composition. Direct callers may only pass the empty
     # filter shape today.

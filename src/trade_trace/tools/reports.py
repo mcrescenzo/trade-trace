@@ -42,6 +42,7 @@ from trade_trace.reports import (
     report_recall_receipts,
     report_risk,
     report_source_quality,
+    report_strategy_health,
     report_strategy_performance,
     report_strengths,
     report_unscored_forecasts,
@@ -185,6 +186,15 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "filter": _FILTER_PROP,
             "min_sample": {"type": "integer", "minimum": 1},
         }
+    ),
+    "report.strategy_health": _schema(
+        {
+            "filter": _FILTER_PROP,
+            "status": {"type": "string", "enum": ["active", "archived", "all"]},
+            "as_of": {"type": "string", "format": "date-time"},
+            "min_sample": {"type": "integer", "minimum": 1},
+        },
+        description="Read-only local strategy process-health diagnostics; defaults to active strategies.",
     ),
     "report.watchlist": _schema(
         {
@@ -929,6 +939,38 @@ def _report_lifecycle(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 as_of=as_of_raw,
                 stale_threshold_days=stale_threshold_days,
             )
+        finally:
+            connection.close()
+        _propagate_report_meta(ctx, data)
+        return data
+    except ValidationError as exc:
+        raise report_filter_validation_to_tool_error(exc) from exc
+    except UnsupportedFilterError as exc:
+        raise _unsupported_filter_to_tool_error(exc) from exc
+    except ValueError as exc:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
+
+
+def _report_strategy_health(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.strategy_health` — deterministic local strategy health."""
+
+    status = args.get("status", "active")
+    if status not in {"active", "archived", "all"}:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "status must be one of active, archived, all", details={"field": "status", "value": status})
+    min_sample = args.get("min_sample", 5)
+    if not isinstance(min_sample, int) or min_sample < 1:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "min_sample must be a positive integer", details={"field": "min_sample", "value": min_sample})
+    as_of_raw = args.get("as_of")
+    if as_of_raw is not None and not isinstance(as_of_raw, str):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "as_of must be an ISO timestamp string", details={"field": "as_of", "value": as_of_raw})
+    try:
+        home = resolve_home(args.get("home"))
+        path = db_path(home)
+        if not path.exists():
+            raise ToolError(ErrorCode.STORAGE_ERROR, "journal not initialized; run `tt journal init` first", details={"home": str(home), "db_path": str(path)})
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            data = report_strategy_health(connection, raw_filter=args.get("filter"), status=status, as_of=as_of_raw, min_sample=min_sample)
         finally:
             connection.close()
         _propagate_report_meta(ctx, data)
@@ -1994,6 +2036,19 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}, "states": ["pending_review"], "as_of": "2026-01-20T00:00:00Z", "stale_threshold_days": 14},
         optional_keys=("filter", "states", "status", "as_of", "stale_threshold_days"),
         json_schema=_REPORT_SCHEMAS["report.lifecycle"],
+    )
+    registry.register(
+        "report.strategy_health",
+        _report_strategy_health,
+        description=(
+            "Deterministic read-only local strategy process-health report across strategies. Identifies review_due, "
+            "low_n, open unresolved forecasts, thesis source-reference gaps, repeated overrides, and local "
+            "policy-candidate support status. Defaults to active strategies; ordering is administrative "
+            "review_due-first then slug/id. No network, execution, ranking, or advice."
+        ),
+        example_minimal={"filter": {}, "status": "active", "as_of": "2026-01-20T00:00:00Z", "min_sample": 5},
+        optional_keys=("filter", "status", "as_of", "min_sample"),
+        json_schema=_REPORT_SCHEMAS["report.strategy_health"],
     )
     registry.register(
         "report.recall_receipts",

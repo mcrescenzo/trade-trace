@@ -47,6 +47,10 @@ from trade_trace.reports.source_quality import (
     STALE_SOURCE_THRESHOLD_DAYS,
     report_source_quality,
 )
+from trade_trace.reports.strategy_health import (
+    DEFAULT_HEALTH_MIN_SAMPLE,
+    report_strategy_health,
+)
 from trade_trace.reports.tag_aggregates import report_mistakes, report_strengths
 from trade_trace.reports.unscored import report_unscored_forecasts
 from trade_trace.reports.watchlist import report_watchlist
@@ -56,6 +60,7 @@ __all__ = [
     "CONFIDENCE_LABELS",
     "DEFAULT_ADHERENCE_MIN_SAMPLE",
     "DEFAULT_BIN_POLICY",
+    "DEFAULT_HEALTH_MIN_SAMPLE",
     "DEFAULT_MIN_SAMPLE",
     "DEFAULT_OPPORTUNITY_MIN_SAMPLE",
     "DEFAULT_RISK_MIN_SAMPLE",
@@ -86,6 +91,7 @@ __all__ = [
     "report_playbook_adherence",
     "report_risk",
     "report_source_quality",
+    "report_strategy_health",
     "report_strategy_performance",
     "report_strengths",
     "report_unscored_forecasts",

@@ -11,7 +11,8 @@ report.playbook_adherence, report.coach, report.filter_schema,
 report.compare, report.strategy_performance, report.audit_readiness,
 report.risk, report.opportunity, review.bundle, report.current_exposure,
 report.exposure_anomalies, report.open_positions, report.lifecycle,
-report.recall_receipts, report.memory_usefulness, report.work_queue, and agent.next_actions. Deferred (P1+):
+report.recall_receipts, report.strategy_health, report.memory_usefulness,
+report.work_queue, and agent.next_actions. Deferred (P1+):
 trading-native forecast-vs-market edge reports, calibration-by-liquidity-bucket,
 skipped-positive-edge review, and broader replay/evaluation surfaces.
 
@@ -491,7 +492,39 @@ Item conventions mirror [memory-layer.md §9.1](memory-layer.md#91-downstream-re
 
 Forbidden interpretations: not a generic transcript memory store, durable receipt table, task queue, dashboard workflow, trading signal/ranking/advice, profit claim, broker/execution/wallet path, or permission to fetch live/external data.
 
-### 4.13 `report.memory_usefulness`
+### 4.13 `report.strategy_health`
+
+Read-only local process-health report across strategy rows. It defaults to
+active strategies and emits administrative review context only: it does not
+rank strategies by performance, recommend trading more or less, fetch market
+data, infer edge/profit, or create durable strategy lifecycle state.
+
+Inputs:
+
+- `status`: `active` by default; accepts `active`, `archived`, or `all`.
+- `as_of`: optional UTC read boundary for review-due checks; pass it for
+  reproducible output.
+- `min_sample`: positive integer for low-N caveats.
+- `filter`: supports strategy id/slug, actor/run/model/environment, and
+  `created_at_*` windows. Unsupported non-empty fields are rejected rather
+  than silently broadened.
+
+Outputs include one group per matching strategy, ordered by due-review then
+slug/id. Each group carries `sections` with `{count, record_ids}` for
+decisions, review-due decisions, open unresolved forecasts, thesis
+source-reference gaps, repeated overrides (only surfaced once at least two
+override decisions exist), and policy-candidate support status. Source-quality
+checks are intentionally limited to missing thesis source references; broader
+source freshness/contradiction diagnostics remain in `report.source_quality`.
+Policy candidates currently return `count=0` with
+`policy_candidates_unsupported_local_surface` until a canonical local
+quarantine/policy-candidate surface exists.
+
+Forbidden interpretations: not a strategy ranking, performance leaderboard,
+signal/edge detector, trading advice, policy promotion engine, scheduler,
+broker/execution/wallet path, or permission to fetch live/external data.
+
+### 4.14 `report.memory_usefulness`
 
 Read-only diagnostic projection over `report.recall_receipts` plus returned memory-node metadata and downstream typed edge evidence. It is a caveated evidence view only: it does not estimate causal memory value, optimize memory, score agents/models, rank trades, make profit claims, or provide advice.
 
@@ -510,7 +543,7 @@ Outputs include `summary.metrics`, `groups`, `memory_diagnostics`, `negative_con
 
 Forbidden interpretations: not a durable usefulness table, generic memory framework, reward/scoring signal, model optimization target, task queue, dashboard workflow, trading signal/ranking/advice, profit claim, broker/execution/wallet path, or external/live fetch path.
 
-### 4.14 `report.work_queue` and `agent.next_actions`
+### 4.15 `report.work_queue` and `agent.next_actions`
 
 `report.work_queue` projects selected lifecycle states into transient
 process-obligation items. `agent.next_actions` is an agent-facing alias /
