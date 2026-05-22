@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from tests._mcp_helpers import mcp_default as _mcp
 from trade_trace.core import default_registry
 from trade_trace.storage.paths import db_path
@@ -26,6 +28,17 @@ def test_strategy_tools_registered():
     for tool in ("strategy.create", "strategy.list", "strategy.show",
                  "strategy.update"):
         assert tool in names
+
+
+def test_strategy_show_runtime_schema_exposes_public_inputs():
+    schema = default_registry().get("strategy.show").json_schema
+    assert schema is not None
+    properties = schema["properties"]
+    assert set(properties) >= {"strategy_id", "slug", "as_of", "stale_threshold_days"}
+    assert properties["strategy_id"]["type"] == "string"
+    assert properties["slug"]["type"] == "string"
+    assert properties["as_of"]["type"] == "string"
+    assert properties["stale_threshold_days"]["type"] == "integer"
 
 
 # -- strategy.create --------------------------------------------
@@ -119,6 +132,132 @@ def test_strategy_show_not_found(home):
     assert env.ok is False
     assert env.error.code.value == "NOT_FOUND"
     assert env.error.details["entity_kind"] == "strategy"
+
+
+def test_strategy_show_includes_deterministic_health_summary(home):
+    sid = _mcp(home, "strategy.create", {
+        "name": "Health summary", "slug": "health-summary",
+        "idempotency_key": "00000000-0000-4000-8000-strat-health-01",
+    }).data["id"]
+    db = sqlite3.connect(db_path(home))
+    try:
+        db.execute(
+            "INSERT INTO venues(id, name, kind, created_at, actor_id) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("venue_health", "Manual", "manual", "2026-01-01T00:00:00Z", "tester"),
+        )
+        db.execute(
+            "INSERT INTO instruments(id, venue_id, symbol, title, asset_class, created_at, actor_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("inst_health", "venue_health", "HLTH", "Health", "equity", "2026-01-01T00:00:00Z", "tester"),
+        )
+        db.execute(
+            "INSERT INTO theses(id, instrument_id, side, body, strategy_id, created_at, actor_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("th_health_1", "inst_health", "long", "body", sid, "2026-01-01T00:00:00Z", "tester"),
+        )
+        db.execute(
+            "INSERT INTO forecasts(id, thesis_id, kind, resolution_at, scoring_state, created_at, actor_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("fc_health_1", "th_health_1", "binary", "2026-03-01T00:00:00Z", "pending", "2026-01-02T00:00:00Z", "tester"),
+        )
+        for outcome_id, label, probability in (("fco_health_yes", "yes", 0.6), ("fco_health_no", "no", 0.4)):
+            db.execute(
+                "INSERT INTO forecast_outcomes(id, forecast_id, outcome_label, probability) VALUES (?, ?, ?, ?)",
+                (outcome_id, "fc_health_1", label, probability),
+            )
+        for decision_id, decision_type, created_at, review_by in (
+            ("dec_health_watch", "watch", "2026-01-03T00:00:00Z", "2026-01-10T00:00:00Z"),
+            ("dec_health_hold", "hold", "2026-01-04T00:00:00Z", "2026-02-10T00:00:00Z"),
+        ):
+            db.execute(
+                "INSERT INTO decisions(id, instrument_id, thesis_id, forecast_id, type, review_by, "
+                "strategy_id, created_at, actor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (decision_id, "inst_health", "th_health_1", "fc_health_1", decision_type,
+                 review_by, sid, created_at, "tester"),
+            )
+        event_count = db.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+        db.commit()
+    finally:
+        db.close()
+
+    without_as_of = _mcp(home, "strategy.show", {"strategy_id": sid})
+    assert without_as_of.ok, without_as_of
+    health = without_as_of.data["health_summary"]
+    assert health["as_of"] is None
+    assert "as_of_not_supplied" in health["caveats"]
+    assert health["sections"]["due_watch_decisions"] == {"count": 0, "record_ids": []}
+    assert health["sections"]["stale_watch_decisions"] == {"count": 0, "record_ids": []}
+
+    with_as_of = _mcp(home, "strategy.show", {
+        "strategy_id": sid,
+        "as_of": "2026-01-20T00:00:00Z",
+        "stale_threshold_days": 14,
+    })
+    assert with_as_of.ok, with_as_of
+    health = with_as_of.data["health_summary"]
+    assert health["sections"]["decisions"] == {
+        "count": 2, "record_ids": ["dec_health_watch", "dec_health_hold"]}
+    assert health["sections"]["theses"] == {"count": 1, "record_ids": ["th_health_1"]}
+    assert health["sections"]["open_unresolved_forecasts"] == {
+        "count": 1, "record_ids": ["fc_health_1"]}
+    assert health["sections"]["due_watch_decisions"] == {
+        "count": 1, "record_ids": ["dec_health_watch"]}
+    assert health["sections"]["stale_watch_decisions"] == {
+        "count": 1, "record_ids": ["dec_health_watch"]}
+    for caveat in (
+        "low_n_decisions", "missing_forecast_scores", "missing_source_refs",
+        "missing_reflections", "missing_playbook_adherence",
+    ):
+        assert caveat in health["caveats"]
+    assert "as_of_not_supplied" not in health["caveats"]
+    assert all(
+        forbidden not in repr(health).lower()
+        for forbidden in ("advice", "fetch", "profit", "best strategy")
+    )
+
+    db = sqlite3.connect(db_path(home))
+    try:
+        assert db.execute("SELECT COUNT(*) FROM events").fetchone()[0] == event_count
+    finally:
+        db.close()
+
+
+def test_strategy_show_rejects_negative_stale_threshold(home):
+    env = _mcp(home, "strategy.show", {
+        "slug": "does-not-exist", "stale_threshold_days": -1,
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "stale_threshold_days"
+
+
+@pytest.mark.parametrize(
+    "as_of",
+    [
+        "2026-01-20T00:00:00+00:00",
+        "2026-01-20T00:00:00-05:00",
+        "2026-01-20T00:00:00",
+    ],
+)
+def test_strategy_show_rejects_non_z_as_of_contract(home, as_of):
+    env = _mcp(home, "strategy.show", {
+        "slug": "does-not-exist",
+        "as_of": as_of,
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "as_of"
+
+
+@pytest.mark.parametrize("stale_threshold_days", [True, 1.5])
+def test_strategy_show_rejects_non_integer_stale_threshold(home, stale_threshold_days):
+    env = _mcp(home, "strategy.show", {
+        "slug": "does-not-exist", "stale_threshold_days": stale_threshold_days,
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "stale_threshold_days"
 
 
 # -- strategy.update --------------------------------------------

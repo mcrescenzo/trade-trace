@@ -34,7 +34,7 @@ Agent-continuity features must be discoverable and callable by a stateless LLM t
 - `snapshot.add` and `source.add` now persist the common provenance fields (`agent_id`, `model_id`, `environment`, `run_id`) instead of advertising `_Row` metadata that runtime discarded.
 - `report.calibration` now supports actor/run filters for `actor_id`, `agent_id`, `model_id`, `environment`, and `run_id`; `report.compare` can group calibration by `actor_id`, `agent_id`, `model_id`, `environment`, and `run_id`.
 - `strategy.list` accepts both historical `status='both'` and documented `status='all'` as all-status aliases.
-- `strategy.show` is documented as row-focused in the PRD until richer strategy summaries land in the strategy diagnostics epic.
+- `strategy.show` now returns the row plus a modest read-only `health_summary`; broader cross-strategy and forecast-specific diagnostics still belong to the strategy diagnostics epic's report surfaces.
 
 ## Required checks when adding or changing a public surface
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
@@ -34,9 +35,188 @@ from trade_trace.tools.errors import ToolError
 SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 """lowercase-kebab: alphanumeric segments separated by single hyphens."""
 
+UTC_Z_TIMESTAMP_PATTERN = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$"
+)
+"""Canonical UTC timestamp format used for text-ordered DB comparisons."""
+
 
 _STATUS_VALUES = ("active", "archived")
 _LIST_STATUS_VALUES = (*_STATUS_VALUES, "both", "all")
+_DEFAULT_STALE_THRESHOLD_DAYS = 14
+_HEALTH_MIN_SAMPLE = 20
+
+
+def _parse_as_of(value: Any, *, field: str) -> str:
+    if not isinstance(value, str) or not UTC_Z_TIMESTAMP_PATTERN.match(value):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"{field} must be a UTC ISO-8601 timestamp ending in Z",
+            details={
+                "field": field,
+                "value": value,
+                "expected_format": "YYYY-MM-DDTHH:MM:SS[.ffffff]Z",
+            },
+        )
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"{field} must be a valid UTC ISO-8601 timestamp ending in Z",
+            details={
+                "field": field,
+                "value": value,
+                "expected_format": "YYYY-MM-DDTHH:MM:SS[.ffffff]Z",
+            },
+        ) from exc
+    if parsed.tzinfo != UTC:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"{field} must be UTC and end in Z",
+            details={"field": field, "value": value, "timezone": "UTC"},
+        )
+    return value
+
+
+def _iso_minus_days(value: str, days: int) -> str:
+    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return (dt - timedelta(days=days)).isoformat().replace("+00:00", "Z")
+
+
+def _id_section(ids: list[str]) -> dict[str, Any]:
+    return {"count": len(ids), "record_ids": ids}
+
+
+def _strategy_health_summary(
+    conn: Any,
+    strategy_id: str,
+    *,
+    as_of: str | None,
+    stale_threshold_days: int,
+) -> dict[str, Any]:
+    """Read-only, deterministic local-table health summary for strategy.show."""
+
+    decision_ids = [r[0] for r in conn.execute(
+        "SELECT id FROM decisions WHERE strategy_id = ? ORDER BY created_at, id",
+        (strategy_id,),
+    ).fetchall()]
+    thesis_ids = [r[0] for r in conn.execute(
+        "SELECT id FROM theses WHERE strategy_id = ? ORDER BY created_at, id",
+        (strategy_id,),
+    ).fetchall()]
+    forecast_ids = [r[0] for r in conn.execute(
+        """
+        SELECT f.id FROM forecasts f
+        JOIN theses t ON t.id = f.thesis_id
+        WHERE t.strategy_id = ?
+          AND f.scoring_state IN ('pending', 'failed')
+          AND f.invalidated_at IS NULL
+        ORDER BY f.created_at, f.id
+        """,
+        (strategy_id,),
+    ).fetchall()]
+    scored_forecast_ids = [r[0] for r in conn.execute(
+        """
+        SELECT DISTINCT f.id FROM forecasts f
+        JOIN theses t ON t.id = f.thesis_id
+        JOIN forecast_scores fs ON fs.forecast_id = f.id
+        WHERE t.strategy_id = ?
+        ORDER BY f.id
+        """,
+        (strategy_id,),
+    ).fetchall()]
+    missing_source_ref_ids = [r[0] for r in conn.execute(
+        """
+        SELECT t.id FROM theses t
+        WHERE t.strategy_id = ? AND NOT EXISTS (
+            SELECT 1 FROM edges e
+            WHERE ((e.source_kind = 'thesis' AND e.source_id = t.id)
+                OR (e.target_kind = 'thesis' AND e.target_id = t.id))
+              AND (e.source_kind = 'source' OR e.target_kind = 'source')
+        )
+        ORDER BY t.created_at, t.id
+        """,
+        (strategy_id,),
+    ).fetchall()]
+    reflection_ids = [r[0] for r in conn.execute(
+        """
+        SELECT mn.id FROM memory_nodes mn
+        JOIN edges e ON e.source_kind = 'memory_node' AND e.source_id = mn.id
+        WHERE mn.node_type = 'reflection'
+          AND e.target_kind = 'strategy' AND e.target_id = ?
+        ORDER BY mn.created_at, mn.id
+        """,
+        (strategy_id,),
+    ).fetchall()]
+    adherence_decision_ids = [r[0] for r in conn.execute(
+        """
+        SELECT DISTINCT d.id FROM decisions d
+        JOIN decision_playbook_rules dpr ON dpr.decision_id = d.id
+        WHERE d.strategy_id = ?
+        ORDER BY d.id
+        """,
+        (strategy_id,),
+    ).fetchall()]
+
+    due_watch_ids: list[str] = []
+    stale_watch_ids: list[str] = []
+    if as_of is not None:
+        due_watch_ids = [r[0] for r in conn.execute(
+            """
+            SELECT id FROM decisions
+            WHERE strategy_id = ? AND type IN ('watch', 'hold', 'review')
+              AND review_by IS NOT NULL AND review_by <= ?
+            ORDER BY review_by, created_at, id
+            """,
+            (strategy_id, as_of),
+        ).fetchall()]
+        stale_before = _iso_minus_days(as_of, stale_threshold_days)
+        stale_watch_ids = [r[0] for r in conn.execute(
+            """
+            SELECT id FROM decisions
+            WHERE strategy_id = ? AND type = 'watch' AND created_at <= ?
+            ORDER BY created_at, id
+            """,
+            (strategy_id, stale_before),
+        ).fetchall()]
+
+    caveats: list[str] = []
+    if len(decision_ids) < _HEALTH_MIN_SAMPLE:
+        caveats.append("low_n_decisions")
+    if not forecast_ids and not scored_forecast_ids:
+        caveats.append("missing_forecasts")
+    if not scored_forecast_ids:
+        caveats.append("missing_forecast_scores")
+    if missing_source_ref_ids:
+        caveats.append("missing_source_refs")
+    if not reflection_ids:
+        caveats.append("missing_reflections")
+    if decision_ids and not adherence_decision_ids:
+        caveats.append("missing_playbook_adherence")
+    if as_of is None:
+        caveats.append("as_of_not_supplied")
+
+    return {
+        "strategy_id": strategy_id,
+        "as_of": as_of,
+        "stale_threshold_days": stale_threshold_days,
+        "sample": {"min_sample": _HEALTH_MIN_SAMPLE, "decision_count": len(decision_ids)},
+        "sections": {
+            "decisions": _id_section(decision_ids),
+            "theses": _id_section(thesis_ids),
+            "open_unresolved_forecasts": _id_section(forecast_ids),
+            "scored_forecasts": _id_section(scored_forecast_ids),
+            "due_watch_decisions": _id_section(due_watch_ids),
+            "stale_watch_decisions": _id_section(stale_watch_ids),
+            "missing_source_refs": _id_section(missing_source_ref_ids),
+            "strategy_reflections": _id_section(reflection_ids),
+            "decisions_with_playbook_adherence": _id_section(adherence_decision_ids),
+        },
+        "caveats": sorted(set(caveats)),
+    }
 
 
 def _normalize_slug(value: Any) -> str:
@@ -237,6 +417,24 @@ def _strategy_show(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
     strategy_id = args.get("strategy_id")
     slug = args.get("slug")
+    as_of = _parse_as_of(args["as_of"], field="as_of") if "as_of" in args else None
+    raw_stale_threshold_days = args.get("stale_threshold_days", _DEFAULT_STALE_THRESHOLD_DAYS)
+    if not isinstance(raw_stale_threshold_days, int) or isinstance(raw_stale_threshold_days, bool):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "stale_threshold_days must be a nonnegative integer",
+            details={
+                "field": "stale_threshold_days",
+                "value": raw_stale_threshold_days,
+            },
+        )
+    stale_threshold_days = raw_stale_threshold_days
+    if stale_threshold_days < 0:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "stale_threshold_days must be nonnegative",
+            details={"field": "stale_threshold_days", "value": stale_threshold_days},
+        )
     if not strategy_id and not slug:
         raise ToolError(
             ErrorCode.VALIDATION_ERROR,
@@ -257,18 +455,25 @@ def _strategy_show(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 "created_at, updated_at FROM strategies WHERE slug = ?",
                 (slug,),
             ).fetchone()
+        if row is None:
+            raise ToolError(
+                ErrorCode.NOT_FOUND,
+                "strategy not found",
+                details={
+                    "entity_kind": "strategy",
+                    "strategy_id": strategy_id, "slug": slug,
+                },
+            )
+        result = _strategy_full_row_to_dict(row)
+        result["health_summary"] = _strategy_health_summary(
+            db.connection,
+            result["id"],
+            as_of=as_of,
+            stale_threshold_days=stale_threshold_days,
+        )
+        return result
     finally:
         db.close()
-    if row is None:
-        raise ToolError(
-            ErrorCode.NOT_FOUND,
-            "strategy not found",
-            details={
-                "entity_kind": "strategy",
-                "strategy_id": strategy_id, "slug": slug,
-            },
-        )
-    return _strategy_full_row_to_dict(row)
 
 
 def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -417,9 +622,18 @@ def register_strategy_tools(registry: ToolRegistry) -> None:
     registry.register(
         "strategy.show",
         _strategy_show,
+        example_minimal={
+            "strategy_id": "strat_example",
+            "slug": "example-strategy",
+            "as_of": "2026-01-20T00:00:00Z",
+            "stale_threshold_days": 14,
+        },
+        optional_keys=("strategy_id", "slug", "as_of", "stale_threshold_days"),
         description=(
-            "Show one strategy by id or slug. NOT_FOUND when neither "
-            "matches."
+            "Show one strategy by id or slug with a read-only local "
+            "health_summary. Pass as_of as a UTC Z timestamp for deterministic "
+            "due/stale watch counts; stale_threshold_days defaults to 14. "
+            "NOT_FOUND when neither identifier matches."
         ),
     )
     registry.register(
