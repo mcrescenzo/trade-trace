@@ -283,3 +283,40 @@ def test_registered_tool_descriptions_do_not_emit_uncaveated_advice_claims():
         if match:
             offending.append((name, match.group(0)))
     assert offending == []
+
+
+def test_diagnostic_report_descriptions_caveat_edge_signal_ranking_language():
+    """New diagnostics must stay retrospective/process-only in model-facing text."""
+
+    registry = default_registry()
+    required_fragments = {
+        "report.forecast_diagnostics": (
+            "retrospective diagnostics",
+            "caller-supplied retrospective reference comparison",
+            "not a trading signal",
+            "No external fetching",
+            "trading advice",
+            "alpha/profit claim",
+            "performance ranking",
+        ),
+        "report.strategy_health": (
+            "process-health report",
+            "administrative",
+            "not profit/performance ranking",
+            "edge/signal detection",
+            "trading advice",
+        ),
+    }
+    missing = []
+    for tool, fragments in required_fragments.items():
+        registration = registry.get(tool)
+        surfaces = {
+            "registry.description": registration.description or "",
+            "json_schema.description": (registration.json_schema or {}).get("description", ""),
+        }
+        for surface, description in surfaces.items():
+            for fragment in fragments:
+                if fragment not in description:
+                    missing.append((tool, surface, fragment, description))
+
+    assert missing == []

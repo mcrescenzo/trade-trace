@@ -84,6 +84,11 @@ Playbooks codify rules; strategies (§2.12) group decisions by edge thesis. The 
 
 ### 2.7 Coach signals
 
+Here `signals` means local process notifications written by deterministic
+tools (for example stale watches or unscored forecasts), not trading signals.
+They are retrospective/process context only and must not be interpreted as
+advice, alpha, profitability evidence, or instructions to trade.
+
 No background scheduler or daemon exists in MVP. Write-triggered signals may be persisted during ordinary writes. Time-passing signals, such as stale watches and unscored forecasts, are generated lazily by `report.coach`, `report.watchlist`, `report.unscored_forecasts`, or an explicit maintenance scan. External scheduling is out of scope.
 
 ### 2.8 Credentials and security
@@ -372,7 +377,7 @@ All deterministic reports accept a `filter` argument conforming to the `ReportFi
 Deterministic reports:
 
 - `report.calibration` — binary Brier, log score, reliability buckets, ECE, sharpness, and a sample-prevalence baseline, computed over scored binary forecasts matching the filter. Supports actor/run filters for `actor_id`, `agent_id`, `model_id`, `environment`, and `run_id` plus the documented venue/strategy/outcome filters. Full output shape and formulas in [`scoring.md`](./architecture/scoring.md) §3 and §7 and `reports.md` §4. Returns `sample_warning` when the filtered set is below the configurable minimum (default 20 scored forecasts).
-- `report.forecast_diagnostics` — binary-first retrospective diagnostics over local forecasts, scored outcomes, decisions/non-actions, and caller-supplied snapshots. It compares agent `p_yes` only to stored `snapshots.implied_probability` as a caveated `recorded_market_reference_gap`, reports Brier/reliability/base-rate caveats and low-N/source/spread/liquidity coverage, excludes unsupported/non-binary forecasts with reasons, and never fetches data or provides advice/profit ranking.
+- `report.forecast_diagnostics` — binary-first retrospective diagnostics over local forecasts, scored outcomes, decisions/non-actions, and caller-supplied snapshots. It compares agent `p_yes` only to stored `snapshots.implied_probability` as a caveated caller-supplied `recorded_market_reference_gap`, reports Brier/reliability/base-rate caveats and low-N/source/spread/liquidity coverage, excludes unsupported/non-binary forecasts with reasons, and never fetches data or provides advice, a trading signal, alpha, or profit/performance ranking.
 - `report.mistakes` / `report.strengths` — tag counts and co-occurrence over decisions and reviews.
 - `report.pnl` — paper/actual P&L aggregates where position projections have enough fills to compute realized/unrealized P&L. Returns a `data_coverage` field reporting how many positions could and could not be computed.
 - Current-exposure/open-position report surfaces must follow [`current-exposure-agent-contract.md`](./architecture/current-exposure-agent-contract.md) for bucket names, caveat codes, and source precedence. This PRD link is a contract seam only; it does not imply a shipped `report.current_exposure` tool.
@@ -390,13 +395,13 @@ Every write tool accepts `--dry-run` (CLI) / `_dry_run: true` (MCP): the dispatc
 
 `report.coach` aggregates objective signals into a structured packet. It does not call an LLM and does not provide trading advice. Allowed outputs: surfacing recurring tags, calibration drift buckets, override outcomes, stale watches, sample-size warnings, integrity / source-quality diagnostics. Forbidden outputs: trade recommendations, profitability claims, directional advice.
 
-Trading-native liquidity-bucket and skipped-positive-edge review reports are deferred to P1. A cautious binary-first `report.forecast_diagnostics` now covers local forecast-vs-recorded-market-reference diagnostics using caller-supplied `snapshots.implied_probability` only; no data is fetched or treated as advice/profitability evidence. The data is already captured in `snapshots`; broader reports are additive.
+Trading-native liquidity-bucket and skipped-positive-edge review reports are deferred to P1; that legacy label refers only to caller-recorded thesis/review terminology, not an engine for discovering profitable edge. A cautious binary-first `report.forecast_diagnostics` now covers local forecast-vs-recorded-market-reference diagnostics using caller-supplied `snapshots.implied_probability` only; no data is fetched or treated as advice, a trading signal, alpha, or profitability evidence. The data is already captured in `snapshots`; broader reports are additive.
 
 Comparison and per-strategy reporting:
 
 - `report.compare(group_by, filter)` — runs the same metric set across groups and returns a per-group `ReportGroup` for side-by-side comparison. Live `group_by` values (per `trade_trace.reports.compare.SUPPORTED_GROUP_BY_BY_BASE_REPORT`): for `base_report="calibration"` — `actor_id`, `agent_id`, `model_id`, `run_id`, `strategy_id`, `decision_type`, `venue_id`, `asset_class`, `environment`, `instrument_id`, `outcome_status`, `status`; for `base_report="pnl"` — `instrument_id`, `status`, `venue_id`, `asset_class`. Deferred to P1+ until SQL mapping lands: `playbook_version_id`, `liquidity_bucket`, `confidence_bucket`. See trade-trace-cs0r.
 - `report.strategy_performance` — single-strategy convenience wrapper around the filter pattern; per-strategy P&L, calibration trend, mistake-tag frequency, playbook adherence summary.
-- `report.strategy_health` — deterministic read-only local process-health report across active strategies by default. It surfaces review-due decisions, low-N caveats, open/unresolved forecasts, thesis source-reference gaps, repeated overrides, and the current unsupported-local-surface caveat for policy candidates. It uses administrative ordering, not performance ranking, and does not fetch data or provide advice.
+- `report.strategy_health` — deterministic read-only local process-health report across active strategies by default. It surfaces review-due decisions, low-N caveats, open/unresolved forecasts, thesis source-reference gaps, repeated overrides, and the current unsupported-local-surface caveat for policy candidates. It uses administrative ordering, not profit/performance ranking, and does not fetch data, detect edge/signals, or provide advice.
 - `report.risk` and `report.opportunity` — shipped local journal/projection analysis reports; see [`risk-units.md`](./architecture/risk-units.md) and [`opportunity-analysis.md`](./architecture/opportunity-analysis.md). They do not fetch market data, execute trades, or assert broker truth.
 
 `review.bundle(filter, *, max_records?, include_sources?, include_reflections?, include_playbook?)` packages a bounded case set as deterministic JSON for an external review loop (a separate LLM or a human reviewer). It selects records by filter, includes their theses/forecasts/outcomes/reflections, and includes attached sources subject to `sources.redaction_status`. Sources marked `sensitive` are never included; sources marked `redacted` have `body`/`extracted_text` omitted. The bundle does not call an LLM and does not provide advice. Full spec in [`reports.md`](./architecture/reports.md) §5.

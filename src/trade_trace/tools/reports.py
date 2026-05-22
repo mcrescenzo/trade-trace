@@ -108,7 +108,9 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
         {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
         description=(
             "Binary-first retrospective diagnostics over local forecasts, scored outcomes, decisions, "
-            "and caller-supplied snapshots.implied_probability. No external fetching, advice, or performance ordering."
+            "and caller-supplied snapshots.implied_probability; recorded_market_reference_gap is a "
+            "caller-supplied retrospective reference comparison, not a trading signal. No external fetching, "
+            "trading advice, alpha/profit claim, or performance ranking."
         ),
     ),
     "report.playbook_adherence": _schema(
@@ -202,7 +204,11 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "as_of": {"type": "string", "format": "date-time"},
             "min_sample": {"type": "integer", "minimum": 1},
         },
-        description="Read-only local strategy process-health diagnostics; defaults to active strategies.",
+        description=(
+            "Read-only local strategy process-health report over local caller-supplied records; defaults "
+            "to active strategies. Ordering is administrative review_due-first, not profit/performance ranking. "
+            "No network, execution, edge/signal detection, or trading advice."
+        ),
     ),
     "report.watchlist": _schema(
         {
@@ -1849,7 +1855,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "Binary-first retrospective diagnostics over local forecasts, outcomes, decisions/non-actions, "
             "and caller-supplied snapshot market/reference fields. Reports Brier/reliability/base-rate "
             "caveats and recorded_market_reference_gap only when snapshots.implied_probability was stored; "
-            "no external fetching, advice, signal, or performance ordering."
+            "the gap is a caller-supplied retrospective reference comparison, not a trading signal. "
+            "No external fetching, trading advice, alpha/profit claim, or performance ranking."
         ),
         example_minimal={"filter": {}, "min_sample": 20},
         optional_keys=("filter", "min_sample"),
@@ -2086,7 +2093,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "Deterministic read-only local strategy process-health report across strategies. Identifies review_due, "
             "low_n, open unresolved forecasts, thesis source-reference gaps, repeated overrides, and local "
             "policy-candidate support status. Defaults to active strategies; ordering is administrative "
-            "review_due-first then slug/id. No network, execution, ranking, or advice."
+            "review_due-first then slug/id, not profit/performance ranking. No network, execution, "
+            "edge/signal detection, or trading advice."
         ),
         example_minimal={"filter": {}, "status": "active", "as_of": "2026-01-20T00:00:00Z", "min_sample": 5},
         optional_keys=("filter", "status", "as_of", "min_sample"),

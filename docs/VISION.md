@@ -46,7 +46,7 @@ Three shifts make 2026 the right moment:
 7. **Structured input, graceful prose.** Prefer explicit fields with schema validation, but allow attached freeform notes for the LLM to reason about.
 8. **Auditability over convenience.** Snapshots, theses, decisions, and memory nodes are append-only and versioned. Corrections create new events; nothing is silently overwritten.
 9. **Memory and ledger are linked but distinct.** The trade ledger is strict, typed, and auditable — the agent's actions and what the market did. The memory layer is a flexible graph — the agent's beliefs, observations, and reflections. Both worlds cross-link through a single edges table. Beliefs are versioned and falsifiable; ledger facts are immutable.
-10. **The agent is the one with judgment.** The system surfaces objective signals (calibration drift, mistake-tag frequency, advisory/manual playbook overrides, stale watches) but does not decide what counts as a mistake. The agent reflects; the system stores and links the reflection.
+10. **The agent is the one with judgment.** The system surfaces objective process diagnostics (calibration drift, mistake-tag frequency, advisory/manual playbook overrides, stale watches) but does not decide what counts as a mistake, generate trading signals, rank opportunities, or recommend trades.
 
 ## Primary persona
 
@@ -104,7 +104,7 @@ Trade Trace's central feature is a closed loop that turns trading experience int
 
 Layers 1 and 2 are deterministic and live in the system. Layers 3 and 4 are agent-driven and stored as graph memory. The loop closes because every new decision records the current playbook version, advisory/manual overrides are tracked, and override outcomes feed the next cycle's reports. Future machine-checkable rules may add automatic violation detection for explicitly modeled predicates.
 
-Reflections, reports, and recall can be scoped by **strategy** — a named edge thesis (e.g., `earnings-momentum`, `pairs-trade-XYZ`) that groups decisions, theses, and reviews into one logical grain. The loop then runs not just per-decision but per-strategy: the agent can ask "how is this strategy performing, what mistakes recur in it, what rule changes does it suggest?" without smearing those signals across unrelated trades. Strategies are orthogonal to playbooks (rules) and tags (free-form sub-classifiers); see PRD §2.12.
+Reflections, reports, and recall can be scoped by **strategy** — a named strategy thesis (e.g., `earnings-momentum`, `pairs-trade-XYZ`) that groups decisions, theses, and reviews into one logical grain. This is retrospective grouping/process context only; it is not an edge detector, opportunity ranking, or recommendation surface. The loop then runs not just per-decision but per-strategy: the agent can ask "is this strategy coherent, sourced, reviewed, and calibrated?" without smearing those diagnostics across unrelated trades. Strategies are orthogonal to playbooks (rules) and tags (free-form sub-classifiers); see PRD §2.12.
 
 This loop is the product. The MVP proves the complete loop with narrow breadth: structured manual ingestion, binary scoring, deterministic reports, reflection, playbook versioning, and recall. Broad asset coverage, richer scoring, sync, and viewers can follow only after that slice works.
 

@@ -274,8 +274,9 @@ under `summary.exclusions.counts_by_reason` plus bounded forecast IDs.
 The market/reference panel uses only stored `snapshots.implied_probability`
 linked through local decisions. It reports the agent probability minus that
 stored value as `recorded_market_reference_gap`/`mean_recorded_market_reference_gap`;
-this is a recorded reference comparison, not a trading signal, advice, alpha, or
-profitability evidence. If no implied probability is stored, the report emits
+this is a caller-supplied retrospective reference comparison, not a trading
+signal, advice, alpha, opportunity ranking, or profitability evidence. If no
+implied probability is stored, the report emits
 `missing_market_reference`; it does not derive a probability from price fields
 and does not fetch market data. Spread and liquidity coverage are reported as
 coverage counts/caveat codes rather than inferred quality thresholds.
@@ -366,7 +367,7 @@ calibration metrics. Diagnostics:
 4. `disputed_rate` — outcomes with `status='disputed'`.
 5. `void_cancelled_rate` — combined for `status in (void, cancelled)`.
 6. `suspicious_late_rate` — forecasts whose `created_at` is after a
-   matching outcome's `resolved_at` (post-hoc bias signal).
+   matching outcome's `resolved_at` (post-hoc bias indicator).
 
 Each diagnostic returns `{count, total, rate_pct, sample_ids,
 truncated}`. The framing is hygiene-not-fraud per scoring.md §9: the
@@ -397,7 +398,7 @@ Five provenance hygiene diagnostics over the source-attachment graph:
 
 Each diagnostic returns `{count, sample_ids, samples, truncated}`. The
 report is intentionally global (no `ReportFilter` input): provenance
-hygiene is a journal-level signal, not a per-strategy slice. No external
+hygiene is a journal-level diagnostic, not a per-strategy slice. No external
 fetching, no credibility scoring.
 
 Source: bead trade-trace-l9q.

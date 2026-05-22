@@ -77,7 +77,7 @@ Trade Trace supplies the substrate. The agent supplies the judgment. Reports and
 | **Calibration and scoring** | Scores supported binary forecasts on final outcomes and reports Brier, reliability bins, ECE, sharpness, baselines, and integrity caveats. |
 | **Typed memory graph** | Retain / Recall / Reflect for observations, reflections, and playbook rules, with typed edges to ledger rows and bi-temporal validity. |
 | **Playbooks and adherence** | Versions procedural rules, records whether rules were considered/followed/overridden/not applicable, and reports adherence patterns. |
-| **Strategies** | Groups decisions, theses, reviews, reports, recall, and reflections under named edge theses without turning strategies into execution logic. |
+| **Strategies** | Groups decisions, theses, reviews, reports, recall, and reflections under named strategy theses without turning strategies into execution logic, rankings, or trade recommendations. |
 | **Deterministic reports** | Calibration, forecast diagnostics, source quality, audit readiness, risk/opportunity diagnostics, P&L where local projection data exists, strategy health/performance, recall receipts, and review bundles. |
 | **Fresh-session continuity** | `agent.next_actions`, `report.work_queue`, and `report.lifecycle` expose local process obligations for stateless agents without scheduling, assigning, or fetching anything. |
 | **MCP + CLI parity** | Same tool registry, JSON envelopes, validation semantics, stable error codes, schemas, and dry-run/idempotency contracts across transports. |

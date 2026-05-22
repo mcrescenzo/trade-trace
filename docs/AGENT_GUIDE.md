@@ -21,7 +21,7 @@ tt report lifecycle --home <journal-home> --as-of 2026-05-22T00:00:00Z --states-
 {"tool":"agent.next_actions","args":{"as_of":"2026-05-22T00:00:00Z","filter":{"instrument":{"instrument_id":["ins_..."]}},"kinds":["resolve_due_forecast","record_reflection"]}}
 ```
 
-Use returned `source_refs`, `allowed_actions`, `forbidden_actions`, `closure_condition`, and `caveat` fields to decide what local evidence to inspect next. Resolve/review/reflect/adherence/source gaps only when the caller supplies the missing evidence or process judgment. Forbidden interpretations: not a scheduler/daemon/reminder, not a human dashboard queue, not task assignment, not advice/signals/ranking/profit proof, not broker/exchange/wallet state, and not live market/source/outcome fetching.
+Use returned `source_refs`, `allowed_actions`, `forbidden_actions`, `closure_condition`, and `caveat` fields to decide what local evidence to inspect next. Resolve/review/reflect/adherence/source gaps only when the caller supplies the missing evidence or process judgment. Forbidden interpretations: not a scheduler/daemon/reminder, not a human dashboard queue, not task assignment, not advice/trading signals/ranking/profit proof, not broker/exchange/wallet state, and not live market/source/outcome fetching.
 
 If you only have an unstructured market thought after checking continuity surfaces, start with `idea.capture` to create a local draft source/observation and promote it later. When a run is partially complete, call `journal.bundle.status` with the known `instrument_id`, `thesis_id`, `forecast_id`, `decision_id`, `source_id`, or `memory_node_id`; it is read-only and returns concrete `next_calls` for missing local journal steps.
 
@@ -64,19 +64,19 @@ If you only have an unstructured market thought after checking continuity surfac
 7. `memory.recall` — before writing the next thesis, retrieve relevant reflections, observations, and playbook rules with a required natural-language `query`. Use optional `context` only to narrow graph/provenance ranking metadata such as instrument or strategy; it is not a substitute for `query`.
 
 ```json
-{"tool":"memory.recall","args":{"query":"prior lessons about event X and spread-adjusted edge","context":{"kind":"strategy","id":"str_..."},"node_types":["observation","reflection","playbook_rule"],"k":10,"max_chars":6000,"compact":true}}
+{"tool":"memory.recall","args":{"query":"prior lessons about event X and recorded spread-adjusted thesis gap","context":{"kind":"strategy","id":"str_..."},"node_types":["observation","reflection","playbook_rule"],"k":10,"max_chars":6000,"compact":true}}
 ```
 
 8. `memory.reflect` — after the outcome, write the lesson and bind it to the row it is about. Prefer this safe helper over raw `memory.retain` for retrospective learning.
 
 ```json
-{"tool":"memory.reflect","args":{"target":{"kind":"decision","id":"dec_..."},"body":"The skip was correct: quoted edge disappeared after fees and spread.","importance":7,"idempotency_key":"agent-run-42:reflection:event-x"}}
+{"tool":"memory.reflect","args":{"target":{"kind":"decision","id":"dec_..."},"body":"The skip was correct in retrospective process review: the recorded thesis gap disappeared after fees and spread.","importance":7,"idempotency_key":"agent-run-42:reflection:event-x"}}
 ```
 
 9. `playbook.propose_version` — when a reflection should change future procedure, propose a new playbook version anchored to the reflection node.
 
 ```json
-{"tool":"playbook.propose_version","args":{"playbook_id":"pbk_...","provenance_reflection_node_id":"mem_...","description":"Require explicit spread-adjusted edge before acting.","idempotency_key":"agent-run-42:playbook:event-x"}}
+{"tool":"playbook.propose_version","args":{"playbook_id":"pbk_...","provenance_reflection_node_id":"mem_...","description":"Require an explicit recorded spread-adjusted thesis gap before acting; this is a process rule, not Trade Trace advice.","idempotency_key":"agent-run-42:playbook:event-x"}}
 ```
 
 ## 3. Patterns
