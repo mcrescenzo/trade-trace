@@ -335,6 +335,16 @@ exposed as candidate context; v0 emits
 Evaluation labels are withheld by default and, when explicitly requested, remain
 structurally separate in top-level `evaluation_labels`.
 
+The shipped v0 `replay.evaluate_output` tool is a thin deterministic
+syntactic/process checker over caller-supplied `case_bundle` and
+`candidate_output` objects. It returns machine-readable criteria for bundle
+contract validity, candidate metadata, case coverage, future-label leakage,
+forecast presence, decision type validity, citation coverage, playbook/caveat
+acknowledgement, forbidden boundary language, and later-scoring applicability.
+It is read-only and performs no external fetch, model execution, hidden write,
+market simulation, backtest, profit proof, or trading-advice generation. v0 does
+not make semantic NLP judgments and does not implement causal/profit scoring.
+
 ## Implementation test plan for future F2/F3/F4 work
 
 Future implementation tests should include fixtures that prove:

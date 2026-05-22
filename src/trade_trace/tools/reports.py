@@ -29,6 +29,7 @@ from trade_trace.reports import (
     TradingAdvicePhraseError,
     agent_next_actions,
     compose_bootstrap_packet,
+    evaluate_output,
     export_case_bundle,
     report_audit_readiness,
     report_calibration,
@@ -167,6 +168,20 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "Read-only deterministic local replay case bundle export over caller-supplied journal rows. "
             "No fetch, no model runner, no market simulator, no backtester, no broker/execution path, "
             "no profit proof, and no trading advice. Future outcomes/labels are withheld from candidate context."
+        ),
+    ),
+    "replay.evaluate_output": _schema(
+        {
+            "kind": {"type": "string", "const": "replay.evaluate_output"},
+            "contract_version": {"type": "string", "const": "replay.evaluate_output.v0"},
+            "case_bundle": {"type": "object", "description": "Required replay.case_bundle data payload supplied by caller."},
+            "candidate_output": {"type": "object", "description": "Required candidate agent output object to check."},
+            "rubric_version": {"type": "string", "description": "Optional rubric version; defaults replay.rubric.v0."},
+        },
+        required=["case_bundle", "candidate_output"],
+        description=(
+            "Read-only deterministic replay candidate-output process checker over caller-supplied objects. "
+            "No DB writes, no fetch, no model runner, no market simulator, no backtester, profit proof, or trading advice."
         ),
     ),
     "report.filter_schema": _schema(
@@ -1912,6 +1927,18 @@ def _replay_case_bundle(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
     return data
 
 
+def _replay_evaluate_output(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`replay.evaluate_output` — deterministic candidate process checker."""
+    try:
+        data = evaluate_output(args)
+    except ValueError as exc:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc), details={"tool": ctx.tool, "field": "replay.evaluate_output_request"}) from exc
+    ctx.meta_hints["replay_contract_version"] = data.get("contract_version")
+    ctx.meta_hints["evaluation_id"] = data.get("evaluation_id")
+    ctx.meta_hints["overall_status"] = (data.get("summary") or {}).get("overall_status")
+    return data
+
+
 def _report_filter_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """Return the canonical Pydantic-generated JSON Schema for ReportFilter.
 
@@ -2032,6 +2059,19 @@ def register_report_tools(registry: ToolRegistry) -> None:
         optional_keys=("kind", "contract_version", "case_selection", "task", "budgets"),
         json_schema=_REPORT_SCHEMAS["replay.case_bundle"],
         usage_summary="Export deterministic local point-in-time replay cases; no writes, fetches, model runs, simulation, or advice.",
+    )
+    registry.register(
+        "replay.evaluate_output",
+        _replay_evaluate_output,
+        description=(
+            "Read-only deterministic replay candidate-output process checker over caller-supplied case_bundle and "
+            "candidate_output objects. Returns machine-readable pass/fail/ambiguous/not_applicable criteria. No fetch, "
+            "model runner, market simulator, backtester, broker/execution path, profit proof, or trading advice."
+        ),
+        example_minimal={"case_bundle": {"kind": "replay.case_bundle", "contract_version": "replay.case_bundle.v0", "cases": []}, "candidate_output": {}},
+        optional_keys=("kind", "contract_version", "rubric_version"),
+        json_schema=_REPORT_SCHEMAS["replay.evaluate_output"],
+        usage_summary="Evaluate a candidate replay output for structural process criteria only; no writes, fetches, model runs, scoring engine, simulation, or advice.",
     )
     registry.register(
         "report.filter_schema",

@@ -45,6 +45,7 @@ from trade_trace.reports.playbook_adherence import (
 from trade_trace.reports.pnl import report_pnl
 from trade_trace.reports.recall_receipts import report_recall_receipts
 from trade_trace.reports.replay import export_case_bundle
+from trade_trace.reports.replay_evaluate import evaluate_output
 from trade_trace.reports.risk import DEFAULT_RISK_MIN_SAMPLE, report_risk
 from trade_trace.reports.source_quality import (
     STALE_SOURCE_THRESHOLD_DAYS,
@@ -82,6 +83,7 @@ __all__ = [
     "compose_bootstrap_packet",
     "confidence_bucket",
     "export_case_bundle",
+    "evaluate_output",
     "liquidity_bucket",
     "report_calibration",
     "report_calibration_integrity",
