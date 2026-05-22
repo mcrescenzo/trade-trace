@@ -95,11 +95,17 @@ def test_computed_recall_receipts_classify_use_and_caveats_without_persistence(h
     assert receipt["node_ids_returned"] == ["mem-used", "mem-ignored", "mem-stale"]
     statuses = {item["id"]: item for item in receipt["items"]}
     assert statuses["mem-used"]["status"] == "cited_or_used"
+    assert statuses["mem-used"]["attribution_status"] == "cited_or_used"
     assert statuses["mem-ignored"]["status"] == "ignored_or_unattributed"
+    assert statuses["mem-ignored"]["attribution_status"] == "not_attributable"
     assert statuses["mem-stale"]["status"] == "ignored_or_unattributed"
+    assert statuses["mem-stale"]["attribution_status"] == "contradicted"
     assert "STALE_OR_INVALIDATED_MEMORY" in statuses["mem-stale"]["caveat_codes"]
     assert "CONTRADICTED_DOWNSTREAM" in statuses["mem-stale"]["caveat_codes"]
     assert statuses["mem-used"]["source_refs"] == [{"target_kind": "source", "target_id": "source-1", "edge_type": "about"}]
+    assert "CONSUMER_INFERENCE_UNSCOPED" in receipt["caveat_codes"]
+    assert report["attribution_conventions"]["use_link_direction"] == "consumer -> memory_node"
+    assert report["attribution_conventions"]["source_reference_direction"] == "memory_node -> source (not downstream use evidence)"
 
 
 def test_recall_receipts_tool_filters_by_context_and_consumer(home):
@@ -117,3 +123,34 @@ def test_recall_receipts_tool_filters_by_context_and_consumer(home):
     receipts = dumped["data"]["recall_receipts"]
     assert [r["recall_id"] for r in receipts] == ["recall-1"]
     assert receipts[0]["node_ids_used"] == ["mem-used"]
+
+
+def test_recall_receipts_require_consumer_scope_for_strong_attribution(home):
+    with _conn(home) as conn:
+        _seed(conn)
+        report = report_recall_receipts(conn, recall_id="recall-1", consumer_kind="decision", consumer_id="dec")
+
+    receipt = report["recall_receipts"][0]
+    assert "CONSUMER_INFERENCE_UNSCOPED" not in receipt["caveat_codes"]
+    assert receipt["node_ids_used"] == ["mem-used"]
+    statuses = {item["id"]: item for item in receipt["items"]}
+    assert statuses["mem-used"]["edge_evidence"] == [
+        {
+            "edge_id": "e-use",
+            "consumer_kind": "decision",
+            "consumer_id": "dec",
+            "edge_type": "supports",
+            "created_at": "2026-01-01T00:06:00Z",
+        }
+    ]
+    assert statuses["mem-stale"]["edge_evidence"] == []
+    assert statuses["mem-stale"]["attribution_status"] == "stale"
+
+
+def test_recall_receipts_do_not_treat_memory_source_refs_as_downstream_use(home):
+    with _conn(home) as conn:
+        _seed(conn)
+        report = report_recall_receipts(conn, recall_id="recall-1", consumer_kind="review", consumer_id="missing-review")
+
+    assert report["recall_receipts"] == []
+    assert report["summary"]["sample_warning"] == "no_recall_events"

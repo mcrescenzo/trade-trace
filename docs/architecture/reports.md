@@ -11,7 +11,7 @@ report.playbook_adherence, report.coach, report.filter_schema,
 report.compare, report.strategy_performance, report.audit_readiness,
 report.risk, report.opportunity, review.bundle, report.current_exposure,
 report.exposure_anomalies, report.open_positions, report.lifecycle,
-report.work_queue, and agent.next_actions. Deferred (P1+):
+report.recall_receipts, report.work_queue, and agent.next_actions. Deferred (P1+):
 trading-native forecast-vs-market edge reports, calibration-by-liquidity-bucket,
 skipped-positive-edge review, and broader replay/evaluation surfaces.
 
@@ -474,7 +474,24 @@ daemon, reminder, assignment queue, human dashboard workflow, trading
 signal/ranking/advice, profit claim, broker truth, wallet/execution path,
 or permission to fetch live market/source/outcome data.
 
-### 4.12 `report.work_queue` and `agent.next_actions`
+### 4.12 `report.recall_receipts`
+
+Read-only computed receipt over `memory_recall_events`, `memory_nodes`, and typed `edges`. It does not create a durable receipt table. It answers: what memories were returned, which scoped downstream consumer linked back to them, and which attribution caveats apply.
+
+Inputs:
+
+- `recall_id`, `node_id`: optional point filters.
+- `consumer_kind`, `consumer_id`: downstream consumer scope. `consumer_id` requires `consumer_kind`; strong attribution requires both.
+- `run_id`, `agent_id`, `model_id`, `environment`: actor/run segmentation from the recall event.
+- `instrument_id`, `strategy_id`: filters against recall context.
+- `as_of`: bounds recall events and edge evidence by `created_at`.
+- `limit`: positive integer event limit.
+
+Item conventions mirror [memory-layer.md §9.1](memory-layer.md#91-downstream-recall-use-and-citation-conventions): `status` is `cited_or_used` when a consumer-to-memory `supports`, `derived_from`, `about`, `follows`, or `violates` edge exists, otherwise `ignored_or_unattributed`. `attribution_status` narrows the reason to `cited_or_used`, `contradicted`, `stale`, or `not_attributable`. `source_refs` from `memory_node -> source` never count as downstream use. Unscoped inference carries `CONSUMER_INFERENCE_UNSCOPED`; stale/invalidated nodes, contradiction edges, and supersession edges carry explicit caveat codes.
+
+Forbidden interpretations: not a generic transcript memory store, durable receipt table, task queue, dashboard workflow, trading signal/ranking/advice, profit claim, broker/execution/wallet path, or permission to fetch live/external data.
+
+### 4.13 `report.work_queue` and `agent.next_actions`
 
 `report.work_queue` projects selected lifecycle states into transient
 process-obligation items. `agent.next_actions` is an agent-facing alias /

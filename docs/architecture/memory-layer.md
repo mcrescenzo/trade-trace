@@ -292,12 +292,43 @@ All operations are exposed as MCP tools and CLI subcommands with semantic parity
 - **`memory.link(from, to, edge_type, *, weight?)`** — explicit edge creation between two existing endpoints. Validates endpoint kind and ID.
 - **`reflection.prompt_for_outcome(outcome_id, *, include_forecast?, include_thesis?, include_prior_reflections?)`** — deterministic, no-LLM tool. Returns a structured packet: the resolved outcome, the original thesis and forecast it resolved, prior reflections on the same instrument/strategy, and the calibration delta (forecast probability vs. realized indicator). The caller (a separate LLM) decides what to write back via `memory.reflect`. The system never auto-generates reflections; this tool packages evidence for the reviewer.
 
+### 9.1 Downstream recall-use and citation conventions
+
+Recall telemetry records what `memory.recall` returned; downstream use is recorded or inferred only from typed edges. The canonical use-link direction is always:
+
+```text
+consumer row  --edge_type-->  memory_node
+```
+
+where the consumer row is one of `decision`, `thesis`, `forecast`, `outcome`, `review`, or `playbook_version`. Use `memory.link` after the consumer row exists. Do **not** use `memory_node -> consumer` edges to mean downstream use; memory-node outgoing edges remain source/provenance/reference links.
+
+| Consumer kind | When to link recalled memory | Use edge types | Caveat edge types |
+|---|---|---|---|
+| `decision` | The decision reason cites or materially relies on a recalled lesson/observation/reflection. | `supports`, `derived_from`, `about`, `follows`, `violates` | `contradicts`, `supersedes` |
+| `thesis` | A promoted thesis uses a remembered precedent, rule, or reflection as evidence/context. | `supports`, `derived_from`, `about` | `contradicts`, `supersedes` |
+| `forecast` | A probability/range forecast uses a remembered calibration lesson or comparable case. | `supports`, `derived_from`, `about` | `contradicts`, `supersedes` |
+| `review` / reflection target | A review/reflection explicitly uses recalled memories as evidence for the review conclusion. | `supports`, `derived_from`, `about`, `follows`, `violates` | `contradicts`, `supersedes` |
+| `playbook_version` | A playbook/rule change is based on or intentionally departs from a recalled memory. | `supports`, `derived_from`, `about`, `follows`, `violates` | `contradicts`, `supersedes` |
+
+Attribution terms are exact:
+
+- **Cited / used**: a consumer-to-memory edge exists with `supports`, `derived_from`, `about`, `follows`, or `violates`. `violates` still counts as use because the consumer intentionally used the memory as a rule/constraint it broke.
+- **Ignored**: the memory was returned in the recall event but the scoped consumer has no downstream edge to it.
+- **Not attributable**: the report has no consumer scope, no matching consumer edge, or only memory-node outgoing source/reference edges. The system cannot distinguish "ignored" from "used in free text but not linked".
+- **Stale**: the returned memory has `valid_to` at or before the receipt `as_of`, or `invalidated_at`/`invalidated_by` is set. Stale memories may still be cited, but the receipt carries a stale caveat.
+- **Contradicted**: a scoped or inferred consumer has a `contradicts` edge to the returned memory. This is not a use edge, but it is downstream evidence and carries a contradiction caveat.
+- **Superseded**: a scoped or inferred consumer has a `supersedes` edge to the returned memory. This is not a use edge, but it is downstream evidence and carries a supersession caveat.
+
+Strong attribution requires both `consumer_kind` and `consumer_id` when calling `report.recall_receipts`. If only broad filters are used, the report may infer downstream edges from any supported consumer kind and must mark the receipt with `CONSUMER_INFERENCE_UNSCOPED`.
+
+Source/provenance convention: `memory_node -> source` edges are exposed as `source_refs` in recall receipts, but never prove downstream use. They answer "where did this memory come from?", not "which later decision used it?".
+
 The `target` of a reflection can be:
 
 - A specific decision (`decision_id`), position (`position_id`), instrument (`instrument_id`), playbook version (`playbook_version_id`), signal (`signal_id`), outcome (`outcome_id`), forecast (`forecast_id`), or strategy (`strategy_id`) — creates an `about` edge to the target endpoint.
 - A time period (`period: {start, end}`) or tag (`tag: "liquidity-ignored"`) — stored in reflection `meta_json` until/unless period/tag entities become first-class endpoints. Strategies, by contrast, *are* first-class (PRD §2.12) and target a strategy directly rather than via `meta_json`.
 
-### 9.1 Period- and tag-scoped reflection lookup
+### 9.2 Period- and tag-scoped reflection lookup
 
 Since period and tag are not first-class edge endpoints in MVP, the
 lookup pattern goes through `meta_json` directly. The canonical

@@ -17,6 +17,14 @@ USE_EDGE_TYPES: Final[set[str]] = {"supports", "derived_from", "about", "follows
 CONTRADICTION_EDGE_TYPES: Final[set[str]] = {"contradicts"}
 SUPERSESSION_EDGE_TYPES: Final[set[str]] = {"supersedes"}
 CONSUMER_KINDS: Final[set[str]] = {"decision", "thesis", "forecast", "outcome", "review", "playbook_version"}
+ATTRIBUTION_CONVENTIONS: Final[dict[str, Any]] = {
+    "use_link_direction": "consumer -> memory_node",
+    "use_edge_types": sorted(USE_EDGE_TYPES),
+    "contradiction_edge_types": sorted(CONTRADICTION_EDGE_TYPES),
+    "supersession_edge_types": sorted(SUPERSESSION_EDGE_TYPES),
+    "source_reference_direction": "memory_node -> source (not downstream use evidence)",
+    "strong_inference_requires": "consumer_kind plus consumer_id",
+}
 
 
 def report_recall_receipts(
@@ -128,7 +136,7 @@ def report_recall_receipts(
             "caveat_codes": sorted(caveat_codes),
         },
         groups=groups,
-        extra={"recall_receipts": receipts},
+        extra={"recall_receipts": receipts, "attribution_conventions": ATTRIBUTION_CONVENTIONS},
     )
 
 
@@ -226,14 +234,28 @@ def _memory_item(conn: sqlite3.Connection, node_id: str, *, rank: int, edge_evid
     if any(ev["edge_type"] in SUPERSESSION_EDGE_TYPES for ev in edge_evidence):
         caveats.append("SUPERSEDED_DOWNSTREAM")
     used = any(ev["edge_type"] in USE_EDGE_TYPES for ev in edge_evidence)
+    contradicted = any(ev["edge_type"] in CONTRADICTION_EDGE_TYPES for ev in edge_evidence)
+    superseded = any(ev["edge_type"] in SUPERSESSION_EDGE_TYPES for ev in edge_evidence)
+    attribution_status = _attribution_status(used=used, contradicted=contradicted, superseded=superseded, caveats=caveats)
     return {
         **node,
         "rank": rank,
         "status": "cited_or_used" if used else "ignored_or_unattributed",
+        "attribution_status": attribution_status,
         "edge_evidence": edge_evidence,
         "source_refs": _source_refs_for(conn, node_id),
         "caveat_codes": sorted(set(caveats)),
     }
+
+
+def _attribution_status(*, used: bool, contradicted: bool, superseded: bool, caveats: list[str]) -> str:
+    if used:
+        return "cited_or_used"
+    if contradicted:
+        return "contradicted"
+    if superseded or "STALE_OR_INVALIDATED_MEMORY" in caveats or "STALE_AS_OF_RECEIPT" in caveats:
+        return "stale"
+    return "not_attributable"
 
 
 def _edge_evidence(conn: sqlite3.Connection, node_id: str, *, consumer_kind: str | None, consumer_id: str | None, as_of: str | None) -> list[dict[str, Any]]:
