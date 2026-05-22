@@ -34,7 +34,9 @@ from trade_trace.tools._helpers import (
 from trade_trace.tools.decision_matrix import (
     allowed_decision_types,
     decision_matrix_contract,
+    material_non_action_taxonomy,
     validate_decision_fields,
+    validate_material_non_action,
 )
 from trade_trace.tools.errors import ToolError
 
@@ -861,6 +863,7 @@ def _maybe_inject_late_flag(args: dict[str, Any], *, late_recorded: bool) -> str
 def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     decision_type = require(args, "type")
     validate_decision_fields(decision_type, args)
+    validate_material_non_action(decision_type, args)
     reject_if_contains_secrets(args.get("reason"), field="reason")
     tags = _store_tags(args.get("tags"))
     seg = common_metadata(args)
@@ -2178,6 +2181,7 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
         "paper_exit remain journal records only for projection purposes."
     ),
     "x-decision-matrix": _DECISION_MATRIX_CONTRACT,
+    "x-material-non-action-taxonomy": material_non_action_taxonomy(),
     "x-decision-examples": {
         "skip": {
             "type": "skip",

@@ -218,7 +218,7 @@ The four segmentation fields (`agent_id`, `model_id`, `environment`, `run_id`) s
 | `actual_exit` | R | O | R | R | R | O | O | O | X |
 | `add` | R | O | R | R | R | O | O | O | X |
 | `reduce` | R | O | R | R | R | O | O | O | X |
-| `hold` | R | O | O | X | X | X | X | O | X |
+| `hold` | R | O | O | X | X | X | X | O | O |
 | `invalidate_thesis` | R | R | X | X | X | X | X | R | X |
 | `update_thesis` | R | R | X | X | X | X | X | O | X |
 | `resolved` | R | O | X | X | X | X | X | O | X |
@@ -226,7 +226,9 @@ The four segmentation fields (`agent_id`, `model_id`, `environment`, `run_id`) s
 
 Forbidden-but-supplied fields raise `VALIDATION_ERROR` with `details.field` set. The matrix is enforced at write time, not at projection time.
 
-Per bead trade-trace-gbtj, `watch` accepts an optional `review_by` (matrix `O`) so a watch can carry a first-class deferred-review deadline. `report.watchlist` surfaces the deadline plus a per-row `overdue` flag (`review_by <= as_of`) and a summary `overdue_count`. Age-based `mode='stale'` filtering remains independent so age-only callers are unchanged.
+Per bead trade-trace-gbtj, `watch` accepts an optional `review_by` (matrix `O`) so a watch can carry a first-class deferred-review deadline. `hold` also accepts optional `review_by` so material defer-like hold records can carry a first-class checkpoint without changing decision type. `report.watchlist` surfaces the deadline plus a per-row `overdue` flag (`review_by <= as_of`) and a summary `overdue_count`. Age-based `mode='stale'` filtering remains independent so age-only callers are unchanged.
+
+Material non-actions are explicit learning cases over existing `decisions`, not a new table or enum. Callers mark one by setting `metadata_json.material_non_action = {"category": <category>, "materiality_reason": <reason>}` and still choosing an existing `decision.type`. Categories are `watch`, `skip`, `hold`, `defer`, `review`, `thesis_update`, and `thesis_invalidated`; `defer` is encoded as `type=watch|hold|review` plus `category=defer` and requires `review_by`. Allowed materiality reasons are exposed in `tool.schema` as `x-material-non-action-taxonomy` and include `candidate_rejected`, `liquidity`, `source_stale`, `insufficient_edge`, `risk_limit`, `playbook_block`, `already_exposed`, `forecast_ambiguous`, `waiting_for_resolution`, `thesis_changed`, `thesis_invalidated`, `review_obligation`, `scanner_selected`, and `source_gap`. When material metadata is present, `reason` is required and the category must be compatible with the decision type. Ordinary absence of action remains no row/no marker; reports must not infer material learning cases from silence. `report.watchlist` includes `material_non_action_count` plus per-row material category/reason so material watches/defers can be distinguished from ordinary watch records.
 
 #### `decision_tags`
 - `decision_id`, `tag`

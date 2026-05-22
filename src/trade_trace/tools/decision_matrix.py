@@ -57,7 +57,7 @@ DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
     "hold": {
         "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "O",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
-        "reason": "O", "review_by": "X",
+        "reason": "O", "review_by": "O",
     },
     "invalidate_thesis": {
         "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "X",
@@ -81,11 +81,42 @@ DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
     },
 }
 
+MATERIAL_NON_ACTION_CATEGORIES: dict[str, dict[str, Any]] = {
+    "watch": {"decision_types": ["watch"], "requires_review_by": False, "closure": "review or resolved decision after trigger/deadline"},
+    "skip": {"decision_types": ["skip"], "requires_review_by": False, "closure": "terminal by default; review only when selected by supplied outcome/opportunity evidence"},
+    "hold": {"decision_types": ["hold"], "requires_review_by": False, "closure": "later action, review, thesis update, or resolved decision"},
+    "defer": {"decision_types": ["watch", "hold", "review"], "requires_review_by": True, "closure": "review_by checkpoint or explicit review/decision when blocker clears"},
+    "review": {"decision_types": ["review"], "requires_review_by": True, "closure": "the recorded review decision is the checkpoint; follow with reflection if lessons emerge"},
+    "thesis_update": {"decision_types": ["update_thesis"], "requires_review_by": False, "closure": "superseding thesis/review/reflection as applicable"},
+    "thesis_invalidated": {"decision_types": ["invalidate_thesis"], "requires_review_by": False, "closure": "invalidated thesis plus review/reflection when outcome evidence exists"},
+}
+
+MATERIALITY_REASONS: list[str] = [
+    "candidate_rejected", "liquidity", "source_stale", "insufficient_edge",
+    "risk_limit", "playbook_block", "already_exposed", "forecast_ambiguous",
+    "waiting_for_resolution", "thesis_changed", "thesis_invalidated",
+    "review_obligation", "scanner_selected", "source_gap",
+]
+
 
 def allowed_decision_types() -> list[str]:
     """Return the stable decision.type choices in matrix order."""
 
     return list(DECISION_MATRIX)
+
+
+def material_non_action_taxonomy() -> dict[str, Any]:
+    """Expose optional metadata-based material non-action taxonomy."""
+
+    return {
+        "metadata_key": "metadata_json.material_non_action",
+        "categories": MATERIAL_NON_ACTION_CATEGORIES,
+        "materiality_reasons": MATERIALITY_REASONS,
+        "required_when_present": ["category", "materiality_reason"],
+        "reason_field_required_when_present": True,
+        "ordinary_absence_of_action": "No decision row and no material_non_action metadata; reports must not infer a learning case from silence.",
+        "defer_encoding": "Use category=defer on decision.type watch, hold, or review; do not add a defer decision enum without migration/product approval.",
+    }
 
 
 def decision_matrix_contract() -> dict[str, dict[str, list[str]]]:
@@ -137,6 +168,35 @@ def _matrix_details(decision_type: str, args: dict[str, Any]) -> dict[str, Any]:
         "allowed_decision_types": allowed_decision_types(),
         "corrected_payload_hint": _corrected_payload_hint(decision_type, args),
     }
+
+
+def validate_material_non_action(decision_type: str, args: dict[str, Any]) -> None:
+    """Validate optional material non-action metadata for `decision.add`."""
+
+    from trade_trace.contracts.errors import ErrorCode
+    from trade_trace.tools.errors import ToolError
+
+    metadata = args.get("metadata_json")
+    if not isinstance(metadata, dict):
+        return
+    marker = metadata.get("material_non_action")
+    if marker is None:
+        return
+    if not isinstance(marker, dict):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "metadata_json.material_non_action must be an object", details={"field": "metadata_json.material_non_action", "taxonomy": material_non_action_taxonomy()})
+    category = marker.get("category")
+    materiality_reason = marker.get("materiality_reason")
+    if category not in MATERIAL_NON_ACTION_CATEGORIES:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, f"unknown material non-action category {category!r}", details={"field": "metadata_json.material_non_action.category", "value": category, "allowed_categories": list(MATERIAL_NON_ACTION_CATEGORIES), "taxonomy": material_non_action_taxonomy()})
+    if materiality_reason not in MATERIALITY_REASONS:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, f"unknown materiality_reason {materiality_reason!r}", details={"field": "metadata_json.material_non_action.materiality_reason", "value": materiality_reason, "allowed_materiality_reasons": MATERIALITY_REASONS, "taxonomy": material_non_action_taxonomy()})
+    allowed_types = MATERIAL_NON_ACTION_CATEGORIES[category]["decision_types"]
+    if decision_type not in allowed_types:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, f"material non-action category {category!r} is not valid for decision.type={decision_type!r}", details={"field": "metadata_json.material_non_action.category", "category": category, "decision_type": decision_type, "allowed_decision_types_for_category": allowed_types, "taxonomy": material_non_action_taxonomy()})
+    if not args.get("reason"):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "reason is required when metadata_json.material_non_action is supplied", details={"field": "reason", "violation": "required_for_material_non_action", "taxonomy": material_non_action_taxonomy()})
+    if MATERIAL_NON_ACTION_CATEGORIES[category]["requires_review_by"] and not args.get("review_by"):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, f"review_by is required for material non-action category {category!r}", details={"field": "review_by", "violation": "required_for_material_non_action", "category": category, "taxonomy": material_non_action_taxonomy()})
 
 
 def validate_decision_fields(decision_type: str, args: dict) -> None:

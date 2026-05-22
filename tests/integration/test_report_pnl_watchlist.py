@@ -156,9 +156,13 @@ def test_watchlist_lists_watch_decisions(home):
     _envelope(home, "decision.add", {
         "instrument_id": inst["data"]["id"], "type": "watch",
         "reason": "monitor levels",
+        "metadata_json": {"material_non_action": {"category": "watch", "materiality_reason": "liquidity"}},
     })
     env = _envelope(home, "report.watchlist", {})
     assert env["data"]["summary"]["metrics"]["watch_count"] == 1
+    assert env["data"]["summary"]["metrics"]["material_non_action_count"] == 1
+    assert env["data"]["groups"][0]["metrics"]["material_non_action"] is True
+    assert env["data"]["groups"][0]["metrics"]["materiality_reason"] == "liquidity"
     assert env["data"]["groups"][0]["label"].startswith("watch on")
 
 
