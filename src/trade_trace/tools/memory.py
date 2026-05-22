@@ -173,7 +173,19 @@ def _validate_policy_candidate_meta(meta_json: dict[str, Any], *, node_type: str
             "policy candidates require explicit scope metadata",
             details={"field": "meta_json.policy_candidate.scope"},
         )
-    if not any(key in scope for key in ("strategy_id", "strategy_ids", "strategy_scope")):
+    strategy_id = scope.get("strategy_id")
+    strategy_ids = scope.get("strategy_ids")
+    strategy_scope = scope.get("strategy_scope")
+    has_meaningful_strategy_scope = (
+        (isinstance(strategy_id, str) and bool(strategy_id.strip()))
+        or (
+            isinstance(strategy_ids, list)
+            and bool(strategy_ids)
+            and all(isinstance(value, str) and bool(value.strip()) for value in strategy_ids)
+        )
+        or (isinstance(strategy_scope, str) and bool(strategy_scope.strip()))
+    )
+    if not has_meaningful_strategy_scope:
         raise ToolError(
             ErrorCode.VALIDATION_ERROR,
             "policy candidates must explicitly scope strategy applicability",
