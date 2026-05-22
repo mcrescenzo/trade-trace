@@ -12,8 +12,11 @@ import json
 import sqlite3
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
+from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
+from trade_trace.reports._envelope import standard_report_result
+from trade_trace.reports._filter_support import process_filter
 from trade_trace.reports.watchlist import DEFAULT_STALE_THRESHOLD_DAYS
 from trade_trace.tools._helpers import now_iso
 
@@ -82,7 +85,7 @@ def derive_lifecycle_cases(
     decisions = conn.execute(
         """
         SELECT id, instrument_id, thesis_id, forecast_id, snapshot_id, type,
-               reason, playbook_version_id, review_by, strategy_id,
+               reason, playbook_version_id, review_by, strategy_id, run_id,
                metadata_json, created_at
         FROM decisions
         ORDER BY created_at ASC, id ASC
@@ -102,6 +105,7 @@ def derive_lifecycle_cases(
                 "playbook_version_id",
                 "review_by",
                 "strategy_id",
+                "run_id",
                 "metadata_json",
                 "created_at",
             ],
@@ -148,6 +152,109 @@ def derive_lifecycle_cases(
         cases.append(_derive_forecast_case(conn, forecast=forecast, as_of_dt=as_of_dt))
 
     return [case.to_dict() for case in sorted(cases, key=_case_sort_key)]
+
+
+def report_lifecycle(
+    conn: sqlite3.Connection,
+    *,
+    raw_filter: dict[str, Any] | None = None,
+    states: list[str] | None = None,
+    as_of: str | None = None,
+    stale_threshold_days: int = DEFAULT_STALE_THRESHOLD_DAYS,
+) -> dict[str, Any]:
+    """Return public derived lifecycle gaps/cases without persisting state."""
+
+    if not isinstance(stale_threshold_days, int) or stale_threshold_days < 0:
+        raise ValueError("stale_threshold_days must be a non-negative integer")
+    allowed_states = set(get_args(LifecycleState))
+    state_filter = sorted(set(states or []))
+    unknown = [state for state in state_filter if state not in allowed_states]
+    if unknown:
+        raise ValueError(f"unsupported lifecycle state(s): {unknown!r}")
+    resolved_as_of = _iso(_parse_ts(as_of or now_iso()))
+
+    rf = ReportFilter.model_validate(raw_filter or {})
+    filter_view = process_filter(rf, report="report.lifecycle")
+    cases = [
+        _public_case(case)
+        for case in derive_lifecycle_cases(
+            conn,
+            as_of=resolved_as_of,
+            stale_threshold_days=stale_threshold_days,
+        )
+    ]
+    cases = [case for case in cases if _case_matches_filter(case, rf, state_filter)]
+
+    state_counts = {state: 0 for state in sorted(allowed_states)}
+    for case in cases:
+        state_counts[case["state"]] += 1
+    groups = [
+        {
+            "key": case["case_id"],
+            "label": f"{case['state']} lifecycle case",
+            "metrics": {
+                "state": case["state"],
+                "status": case["status"],
+                "due_at": case.get("due_at"),
+                "created_at": case["timestamps"].get("created_at"),
+                "material_non_action": case.get("material_non_action") is not None,
+            },
+            "filter": {**filter_view, "states": state_filter},
+            "record_ids": case["record_ids"],
+            "examples": [{"kind": "lifecycle_case", "id": case["case_id"], "summary": ",".join(case["reason_codes"])}],
+            "sample_size": 1,
+            "sample_warning": None,
+            "truncated": False,
+        }
+        for case in cases
+    ]
+    return standard_report_result(
+        summary={
+            "sample_size": len(cases),
+            "sample_warning": None,
+            "filter": {**filter_view, "states": state_filter},
+            "metrics": {
+                "case_count": len(cases),
+                "state_counts": state_counts,
+                "due_count": sum(1 for case in cases if case.get("due_at") is not None),
+                "material_non_action_count": sum(1 for case in cases if case.get("material_non_action") is not None),
+                "stale_threshold_days": stale_threshold_days,
+            },
+            "caveats": [],
+        },
+        groups=groups,
+        extra={"as_of": resolved_as_of, "lifecycle_cases": cases},
+    )
+
+
+def _public_case(case: dict[str, Any]) -> dict[str, Any]:
+    record_ids: dict[str, list[str]] = {}
+    for ref in case["source_refs"]:
+        record_ids.setdefault(f"{ref['kind']}s", []).append(ref["id"])
+    return {**case, "status": case["state"], "record_ids": {kind: sorted(set(ids)) for kind, ids in sorted(record_ids.items())}}
+
+
+def _case_matches_filter(case: dict[str, Any], rf: ReportFilter, states: list[str]) -> bool:
+    if states and case["state"] not in states:
+        return False
+    refs = {(ref["kind"], ref["id"]) for ref in case["source_refs"]}
+    if rf.instrument.instrument_id and not any(("instrument", inst) in refs for inst in rf.instrument.instrument_id):
+        return False
+    strategy_ids = [ref_id for kind, ref_id in refs if kind == "strategy"]
+    if rf.strategy_filter_mode() == "is_null" and strategy_ids:
+        return False
+    if rf.strategy_filter_mode() == "match" and ("strategy", rf.strategy.strategy_id or STRATEGY_NONE_SENTINEL) not in refs:
+        return False
+    if rf.actors.run_id and not any(("run", run_id) in refs for run_id in rf.actors.run_id):
+        return False
+    created_at = case.get("timestamps", {}).get("created_at")
+    for gte in (rf.time_window.created_at_gte, rf.time_window.decision_at_gte):
+        if gte is not None and (created_at is None or _parse_ts(created_at) < _parse_ts(gte)):
+            return False
+    for lt in (rf.time_window.created_at_lt, rf.time_window.decision_at_lt):
+        if lt is not None and (created_at is None or _parse_ts(created_at) >= _parse_ts(lt)):
+            return False
+    return True
 
 
 def _derive_decision_case(
@@ -313,6 +420,8 @@ def _base_decision_refs(decision: dict[str, Any]) -> list[dict[str, str]]:
     for kind, key in (("thesis", "thesis_id"), ("forecast", "forecast_id"), ("snapshot", "snapshot_id"), ("playbook_version", "playbook_version_id"), ("strategy", "strategy_id")):
         if decision.get(key):
             refs.append({"kind": kind, "id": decision[key]})
+    if decision.get("run_id"):
+        refs.append({"kind": "run", "id": decision["run_id"]})
     return refs
 
 
@@ -427,4 +536,4 @@ def _case_sort_key(case: LifecycleCase) -> tuple[str, str, str]:
     return (created_at, case.case_id, case.state)
 
 
-__all__ = ["LifecycleCase", "LifecycleState", "derive_lifecycle_cases"]
+__all__ = ["LifecycleCase", "LifecycleState", "derive_lifecycle_cases", "report_lifecycle"]

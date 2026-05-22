@@ -1,6 +1,6 @@
 # Internal derived decision/non-action lifecycle
 
-Status: internal implementation note for `trade-trace-03b6.1`; not a public report/tool contract.
+> Status: **partial — public report shipped, internal substrate documented** for `trade-trace-03b6`; `report.lifecycle` is a public read-only report while the derived lifecycle substrate remains an internal implementation note.
 
 `trade_trace.reports.lifecycle.derive_lifecycle_cases(conn, as_of=..., stale_threshold_days=...)` derives lifecycle cases from existing SQLite rows only. It does not create lifecycle tables, durable work items, scheduler state, advice, source fetches, or public report payload shapes.
 

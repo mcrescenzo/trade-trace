@@ -213,6 +213,7 @@ SHIPPED_REPORTS = {
     "report.current_exposure",
     "report.exposure_anomalies",
     "report.filter_schema",
+    "report.lifecycle",
     "report.open_positions",
     "report.strategy_performance",
 }

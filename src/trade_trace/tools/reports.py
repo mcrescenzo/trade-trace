@@ -14,6 +14,7 @@ trade-trace-77z; the coach lands in trade-trace-2g2.
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -31,6 +32,7 @@ from trade_trace.reports import (
     report_coach,
     report_compare,
     report_decision_velocity,
+    report_lifecycle,
     report_mistakes,
     report_opportunity,
     report_playbook_adherence,
@@ -43,6 +45,8 @@ from trade_trace.reports import (
     report_watchlist,
 )
 from trade_trace.reports._filter_support import UnsupportedFilterError
+from trade_trace.storage import resolve_home
+from trade_trace.storage.paths import db_path
 from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
 from trade_trace.tools._helpers import open_db_for_args
 from trade_trace.tools._report_filter_errors import (
@@ -184,6 +188,16 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "mode": {"type": "string", "enum": ["all", "stale"]},
             "stale_threshold_days": {"type": "integer", "minimum": 0},
         }
+    ),
+    "report.lifecycle": _schema(
+        {
+            "filter": _FILTER_PROP,
+            "states": {"type": "array", "items": {"type": "string"}},
+            "status": {"type": "string"},
+            "as_of": {"type": "string", "format": "date-time"},
+            "stale_threshold_days": {"type": "integer", "minimum": 0},
+        },
+        description="Read-only derived lifecycle cases; filter by ReportFilter plus states/status, as_of, and stale threshold.",
     ),
     "report.open_positions": _schema(
         {
@@ -823,6 +837,49 @@ def _report_watchlist(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         db.close()
     _propagate_report_meta(ctx, data)
     return data
+
+
+def _report_lifecycle(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.lifecycle` — derived lifecycle gaps/cases, read-only."""
+
+    stale_threshold_days = args.get("stale_threshold_days", 14)
+    if not isinstance(stale_threshold_days, int) or stale_threshold_days < 0:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "stale_threshold_days must be a non-negative integer", details={"field": "stale_threshold_days", "value": stale_threshold_days})
+    states = args.get("states")
+    status = args.get("status")
+    if status is not None:
+        if not isinstance(status, str):
+            raise ToolError(ErrorCode.VALIDATION_ERROR, "status must be a string", details={"field": "status", "value": status})
+        states = [*(states or []), status]
+    if states is not None and (not isinstance(states, list) or not all(isinstance(item, str) for item in states)):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "states must be a list of strings", details={"field": "states", "value": states})
+    as_of_raw = args.get("as_of")
+    if as_of_raw is not None and not isinstance(as_of_raw, str):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "as_of must be an ISO timestamp string", details={"field": "as_of", "value": as_of_raw})
+    try:
+        home = resolve_home(args.get("home"))
+        path = db_path(home)
+        if not path.exists():
+            raise ToolError(ErrorCode.STORAGE_ERROR, "journal not initialized; run `tt journal init` first", details={"home": str(home), "db_path": str(path)})
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            data = report_lifecycle(
+                connection,
+                raw_filter=args.get("filter"),
+                states=states,
+                as_of=as_of_raw,
+                stale_threshold_days=stale_threshold_days,
+            )
+        finally:
+            connection.close()
+        _propagate_report_meta(ctx, data)
+        return data
+    except ValidationError as exc:
+        raise report_filter_validation_to_tool_error(exc) from exc
+    except UnsupportedFilterError as exc:
+        raise _unsupported_filter_to_tool_error(exc) from exc
+    except ValueError as exc:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
 
 
 def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -1737,6 +1794,19 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}, "mode": "all", "stale_threshold_days": 14},
         optional_keys=("filter", "mode", "stale_threshold_days"),
         json_schema=_REPORT_SCHEMAS["report.watchlist"]
+    )
+    registry.register(
+        "report.lifecycle",
+        _report_lifecycle,
+        description=(
+            "Read-only derived lifecycle report for local decision, forecast, and material non-action cases. "
+            "Returns lifecycle_cases and groups with stable states/status, reason/caveat codes, source_refs, "
+            "record_ids, due_at, thresholds, and timestamps. Supports ReportFilter strategy/instrument/run/date "
+            "plus states/status, as_of, and stale_threshold_days. No writes, no scheduling, no recommendations."
+        ),
+        example_minimal={"filter": {}, "states": ["pending_review"], "as_of": "2026-01-20T00:00:00Z", "stale_threshold_days": 14},
+        optional_keys=("filter", "states", "status", "as_of", "stale_threshold_days"),
+        json_schema=_REPORT_SCHEMAS["report.lifecycle"],
     )
     registry.register(
         "report.open_positions",

@@ -30,6 +30,7 @@ from trade_trace.reports.integrity import (
     MAX_SAMPLE_IDS,
     report_calibration_integrity,
 )
+from trade_trace.reports.lifecycle import report_lifecycle
 from trade_trace.reports.opportunity import (
     DEFAULT_OPPORTUNITY_MIN_SAMPLE,
     report_opportunity,
@@ -69,6 +70,7 @@ __all__ = [
     "liquidity_bucket",
     "report_calibration",
     "report_calibration_integrity",
+    "report_lifecycle",
     "report_coach",
     "report_compare",
     "report_decision_velocity",

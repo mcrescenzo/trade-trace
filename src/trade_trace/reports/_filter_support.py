@@ -71,6 +71,15 @@ SUPPORTED_FILTER_FIELDS: dict[str, frozenset[str]] = {
     "report.strengths": frozenset(),
     "report.pnl": frozenset(),
     "report.watchlist": frozenset(),
+    "report.lifecycle": frozenset({
+        "actors.run_id",
+        "instrument.instrument_id",
+        "strategy.strategy_id",
+        "time_window.created_at_gte",
+        "time_window.created_at_lt",
+        "time_window.decision_at_gte",
+        "time_window.decision_at_lt",
+    }),
     "report.unscored_forecasts": frozenset(),
     "report.playbook_adherence": frozenset(),
     # The coach composes other reports; it inherits their support

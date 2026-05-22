@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
+from trade_trace.core import default_registry, dispatch
 from trade_trace.reports.lifecycle import derive_lifecycle_cases
 from trade_trace.storage.paths import db_path
 
@@ -57,12 +58,14 @@ def _insert_decision(
     thesis_id: str | None = "th",
     playbook_version_id: str | None = None,
     metadata: dict | None = None,
+    strategy_id: str | None = None,
+    run_id: str | None = None,
 ) -> None:
     conn.execute(
         """
         INSERT INTO decisions (id, instrument_id, thesis_id, forecast_id, type, reason,
-                               playbook_version_id, review_by, metadata_json, created_at, actor_id)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                               playbook_version_id, review_by, strategy_id, run_id, metadata_json, created_at, actor_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         (
             decision_id,
@@ -73,6 +76,8 @@ def _insert_decision(
             "because",
             playbook_version_id,
             review_by,
+            strategy_id,
+            run_id,
             json.dumps(metadata or {}),
             created_at,
             "test",
@@ -218,3 +223,69 @@ def test_material_non_action_marker_and_missing_source_caveat(home):
         (("kind", "decision"), ("id", "d-defer")),
     }
     assert "missing_source_ref" not in case["caveat_codes"]
+
+
+def _report(home, args):
+    env = dispatch("report.lifecycle", {"home": str(home), **args}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
+    assert env["ok"], env
+    return env["data"]
+
+
+def test_report_lifecycle_surface_filters_and_links_without_writes(home):
+    with _conn(home) as conn:
+        _seed_base(conn)
+        conn.execute("INSERT INTO strategies(id, name, slug, status, created_at, updated_at, actor_id) VALUES (?,?,?,?,?,?,?)", ("strat-a", "Strategy A", "strat-a", "active", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "test"))
+        conn.execute("INSERT INTO strategies(id, name, slug, status, created_at, updated_at, actor_id) VALUES (?,?,?,?,?,?,?)", ("strat-b", "Strategy B", "strat-b", "active", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "test"))
+        _insert_decision(conn, "d-a", "watch", "2026-01-01T00:03:00Z", review_by="2026-01-05T00:00:00Z", strategy_id="strat-a", run_id="run-a")
+        _insert_decision(conn, "d-b", "hold", "2026-01-02T00:03:00Z", strategy_id="strat-b", run_id="run-b")
+        before = {name: conn.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0] for name in ("decisions", "forecasts", "edges", "memory_nodes")}
+
+    data = _report(home, {
+        "as_of": "2026-01-20T00:00:00Z",
+        "stale_threshold_days": 14,
+        "states": ["pending_review"],
+        "filter": {
+            "strategy": {"strategy_id": "strat-a"},
+            "instrument": {"instrument_id": ["inst"]},
+            "actors": {"run_id": ["run-a"]},
+            "time_window": {"created_at_gte": "2026-01-01T00:00:00Z", "created_at_lt": "2026-01-02T00:00:00Z"},
+        },
+    })
+
+    assert data["as_of"] == "2026-01-20T00:00:00Z"
+    assert data["summary"]["metrics"]["case_count"] == 1
+    case = data["lifecycle_cases"][0]
+    assert case["case_id"] == "derived:decision:d-a:lifecycle"
+    assert case["state"] == case["status"] == "pending_review"
+    assert {"kind": "decision", "id": "d-a"} in case["source_refs"]
+    assert {"kind": "run", "id": "run-a"} in case["source_refs"]
+    assert case["record_ids"]["decisions"] == ["d-a"]
+    assert case["record_ids"]["instruments"] == ["inst"]
+    assert data["groups"][0]["record_ids"]["decisions"] == ["d-a"]
+
+    data_again = _report(home, {
+        "as_of": "2026-01-20T00:00:00Z",
+        "stale_threshold_days": 14,
+        "states": ["pending_review"],
+        "filter": {"strategy": {"strategy_id": "strat-a"}, "instrument": {"instrument_id": ["inst"]}, "actors": {"run_id": ["run-a"]}},
+    })
+    assert data_again["lifecycle_cases"][0] == case
+
+    with _conn(home) as conn:
+        after = {name: conn.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0] for name in before}
+    assert after == before
+
+
+def test_report_lifecycle_status_alias_and_schema(home):
+    with _conn(home) as conn:
+        _seed_base(conn)
+        _insert_decision(conn, "d-stale", "hold", "2026-01-01T00:04:00Z")
+
+    data = _report(home, {"as_of": "2026-01-20T00:00:00Z", "status": "stale", "stale_threshold_days": 14})
+    assert [case["state"] for case in data["lifecycle_cases"]] == ["stale"]
+
+    schema_env = dispatch("tool.schema", {"tool": "report.lifecycle"}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
+    assert schema_env["ok"], schema_env
+    props = schema_env["data"]["json_schema"]["properties"]
+    for key in ("filter", "states", "status", "as_of", "stale_threshold_days"):
+        assert key in props
