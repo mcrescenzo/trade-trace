@@ -209,6 +209,7 @@ SHIPPED_REPORTS = {
     "report.unscored_forecasts",
     "report.decision_velocity",
     "report.playbook_adherence",
+    "report.policy_candidates",
     "report.coach",
     "report.compare",
     "report.current_exposure",

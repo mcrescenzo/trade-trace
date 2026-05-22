@@ -12,8 +12,8 @@ report.compare, report.strategy_performance, report.audit_readiness,
 report.risk, report.opportunity, review.bundle, report.current_exposure,
 report.exposure_anomalies, report.open_positions, report.lifecycle,
 report.recall_receipts, report.strategy_health, report.memory_usefulness,
-report.forecast_diagnostics, report.work_queue, agent.next_actions, and
-report.bootstrap. Deferred (P1+):
+report.forecast_diagnostics, report.work_queue, agent.next_actions,
+report.policy_candidates, and report.bootstrap. Deferred (P1+):
 trading-native calibration-by-liquidity-bucket,
 skipped-positive-edge review, and broader replay/evaluation surfaces.
 
@@ -322,9 +322,18 @@ Per-row: forecast, days past resolution, outcome status if any.
 
 ### 4.6 `report.playbook_adherence`
 
-Group by playbook version. Per-group: counts of `considered`,
-`followed`, `overridden`, `not_applicable`; override-outcome breakdown
-where outcomes exist.
+Group by playbook version. Per-group: counts of self-reported
+`decision_playbook_rules.status` values (`considered`, `followed`,
+`overridden`, `not_applicable`); override-outcome breakdown where
+outcomes exist. The report also includes an audit-only `predicate_audit`
+section at summary and group level. This section evaluates only explicit
+`memory_nodes.meta_json.predicate` metadata through the closed-set
+predicate evaluator and reports machine-checkable statuses (`pass`,
+`fail`, `not_computable`, `ambiguous`, `not_applicable`), alignment
+labels, mismatches, missing/unresolved metadata, record refs, source refs,
+and caveats. Predicate audit is deterministic and read-only: it does not
+parse rule prose, block execution, place trades, mutate playbooks, or
+provide advice.
 
 ### 4.7 `report.compare`
 

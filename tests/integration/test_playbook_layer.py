@@ -16,6 +16,7 @@ Covers:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -65,12 +66,20 @@ def _seed_reflection(home: Path, *, idem_suffix: str = "ref0") -> str:
     }).data["id"]
 
 
-def _seed_rule_node(home: Path, *, idem_suffix: str = "rule0") -> str:
-    return _mcp(home, "memory.retain", {
+def _seed_rule_node(
+    home: Path,
+    *,
+    idem_suffix: str = "rule0",
+    meta_json: dict | None = None,
+) -> str:
+    args: dict[str, Any] = {
         "node_type": "playbook_rule",
         "body": f"Rule: do not enter when spread > 8% (idem {idem_suffix})",
         "idempotency_key": f"00000000-0000-4000-8000-pb-rl-{idem_suffix}",
-    }).data["id"]
+    }
+    if meta_json is not None:
+        args["meta_json"] = meta_json
+    return _mcp(home, "memory.retain", args).data["id"]
 
 
 # -- registration -----------------------------------------------
@@ -436,6 +445,96 @@ def test_report_playbook_adherence_aggregates_by_version(home, adherence_setup):
     assert group["sample_size"] == 1
     assert env.data["summary"]["sample_size"] == 1
     assert env.data["summary"]["metrics"]["total_adherence_rows"] == 3
+
+
+def test_report_playbook_adherence_predicate_audit_alignment_and_mismatch(home, adherence_setup):
+    pass_rule = _seed_rule_node(home, idem_suffix="pred-pass", meta_json={
+        "predicate": {"family": "decision_type_in", "values": ["actual_enter"]},
+    })
+    fail_rule = _seed_rule_node(home, idem_suffix="pred-fail", meta_json={
+        "predicate": {"family": "decision_type_in", "values": ["actual_exit"]},
+    })
+    for i, rule in enumerate((pass_rule, fail_rule)):
+        env = _mcp(home, "decision.record_adherence", {
+            "decision_id": adherence_setup["decision_id"],
+            "playbook_version_id": adherence_setup["version_id"],
+            "rule_node_id": rule,
+            "status": "followed",
+            "idempotency_key": f"00000000-0000-4000-8000-pb-pa-{i:03d}",
+        })
+        assert env.ok, env
+
+    env = _mcp(home, "report.playbook_adherence", {})
+    assert env.ok
+    audit = env.data["groups"][0]["predicate_audit"]
+    assert audit["metrics"]["predicate_status_counts"]["pass"] == 1
+    assert audit["metrics"]["predicate_status_counts"]["fail"] == 1
+    assert audit["metrics"]["mismatch_count"] == 1
+    assert audit["mismatches"][0]["alignment"] == "mismatch_self_report_followed_predicate_fail"
+    assert audit["mismatches"][0]["self_reported_status"] == "followed"
+    assert audit["mismatches"][0]["predicate_status"] == "fail"
+
+
+def test_report_playbook_adherence_predicate_audit_missing_and_unsupported_metadata(home, adherence_setup):
+    missing_rule = _seed_rule_node(home, idem_suffix="pred-missing")
+    unsupported_rule = _seed_rule_node(home, idem_suffix="pred-unsupported", meta_json={
+        "predicate": {"family": "parse_rule_prose"},
+    })
+    for i, rule in enumerate((missing_rule, unsupported_rule)):
+        env = _mcp(home, "decision.record_adherence", {
+            "decision_id": adherence_setup["decision_id"],
+            "playbook_version_id": adherence_setup["version_id"],
+            "rule_node_id": rule,
+            "status": "considered",
+            "idempotency_key": f"00000000-0000-4000-8000-pb-pm-{i:03d}",
+        })
+        assert env.ok, env
+
+    env = _mcp(home, "report.playbook_adherence", {})
+    assert env.ok
+    audit = env.data["summary"]["predicate_audit"]
+    assert audit["metrics"]["predicate_status_counts"]["not_computable"] == 2
+    assert audit["metrics"]["missing_or_unresolved_count"] == 2
+    caveats = " ".join(c for item in audit["missing_data"] for c in item["caveats"])
+    assert "no predicate object" in caveats
+    assert "unsupported predicate family" in caveats
+
+
+def test_report_playbook_adherence_predicate_audit_is_read_only(home, adherence_setup):
+    rule = _seed_rule_node(home, idem_suffix="pred-readonly", meta_json={
+        "predicate": {"family": "field_exists", "field": "reason"},
+    })
+    env = _mcp(home, "decision.record_adherence", {
+        "decision_id": adherence_setup["decision_id"],
+        "playbook_version_id": adherence_setup["version_id"],
+        "rule_node_id": rule,
+        "status": "followed",
+        "idempotency_key": "00000000-0000-4000-8000-pb-pr-001",
+    })
+    assert env.ok, env
+
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        before = db.connection.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+    finally:
+        db.close()
+
+    report = _mcp(home, "report.playbook_adherence", {})
+    assert report.ok
+    assert "does not block execution, place trades, mutate playbooks" in " ".join(
+        report.data["summary"]["caveats"],
+    )
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        after = db.connection.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+        decisions = db.connection.execute("SELECT COUNT(*) FROM decisions").fetchone()[0]
+    finally:
+        db.close()
+    assert after == before
+    assert decisions == 1
 
 
 def test_report_playbook_adherence_filter_by_playbook(home, adherence_setup):

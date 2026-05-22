@@ -43,6 +43,7 @@ from trade_trace.reports.playbook_adherence import (
     report_playbook_adherence,
 )
 from trade_trace.reports.pnl import report_pnl
+from trade_trace.reports.policy_candidates import report_policy_candidates
 from trade_trace.reports.recall_receipts import report_recall_receipts
 from trade_trace.reports.replay import export_case_bundle
 from trade_trace.reports.replay_evaluate import evaluate_output
@@ -98,6 +99,7 @@ __all__ = [
     "report_pnl",
     "report_recall_receipts",
     "report_playbook_adherence",
+    "report_policy_candidates",
     "report_risk",
     "report_source_quality",
     "report_strategy_health",

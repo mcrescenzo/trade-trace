@@ -44,6 +44,7 @@ from trade_trace.reports import (
     report_opportunity,
     report_playbook_adherence,
     report_pnl,
+    report_policy_candidates,
     report_recall_receipts,
     report_risk,
     report_source_quality,
@@ -211,6 +212,19 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "strategy_id": {"type": "string"},
         },
         description="Optional ReportFilter plus top-level playbook_id/strategy_id scoping.",
+    ),
+    "report.policy_candidates": _schema(
+        {
+            "status": {"type": "string"},
+            "strategy_id": {"type": "string"},
+            "playbook_id": {"type": "string"},
+            "as_of": {"type": "string", "format": "date-time"},
+            "limit": {"type": "integer", "minimum": 1},
+        },
+        description=(
+            "Read-only local report over reflection memory_nodes with meta_json.policy_candidate. "
+            "Shows caveated candidate policy statements, support/contradiction, scope, missing evidence, replay refs, and reasons not promoted. No writes, promotion, fetching, model advice, or performance claims."
+        ),
     ),
     "report.source_quality": _schema(
         {
@@ -1180,6 +1194,31 @@ def _report_memory_usefulness(args: dict[str, Any], ctx: ToolContext) -> dict[st
                 as_of=args.get("as_of"),
                 limit=limit,
             )
+        finally:
+            connection.close()
+        _propagate_report_meta(ctx, data)
+        return data
+    except ValueError as exc:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
+
+
+def _report_policy_candidates(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.policy_candidates` — read-only policy candidate report."""
+
+    limit = args.get("limit", 100)
+    if not isinstance(limit, int) or limit < 1:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "limit must be a positive integer", details={"field": "limit", "value": limit})
+    for field in ("status", "strategy_id", "playbook_id", "as_of"):
+        if args.get(field) is not None and not isinstance(args[field], str):
+            raise ToolError(ErrorCode.VALIDATION_ERROR, f"{field} must be a string", details={"field": field, "value": args[field]})
+    try:
+        home = resolve_home(args.get("home"))
+        path = db_path(home)
+        if not path.exists():
+            raise ToolError(ErrorCode.STORAGE_ERROR, "journal not initialized; run `tt journal init` first", details={"home": str(home), "db_path": str(path)})
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            data = report_policy_candidates(connection, status=args.get("status"), strategy_id=args.get("strategy_id"), playbook_id=args.get("playbook_id"), as_of=args.get("as_of"), limit=limit)
         finally:
             connection.close()
         _propagate_report_meta(ctx, data)
@@ -2377,6 +2416,17 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"recall_id": "recall_...", "as_of": "2026-01-20T00:00:00Z"},
         optional_keys=("recall_id", "node_id", "consumer_kind", "consumer_id", "run_id", "agent_id", "model_id", "environment", "instrument_id", "strategy_id", "memory_kind", "as_of", "limit"),
         json_schema=_REPORT_SCHEMAS["report.memory_usefulness"],
+    )
+    registry.register(
+        "report.policy_candidates",
+        _report_policy_candidates,
+        description=(
+            "Read-only report over quarantined/candidate policy reflection metadata. "
+            "Surfaces source-backed support/contradiction, scope, missing evidence, replay refs, and reasons not promoted; no writes, promotion, fetch, model advice, or performance claims."
+        ),
+        example_minimal={"status": "candidate", "as_of": "2026-01-20T00:00:00Z"},
+        optional_keys=("status", "strategy_id", "playbook_id", "as_of", "limit"),
+        json_schema=_REPORT_SCHEMAS["report.policy_candidates"],
     )
     registry.register(
         "report.work_queue",

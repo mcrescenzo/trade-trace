@@ -16,6 +16,7 @@ import sqlite3
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.playbook_predicates import PREDICATE_STATUSES, evaluate_predicate
 from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 
@@ -24,6 +25,78 @@ DEFAULT_ADHERENCE_MIN_SAMPLE = 10
 
 
 _STATUSES = ("considered", "followed", "overridden", "not_applicable")
+
+
+def _predicate_alignment(self_reported_status: str, predicate_status: str) -> str:
+    """Describe audit-only alignment without implying execution blocking."""
+
+    if predicate_status in {"not_computable", "ambiguous"}:
+        return "missing_or_unresolved_machine_audit"
+    if predicate_status == "not_applicable":
+        return "predicate_not_applicable"
+    if self_reported_status == "followed" and predicate_status == "pass":
+        return "self_report_followed_matches_predicate_pass"
+    if self_reported_status == "followed" and predicate_status == "fail":
+        return "mismatch_self_report_followed_predicate_fail"
+    if self_reported_status == "overridden" and predicate_status == "pass":
+        return "mismatch_self_report_overridden_predicate_pass"
+    if self_reported_status == "overridden" and predicate_status == "fail":
+        return "self_report_overridden_matches_predicate_fail"
+    return "self_report_not_a_binary_adherence_claim"
+
+
+def _audit_predicates(conn: sqlite3.Connection, rows: list[tuple]) -> dict[str, Any]:
+    """Evaluate explicit playbook-rule predicates for report-only audit fields."""
+
+    status_counts = {status: 0 for status in PREDICATE_STATUSES}
+    alignment_counts: dict[str, int] = {}
+    evaluations: list[dict[str, Any]] = []
+    mismatches: list[dict[str, Any]] = []
+    missing_data: list[dict[str, Any]] = []
+    caveats: list[str] = [
+        "Predicate audit is deterministic, read-only, and report-only; it does not block execution, place trades, mutate playbooks, or provide advice.",
+        "Only explicit memory_nodes.meta_json.predicate metadata is evaluated; rule body/prose is not parsed.",
+    ]
+
+    for row in rows:
+        adherence_id, decision_id, _version_id, rule_node_id, self_status = row[:5]
+        result = evaluate_predicate(conn, decision_id=decision_id, rule_node_id=rule_node_id)
+        predicate_status = result.status
+        alignment = _predicate_alignment(str(self_status), predicate_status)
+        status_counts[predicate_status] += 1
+        alignment_counts[alignment] = alignment_counts.get(alignment, 0) + 1
+
+        item = {
+            "adherence_row_id": adherence_id,
+            "decision_id": decision_id,
+            "rule_node_id": rule_node_id,
+            "self_reported_status": self_status,
+            "predicate_status": predicate_status,
+            "predicate_family": result.family,
+            "alignment": alignment,
+            "record_refs": result.record_refs,
+            "source_refs": result.source_refs,
+            "caveats": result.caveats,
+        }
+        evaluations.append(item)
+        if alignment.startswith("mismatch_"):
+            mismatches.append(item)
+        if predicate_status in {"not_computable", "ambiguous"}:
+            missing_data.append(item)
+
+    return {
+        "metrics": {
+            "predicate_status_counts": status_counts,
+            "alignment_counts": alignment_counts,
+            "mismatch_count": len(mismatches),
+            "missing_or_unresolved_count": len(missing_data),
+            "evaluated_adherence_rows": len(rows),
+        },
+        "evaluations": evaluations,
+        "mismatches": mismatches,
+        "missing_data": missing_data,
+        "caveats": caveats,
+    }
 
 
 def report_playbook_adherence(
@@ -73,6 +146,7 @@ def report_playbook_adherence(
 
     groups: list[dict[str, Any]] = []
     for version_id, items in by_version.items():
+        predicate_audit = _audit_predicates(conn, items)
         status_counts = {status: 0 for status in _STATUSES}
         for item in items:
             status_counts[item[4]] += 1
@@ -94,6 +168,7 @@ def report_playbook_adherence(
                 "not_applicable": status_counts["not_applicable"],
                 "total_adherence_rows": len(items),
                 "decision_count": sample_size,
+                "predicate_audit": predicate_audit["metrics"],
             },
             "filter": filter_dict,
             "record_ids": {
@@ -109,6 +184,7 @@ def report_playbook_adherence(
             ],
             "sample_size": sample_size,
             "sample_warning": sample_warning,
+            "predicate_audit": predicate_audit,
             "truncated": False,
         })
 
@@ -125,6 +201,7 @@ def report_playbook_adherence(
     # raw row count stays available under
     # `metrics.total_adherence_rows`.
     all_decision_ids = {row[1] for row in rows}
+    summary_predicate_audit = _audit_predicates(conn, rows)
 
     summary: dict[str, Any] = {
         "sample_size": len(all_decision_ids),
@@ -136,8 +213,10 @@ def report_playbook_adherence(
             "total_adherence_rows": len(rows),
             "playbook_id_filter": playbook_id,
             "strategy_id_filter": strategy_id,
+            "predicate_audit": summary_predicate_audit["metrics"],
         },
-        "caveats": [],
+        "predicate_audit": summary_predicate_audit,
+        "caveats": summary_predicate_audit["caveats"],
     }
     return standard_report_result(summary=summary, groups=groups)
 
