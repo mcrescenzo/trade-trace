@@ -38,6 +38,7 @@ from trade_trace.reports import (
     report_opportunity,
     report_playbook_adherence,
     report_pnl,
+    report_recall_receipts,
     report_risk,
     report_source_quality,
     report_strategy_performance,
@@ -200,6 +201,23 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "stale_threshold_days": {"type": "integer", "minimum": 0},
         },
         description="Read-only derived lifecycle cases; filter by ReportFilter plus states/status, as_of, and stale threshold.",
+    ),
+    "report.recall_receipts": _schema(
+        {
+            "recall_id": {"type": "string"},
+            "node_id": {"type": "string"},
+            "consumer_kind": {"type": "string", "enum": ["decision", "thesis", "forecast", "outcome", "review", "playbook_version"]},
+            "consumer_id": {"type": "string"},
+            "run_id": {"type": "string"},
+            "agent_id": {"type": "string"},
+            "model_id": {"type": "string"},
+            "environment": {"type": "string"},
+            "instrument_id": {"type": "string"},
+            "strategy_id": {"type": "string"},
+            "as_of": {"type": "string", "format": "date-time"},
+            "limit": {"type": "integer", "minimum": 1},
+        },
+        description="Read-only computed recall receipts over memory_recall_events, memory_nodes, and typed edge evidence.",
     ),
     "report.work_queue": _schema(
         {
@@ -902,6 +920,46 @@ def _report_lifecycle(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         raise _unsupported_filter_to_tool_error(exc) from exc
     except ValueError as exc:
         raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
+
+
+def _report_recall_receipts(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.recall_receipts` — computed memory recall receipts, read-only."""
+
+    limit = args.get("limit", 100)
+    if not isinstance(limit, int) or limit < 1:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "limit must be a positive integer", details={"field": "limit", "value": limit})
+    for field in ("recall_id", "node_id", "consumer_kind", "consumer_id", "run_id", "agent_id", "model_id", "environment", "instrument_id", "strategy_id", "as_of"):
+        if args.get(field) is not None and not isinstance(args[field], str):
+            raise ToolError(ErrorCode.VALIDATION_ERROR, f"{field} must be a string", details={"field": field, "value": args[field]})
+    try:
+        home = resolve_home(args.get("home"))
+        path = db_path(home)
+        if not path.exists():
+            raise ToolError(ErrorCode.STORAGE_ERROR, "journal not initialized; run `tt journal init` first", details={"home": str(home), "db_path": str(path)})
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            data = report_recall_receipts(
+                connection,
+                recall_id=args.get("recall_id"),
+                node_id=args.get("node_id"),
+                consumer_kind=args.get("consumer_kind"),
+                consumer_id=args.get("consumer_id"),
+                run_id=args.get("run_id"),
+                agent_id=args.get("agent_id"),
+                model_id=args.get("model_id"),
+                environment=args.get("environment"),
+                instrument_id=args.get("instrument_id"),
+                strategy_id=args.get("strategy_id"),
+                as_of=args.get("as_of"),
+                limit=limit,
+            )
+        finally:
+            connection.close()
+        _propagate_report_meta(ctx, data)
+        return data
+    except ValueError as exc:
+        raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
+
 
 
 def _work_queue_common(args: dict[str, Any], ctx: ToolContext, *, surface: str) -> dict[str, Any]:
@@ -1877,6 +1935,19 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}, "states": ["pending_review"], "as_of": "2026-01-20T00:00:00Z", "stale_threshold_days": 14},
         optional_keys=("filter", "states", "status", "as_of", "stale_threshold_days"),
         json_schema=_REPORT_SCHEMAS["report.lifecycle"],
+    )
+    registry.register(
+        "report.recall_receipts",
+        _report_recall_receipts,
+        description=(
+            "Read-only computed recall receipts over memory_recall_events, returned memory nodes, "
+            "and downstream typed edge evidence. Returns query/context/strategies, actor/model/run "
+            "metadata, returned node IDs, cited_or_used vs ignored_or_unattributed status, source_refs, "
+            "and stale/contradicted caveats. Does not create receipt tables or transcript memory."
+        ),
+        example_minimal={"recall_id": "recall_..."},
+        optional_keys=("recall_id", "node_id", "consumer_kind", "consumer_id", "run_id", "agent_id", "model_id", "environment", "instrument_id", "strategy_id", "as_of", "limit"),
+        json_schema=_REPORT_SCHEMAS["report.recall_receipts"],
     )
     registry.register(
         "report.work_queue",
