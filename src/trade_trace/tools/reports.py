@@ -33,6 +33,7 @@ from trade_trace.reports import (
     report_coach,
     report_compare,
     report_decision_velocity,
+    report_forecast_diagnostics,
     report_lifecycle,
     report_memory_usefulness,
     report_mistakes,
@@ -102,6 +103,13 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
     "report.calibration": _schema(
         {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
         description="Optional ReportFilter and low-N warning threshold; defaults min_sample=20.",
+    ),
+    "report.forecast_diagnostics": _schema(
+        {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
+        description=(
+            "Binary-first retrospective diagnostics over local forecasts, scored outcomes, decisions, "
+            "and caller-supplied snapshots.implied_probability. No external fetching, advice, or performance ordering."
+        ),
     ),
     "report.playbook_adherence": _schema(
         {
@@ -610,6 +618,27 @@ def _report_calibration(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         # Embed integrity diagnostics in the panel so the panel can never
         # be read without the denominator/hygiene context.
         data["integrity_diagnostics"] = report_calibration_integrity(db.connection)
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_forecast_diagnostics(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    raw_filter = args.get("filter")
+    min_sample = args.get("min_sample")
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_forecast_diagnostics(
+                db.connection,
+                raw_filter=raw_filter,
+                min_sample=min_sample if min_sample is not None else 20,
+            )
+        except ValidationError as exc:
+            raise report_filter_validation_to_tool_error(exc) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
     finally:
         db.close()
     _propagate_report_meta(ctx, data)
@@ -1812,6 +1841,19 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "report.calibration_integrity under data.integrity_diagnostics."
         ),
         json_schema=_REPORT_SCHEMAS["report.calibration"]
+    )
+    registry.register(
+        "report.forecast_diagnostics",
+        _report_forecast_diagnostics,
+        description=(
+            "Binary-first retrospective diagnostics over local forecasts, outcomes, decisions/non-actions, "
+            "and caller-supplied snapshot market/reference fields. Reports Brier/reliability/base-rate "
+            "caveats and recorded_market_reference_gap only when snapshots.implied_probability was stored; "
+            "no external fetching, advice, signal, or performance ordering."
+        ),
+        example_minimal={"filter": {}, "min_sample": 20},
+        optional_keys=("filter", "min_sample"),
+        json_schema=_REPORT_SCHEMAS["report.forecast_diagnostics"],
     )
     registry.register(
         "report.playbook_adherence",

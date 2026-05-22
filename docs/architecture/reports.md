@@ -12,8 +12,8 @@ report.compare, report.strategy_performance, report.audit_readiness,
 report.risk, report.opportunity, review.bundle, report.current_exposure,
 report.exposure_anomalies, report.open_positions, report.lifecycle,
 report.recall_receipts, report.strategy_health, report.memory_usefulness,
-report.work_queue, and agent.next_actions. Deferred (P1+):
-trading-native forecast-vs-market edge reports, calibration-by-liquidity-bucket,
+report.forecast_diagnostics, report.work_queue, and agent.next_actions. Deferred (P1+):
+trading-native calibration-by-liquidity-bucket,
 skipped-positive-edge review, and broader replay/evaluation surfaces.
 
 Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
@@ -214,6 +214,7 @@ Per-report minimums:
 | Report | Minimum (default, configurable) |
 |---|---|
 | `report.calibration` | 20 scored binary forecasts |
+| `report.forecast_diagnostics` | 20 scored binary forecasts |
 | `report.mistakes` / `report.strengths` | 10 tagged decisions |
 | `report.pnl` | 5 closed positions |
 | `report.playbook_adherence` | 10 decisions with adherence rows |
@@ -262,7 +263,31 @@ count) and adds a caveat to `data.caveats[]` when any were excluded.
 standalone surface. The embed exists so an agent reading the calibration
 panel cannot ignore the denominator/hygiene context. See §4.8.
 
-### 4.2 `report.mistakes` and `report.strengths`
+### 4.2 `report.forecast_diagnostics`
+
+Binary-first retrospective report over local forecasts, scored outcomes,
+decisions/non-actions, and caller-supplied snapshots. The scored diagnostic
+sample includes only binary forecasts with a usable YES probability; non-binary
+or otherwise unsupported forecasts are excluded from scored metrics and listed
+under `summary.exclusions.counts_by_reason` plus bounded forecast IDs.
+
+The market/reference panel uses only stored `snapshots.implied_probability`
+linked through local decisions. It reports the agent probability minus that
+stored value as `recorded_market_reference_gap`/`mean_recorded_market_reference_gap`;
+this is a recorded reference comparison, not a trading signal, advice, alpha, or
+profitability evidence. If no implied probability is stored, the report emits
+`missing_market_reference`; it does not derive a probability from price fields
+and does not fetch market data. Spread and liquidity coverage are reported as
+coverage counts/caveat codes rather than inferred quality thresholds.
+
+The base-rate/reference panel reuses the local scored binary sample prevalence
+and calibration metrics where enough resolved outcomes exist. Low-N and
+`baseline_unavailable` caveats are explicit. Decision coverage includes counts
+by decision type, including non-actions such as `watch`, `skip`, `hold`, and
+`review`, plus drill-down IDs for forecasts, decisions, snapshots, outcomes,
+forecast scores, and strategies where applicable.
+
+### 4.3 `report.mistakes` / `report.strengths`
 
 Group by tag. Per-group metrics: tag count, distinct decisions,
 co-occurrence with other tags (top-5), tag-vs-outcome conditional rates

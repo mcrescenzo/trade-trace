@@ -23,7 +23,7 @@ MVP vertical slice:
 9. Token-budgeted recall of prior observations, reflections, and playbook rules in the next decision
 10. Source/evidence capture attached to theses, decisions, and forecasts
 
-The post-MVP pre-release track has since landed stdio MCP, tool-schema introspection, optional `sqlite-vec` embeddings/model import/API-provider/reindex surfaces, JSONL/CSV import implementations, and comparison/review-bundle/risk/opportunity reports. Still deferred: multi-class/scalar scoring, broader trading-native edge/market reports (forecast-vs-market, calibration-by-liquidity-bucket, skipped-positive-edge review), exact ForecastBench submission compatibility, sync, HTTP/SSE transport, and websockets.
+The post-MVP pre-release track has since landed stdio MCP, tool-schema introspection, optional `sqlite-vec` embeddings/model import/API-provider/reindex surfaces, JSONL/CSV import implementations, and comparison/review-bundle/risk/opportunity reports. Still deferred: multi-class/scalar scoring, broader trading-native liquidity-bucket/skipped-positive-edge reports, exact ForecastBench submission compatibility, sync, HTTP/SSE transport, and websockets.
 
 Trade Trace does not fetch trading data, broker data, market prices, or outcomes from external services. The agent supplies all market data through the structured ingestion APIs. The one outbound-network path is the optional local embedding model download (off by default in MVP — see §2.4 and [`memory-layer.md`](./architecture/memory-layer.md) §8), which never carries trading data and is explicitly opt-in.
 
@@ -372,6 +372,7 @@ All deterministic reports accept a `filter` argument conforming to the `ReportFi
 Deterministic reports:
 
 - `report.calibration` — binary Brier, log score, reliability buckets, ECE, sharpness, and a sample-prevalence baseline, computed over scored binary forecasts matching the filter. Supports actor/run filters for `actor_id`, `agent_id`, `model_id`, `environment`, and `run_id` plus the documented venue/strategy/outcome filters. Full output shape and formulas in [`scoring.md`](./architecture/scoring.md) §3 and §7 and `reports.md` §4. Returns `sample_warning` when the filtered set is below the configurable minimum (default 20 scored forecasts).
+- `report.forecast_diagnostics` — binary-first retrospective diagnostics over local forecasts, scored outcomes, decisions/non-actions, and caller-supplied snapshots. It compares agent `p_yes` only to stored `snapshots.implied_probability` as a caveated `recorded_market_reference_gap`, reports Brier/reliability/base-rate caveats and low-N/source/spread/liquidity coverage, excludes unsupported/non-binary forecasts with reasons, and never fetches data or provides advice/profit ranking.
 - `report.mistakes` / `report.strengths` — tag counts and co-occurrence over decisions and reviews.
 - `report.pnl` — paper/actual P&L aggregates where position projections have enough fills to compute realized/unrealized P&L. Returns a `data_coverage` field reporting how many positions could and could not be computed.
 - Current-exposure/open-position report surfaces must follow [`current-exposure-agent-contract.md`](./architecture/current-exposure-agent-contract.md) for bucket names, caveat codes, and source precedence. This PRD link is a contract seam only; it does not imply a shipped `report.current_exposure` tool.
@@ -389,7 +390,7 @@ Every write tool accepts `--dry-run` (CLI) / `_dry_run: true` (MCP): the dispatc
 
 `report.coach` aggregates objective signals into a structured packet. It does not call an LLM and does not provide trading advice. Allowed outputs: surfacing recurring tags, calibration drift buckets, override outcomes, stale watches, sample-size warnings, integrity / source-quality diagnostics. Forbidden outputs: trade recommendations, profitability claims, directional advice.
 
-Trading-native reports (forecast-vs-market edge, calibration-by-liquidity-bucket, skipped-positive-edge review) are deferred to P1. The data is already captured in `snapshots`; the reports are additive.
+Trading-native liquidity-bucket and skipped-positive-edge review reports are deferred to P1. A cautious binary-first `report.forecast_diagnostics` now covers local forecast-vs-recorded-market-reference diagnostics using caller-supplied `snapshots.implied_probability` only; no data is fetched or treated as advice/profitability evidence. The data is already captured in `snapshots`; broader reports are additive.
 
 Comparison and per-strategy reporting:
 
@@ -531,7 +532,7 @@ The current pre-release implementation includes the import-ready write schema pl
 ### P1
 - Multi-class/categorical scoring and ranked probability score
 - Scalar/distribution schema including `distribution_json`
-- Broader trading-native reports: forecast-vs-market edge, calibration-by-liquidity-bucket, skipped-positive-edge review
+- Broader trading-native reports: calibration-by-liquidity-bucket, skipped-positive-edge review
 - ForecastBench schema verification and compatible export if feasible
 - HTTP/SSE transport, re-embedding tools
 - Subscribe API on the event log
