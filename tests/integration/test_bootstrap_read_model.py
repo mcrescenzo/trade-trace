@@ -230,6 +230,33 @@ def test_bootstrap_fresh_session_recovers_prior_process_memory_and_strategy_cont
         assert caveat in serialized
 
 
+def test_bootstrap_include_memory_body_returns_actual_body_not_title(home):
+    """trade-trace-s7x9: include_memory_body used to return the node title
+    because the recall-receipts query never selected the body column.
+    The fixture's mem-useful has title='Useful context' and body='Useful
+    context body' — distinct strings so a regression catches the swap."""
+    with _conn(home) as conn:
+        _seed_fresh_session_recovery(conn)
+        packet = compose_bootstrap_packet(
+            conn,
+            as_of="2026-01-20T00:00:00Z",
+            raw_filter={"strategy_ids": ["strat-a"]},
+            budgets={
+                "default_max_items_per_section": 20,
+                "default_max_chars_per_section": 12000,
+                "include_memory_body": True,
+            },
+        )
+
+    memory = packet["memory_context"]
+    assert "memory_body_omitted" not in memory["memory_caveats"], memory["memory_caveats"]
+    nodes = {node["node_id"]: node for node in memory["memory_nodes"]}
+    useful = nodes["mem-useful"]
+    assert useful["summary"] == "Useful context"
+    assert useful["body"] == "Useful context body", useful
+    assert useful["body"] != useful["summary"], useful
+
+
 def test_bootstrap_budgets_truncation_and_not_requested_sections_are_explicit(home):
     with _conn(home) as conn:
         _seed_base(conn)

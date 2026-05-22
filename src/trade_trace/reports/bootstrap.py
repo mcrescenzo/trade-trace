@@ -339,7 +339,7 @@ def _memory_context(recall: dict[str, Any], memory: dict[str, Any], *, include_b
         for item in receipt.get("items", []):
             node = {"node_id": item.get("id"), "node_type": item.get("node_type"), "summary": item.get("title"), "valid_from": item.get("valid_from"), "valid_to": item.get("valid_to"), "confidence": item.get("confidence_base"), "importance": item.get("importance"), "source_refs": item.get("source_refs", []), "caveat_codes": item.get("caveat_codes", [])}
             if include_body:
-                node["body"] = item.get("title")
+                node["body"] = item.get("body")
             nodes.append(node)
     return {"included": True, "recall_queries": [{"source": "report.recall_receipts", "telemetry_persisted": False}], "memory_nodes": nodes, "recall_receipts": recall.get("recall_receipts", []), "memory_diagnostics": memory.get("memory_diagnostics", []), "omitted_memory": {}, "memory_caveats": sorted(set(recall.get("summary", {}).get("caveat_codes", []) + memory.get("summary", {}).get("caveat_codes", []) + (["memory_body_omitted"] if not include_body else [])))}
 
