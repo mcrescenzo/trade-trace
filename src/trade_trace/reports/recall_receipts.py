@@ -307,11 +307,24 @@ def _event_dict(row: sqlite3.Row | tuple[Any, ...]) -> dict[str, Any]:
     return data
 
 
-def _json_list(raw: str) -> list[str]:
-    value = json.loads(raw)
+def _json_list(raw: str | None) -> list[str]:
+    # Defensive: a NULL or malformed payload in memory_recall_events used to
+    # crash the entire report.recall_receipts call (trade-trace-m9k4). Match
+    # the safe-default pattern used by every other JSON loader in this repo.
+    if raw is None:
+        return []
+    try:
+        value = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return []
     return value if isinstance(value, list) else []
 
 
-def _json_obj(raw: str) -> dict[str, Any]:
-    value = json.loads(raw)
+def _json_obj(raw: str | None) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    try:
+        value = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {}
     return value if isinstance(value, dict) else {}

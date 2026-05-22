@@ -115,3 +115,63 @@ def test_recall_receipts_do_not_treat_memory_source_refs_as_downstream_use(home)
 
     assert report["recall_receipts"] == []
     assert report["summary"]["sample_warning"] == "no_recall_events"
+
+
+def _insert_corrupt_recall_event(
+    conn: sqlite3.Connection,
+    *,
+    recall_id: str,
+    strategies_used: str,
+    node_ids_returned: str,
+    context_json: str,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO memory_recall_events(
+            recall_id, query, strategies_used, node_ids_returned,
+            context_json, limit_k, as_of, created_at, actor_id,
+            agent_id, model_id, environment, run_id
+        )
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (
+            recall_id, "q",
+            strategies_used, node_ids_returned, context_json,
+            5, None,
+            "2026-01-02T00:00:00Z", "actor",
+            "agent", "model", "paper", "run",
+        ),
+    )
+
+
+def test_recall_receipts_handles_corrupt_json_payload(home):
+    """trade-trace-m9k4: a malformed JSON column in memory_recall_events used to
+    crash the entire report. Now it degrades to safe defaults and the report
+    still returns for the other valid rows."""
+    with _conn(home) as conn:
+        _seed(conn)
+        # Two corrupt rows: one with garbage JSON, one with valid JSON of the
+        # wrong shape (string instead of list/object).
+        _insert_corrupt_recall_event(
+            conn, recall_id="recall-bad-json",
+            strategies_used="not valid json {",
+            node_ids_returned='["mem-helpful"',
+            context_json="bare string not object",
+        )
+        _insert_corrupt_recall_event(
+            conn, recall_id="recall-wrong-shape",
+            strategies_used='"a string, not a list"',
+            node_ids_returned='42',
+            context_json='"not an object"',
+        )
+        conn.commit()
+        report = report_recall_receipts(conn)
+
+    by_id = {r["recall_id"]: r for r in report["recall_receipts"]}
+    assert "recall-1" in by_id, list(by_id)
+    assert by_id["recall-bad-json"]["strategies_used"] == []
+    assert by_id["recall-bad-json"]["node_ids_returned"] == []
+    assert by_id["recall-bad-json"]["context"] == {}
+    assert by_id["recall-wrong-shape"]["strategies_used"] == []
+    assert by_id["recall-wrong-shape"]["node_ids_returned"] == []
+    assert by_id["recall-wrong-shape"]["context"] == {}
