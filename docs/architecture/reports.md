@@ -554,9 +554,10 @@ source-reference gaps, repeated overrides (only surfaced once at least two
 override decisions exist), and policy-candidate support status. Source-quality
 checks are intentionally limited to missing thesis source references; broader
 source freshness/contradiction diagnostics remain in `report.source_quality`.
-Policy candidates currently return `count=0` with
-`policy_candidates_unsupported_local_surface` until a canonical local
-quarantine/policy-candidate surface exists.
+Policy candidate support status is sourced from the shipped read-only
+`report.policy_candidates` local surface over reflection `memory_nodes` with
+`meta_json.policy_candidate`; it remains caveated and does not promote or mutate
+policy/playbook state.
 
 Forbidden interpretations: not a strategy ranking, performance leaderboard,
 signal/edge detector, trading advice, policy promotion engine, scheduler,

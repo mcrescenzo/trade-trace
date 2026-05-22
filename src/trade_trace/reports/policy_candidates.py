@@ -11,6 +11,7 @@ import sqlite3
 from typing import Any
 
 from trade_trace.reports._envelope import standard_report_result
+from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
 
 CAVEAT_CODES = (
     "POLICY_CANDIDATE_READ_ONLY",
@@ -39,6 +40,11 @@ def report_policy_candidates(
 
     if limit < 1:
         raise ValueError("limit must be a positive integer")
+    if as_of is not None:
+        try:
+            as_of = to_utc_iso8601(as_of, field="as_of")
+        except TimestampValidationError as exc:
+            raise ValueError(str(exc)) from exc
 
     rows = conn.execute(
         """
@@ -63,7 +69,7 @@ def report_policy_candidates(
             continue
         if status is not None and item["lifecycle_status"] != status:
             continue
-        if strategy_id is not None and item["scope"].get("strategy_id") != strategy_id and item.get("strategy_id") != strategy_id:
+        if strategy_id is not None and not _matches_strategy(item, strategy_id):
             continue
         if playbook_id is not None and item["scope"].get("playbook_id") != playbook_id and item.get("playbook_id") != playbook_id:
             continue
@@ -111,7 +117,7 @@ def _candidate_from_row(row: sqlite3.Row | tuple[Any, ...]) -> dict[str, Any] | 
     evidence = _dict_value(pc, "evidence")
     support = _list_from_any(_first(pc, "support", "supports", "supporting_evidence", default=None) or evidence.get("support") or evidence.get("supports"))
     contradiction = _list_from_any(_first(pc, "contradiction", "contradictions", "contradicting_evidence", default=None) or evidence.get("contradiction") or evidence.get("contradictions"))
-    source_refs = sorted(set(_string_refs(pc.get("source_refs")) | _string_refs(pc.get("source_ids")) | _string_refs(evidence.get("source_refs")) | _string_refs(support) | _string_refs(contradiction)))
+    source_refs = sorted(set(_source_refs(pc.get("source_refs")) | _source_refs(pc.get("source_ids")) | _source_refs(evidence.get("source_refs")) | _source_refs(evidence.get("source_ids")) | _source_refs(support) | _source_refs(contradiction)))
     recall_refs = sorted(set(_string_refs(_first(pc, "recall_refs", "recall_references", default=None))))
     adherence_refs = sorted(set(_string_refs(_first(pc, "adherence_refs", "adherence_references", default=None))))
     replay_cases = sorted(set(_string_refs(_first(pc, "replay_cases", "replay_refs", "replay_references", default=None))))
@@ -159,7 +165,31 @@ def _group_for_status(status: str, items: list[dict[str, Any]], status_filter: s
 
 
 def _valid_as_of(item: dict[str, Any], as_of: str) -> bool:
-    return item["valid_from"] <= as_of and (item["valid_to"] is None or item["valid_to"] > as_of) and (item["invalidated_at"] is None or item["invalidated_at"] > as_of)
+    valid_from = item.get("valid_from") or item.get("created_at")
+    norm_valid_from = _norm_timestamp(valid_from)
+    if norm_valid_from is not None and norm_valid_from > as_of:
+        return False
+    valid_to = _norm_timestamp(item.get("valid_to"))
+    invalidated_at = _norm_timestamp(item.get("invalidated_at"))
+    return (valid_to is None or valid_to > as_of) and (invalidated_at is None or invalidated_at > as_of)
+
+
+def _norm_timestamp(value: Any) -> str | None:
+    if value is None:
+        return None
+    try:
+        return to_utc_iso8601(str(value), field="timestamp")
+    except TimestampValidationError:
+        return str(value)
+
+
+def _matches_strategy(item: dict[str, Any], strategy_id: str) -> bool:
+    raw_scope = item.get("scope")
+    scope: dict[str, Any] = raw_scope if isinstance(raw_scope, dict) else {}
+    if item.get("strategy_id") == strategy_id or scope.get("strategy_id") == strategy_id:
+        return True
+    strategy_ids = scope.get("strategy_ids")
+    return isinstance(strategy_ids, list) and strategy_id in strategy_ids
 
 
 def _first(d: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -195,3 +225,29 @@ def _string_refs(value: Any) -> set[str]:
                 if isinstance(item.get(key), str):
                     refs.add(item[key])
     return refs
+
+
+def _source_refs(value: Any) -> set[str]:
+    refs: set[str] = set()
+    for item in _list_from_any(value):
+        if isinstance(item, str):
+            refs.add(item)
+        elif isinstance(item, dict):
+            for key in ("source_id", "source_ref"):
+                if isinstance(item.get(key), str):
+                    refs.add(item[key])
+            for key in ("source_refs", "source_ids"):
+                refs |= _source_refs(item.get(key))
+            if _is_source_record(item):
+                for key in ("id", "record_id"):
+                    if isinstance(item.get(key), str):
+                        refs.add(item[key])
+    return refs
+
+
+def _is_source_record(item: dict[str, Any]) -> bool:
+    for key in ("kind", "type", "record_type", "table", "entity"):
+        value = item.get(key)
+        if isinstance(value, str) and value.lower() in {"source", "sources", "source_record"}:
+            return True
+    return False

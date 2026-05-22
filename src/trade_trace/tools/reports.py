@@ -1211,6 +1211,12 @@ def _report_policy_candidates(args: dict[str, Any], ctx: ToolContext) -> dict[st
     for field in ("status", "strategy_id", "playbook_id", "as_of"):
         if args.get(field) is not None and not isinstance(args[field], str):
             raise ToolError(ErrorCode.VALIDATION_ERROR, f"{field} must be a string", details={"field": field, "value": args[field]})
+    as_of = args.get("as_of")
+    if as_of is not None:
+        try:
+            as_of = to_utc_iso8601(as_of, field="as_of")
+        except TimestampValidationError as exc:
+            raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc), details={"field": "as_of", "value": args.get("as_of")}) from exc
     try:
         home = resolve_home(args.get("home"))
         path = db_path(home)
@@ -1218,7 +1224,7 @@ def _report_policy_candidates(args: dict[str, Any], ctx: ToolContext) -> dict[st
             raise ToolError(ErrorCode.STORAGE_ERROR, "journal not initialized; run `tt journal init` first", details={"home": str(home), "db_path": str(path)})
         connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
         try:
-            data = report_policy_candidates(connection, status=args.get("status"), strategy_id=args.get("strategy_id"), playbook_id=args.get("playbook_id"), as_of=args.get("as_of"), limit=limit)
+            data = report_policy_candidates(connection, status=args.get("status"), strategy_id=args.get("strategy_id"), playbook_id=args.get("playbook_id"), as_of=as_of, limit=limit)
         finally:
             connection.close()
         _propagate_report_meta(ctx, data)

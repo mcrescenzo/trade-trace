@@ -17,7 +17,7 @@ def _init_home(tmp_path):
     return home
 
 
-def _insert_candidate(conn: sqlite3.Connection, node_id: str, pc: dict, *, valid_from: str = NOW, valid_to: str | None = None, invalidated_at: str | None = None) -> None:
+def _insert_candidate(conn: sqlite3.Connection, node_id: str, pc: dict, *, valid_from: str | None = NOW, valid_to: str | None = None, invalidated_at: str | None = None) -> None:
     conn.execute(
         """
         INSERT INTO memory_nodes(id, node_type, title, body, meta_json, valid_from, valid_to, invalidated_at, created_at, actor_id)
@@ -86,3 +86,77 @@ def test_policy_candidates_filters_as_of_limit_and_mcp_read_only(tmp_path):
         assert after_playbooks == before_playbooks
     finally:
         conn.close()
+
+
+def test_policy_candidates_null_valid_from_as_of_uses_created_at_and_validity():
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        """
+        CREATE TABLE memory_nodes(
+            id TEXT, node_type TEXT, title TEXT, body TEXT, meta_json TEXT,
+            confidence_base REAL, importance REAL, valid_from TEXT, valid_to TEXT,
+            invalidated_at TEXT, created_at TEXT, actor_id TEXT, agent_id TEXT,
+            model_id TEXT, environment TEXT, run_id TEXT
+        )
+        """
+    )
+    try:
+        _insert_candidate(conn, "mem-null", {"status": "candidate"}, valid_from=None, valid_to="2026-01-11T00:00:00Z")
+        _insert_candidate(conn, "mem-expired", {"status": "candidate"}, valid_from=None, valid_to="2026-01-09T00:00:00Z")
+        _insert_candidate(conn, "mem-future", {"status": "candidate"}, valid_from="2026-01-11T00:00:00Z")
+        conn.commit()
+        result = report_policy_candidates(conn, as_of="2026-01-10T12:00:00Z")
+    finally:
+        conn.close()
+    assert [i["node_id"] for i in result["policy_candidates"]] == ["mem-null"]
+
+
+def test_policy_candidates_as_of_normalization_and_invalid_validation(tmp_path):
+    home = _init_home(tmp_path)
+    conn = sqlite3.connect(db_path(home))
+    try:
+        _insert_candidate(conn, "mem-tz", {"status": "candidate"}, valid_from="2026-01-10T00:00:00Z")
+        conn.commit()
+    finally:
+        conn.close()
+
+    out = _envelope(home, "report.policy_candidates", {"as_of": "2026-01-10T05:30:00.000+05:30"})["data"]
+    assert out["summary"]["filter"]["as_of"] == "2026-01-10T00:00:00.000Z"
+    assert [i["node_id"] for i in out["policy_candidates"]] == ["mem-tz"]
+
+    invalid = mcp_call("report.policy_candidates", {"home": str(home), "as_of": "not-a-time"}, actor_id="agent:default")
+    assert invalid.ok is False
+    assert invalid.error is not None
+    assert invalid.error.code == "VALIDATION_ERROR"
+    assert invalid.error.details["field"] == "as_of"
+
+
+def test_policy_candidates_strategy_id_filter_includes_scope_strategy_ids_only(tmp_path):
+    home = _init_home(tmp_path)
+    conn = sqlite3.connect(db_path(home))
+    try:
+        _insert_candidate(conn, "mem-list", {"status": "candidate", "scope": {"strategy_ids": ["s1", "s2"]}})
+        _insert_candidate(conn, "mem-top", {"status": "candidate", "strategy_id": "s1"})
+        _insert_candidate(conn, "mem-other", {"status": "candidate", "scope": {"strategy_ids": ["s3"]}})
+        _insert_candidate(conn, "mem-global", {"status": "candidate", "scope": {"strategy_scope": "global"}})
+        conn.commit()
+        result = report_policy_candidates(conn, strategy_id="s1")
+    finally:
+        conn.close()
+    assert [i["node_id"] for i in result["policy_candidates"]] == ["mem-list", "mem-top"]
+
+
+def test_policy_candidates_nested_source_refs_preserved_without_generic_evidence_ids(tmp_path):
+    home = _init_home(tmp_path)
+    conn = sqlite3.connect(db_path(home))
+    try:
+        _insert_candidate(conn, "mem-src", {"status": "candidate", "support": [{"id": "ev-1", "source_refs": ["src-1"], "recall_id": "recall-should-not-source"}], "contradictions": [{"record_id": "ev-2", "source_id": "src-2"}], "replay_cases": [{"case_id": "case-1"}], "recall_refs": [{"recall_id": "recall-1"}], "adherence_refs": [{"record_id": "adh-1"}]})
+        conn.commit()
+        result = report_policy_candidates(conn)
+    finally:
+        conn.close()
+    item = result["policy_candidates"][0]
+    assert item["source_refs"] == ["src-1", "src-2"]
+    assert item["replay_cases"] == ["case-1"]
+    assert item["recall_refs"] == ["recall-1"]
+    assert item["adherence_refs"] == ["adh-1"]
