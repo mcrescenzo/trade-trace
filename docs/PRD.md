@@ -142,7 +142,7 @@ All write APIs include common metadata from MVP:
 - `run_id` — optional agent run/session identifier. Reporting dimension only.
 - `metadata_json` — venue/tool-specific extension. The escape hatch for everything not modeled as a first-class column. Account/portfolio bucket labels (if used) belong here until dogfood proves a need to promote them to a first-class column.
 
-The four segmentation fields (`agent_id`, `model_id`, `environment`, `run_id`) ship as optional columns on `theses`, `forecasts`, `decisions`, `snapshots`, `outcomes`, `events`, and `memory_nodes`. None are required at the schema level; any unset value defaults to `NULL`. Reports may group or filter by them. They never imply credentials, broker accounts, or execution.
+The four segmentation fields (`agent_id`, `model_id`, `environment`, `run_id`) ship as optional columns on `theses`, `forecasts`, `decisions`, `snapshots`, `sources`, `outcomes`, `events`, `memory_nodes`, and `memory_recall_events`. None are required at the schema level; any unset value defaults to `NULL`. Reports may group or filter by them where the report documents support. They never imply credentials, broker accounts, or execution.
 
 ### 3.1 Core ledger/source tables
 
@@ -159,6 +159,7 @@ The four segmentation fields (`agent_id`, `model_id`, `environment`, `run_id`) s
 - `id`, `instrument_id`, `captured_at`, `source`, `source_url`
 - `price`, `bid`, `ask`, `mid`, `spread`, `volume`, `open_interest`, `implied_probability`, `liquidity_depth_json`
 - `metadata_json`, `created_at`, `actor_id`
+- Segmentation: `agent_id`, `model_id`, `environment`, `run_id` (all nullable).
 - Immutable; corrections create new snapshots.
 - `source` is a free-form string; MVP only writes `'manual'`.
 
@@ -260,6 +261,7 @@ Per bead trade-trace-gbtj, `watch` accepts an optional `review_by` (matrix `O`) 
 #### `sources`
 - `id`, `kind`, `ref`, `title`, `note`, `stance` (`supports`, `contradicts`, `neutral`), `freshness_at`, `content_hash`, `captured_at`, `created_at`, `actor_id`
 - Provenance fields: `uri`, `media_type`, `storage_kind`, `retrieved_at`, `source_author`, `publisher`, `excerpt`, `extracted_text`, `summary`, `hash_algorithm`, `redaction_status`, `license_or_terms_note`.
+- Segmentation: `agent_id`, `model_id`, `environment`, `run_id` (all nullable).
 - `kind` enum: `url`, `pdf`, `image`, `tweet`, `news_article`, `research_doc`, `transcript`, `chart_image`, `note`, `other`.
 - `stance` enum: `supports`, `contradicts`, `neutral`. The stance produces the corresponding edge type (`supports`, `contradicts`, or `about`) when the source is attached via §4.5.
 - `storage_kind` enum: `url`, `local_path`, `inline_text`, `external_ref`. Note: Trade Trace **never fetches a `url` or reads a `local_path` automatically**. URLs and paths are stored as metadata only. Inline text is the canonical local-content path. `external_ref` covers opaque references the agent will resolve elsewhere. Content-addressed blob storage is explicitly deferred (P2+).
@@ -347,7 +349,7 @@ The MVP slice's manual ingestion path is exposed as one tool per write table. Ev
 
 - **`venue.add(name, kind, *, metadata_json?)`** — creates a `venues` row. `kind` ∈ §3.1 venues enum.
 - **`instrument.add(venue_id, asset_class, title, *, external_id?, symbol?, currency_or_collateral?, expiration_or_resolution_at?, resolution_criteria_text?, contract_multiplier?, metadata_json?)`** — creates an `instruments` row. `asset_class` ∈ §3.1 instruments enum.
-- **`snapshot.add(instrument_id, captured_at, *, source?, source_url?, price?, bid?, ask?, mid?, spread?, volume?, open_interest?, implied_probability?, liquidity_depth_json?, metadata_json?)`** — appends a `snapshots` row. Immutable; corrections create new snapshots.
+- **`snapshot.add(instrument_id, captured_at, *, source?, source_url?, price?, bid?, ask?, mid?, spread?, volume?, open_interest?, implied_probability?, liquidity_depth_json?, agent_id?, model_id?, environment?, run_id?, metadata_json?)`** — appends a `snapshots` row. Immutable; corrections create new snapshots.
 - **`thesis.add(instrument_id, side, body, *, time_horizon_at?, confidence_label?, falsification_criteria?, exit_triggers?, risk_notes?, strategy_id?, parent_thesis_id?, valid_from?, valid_to?)`** — creates a `theses` row. If `parent_thesis_id` is supplied, the new row is the next `version`; a `supersedes` edge is emitted from new → old.
 - **`forecast.add(thesis_id, kind, outcomes, *, resolution_at?, yes_label?, resolution_rule_text?)`** — creates a `forecasts` row plus exactly N `forecast_outcomes` rows. Binary forecasts must satisfy the §3.1 invariants on outcomes. `yes_label` is set here and only here; once written it is immutable.
 - **`forecast.supersede(prior_forecast_id, *, ...same args as forecast.add except thesis_id)`** — appends a new `forecasts` row, sets the prior row's `scoring_state = 'superseded'` (via supersedes-edge invalidation, not in-place mutation; see [`scoring.md`](./architecture/scoring.md) §4.2), and emits a `supersedes` edge new → prior. The recovery path when an earlier forecast's `yes_label` was ambiguous or wrong.
@@ -367,7 +369,7 @@ All deterministic reports accept a `filter` argument conforming to the `ReportFi
 
 Deterministic reports:
 
-- `report.calibration` — binary Brier, log score, reliability buckets, ECE, sharpness, and a sample-prevalence baseline, computed over scored binary forecasts matching the filter. Full output shape and formulas in [`scoring.md`](./architecture/scoring.md) §3 and §7 and `reports.md` §4. Returns `sample_warning` when the filtered set is below the configurable minimum (default 20 scored forecasts).
+- `report.calibration` — binary Brier, log score, reliability buckets, ECE, sharpness, and a sample-prevalence baseline, computed over scored binary forecasts matching the filter. Supports actor/run filters for `actor_id`, `agent_id`, `model_id`, `environment`, and `run_id` plus the documented venue/strategy/outcome filters. Full output shape and formulas in [`scoring.md`](./architecture/scoring.md) §3 and §7 and `reports.md` §4. Returns `sample_warning` when the filtered set is below the configurable minimum (default 20 scored forecasts).
 - `report.mistakes` / `report.strengths` — tag counts and co-occurrence over decisions and reviews.
 - `report.pnl` — paper/actual P&L aggregates where position projections have enough fills to compute realized/unrealized P&L. Returns a `data_coverage` field reporting how many positions could and could not be computed.
 - Current-exposure/open-position report surfaces must follow [`current-exposure-agent-contract.md`](./architecture/current-exposure-agent-contract.md) for bucket names, caveat codes, and source precedence. This PRD link is a contract seam only; it does not imply a shipped `report.current_exposure` tool.
@@ -387,13 +389,13 @@ Every write tool accepts `--dry-run` (CLI) / `_dry_run: true` (MCP): the dispatc
 
 Trading-native reports (forecast-vs-market edge, calibration-by-liquidity-bucket, skipped-positive-edge review) are deferred to P1. The data is already captured in `snapshots`; the reports are additive.
 
-Comparison and per-strategy reporting are deferred to P1:
+Comparison and per-strategy reporting:
 
-- `report.compare(group_by, filter)` — runs the same metric set across groups and returns a per-group `ReportGroup` for side-by-side comparison. Live `group_by` values (per `trade_trace.reports.compare.SUPPORTED_GROUP_BY_BY_BASE_REPORT`): for `base_report="calibration"` — `agent_id`, `model_id`, `strategy_id`, `decision_type`, `venue_id`, `asset_class`, `environment`, `instrument_id`, `outcome_status`, `status`; for `base_report="pnl"` — `instrument_id`, `status`, `venue_id`, `asset_class`. Deferred to P1+ (segmentation columns are reserved at M1; the SQL mapping lands per a future bead): `playbook_version_id`, `liquidity_bucket`, `confidence_bucket`. See trade-trace-cs0r.
+- `report.compare(group_by, filter)` — runs the same metric set across groups and returns a per-group `ReportGroup` for side-by-side comparison. Live `group_by` values (per `trade_trace.reports.compare.SUPPORTED_GROUP_BY_BY_BASE_REPORT`): for `base_report="calibration"` — `actor_id`, `agent_id`, `model_id`, `run_id`, `strategy_id`, `decision_type`, `venue_id`, `asset_class`, `environment`, `instrument_id`, `outcome_status`, `status`; for `base_report="pnl"` — `instrument_id`, `status`, `venue_id`, `asset_class`. Deferred to P1+ until SQL mapping lands: `playbook_version_id`, `liquidity_bucket`, `confidence_bucket`. See trade-trace-cs0r.
 - `report.strategy_performance` — single-strategy convenience wrapper around the filter pattern; per-strategy P&L, calibration trend, mistake-tag frequency, playbook adherence summary.
-- `report.risk` and `report.opportunity` — P1; see [`risk-units.md`](./architecture/risk-units.md) and [`opportunity-analysis.md`](./architecture/opportunity-analysis.md).
+- `report.risk` and `report.opportunity` — shipped local journal/projection analysis reports; see [`risk-units.md`](./architecture/risk-units.md) and [`opportunity-analysis.md`](./architecture/opportunity-analysis.md). They do not fetch market data, execute trades, or assert broker truth.
 
-`review.bundle(filter, *, max_records?, include_sources?, include_reflections?, include_playbook?)` packages a bounded case set as deterministic JSON for an external review loop (a separate LLM or a human reviewer). It selects records by filter, includes their theses/forecasts/outcomes/reflections, and includes attached sources subject to `sources.redaction_status`. Sources marked `sensitive` are never included; sources marked `redacted` have `body`/`extracted_text` omitted. The bundle does not call an LLM and does not provide advice. Full spec in [`reports.md`](./architecture/reports.md) §5. MVP ships the contract; P1 ships the implementation.
+`review.bundle(filter, *, max_records?, include_sources?, include_reflections?, include_playbook?)` packages a bounded case set as deterministic JSON for an external review loop (a separate LLM or a human reviewer). It selects records by filter, includes their theses/forecasts/outcomes/reflections, and includes attached sources subject to `sources.redaction_status`. Sources marked `sensitive` are never included; sources marked `redacted` have `body`/`extracted_text` omitted. The bundle does not call an LLM and does not provide advice. Full spec in [`reports.md`](./architecture/reports.md) §5.
 
 ### 4.3 Playbooks
 
@@ -424,8 +426,8 @@ Evidence capture is first-class in MVP because reflection quality depends on it:
 Strategies (§2.12) are managed through a small CRUD-style tool family:
 
 - `strategy.create(name, slug?, description?, hypothesis?)` — creates a new `active` strategy. The `slug` defaults to a kebab-case slugification of `name`; duplicate slugs raise `VALIDATION_ERROR` (§6).
-- `strategy.list(status?, q?)` — lists strategies. `status` defaults to `active` and accepts `active`, `archived`, or `all`. `q` is a substring search over `name`, `slug`, `description`, and `hypothesis`.
-- `strategy.show(id_or_slug)` — returns the strategy row plus summary counts (decisions, theses, reviews, reflections linked) once those joins are wired up. Accepts either the canonical `id` or the `slug`.
+- `strategy.list(status?, q?)` — lists strategies. `status` defaults to `active` and accepts `active`, `archived`, `both`, or `all` (`both` and `all` are aliases for all statuses). `q` is a substring search over `name`, `slug`, `description`, and `hypothesis`.
+- `strategy.show(strategy_id? | slug?)` — returns the strategy row. Accepts either the canonical `strategy_id` or the `slug`. Summary counts and richer diagnostics live in report surfaces such as `report.strategy_performance`; they are not part of the row-focused `strategy.show` response.
 - `strategy.update(id, *, description?, hypothesis?, status?)` — partial update. `name` and `slug` are immutable in MVP; rename support is deferred. Setting `status='archived'` is the archive operation; there is no separate `strategy.archive` tool.
 
 Tools that reference a strategy (`decision.add`, `thesis.add`, write paths into `reviews`, `memory.recall` context, `memory.reflect` target, and every `report.*` filter) accept the canonical `strategy_id`. They MAY also accept a `strategy_slug` input alias that the server resolves to `strategy_id` before validation; the success envelope always echoes `strategy_id` regardless of which form was passed.

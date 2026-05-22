@@ -33,8 +33,10 @@ from trade_trace.reports.calibration import (
 from trade_trace.reports.pnl import DEFAULT_PNL_MIN_SAMPLE, _pnl_metrics_for_rows
 
 CALIBRATION_GROUP_SQL: dict[str, str] = {
-    "agent_id": "f.actor_id",
+    "actor_id": "f.actor_id",
+    "agent_id": "f.agent_id",
     "model_id": "f.model_id",
+    "run_id": "f.run_id",
     "strategy_id": "t.strategy_id",
     "decision_type": "d.type",
     "venue_id": "i.venue_id",
@@ -276,8 +278,8 @@ def _group_filter_view(rf: ReportFilter, group_by: str, key: str, *, report: str
         view.setdefault("strategy", {})["strategy_id"] = key
     elif group_by == "venue_id":
         view.setdefault("instrument", {})["venue_id"] = [key]
-    elif group_by == "agent_id":
-        view.setdefault("actors", {})["actor_id"] = [key]
+    elif group_by in {"actor_id", "agent_id", "model_id", "environment", "run_id"}:
+        view.setdefault("actors", {})[group_by] = [key]
     else:
         view.setdefault("compare", {})["group_by"] = group_by
         view["compare"]["group_value"] = key

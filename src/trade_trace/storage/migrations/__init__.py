@@ -39,6 +39,9 @@ from trade_trace.storage.migrations.m009_events_append_only import (
 from trade_trace.storage.migrations.m010_strategy_id_new_row_triggers import (
     _migration_010_strategy_id_new_row_triggers,
 )
+from trade_trace.storage.migrations.m011_agent_continuity_provenance import (
+    _migration_011_agent_continuity_provenance,
+)
 
 MIGRATIONS: list[Migration] = [
     _migration_001_meta_table,
@@ -51,6 +54,7 @@ MIGRATIONS: list[Migration] = [
     _migration_008_playbooks,
     _migration_009_events_append_only,
     _migration_010_strategy_id_new_row_triggers,
+    _migration_011_agent_continuity_provenance,
 ]
 
 
@@ -79,6 +83,7 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
     (8, ["playbooks", "playbook_versions", "decision_playbook_rules"]),
     (9, ["memory_node_embeddings"]),
     (10, []),
+    (11, []),
 ]
 
 
@@ -116,6 +121,10 @@ _MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
     (8, {}),
     (9, {}),
     (10, {}),
+    (11, {
+        "snapshots": ["agent_id", "model_id", "environment", "run_id"],
+        "sources": ["agent_id", "model_id", "environment", "run_id"],
+    }),
 ]
 
 
@@ -137,6 +146,7 @@ __all__ = [
     "_migration_008_playbooks",
     "_migration_009_events_append_only",
     "_migration_010_strategy_id_new_row_triggers",
+    "_migration_011_agent_continuity_provenance",
     "_require_fts5",
     "apply_pending_migrations",
     "current_version",

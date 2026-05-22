@@ -36,6 +36,7 @@ SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 _STATUS_VALUES = ("active", "archived")
+_LIST_STATUS_VALUES = (*_STATUS_VALUES, "both", "all")
 
 
 def _normalize_slug(value: Any) -> str:
@@ -191,7 +192,7 @@ def _strategy_full_row_to_dict(row: tuple) -> dict[str, Any]:
 
 def _strategy_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`strategy.list` — paginated list. Optional `status` filter (active /
-    archived / both). Default returns active only."""
+    archived / both / all). Default returns active only."""
 
     status_filter = args.get("status")
     limit = int(args.get("limit", 100))
@@ -201,11 +202,12 @@ def _strategy_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "limit must be in [1, 1000]",
             details={"field": "limit", "value": limit},
         )
-    if status_filter is not None and status_filter not in (*_STATUS_VALUES, "both"):
+    if status_filter is not None and status_filter not in _LIST_STATUS_VALUES:
         raise ToolError(
             ErrorCode.VALIDATION_ERROR,
-            f"status must be one of {(*_STATUS_VALUES, 'both')}",
-            details={"field": "status", "value": status_filter},
+            f"status must be one of {_LIST_STATUS_VALUES}",
+            details={"field": "status", "value": status_filter,
+                     "allowed": list(_LIST_STATUS_VALUES)},
         )
     sql = (
         "SELECT id, name, slug, description, hypothesis, status, "
@@ -409,7 +411,7 @@ def register_strategy_tools(registry: ToolRegistry) -> None:
         _strategy_list,
         description=(
             "List strategies. Default returns active rows. Pass "
-            "status='archived' or 'both' to broaden. limit defaults to 100."
+            "status='archived', 'both', or 'all' to broaden. limit defaults to 100."
         ),
     )
     registry.register(

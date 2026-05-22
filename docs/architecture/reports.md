@@ -8,10 +8,11 @@ report.calibration_integrity, report.source_quality, report.mistakes,
 report.strengths, report.pnl, report.watchlist,
 report.unscored_forecasts, report.decision_velocity,
 report.playbook_adherence, report.coach, report.filter_schema,
-report.compare, report.strategy_performance, report.audit_readiness.
-Deferred (P1): report.risk, report.opportunity. review.bundle ships as a contract-only stub
-(UNSUPPORTED_CAPABILITY); the §5 spec is the binding contract for the P1
-implementation.
+report.compare, report.strategy_performance, report.audit_readiness,
+report.risk, report.opportunity, review.bundle, report.current_exposure,
+report.exposure_anomalies, and report.open_positions. Deferred (P1+):
+trading-native forecast-vs-market edge reports, calibration-by-liquidity-bucket,
+skipped-positive-edge review, and broader replay/evaluation surfaces.
 
 Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
@@ -113,6 +114,12 @@ filter on this field"; `null` means "unset."
   `VALIDATION_ERROR`.
 - `tags_any` and `tags_all` may both be set: a row matches when
   `(decision_tags ∩ tags_all == tags_all) AND (decision_tags ∩ tags_any ≠ ∅)`.
+- `report.calibration` applies `actors.actor_id`, `actors.agent_id`,
+  `actors.model_id`, `actors.environment`, and `actors.run_id` against
+  scored forecasts. `report.compare(base_report="calibration")` may group
+  by the same actor/run fields. Reports that do not list these fields in
+  `_filter_support.SUPPORTED_FILTER_FIELDS` reject them instead of silently
+  broadening the result.
 
 ### 2.2 Round-trip and `report.filter_schema`
 
@@ -288,14 +295,16 @@ Group by playbook version. Per-group: counts of `considered`,
 `followed`, `overridden`, `not_applicable`; override-outcome breakdown
 where outcomes exist.
 
-### 4.7 `report.compare` (P1)
+### 4.7 `report.compare`
 
 Inputs:
 
 - `filter`: a `ReportFilter` defining the baseline candidate set.
-- `group_by`: one of `agent_id`, `model_id`, `strategy_id`,
-  `playbook_version_id`, `decision_type`, `venue_id`, `asset_class`,
-  `liquidity_bucket`, `confidence_bucket`, `environment`.
+- `group_by`: allowlisted per base report. For `base_report='calibration'`:
+  `actor_id`, `agent_id`, `model_id`, `run_id`, `strategy_id`,
+  `decision_type`, `venue_id`, `asset_class`, `environment`,
+  `instrument_id`, `outcome_status`, `status`. For `base_report='pnl'`:
+  `instrument_id`, `status`, `venue_id`, `asset_class`.
 - `base_report`: the underlying report whose metrics to compute per
   group. Current shipped implementation supports `calibration` and `pnl`.
   Other planned kernels (`mistakes`, `playbook_adherence`) remain deferred.

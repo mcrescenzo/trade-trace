@@ -230,3 +230,50 @@ def test_shipped_report_tool_set_is_locked():
         f"added: {shipped_reports - SHIPPED_REPORTS}; "
         f"removed: {SHIPPED_REPORTS - shipped_reports}"
     )
+
+
+FORBIDDEN_AGENT_CONTINUITY_TOOL_TOKENS = (
+    "broker",
+    "wallet",
+    "order",
+    "execute",
+    "execution",
+    "scheduler",
+    "cron",
+    "backtest",
+    "dashboard",
+    "fetch_price",
+    "fetch_market",
+)
+
+
+def test_agent_continuity_roadmap_does_not_add_forbidden_tool_families():
+    """Agent-continuity features must stay a local memory/evaluation layer.
+
+    New public tools may not smuggle in execution, fetching, scheduling,
+    dashboard, broker/wallet, or backtester semantics under the roadmap.
+    """
+
+    offending = [
+        name for name in _registered_tool_names()
+        if any(token in name.replace(".", "_") for token in FORBIDDEN_AGENT_CONTINUITY_TOOL_TOKENS)
+    ]
+    assert offending == []
+
+
+def test_registered_tool_descriptions_do_not_emit_uncaveated_advice_claims():
+    """Descriptions are model-facing prompts; keep them evidence/reporting-only."""
+
+    forbidden = re.compile(
+        r"\b(buy recommendation|sell recommendation|trade recommendation|"
+        r"guaranteed profit|profit guarantee|financial advice)\b",
+        re.IGNORECASE,
+    )
+    registry = default_registry()
+    offending = []
+    for name in registry.names():
+        description = registry.get(name).description or ""
+        match = forbidden.search(description)
+        if match:
+            offending.append((name, match.group(0)))
+    assert offending == []

@@ -171,6 +171,18 @@ def _apply_scored_row_filters(
     if rf.actors.actor_id:
         where.append(f"f.actor_id IN ({_placeholders(len(rf.actors.actor_id))})")
         params.extend(rf.actors.actor_id)
+    if rf.actors.agent_id:
+        where.append(f"f.agent_id IN ({_placeholders(len(rf.actors.agent_id))})")
+        params.extend(rf.actors.agent_id)
+    if rf.actors.model_id:
+        where.append(f"f.model_id IN ({_placeholders(len(rf.actors.model_id))})")
+        params.extend(rf.actors.model_id)
+    if rf.actors.environment:
+        where.append(f"f.environment IN ({_placeholders(len(rf.actors.environment))})")
+        params.extend(rf.actors.environment)
+    if rf.actors.run_id:
+        where.append(f"f.run_id IN ({_placeholders(len(rf.actors.run_id))})")
+        params.extend(rf.actors.run_id)
     if rf.instrument.venue_id:
         where.append(f"i.venue_id IN ({_placeholders(len(rf.instrument.venue_id))})")
         params.extend(rf.instrument.venue_id)

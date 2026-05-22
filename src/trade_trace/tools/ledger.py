@@ -307,6 +307,7 @@ def _snapshot_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     source = args.get("source", "manual")
     liquidity_depth_json = _store_metadata_json(args, "liquidity_depth_json")
     metadata_json = _store_metadata_json(args)
+    seg = common_metadata(args)
     payload_common = {
         "instrument_id": instrument_id,
         "captured_at": captured_at,
@@ -321,6 +322,10 @@ def _snapshot_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         "open_interest": args.get("open_interest"),
         "implied_probability": args.get("implied_probability"),
         "liquidity_depth_json": liquidity_depth_json,
+        "agent_id": seg["agent_id"],
+        "model_id": seg["model_id"],
+        "environment": seg["environment"],
+        "run_id": seg["run_id"],
         "metadata_json": metadata_json,
     }
     db = open_db_for_args(args)
@@ -346,15 +351,18 @@ def _snapshot_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             uow.execute(
                 "INSERT INTO snapshots(id, instrument_id, captured_at, source, source_url, "
                 "price, bid, ask, mid, spread, volume, open_interest, implied_probability, "
-                "liquidity_depth_json, metadata_json, created_at, actor_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "liquidity_depth_json, agent_id, model_id, environment, run_id, "
+                "metadata_json, created_at, actor_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     snap_id, instrument_id, captured_at, source,
                     args.get("source_url"), args.get("price"), args.get("bid"),
                     args.get("ask"), args.get("mid"), args.get("spread"),
                     args.get("volume"), args.get("open_interest"),
                     args.get("implied_probability"),
-                    liquidity_depth_json, metadata_json, created_at, ctx.actor_id,
+                    liquidity_depth_json,
+                    seg["agent_id"], seg["model_id"], seg["environment"], seg["run_id"],
+                    metadata_json, created_at, ctx.actor_id,
                 ),
             )
             emit_event(
@@ -1432,6 +1440,7 @@ def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) 
     captured_at = normalize_timestamp(args, "captured_at")
     retrieved_at = normalize_timestamp(args, "retrieved_at")
     metadata_json = _store_metadata_json(args)
+    seg = common_metadata(args)
 
     def _payload(sid: str) -> dict[str, Any]:
         return {
@@ -1451,6 +1460,10 @@ def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) 
             "hash_algorithm": args.get("hash_algorithm"),
             "redaction_status": redaction_status,
             "license_or_terms_note": args.get("license_or_terms_note"),
+            "agent_id": seg["agent_id"],
+            "model_id": seg["model_id"],
+            "environment": seg["environment"],
+            "run_id": seg["run_id"],
             "metadata_json": metadata_json,
         }
 
@@ -1478,9 +1491,9 @@ def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) 
         "INSERT INTO sources(id, kind, ref, title, note, stance, freshness_at, "
         "content_hash, captured_at, uri, media_type, storage_kind, retrieved_at, "
         "source_author, publisher, excerpt, extracted_text, summary, "
-        "hash_algorithm, redaction_status, license_or_terms_note, metadata_json, "
-        "created_at, actor_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "hash_algorithm, redaction_status, license_or_terms_note, agent_id, "
+        "model_id, environment, run_id, metadata_json, created_at, actor_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             source_id, kind, args.get("ref"), args.get("title"),
             args.get("note"), stance, freshness_at,
@@ -1490,6 +1503,7 @@ def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) 
             args.get("excerpt"), args.get("extracted_text"),
             args.get("summary"), args.get("hash_algorithm"),
             redaction_status, args.get("license_or_terms_note"),
+            seg["agent_id"], seg["model_id"], seg["environment"], seg["run_id"],
             metadata_json, created_at, ctx.actor_id,
         ),
     )
@@ -1990,6 +2004,38 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
 # required fields. The runtime decision matrix in `decision_matrix.py`
 # enforces per-type R/X constraints uniformly and returns a typed
 # VALIDATION_ERROR envelope on violation.
+# Hand-crafted JSON schema for snapshot.add per agent-continuity Epic A.
+# The runtime persists common run/session provenance fields on snapshots; the
+# advertised schema must expose them even though they remain optional.
+_SNAPSHOT_ADD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "instrument_id": {"type": "string"},
+        "captured_at": {"type": "string"},
+        "source": {"type": "string"},
+        "source_url": {"type": "string"},
+        "price": {"type": "number"},
+        "bid": {"type": "number"},
+        "ask": {"type": "number"},
+        "mid": {"type": "number"},
+        "spread": {"type": "number"},
+        "volume": {"type": "number"},
+        "open_interest": {"type": "number"},
+        "implied_probability": {"type": "number"},
+        "liquidity_depth_json": {"type": "object"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "run_id": {"type": "string"},
+        "metadata_json": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["instrument_id", "captured_at", "idempotency_key"],
+    "description": "snapshot.add — append a caller-supplied local market/context snapshot; optional agent/model/environment/run fields persist as reporting dimensions only.",
+}
+
+
 # Hand-crafted JSON schema for source.add per bead trade-trace-2ya5.
 # Storage migrations 003 pin `kind` to a 10-value enum and `stance` to a
 # 3-value enum; the auto-derived schema only emitted the field types as
@@ -2044,6 +2090,10 @@ _SOURCE_ADD_SCHEMA: dict[str, Any] = {
         "extracted_text": {"type": "string"},
         "summary": {"type": "string"},
         "redaction_status": {"type": "string"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "run_id": {"type": "string"},
         "metadata_json": {"type": "object"},
         "idempotency_key": {"type": "string"},
         "home": {"type": "string"},
@@ -2186,6 +2236,7 @@ def register_ledger_tools(registry: ToolRegistry) -> None:
         "snapshot.add",
         _snapshot_add,
         is_write=True,
+        json_schema=_SNAPSHOT_ADD_SCHEMA,
         optional_keys=(
             "price",
             "source",
@@ -2198,6 +2249,10 @@ def register_ledger_tools(registry: ToolRegistry) -> None:
             "open_interest",
             "implied_probability",
             "liquidity_depth_json",
+            "agent_id",
+            "model_id",
+            "environment",
+            "run_id",
             "metadata_json",
         ),
         **_examples_for("snapshot.add"),

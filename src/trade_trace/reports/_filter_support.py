@@ -49,6 +49,10 @@ SUPPORTED_FILTER_FIELDS: dict[str, frozenset[str]] = {
     # consults `outcome.include_late_recorded` to swap the dogfood default.
     "report.calibration": frozenset({
         "actors.actor_id",
+        "actors.agent_id",
+        "actors.model_id",
+        "actors.environment",
+        "actors.run_id",
         "instrument.venue_id",
         "strategy.strategy_id",
         "outcome.include_late_recorded",

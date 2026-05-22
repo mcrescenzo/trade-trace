@@ -369,3 +369,58 @@ def test_playbook_read_and_write_schemas_advertise_runtime_optional_fields():
     for key in ("reason", "metadata_json"):
         assert key in adherence["properties"]
         assert key not in adherence["required"]
+
+
+def test_snapshot_and_source_schemas_advertise_persisted_agent_run_fields():
+    for tool_name in ("snapshot.add", "source.add"):
+        schema = _schema_for(tool_name)
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        for key in ("agent_id", "model_id", "environment", "run_id"):
+            assert key in properties
+            assert key not in required
+
+
+def test_strategy_list_accepts_documented_all_alias_at_runtime(tmp_path):
+    from trade_trace.mcp_server import mcp_call
+
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    assert mcp_call(
+        "strategy.create",
+        {
+            "home": home,
+            "name": "Active strategy",
+            "slug": "active-strategy",
+            "idempotency_key": "00000000-0000-4000-8000-active-strategy",
+        },
+    ).ok
+    archived = mcp_call(
+        "strategy.create",
+        {
+            "home": home,
+            "name": "Archived strategy",
+            "slug": "archived-strategy",
+            "idempotency_key": "00000000-0000-4000-8000-archived-strategy",
+        },
+    )
+    assert archived.ok
+    archived_id = archived.model_dump(mode="json", exclude_none=True)["data"]["id"]
+    assert mcp_call(
+        "strategy.update",
+        {
+            "home": home,
+            "strategy_id": archived_id,
+            "status": "archived",
+            "idempotency_key": "00000000-0000-4000-8000-archive-strategy",
+        },
+    ).ok
+
+    all_env = mcp_call("strategy.list", {"home": home, "status": "all"})
+    both_env = mcp_call("strategy.list", {"home": home, "status": "both"})
+    assert all_env.ok, all_env
+    assert both_env.ok, both_env
+    all_slugs = {item["slug"] for item in all_env.model_dump(mode="json", exclude_none=True)["data"]["items"]}
+    both_slugs = {item["slug"] for item in both_env.model_dump(mode="json", exclude_none=True)["data"]["items"]}
+    assert {"active-strategy", "archived-strategy"}.issubset(all_slugs)
+    assert all_slugs == both_slugs
