@@ -289,3 +289,19 @@ def test_report_lifecycle_status_alias_and_schema(home):
     props = schema_env["data"]["json_schema"]["properties"]
     for key in ("filter", "states", "status", "as_of", "stale_threshold_days"):
         assert key in props
+
+
+def test_parse_ts_treats_naive_iso_as_utc_not_local():
+    """trade-trace-nq8x: a naive ISO string used to pass through
+    `astimezone(UTC)`, which on Python 3.11+ first interprets naive
+    datetimes as the server's local time. The lifecycle parser must
+    treat naive inputs as UTC, matching strategy_health._parse_ts."""
+    from datetime import UTC, datetime
+
+    from trade_trace.reports.lifecycle import _parse_ts
+
+    naive = _parse_ts("2026-01-15T12:00:00")
+    expected = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
+    assert naive == expected, naive
+    assert _parse_ts("2026-01-15T12:00:00Z") == expected
+    assert _parse_ts("2026-01-15T07:00:00-05:00") == expected
