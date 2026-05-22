@@ -63,6 +63,30 @@ A retrospective synthesis written by the agent after a decision, position, perio
 - **Typical importance**: `5`–`8`. Reflections that change the agent's behavior next time warrant `8`+; one-off observations stay near the default.
 - **Durable beliefs** (e.g., "thin-liquidity prediction markets near resolution are systematically mispriced") can set `decay_rate_per_day` to `0.0005` or lower to express slow-fading belief. There is no separate `semantic_claim` type; a reflection with slow decay plays that role. The agent decides at write time.
 
+#### 3.2.1 Policy-candidate quarantine metadata (G1)
+
+Reflections may optionally carry `meta_json.policy_candidate` to make the reflection-to-policy lifecycle explicit while preserving the separation between subjective memory and durable playbook policy. This is metadata on `reflection` nodes only; it is not a new durable table and it never creates, updates, or deletes playbook versions/rules.
+
+Allowed lifecycle statuses are exactly:
+
+- `raw_reflection`
+- `candidate_policy`
+- `quarantined`
+- `needs_more_evidence`
+- `rejected`
+- `promoted_to_playbook`
+- `superseded`
+
+For any status other than `raw_reflection`, metadata must include:
+
+- `candidate_statement`: process-only prose describing the possible policy/playbook implication;
+- `scope`: explicit applicability scope. Strategy applicability must be explicit via `strategy_id`, `strategy_ids`, or `strategy_scope` (for example `none` or `global_candidate`) so strategy-linked reflections do not silently become global;
+- `evidence`: for `candidate_policy`, `quarantined`, `needs_more_evidence`, and `promoted_to_playbook`, an object that can include reflection IDs, supporting/contradicting case counts, caveats, bundle IDs, recall/source/adherence references, and low-N warnings. Missing evidence is represented as caveats/needs-more-evidence metadata, not by omitting the evidence object.
+
+Additional audit fields are required for terminal/transition states: `rejection_reason` for `rejected`, `superseded_by` for `superseded`, and `playbook_version_id` for `promoted_to_playbook`. `promoted_to_playbook` means a separate explicit playbook/process write has already happened or is being cited; setting this metadata by itself must not mutate the playbook.
+
+Transitions are append-only. To change lifecycle state, write a successor reflection (or another memory node where appropriate) with new metadata and link it with `memory.link` (`supersedes`, `derived_from`, `supports`, or `contradicts`) rather than updating the original `memory_nodes` row.
+
 ### 3.3 `playbook_rule`
 
 A codified procedural rule belonging to a specific `playbook_version`.
@@ -70,6 +94,7 @@ A codified procedural rule belonging to a specific `playbook_version`.
 - **Examples**: "Do not enter prediction-market positions when spread > 8% of expected edge"; "Require 2x base liquidity for any entry within 7 days of resolution".
 - **Required meta**: `playbook_version_id` and `rule_meta` (`trigger_kind`, `applicable_decision_types`, optional `applicable_asset_classes`).
 - **Body** holds the free-text rule the agent reads when reasoning. MVP rules are advisory; automatic violation detection requires explicit predicate fields added later.
+- **Machine-checkable predicate metadata** may be stored under `meta_json.predicate` for rules that fit the closed-set evaluator in `trade_trace.playbook_predicates`. This is a library substrate only, not a registered report/tool in this bead. Supported families are intentionally narrow (`field_exists`, `field_equals`, `decision_type_in`, `link_exists`, `source_count_at_least`, `timestamp_present`, `forecast_resolution_rule_present`) and evaluate only recorded local fields/links. Missing predicate metadata leaves a rule self-reported-only; rule body/prose is never parsed as executable logic.
 - **Default decay**: `0.0`. Rules are superseded by new versions, not faded.
 - **Typical importance**: `7`–`10`. Procedural rules are high-leverage by construction; default importance for new rules is `8`.
 - **`valid_to`**: typically `NULL` until the rule is superseded by a new playbook version, at which point `invalidated_at` and `invalidated_by` are set.

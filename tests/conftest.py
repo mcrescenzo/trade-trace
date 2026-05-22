@@ -69,6 +69,16 @@ def pytest_configure(config):
 
 
 @pytest.fixture(autouse=True)
+def _reset_auto_key_counter_per_test():
+    """Reset the auto-idempotency-key counter between tests so each test
+    starts from a known state. Without this the counter accumulates across
+    the whole session (trade-trace-r85a), which makes test failures harder
+    to reproduce in isolation."""
+    _AUTO_KEY_COUNTER[0] = 0
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _restore_strict_dispatch_for_marker(request):
     if request.node.get_closest_marker("strict_idempotency"):
         prior_core = _core.dispatch

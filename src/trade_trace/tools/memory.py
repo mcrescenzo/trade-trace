@@ -62,6 +62,16 @@ SUPERSESSION_DISCOUNT: Final[float] = 0.25
 
 NODE_TYPES: Final[tuple[str, ...]] = ("observation", "reflection", "playbook_rule")
 
+POLICY_CANDIDATE_STATUSES: Final[tuple[str, ...]] = (
+    "raw_reflection",
+    "candidate_policy",
+    "quarantined",
+    "needs_more_evidence",
+    "rejected",
+    "promoted_to_playbook",
+    "superseded",
+)
+
 EDGE_TYPES: Final[tuple[str, ...]] = (
     "about", "supports", "contradicts", "supersedes",
     "derived_from", "violates", "follows",
@@ -112,6 +122,105 @@ def _parse_memory_meta_json_object(
     return value
 
 
+def _validate_policy_candidate_meta(meta_json: dict[str, Any], *, node_type: str) -> None:
+    """Validate optional reflection policy-candidate lifecycle metadata.
+
+    Transitions remain append-only: write a new reflection/memory node and link
+    it (for example with ``supersedes``) rather than updating an old node.
+    Presence of this metadata never creates or mutates playbooks.
+    """
+
+    if "policy_candidate" not in meta_json:
+        return
+    if node_type != "reflection":
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "meta_json.policy_candidate is only valid on reflection memory_nodes",
+            details={"field": "meta_json.policy_candidate", "node_type": node_type},
+        )
+    candidate = meta_json["policy_candidate"]
+    if not isinstance(candidate, dict):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "meta_json.policy_candidate must be an object",
+            details={"field": "meta_json.policy_candidate"},
+        )
+    status = candidate.get("status")
+    if status not in POLICY_CANDIDATE_STATUSES:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "policy_candidate.status must be one of "
+            f"{POLICY_CANDIDATE_STATUSES}",
+            details={
+                "field": "meta_json.policy_candidate.status",
+                "value": status,
+                "allowed": list(POLICY_CANDIDATE_STATUSES),
+            },
+        )
+    if status == "raw_reflection":
+        return
+    statement = candidate.get("candidate_statement")
+    if not isinstance(statement, str) or not statement.strip():
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "policy candidates require candidate_statement prose",
+            details={"field": "meta_json.policy_candidate.candidate_statement"},
+        )
+    scope = candidate.get("scope")
+    if not isinstance(scope, dict) or not scope:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "policy candidates require explicit scope metadata",
+            details={"field": "meta_json.policy_candidate.scope"},
+        )
+    if not any(key in scope for key in ("strategy_id", "strategy_ids", "strategy_scope")):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "policy candidates must explicitly scope strategy applicability",
+            details={
+                "field": "meta_json.policy_candidate.scope.strategy",
+                "reason": "missing_strategy_scope",
+            },
+        )
+    if status in {"candidate_policy", "quarantined", "needs_more_evidence", "promoted_to_playbook"}:
+        evidence = candidate.get("evidence")
+        if not isinstance(evidence, dict):
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "policy candidates require evidence metadata, even when caveated/missing",
+                details={"field": "meta_json.policy_candidate.evidence"},
+            )
+        for field in ("reflection_ids", "caveats"):
+            values = evidence.get(field)
+            if values is not None and (
+                not isinstance(values, list)
+                or not all(isinstance(value, str) for value in values)
+            ):
+                raise ToolError(
+                    ErrorCode.VALIDATION_ERROR,
+                    f"policy_candidate.evidence.{field} must be a list of strings when present",
+                    details={"field": f"meta_json.policy_candidate.evidence.{field}"},
+                )
+    if status == "promoted_to_playbook" and not candidate.get("playbook_version_id"):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "promoted_to_playbook metadata must cite an explicit playbook_version_id; metadata alone never creates or modifies a playbook",
+            details={"field": "meta_json.policy_candidate.playbook_version_id"},
+        )
+    if status == "rejected" and not candidate.get("rejection_reason"):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "rejected policy candidates require rejection_reason",
+            details={"field": "meta_json.policy_candidate.rejection_reason"},
+        )
+    if status == "superseded" and not candidate.get("superseded_by"):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "superseded policy candidates require superseded_by",
+            details={"field": "meta_json.policy_candidate.superseded_by"},
+        )
+
+
 _MEMORY_REFLECT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -132,7 +241,15 @@ _MEMORY_REFLECT_SCHEMA: dict[str, Any] = {
         "decay_rate_per_day": {"type": "number"},
         "valid_from": {"type": "string"},
         "valid_to": {"type": "string"},
-        "meta_json": {"type": "object"},
+        "meta_json": {
+            "type": "object",
+            "description": (
+                "Optional reflection metadata. When policy_candidate is present, "
+                "status must be exactly one of raw_reflection, candidate_policy, "
+                "quarantined, needs_more_evidence, rejected, promoted_to_playbook, "
+                "superseded; candidate statuses require explicit scope/evidence."
+            ),
+        },
         "parent_node_id": {"type": "string"},
         "edge_id": {"type": "string"},
         "idempotency_key": {"type": "string"},
@@ -240,6 +357,7 @@ def _memory_retain_in_uow(
     # whatever was passed, so a list/scalar would persist and confuse
     # downstream consumers that assume object-shaped metadata.
     meta_input = _parse_memory_meta_json_object(args.get("meta_json"))
+    _validate_policy_candidate_meta(meta_input, node_type=node_type)
     meta_json = json.dumps(meta_input, sort_keys=True)
     title = args.get("title")
     parent_node_id = args.get("parent_node_id")
@@ -1169,7 +1287,10 @@ def register_memory_tools(registry: ToolRegistry) -> None:
             "validity (valid_from, valid_to), importance (1-10), "
             "confidence_base, and an optional decay_rate_per_day. "
             "Reflections written via this path are caller-responsible for "
-            "the about-edge; prefer memory.reflect for the safe path."
+            "the about-edge; prefer memory.reflect for the safe path. "
+            "Reflection meta_json may carry policy_candidate lifecycle "
+            "metadata; it is validation/read metadata only and never mutates "
+            "playbooks automatically."
         ),
     )
     registry.register(
@@ -1182,7 +1303,10 @@ def register_memory_tools(registry: ToolRegistry) -> None:
             "ledger or memory endpoint (decision, thesis, forecast, outcome, "
             "memory_node, etc.). Enforces the orphan invariant: every "
             "reflection has an about-edge. Accepts canonical "
-            "target_kind/target_id/body and README sugar target/insight."
+            "target_kind/target_id/body and README sugar target/insight. "
+            "Optional meta_json.policy_candidate records the explicit "
+            "reflection-to-policy quarantine lifecycle without creating or "
+            "modifying playbook versions/rules."
         ),
         json_schema=_MEMORY_REFLECT_SCHEMA,
         usage_summary="Create one reflection memory node about an existing ledger or memory target and atomically attach the about-edge.",

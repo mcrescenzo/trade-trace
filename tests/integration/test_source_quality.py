@@ -13,7 +13,6 @@ Covers ≥6 named tests:
 
 from __future__ import annotations
 
-from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -259,17 +258,28 @@ def test_stale_sources_include_direct_decision_attachment_and_deduplicate(home):
 
 
 def test_stale_sources_silent_when_freshness_recent(home):
-    """negative: a source freshness_at = now (within 7 days of decision)
-    does not fire."""
+    """negative: a source freshness_at one hour before the decision's own
+    `created_at` is well within the 7-day staleness window and must not
+    fire. The original version subtracted from `datetime.now(UTC)`, which
+    coupled the test to wall-clock skew (trade-trace-r85a); we now anchor
+    the offset to the actual decision timestamp so the relative
+    comparison stays deterministic."""
 
+    import sqlite3
     from datetime import datetime, timedelta
 
+    from trade_trace.storage.paths import db_path
     from trade_trace.timestamps import to_utc_iso8601
 
     seeds = _seed_thesis_and_decision(home)
-    recent = to_utc_iso8601(
-        (datetime.now(UTC) - timedelta(hours=1)).isoformat()
-    )
+    with sqlite3.connect(db_path(home)) as conn:
+        row = conn.execute(
+            "SELECT created_at FROM decisions WHERE id = ?",
+            (seeds["decision"],),
+        ).fetchone()
+    assert row is not None
+    dec_dt = datetime.fromisoformat(row[0].replace("Z", "+00:00"))
+    recent = to_utc_iso8601((dec_dt - timedelta(hours=1)).isoformat())
     src = _mcp(home, "source.add", {
         "kind": "url", "stance": "supports", "uri": "https://e.x/recent",
         "freshness_at": recent,

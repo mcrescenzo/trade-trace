@@ -4,7 +4,8 @@ import json
 import subprocess
 import sys
 
-from tests.integration.test_bootstrap_read_model import _counts, _seed_base
+from tests.integration._bootstrap_helpers import counts as _counts
+from tests.integration._bootstrap_helpers import seed_base as _seed_base
 from trade_trace.core import default_registry, dispatch
 from trade_trace.mcp_server import mcp_call, mcp_tool_specs
 from trade_trace.storage.paths import db_path
