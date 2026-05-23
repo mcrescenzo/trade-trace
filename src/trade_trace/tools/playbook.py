@@ -30,7 +30,6 @@ Tools:
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
@@ -44,6 +43,7 @@ from trade_trace.tools._helpers import (
     open_db_for_args,
     reject_if_contains_secrets,
     require,
+    store_metadata_json,
 )
 from trade_trace.tools.errors import ToolError
 
@@ -122,7 +122,7 @@ def _playbook_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     # field. `name` is a short identifier and exempt.
     reject_if_contains_secrets(description, field="description")
     status = args.get("status")
-    metadata_json = json.dumps(args.get("metadata_json") or {}, sort_keys=True)
+    metadata_json = store_metadata_json(args)
     idempotency_key = args.get("idempotency_key")
 
     db = open_db_for_args(args)
@@ -422,7 +422,7 @@ def _playbook_propose_version(
     # Per bead trade-trace-7j1l: scan version description (long-form
     # free-text). The reflection_node_id is a reference, not free text.
     reject_if_contains_secrets(description, field="description")
-    metadata_json = json.dumps(args.get("metadata_json") or {}, sort_keys=True)
+    metadata_json = store_metadata_json(args)
     idempotency_key = args.get("idempotency_key")
 
     db = open_db_for_args(args)
@@ -583,7 +583,7 @@ def _decision_record_adherence(
             details={"field": "status", "value": status,
                      "allowed": list(ADHERENCE_STATUSES)},
         )
-    metadata_json = json.dumps(args.get("metadata_json") or {}, sort_keys=True)
+    metadata_json = store_metadata_json(args)
 
     db = open_db_for_args(args)
     try:

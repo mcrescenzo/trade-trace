@@ -271,6 +271,71 @@ def test_metadata_json_rejects_raw_json_secret_value(home):
     assert env.error.details["pattern_kind"] == "slack_token"
 
 
+# -- bead trade-trace-21q4: strategy + playbook metadata bypass --
+
+
+def test_strategy_create_meta_json_rejects_secret(home):
+    """strategy.create.meta_json must run the same dual-layer guard as
+    ledger metadata_json (bead trade-trace-21q4)."""
+
+    env = _mcp(home, "strategy.create", {
+        "name": "Range Trader", "slug": "range-trader",
+        "meta_json": {"notes": SECRET_FIXTURES["api_key"]},
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "meta_json"
+    assert env.error.details["pattern_kind"] == "api_key"
+
+
+def test_strategy_create_meta_json_rejects_credential_key(home):
+    env = _mcp(home, "strategy.create", {
+        "name": "Range Trader", "slug": "range-trader",
+        "meta_json": {"broker": {"api_key": "anything"}},
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "meta_json"
+    assert env.error.details["credential_key"] == "api_key"
+
+
+def test_strategy_update_meta_json_rejects_secret(home):
+    created = _mcp(home, "strategy.create", {
+        "name": "S", "slug": "s-1",
+    })
+    assert created.ok, created
+    env = _mcp(home, "strategy.update", {
+        "strategy_id": created.data["id"],
+        "meta_json": {"notes": SECRET_FIXTURES["slack_token"]},
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "meta_json"
+    assert env.error.details["pattern_kind"] == "slack_token"
+
+
+def test_playbook_create_metadata_json_rejects_secret(home):
+    env = _mcp(home, "playbook.create", {
+        "name": "PB",
+        "metadata_json": {"deep": {"creds": SECRET_FIXTURES["jwt"]}},
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "metadata_json"
+    assert env.error.details["pattern_kind"] == "jwt"
+
+
+def test_playbook_create_metadata_json_rejects_credential_key(home):
+    env = _mcp(home, "playbook.create", {
+        "name": "PB",
+        "metadata_json": {"private_key": "not-stored"},
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "metadata_json"
+    assert env.error.details["credential_key"] == "private_key"
+
+
 # -- 2. log-output redaction ---------------------------------------
 
 

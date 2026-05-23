@@ -123,6 +123,27 @@ def test_journal_home_directory_is_0700(tmp_path: Path, permissive_umask):
     assert _mode(parent) == 0o700
 
 
+def test_open_db_for_args_creates_home_with_0700(
+    tmp_path: Path, permissive_umask,
+):
+    """`open_db_for_args` lazily creates the journal home before
+    discovering the DB is not initialized. The fresh directory must be
+    chmodded to 0700 immediately so a permissive umask cannot leak a
+    transient world-readable directory between `mkdir` and the
+    journal-not-initialized error (bead trade-trace-pqex).
+    """
+
+    from trade_trace.tools._helpers import open_db_for_args
+    from trade_trace.tools.errors import ToolError
+
+    home = tmp_path / "uninitialized-home"
+    with pytest.raises(ToolError) as info:
+        open_db_for_args({"home": str(home)})
+    assert info.value.code.value == "STORAGE_ERROR"
+    assert home.exists()
+    assert _mode(home) == 0o700
+
+
 # -- Exported JSONL: tmp + final + dir bucket -------------------
 
 

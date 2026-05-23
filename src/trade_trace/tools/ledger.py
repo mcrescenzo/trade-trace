@@ -31,6 +31,9 @@ from trade_trace.tools._helpers import (
     reject_if_contains_secrets,
     require,
 )
+from trade_trace.tools._helpers import (
+    store_metadata_json as _store_metadata_json,
+)
 from trade_trace.tools.decision_matrix import (
     allowed_decision_types,
     decision_matrix_contract,
@@ -53,85 +56,20 @@ def _allow_no_idempotency(args: dict[str, Any]) -> bool:
     return bool(args.get("_allow_no_idempotency"))
 
 
-_CREDENTIAL_METADATA_KEY_PARTS = (
-    "api_key",
-    "access_token",
-    "refresh_token",
-    "auth_token",
-    "bearer_token",
-    "secret_key",
-    "client_secret",
-    "password",
-    "passphrase",
-    "wallet_seed",
-    "wallet_seed_phrase",
-    "seed_phrase",
-    "mnemonic",
-    "private_key",
-    "signing" + "_key",
-    "signing_secret",
-    "broker_token",
-    "trading_password",
-    "session_token",
-    "oauth_token",
-)
-
-
-def _reject_credential_metadata(value: Any, *, field: str) -> None:
-    """Reject explicit metadata JSON that tries to carry credentials.
-
-    Unknown top-level credential-shaped args are ignored by schemas, but
-    caller-provided metadata_json is intentionally persisted. Guard it
-    recursively so explicit JSON objects or raw JSON strings cannot bypass
-    the no-credentials policy.
-    """
-
-    if isinstance(value, dict):
-        for key, child in value.items():
-            key_text = str(key).lower()
-            for forbidden in _CREDENTIAL_METADATA_KEY_PARTS:
-                if forbidden in key_text:
-                    raise ToolError(
-                        ErrorCode.VALIDATION_ERROR,
-                        f"{field} contains credential-shaped key {key!r}; strip credentials before submitting",
-                        details={"field": field, "credential_key": str(key)},
-                    )
-            _reject_credential_metadata(child, field=field)
-        return
-    if isinstance(value, list):
-        for child in value:
-            _reject_credential_metadata(child, field=field)
-        return
-    if isinstance(value, str):
-        reject_if_contains_secrets(value, field=field)
-
-
-def _store_metadata_json(args: dict[str, Any], key: str = "metadata_json") -> str:
-    value = args.get(key)
-    if value is None:
-        return "{}"
-    if isinstance(value, str):
-        # Caller may pass a JSON string directly. If parseable, inspect the
-        # decoded object too so nested credential keys cannot hide in raw JSON.
-        try:
-            decoded = json.loads(value)
-        except json.JSONDecodeError as err:
-            reject_if_contains_secrets(value, field=key)
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"{key} must be valid JSON when supplied as a string",
-                details={"field": key, "reason": "invalid_json"},
-            ) from err
-        else:
-            _reject_credential_metadata(decoded, field=key)
-        return value
-    _reject_credential_metadata(value, field=key)
-    return json.dumps(value, sort_keys=True, default=str)
+_TAG_FORBIDDEN_CHARS = frozenset("<>")
 
 
 def _store_tags(tags: Any) -> list[str]:
     """Normalize a tags argument into a sorted list of lowercased, trimmed,
-    deduplicated strings per PRD §3.1 decision_tags."""
+    deduplicated strings per PRD §3.1 decision_tags.
+
+    Per bead trade-trace-8u3s, the normalizer rejects:
+    - tags that contain HTML-like angle brackets (`<` or `>`), so a
+      payload such as `<script>alert(1)</script>` is refused at
+      ingestion rather than persisted for later rendering.
+    - empty / whitespace-only tags, which previously round-tripped as
+      silent drops and masked obviously broken inputs.
+    """
 
     if tags is None:
         return []
@@ -140,9 +78,28 @@ def _store_tags(tags: Any) -> list[str]:
         tags = [t.strip() for t in tags.split(",")]
     out = set()
     for t in tags:
-        normalized = str(t).strip().lower()
+        raw = str(t)
+        if _TAG_FORBIDDEN_CHARS.intersection(raw):
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "decision tag must not contain `<` or `>` characters",
+                details={
+                    "field": "tags",
+                    "value": raw,
+                    "reason": "html_like_content",
+                },
+            )
+        normalized = raw.strip().lower()
         if not normalized:
-            continue
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "decision tag must not be empty or whitespace-only",
+                details={
+                    "field": "tags",
+                    "value": raw,
+                    "reason": "empty_tag",
+                },
+            )
         if len(normalized) > 64:
             raise ToolError(
                 ErrorCode.VALIDATION_ERROR,

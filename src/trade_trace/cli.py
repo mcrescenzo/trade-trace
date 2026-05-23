@@ -18,6 +18,8 @@ import json
 import sys
 from typing import Any
 
+import jsonschema
+
 from trade_trace.contracts.envelope import (
     Meta,
     dump_envelope,
@@ -430,6 +432,46 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
             file=sys.stderr,
         )
         tool_args["api_key"] = getpass.getpass("OpenAI API key: ")
+
+    # CLI/MCP parity on the numeric-bound half of the input schema
+    # (bead trade-trace-cms2). Previously the CLI skipped the schema
+    # check MCP enforced, which let `--min-sample -1` slip through
+    # `tt report calibration` despite the schema declaring `minimum: 1`.
+    # We narrow CLI validation to numeric-bound failures so handlers
+    # keep ownership of friendlier `type`, `enum`, and `required` error
+    # messages (e.g. the cpz2 idempotency-key copy and the
+    # allowed_decision_types matrix hint).
+    _NUMERIC_BOUND_VALIDATORS = frozenset({
+        "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum",
+        "multipleOf", "minLength", "maxLength", "minItems", "maxItems",
+        "pattern",
+    })
+    registration = (
+        registry.by_name.get(tool_name)
+        if tool_name in registry.by_name
+        else None
+    )
+    schema = registration.json_schema if registration is not None else None
+    if schema:
+        try:
+            jsonschema.validate(instance=tool_args, schema=schema)
+        except jsonschema.ValidationError as exc:
+            if exc.validator in _NUMERIC_BOUND_VALIDATORS:
+                return _emit_cli_error(
+                    tool=tool_name,
+                    actor_id=args.actor_id,
+                    request_id=args.request_id,
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message=f"Input validation error: {exc.message}",
+                    details={
+                        "tool": tool_name,
+                        "field": ".".join(str(p) for p in exc.path) or None,
+                        "validator": exc.validator,
+                        "validator_value": exc.validator_value,
+                    },
+                )
+            # Other validator failures (type, enum, required, …) fall
+            # through to the handler which has friendlier prose.
 
     envelope = dispatch(
         tool_name,

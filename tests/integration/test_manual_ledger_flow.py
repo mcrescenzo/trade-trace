@@ -256,6 +256,56 @@ def test_decision_add_paper_enter_full(home):
     assert env["data"]["tags"] == ["good-skip", "liquidity-ignored"]
 
 
+# -- bead trade-trace-8u3s: tag sanitization at write time -----------
+
+
+@pytest.mark.parametrize(
+    "bad_tag",
+    [
+        "<script>alert(1)</script>",
+        "<img src=x>",
+        "ok>tag",
+        "<plain",
+    ],
+)
+def test_decision_add_rejects_html_like_tags(home, bad_tag):
+    """Tags carrying `<` or `>` would render as live HTML if any future
+    UI surface treats decision_tags as markup. Reject at ingestion (bead
+    trade-trace-8u3s)."""
+
+    inst_id, _ = _setup_thesis(home)
+    env = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "type": "skip",
+        "reason": "boundary test",
+        "tags": ["clean", bad_tag],
+    })
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "tags"
+    assert env["error"]["details"]["reason"] == "html_like_content"
+    assert env["error"]["details"]["value"] == bad_tag
+
+
+@pytest.mark.parametrize("bad_tag", ["", "   ", "\t", "\n"])
+def test_decision_add_rejects_empty_or_whitespace_tags(home, bad_tag):
+    """Previously empty/whitespace-only tags were silently dropped,
+    masking malformed input. Reject explicitly so callers see the
+    error (bead trade-trace-8u3s)."""
+
+    inst_id, _ = _setup_thesis(home)
+    env = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "type": "skip",
+        "reason": "boundary test",
+        "tags": ["legit", bad_tag],
+    })
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "tags"
+    assert env["error"]["details"]["reason"] == "empty_tag"
+
+
 def test_decision_add_paper_enter_creates_position_event_and_live_projection(home):
     inst_id, thesis_id = _setup_thesis(home)
     env = _envelope(home, "decision.add", {

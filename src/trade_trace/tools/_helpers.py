@@ -9,11 +9,12 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any
 
+from trade_trace._permissions import chmod_user_only_dir
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.storage import open_database, resolve_home
-from trade_trace.storage.paths import db_path
+from trade_trace.storage.paths import HomePathValidationError, db_path
 from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
 from trade_trace.tools.errors import ToolError
 
@@ -64,11 +65,34 @@ def now_iso() -> str:
     return to_utc_iso8601(datetime.now(UTC).isoformat())
 
 
+def _resolve_home_arg(args: dict[str, Any]):
+    """Resolve `args["home"]` via `storage.paths.resolve_home`, translating
+    `HomePathValidationError` into a typed `VALIDATION_ERROR` envelope
+    (bead trade-trace-pqex)."""
+
+    try:
+        return resolve_home(args.get("home"))
+    except HomePathValidationError as exc:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            str(exc),
+            details={
+                "field": "home",
+                "value": exc.value,
+                "reason": "path_traversal_rejected",
+            },
+        ) from exc
+
+
 def open_db_for_args(args: dict[str, Any]):
     """Resolve $TRADE_TRACE_HOME and open a DB connection for write."""
 
-    home = resolve_home(args.get("home"))
+    home = _resolve_home_arg(args)
     home.mkdir(parents=True, exist_ok=True)
+    # Pin home to 0700 immediately after creation (bead trade-trace-pqex)
+    # so a fresh journal-home directory cannot leak via the caller's
+    # umask while the journal-not-initialized error is being raised.
+    chmod_user_only_dir(home)
     path = db_path(home)
     if not path.exists():
         raise ToolError(
@@ -139,6 +163,92 @@ def normalize_timestamp(args: dict[str, Any], field: str, *, required: bool = Fa
                 "expected_format": _TIMESTAMP_EXPECTED_FORMAT,
             },
         ) from exc
+
+
+_CREDENTIAL_METADATA_KEY_PARTS = (
+    "api_key",
+    "access_token",
+    "refresh_token",
+    "auth_token",
+    "bearer_token",
+    "secret_key",
+    "client_secret",
+    "password",
+    "passphrase",
+    "wallet_seed",
+    "wallet_seed_phrase",
+    "seed_phrase",
+    "mnemonic",
+    "private_key",
+    "signing" + "_key",
+    "signing_secret",
+    "broker_token",
+    "trading_password",
+    "session_token",
+    "oauth_token",
+)
+
+
+def reject_credential_metadata(value: Any, *, field: str) -> None:
+    """Reject explicit metadata JSON that tries to carry credentials.
+
+    Unknown top-level credential-shaped args are ignored by schemas, but
+    caller-provided metadata_json is intentionally persisted. Guard it
+    recursively so explicit JSON objects or raw JSON strings cannot bypass
+    the no-credentials policy. Shared across ledger, strategy, and playbook
+    surfaces (bead trade-trace-21q4).
+    """
+
+    if isinstance(value, dict):
+        for key, child in value.items():
+            key_text = str(key).lower()
+            for forbidden in _CREDENTIAL_METADATA_KEY_PARTS:
+                if forbidden in key_text:
+                    raise ToolError(
+                        ErrorCode.VALIDATION_ERROR,
+                        f"{field} contains credential-shaped key "
+                        f"{key!r}; strip credentials before submitting",
+                        details={"field": field,
+                                 "credential_key": str(key)},
+                    )
+            reject_credential_metadata(child, field=field)
+        return
+    if isinstance(value, list):
+        for child in value:
+            reject_credential_metadata(child, field=field)
+        return
+    if isinstance(value, str):
+        reject_if_contains_secrets(value, field=field)
+
+
+def store_metadata_json(args: dict[str, Any], key: str = "metadata_json") -> str:
+    """Serialize a caller-supplied metadata_json/meta_json field with the
+    dual-layer secret + credential guard (bead trade-trace-21q4).
+
+    Returns the canonical JSON string ready for INSERT. Accepts a parsed
+    object (dict/list/primitive) or a JSON string; either way both
+    `reject_if_contains_secrets` and `reject_credential_metadata` see the
+    decoded structure so credential keys cannot hide inside raw JSON text.
+    """
+
+    value = args.get(key)
+    if value is None:
+        return "{}"
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError as err:
+            reject_if_contains_secrets(value, field=key)
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"{key} must be valid JSON when supplied as a string",
+                details={"field": key, "reason": "invalid_json"},
+            ) from err
+        else:
+            reject_credential_metadata(decoded, field=key)
+        return value
+    reject_credential_metadata(value, field=key)
+    return json.dumps(value, sort_keys=True, default=str)
 
 
 def reject_if_contains_secrets(value: Any, *, field: str) -> None:

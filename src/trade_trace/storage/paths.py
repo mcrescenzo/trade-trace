@@ -22,11 +22,35 @@ def default_home() -> Path:
     return Path.home() / DEFAULT_DIR_NAME
 
 
+class HomePathValidationError(ValueError):
+    """Raised by `resolve_home` when an explicit `--home` value contains
+    `..` path components (bead trade-trace-pqex). Callers translate this
+    into a typed `VALIDATION_ERROR` envelope so a path-traversal attempt
+    is refused before any filesystem state is created."""
+
+    def __init__(self, value: str) -> None:
+        self.value = value
+        super().__init__(
+            f"home must not contain `..` path components; got {value!r}"
+        )
+
+
 def resolve_home(explicit: str | Path | None = None) -> Path:
-    """Resolve the home dir, preferring an explicit override."""
+    """Resolve the home dir, preferring an explicit override.
+
+    Rejects explicit values containing `..` path components so callers
+    cannot escape the journal sandbox by passing
+    `--home '../../etc/passwd'` (bead trade-trace-pqex). The env-var
+    fallback in `default_home()` is operator-controlled and not
+    validated here.
+    """
 
     if explicit is None:
         return default_home()
+    raw_text = str(explicit)
+    parts = Path(raw_text).parts
+    if any(part == ".." for part in parts):
+        raise HomePathValidationError(raw_text)
     return Path(explicit).expanduser().resolve()
 
 

@@ -25,6 +25,7 @@ from trade_trace.contracts.grammar import validate_actor_id
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.log import IdempotencyConflictError
 from trade_trace.events.unit_of_work import DRY_RUN_FLAG
+from trade_trace.storage.paths import HomePathValidationError
 from trade_trace.tools.admin import register_admin_tools
 from trade_trace.tools.csv_import import register_csv_import
 from trade_trace.tools.errors import ToolError
@@ -215,6 +216,21 @@ def dispatch(
         except ToolError as exc:
             _apply_hints()
             return error_envelope(meta, exc.code, exc.message, exc.details)
+        except HomePathValidationError as exc:
+            # Traversal attempts in --home / journal home (bead trade-trace-pqex)
+            # surface as a typed VALIDATION_ERROR envelope regardless of which
+            # tool handler called resolve_home.
+            _apply_hints()
+            return error_envelope(
+                meta,
+                ErrorCode.VALIDATION_ERROR,
+                str(exc),
+                {
+                    "field": "home",
+                    "value": exc.value,
+                    "reason": "path_traversal_rejected",
+                },
+            )
         except IdempotencyConflictError as exc:
             _apply_hints()
             return error_envelope(

@@ -252,7 +252,20 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         description="Read-only local prediction/event-market audit-readiness diagnostics; no network, no advice.",
     ),
-    "report.calibration_integrity": _EMPTY_SCHEMA,
+    "report.calibration_integrity": _schema(
+        # min_sample is accepted but currently unused by the integrity
+        # panel; the schema declares it so a caller habitually passing
+        # the same low-N threshold across the report.calibration family
+        # gets a consistent rejection on negative values (bead
+        # trade-trace-cms2). Sibling tools share the minimum:1 contract.
+        {"min_sample": {"type": "integer", "minimum": 1}},
+        description=(
+            "Standalone anti-goodhart hygiene panel. min_sample is "
+            "accepted for parity with the report.calibration family but "
+            "currently unused; reserved for future denominator-coverage "
+            "thresholds."
+        ),
+    ),
     "report.unscored_forecasts": _schema({"filter": _FILTER_PROP}),
     "report.decision_velocity": _schema(
         {"filter": _FILTER_PROP, "bucket": {"type": "string", "enum": ["day", "week"]}},

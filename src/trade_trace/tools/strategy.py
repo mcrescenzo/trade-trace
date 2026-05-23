@@ -13,7 +13,6 @@ referential-integrity violations.
 
 from __future__ import annotations
 
-import json
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -29,6 +28,7 @@ from trade_trace.tools._helpers import (
     open_db_for_args,
     reject_if_contains_secrets,
     require,
+    store_metadata_json,
 )
 from trade_trace.tools.errors import ToolError
 
@@ -259,7 +259,7 @@ def _strategy_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             details={"field": "status", "value": status,
                      "allowed": list(_STATUS_VALUES)},
         )
-    meta_json = json.dumps(args.get("meta_json") or {}, sort_keys=True)
+    meta_json = store_metadata_json(args, "meta_json")
     idempotency_key = args.get("idempotency_key")
 
     db = open_db_for_args(args)
@@ -512,8 +512,7 @@ def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             )
         updates.append(("status", status))
     if "meta_json" in args:
-        updates.append(("meta_json", json.dumps(args["meta_json"] or {},
-                                                 sort_keys=True)))
+        updates.append(("meta_json", store_metadata_json(args, "meta_json")))
     # Reject attempts to set immutable fields (name / slug). Detect
     # before opening the DB so we don't write anything.
     for forbidden in ("name", "slug"):
