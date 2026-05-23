@@ -775,17 +775,30 @@ Continues to work on all read commands. Emits prose hints to stderr while JSON s
 
 ## Part XII — Beads Housekeeping (NEW)
 
+> **[VERIFIED 2026-05-23 / trade-trace-z59f]** Every bead referenced
+> in §"First commit of v0.0.2 work" and §"Existing beads to leave
+> open" below was already closed/disposed at the time z59f ran.
+> Validation: `bd list --id <the 15 IDs> --all --flat` returned 15
+> rows, all status ✓ closed. The empty `frontend/` directory was
+> removed locally; git tracked nothing under it (`git status` clean
+> after `rmdir`), so the "git rm -rf frontend/" item below is also
+> a no-op. This Part XII checklist is therefore historical and
+> requires no further executor action; the v0.0.2 program runs
+> through the trade-trace-2n68 epic + its 35 related beads instead
+> of an umbrella tag.
+
 ### First commit of v0.0.2 work
 
-1. **`git rm -rf frontend/`** — directory is empty (only `.` and `..`), zero refs from src/. Pure cleanup from prior Console removal.
-2. **Close as superseded** under the current-exposure cluster: `trade-trace-39pg`, `trade-trace-dr4m`, `trade-trace-suj6`, `trade-trace-ahmp`, `trade-trace-od93`, `trade-trace-umzf`, `trade-trace-ax4e`.
-3. **Close as superseded**: `trade-trace-77z` (market_scan edge/opportunity).
-4. **Close as superseded**: `trade-trace-2g2` (signal.scan future kinds) — only `unscored_forecast` remains relevant.
-5. **Close as scope-changed**: `trade-trace-cs0r` (advanced report filtering) — re-scope to the consolidated report set.
+1. **`git rm -rf frontend/`** — directory is empty (only `.` and `..`), zero refs from src/. Pure cleanup from prior Console removal. *(Done 2026-05-23 via `rmdir`; produced no commit because empty dirs are not tracked by git.)*
+2. **Close as superseded** under the current-exposure cluster: `trade-trace-39pg`, `trade-trace-dr4m`, `trade-trace-suj6`, `trade-trace-ahmp`, `trade-trace-od93`, `trade-trace-umzf`, `trade-trace-ax4e`. *(Already closed.)*
+3. **Close as superseded**: `trade-trace-77z` (market_scan edge/opportunity). *(Already closed.)*
+4. **Close as superseded**: `trade-trace-2g2` (signal.scan future kinds) — only `unscored_forecast` remains relevant. *(Already closed.)*
+5. **Close as scope-changed**: `trade-trace-cs0r` (advanced report filtering) — re-scope to the consolidated report set. *(Already closed.)*
 
 ### New v0.0.2 epic
 
 Create umbrella `trade-trace-v0.0.2-pm-pivot` with child beads:
+*(Materialized as trade-trace-2n68 with 35 related-to children, label `v002-pm-pivot`. See `audits/beads-programs/v002-pm-pivot/`. The umbrella itself was an epic, not a tag.)*
 
 **P0 (foundation, must land first):**
 - Module split (`ledger.py`, `reports.py`)
@@ -816,9 +829,11 @@ Create umbrella `trade-trace-v0.0.2-pm-pivot` with child beads:
 
 ### Existing beads to leave open
 
-- `trade-trace-3zvl` (operational logging contract) — relevant under adapter; adapter operations should emit structured logs per this contract.
-- `trade-trace-jtec` (Console Logs page) — already deferred; keep deferred (Console UI is gone).
-- `trade-trace-5rrw` (public-history rewrite), `trade-trace-jr9b` (audit-artifact scrubbing), `trade-trace-gcpp` (PyPI trusted publisher) — human-decision blockers, separate track.
+- `trade-trace-3zvl` (operational logging contract) — relevant under adapter; adapter operations should emit structured logs per this contract. *(Already closed 2026-05-22.)*
+- `trade-trace-jtec` (Console Logs page) — already deferred; keep deferred (Console UI is gone). *(Already closed 2026-05-22.)*
+- `trade-trace-5rrw` (public-history rewrite), `trade-trace-jr9b` (audit-artifact scrubbing), `trade-trace-gcpp` (PyPI trusted publisher) — human-decision blockers, separate track. *(All three already closed 2026-05-22.)*
+
+[VERIFIED 2026-05-23 / trade-trace-z59f] None of these 5 "leave open" beads is actually open. The adapter-logging and public-release tracks live under fresh bead IDs inside the v002-pm-pivot epic (`trade-trace-2h0g` for adapter security/operational logging, `trade-trace-voum`/`trade-trace-3l6w` for release-readiness).
 
 ---
 
