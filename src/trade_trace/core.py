@@ -24,6 +24,7 @@ from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.grammar import validate_actor_id
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.log import IdempotencyConflictError
+from trade_trace.events.semantic_keys import derive_idempotency_key
 from trade_trace.events.unit_of_work import DRY_RUN_FLAG
 from trade_trace.storage.paths import HomePathValidationError
 from trade_trace.tools.admin import register_admin_tools
@@ -158,26 +159,50 @@ def dispatch(
     # persistence.md §5.3 + AI_AGENT_MCP_GETTING_STARTED.md §7 (bead
     # trade-trace-cpz2). The opt-out (`--allow-no-idempotency` /
     # `_allow_no_idempotency: true`) is the only legal absence path.
+    #
+    # Per bead trade-trace-t7hi: when the agent omits an explicit key
+    # for a write tool whose semantic identity is covered by the
+    # `TOOL_PRIMARY_EVENT_TYPE` registry, derive a deterministic
+    # `auto:` key from `sha256(tool_name + canonical_json(structural))`.
+    # This honors the v0.0.2 "zero hand-crafted idempotency keys"
+    # promise without weakening the at-least-once invariant — replays
+    # of identical input collapse onto the same key, while collisions
+    # surface through the existing IDEMPOTENCY_CONFLICT path. Tools
+    # outside the registry continue to require an explicit key.
     if (
         registration.is_write
         and not allow_no_idempotency
         and not args.get("idempotency_key")
     ):
-        return error_envelope(
-            meta,
-            ErrorCode.VALIDATION_ERROR,
-            (
-                f"{tool_name!r} is a retryable write and requires "
-                "`idempotency_key`; pass `_allow_no_idempotency: true` "
-                "(CLI: `--allow-no-idempotency`) to opt into at-least-once "
-                "semantics for batch importers/admin paths."
-            ),
-            {
-                "field": "idempotency_key",
-                "tool": tool_name,
-                "opt_out_cli": "--allow-no-idempotency",
-                "opt_out_mcp": "_allow_no_idempotency",
-            },
+        derived = derive_idempotency_key(tool_name, args)
+        if derived is not None:
+            args = {**args, "idempotency_key": derived}
+            ctx_idempotency_source: str | None = "auto"
+        else:
+            return error_envelope(
+                meta,
+                ErrorCode.VALIDATION_ERROR,
+                (
+                    f"{tool_name!r} is a retryable write and requires "
+                    "`idempotency_key`; pass `_allow_no_idempotency: true` "
+                    "(CLI: `--allow-no-idempotency`) to opt into at-least-once "
+                    "semantics for batch importers/admin paths."
+                ),
+                {
+                    "field": "idempotency_key",
+                    "tool": tool_name,
+                    "opt_out_cli": "--allow-no-idempotency",
+                    "opt_out_mcp": "_allow_no_idempotency",
+                    "auto_derivation_available": False,
+                },
+            )
+    else:
+        ctx_idempotency_source = (
+            "caller" if (
+                registration.is_write
+                and not allow_no_idempotency
+                and args.get("idempotency_key")
+            ) else None
         )
 
     # Dry-run plumbing per trade-trace-268. The flag is request-scoped so
@@ -188,6 +213,12 @@ def dispatch(
     dry_run_token = DRY_RUN_FLAG.set(True) if dry_run else None
     if dry_run:
         ctx.meta_hints["dry_run"] = True
+
+    # Surface the auto/caller origin of the idempotency key (bead
+    # trade-trace-t7hi) so audit and the calibration-of-correctness
+    # surface can distinguish hand-supplied keys from server-derived ones.
+    if ctx_idempotency_source is not None:
+        ctx.meta_hints["idempotency_source"] = ctx_idempotency_source
 
     def _apply_hints() -> None:
         """Propagate ctx.meta_hints onto the envelope's Meta object.

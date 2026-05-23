@@ -259,14 +259,51 @@ writes by default.** The absence path is opt-in via an explicit flag:
 - MCP: `_allow_no_idempotency: true` in the tool's args object (underscore
   prefix marks it as a transport-level argument, not a domain field).
 
-When the flag is absent and `idempotency_key` is omitted on a retryable
-write, the server returns `VALIDATION_ERROR` with
-`details.field = "idempotency_key"` and `details.hint = "missing required
-idempotency_key; pass --allow-no-idempotency to opt into at-least-once
-semantics"`. Read tools, list tools, and admin tools do not require a key
-and never raise this error.
+#### Auto-derivation (bead trade-trace-t7hi)
 
-The full list of "retryable writes" is exactly the §4.0 core write tools
+For every write tool whose semantic identity is well-defined by the
+existing `SEMANTIC_KEYS` registry (see
+`src/trade_trace/events/semantic_keys.py::TOOL_PRIMARY_EVENT_TYPE`),
+the server auto-derives an idempotency key when the caller omits one:
+
+```
+auto:{sha256(tool_name + canonical_json(structural_fields))[:32]}
+```
+
+`canonical_json` is the same canonicalization used for replay
+comparison (§5.2.1) — strips free-text fields, sorts arrays per the
+event's `sort_keys`, and serializes with `sort_keys=True,
+separators=(',', ':')`. The `auto:` prefix lets the audit trail
+distinguish auto-derived keys from caller-supplied ones without an
+extra column.
+
+The dispatcher echoes the origin back on `meta.idempotency_source`:
+`"auto"` when the server derived the key, `"caller"` when the agent
+supplied one explicitly. Callers can always override the
+auto-derivation by passing their own `idempotency_key`; the server
+records the caller-supplied value and never overwrites it.
+
+Tools intentionally excluded from auto-derivation (administrative
+capabilities like `journal.backup` / `journal.restore` /
+`journal.config_set` / `journal.fixture_seed`, per-row batch
+importers like `import.commit` / `import.csv_fills`, attachment
+helpers that emit two distinct events, and `keyring.revoke` /
+`model.*` / `memory.reindex` / `market.scan.promote`) keep the
+strict rejection path below — their semantic identity cannot be
+captured by canonicalizing a single structural-fields payload and
+auto-derivation would smear distinct calls onto the same key.
+
+#### Strict rejection (bead trade-trace-cpz2)
+
+When the flag is absent, `idempotency_key` is omitted, and the tool
+is **not** in the auto-derivation registry above, the server returns
+`VALIDATION_ERROR` with `details.field = "idempotency_key"`,
+`details.auto_derivation_available = false`, and a hint pointing at
+`--allow-no-idempotency`. Read tools, list tools, and admin
+capability invocations do not require a key and never raise this
+error.
+
+The full list of "retryable writes" covers the §4.0 core write tools
 (PRD): `venue.add`, `instrument.add`, `snapshot.add`, `thesis.add`,
 `forecast.add`, `forecast.supersede`, `decision.add`, `outcome.add` /
 `resolve.record`, plus `memory.retain`, `memory.reflect`, `memory.link`,

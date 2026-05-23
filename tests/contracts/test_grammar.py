@@ -248,21 +248,29 @@ def test_dispatch_rejects_write_without_idempotency_key(tmp_path):
     the `_allow_no_idempotency` opt-in must fail at the dispatch boundary
     with VALIDATION_ERROR and `details.field == "idempotency_key"`. Before
     this enforcement, the M1 ledger tools tolerated missing keys despite
-    docs/schema advertising the opposite (trade-trace-cpz2)."""
+    docs/schema advertising the opposite (trade-trace-cpz2).
+
+    Per bead trade-trace-t7hi, write tools whose semantic identity is
+    in `TOOL_PRIMARY_EVENT_TYPE` get an auto-derived key instead of a
+    rejection. This test uses `journal.backup` — an administrative
+    capability that is intentionally excluded from auto-derivation —
+    so the strict cpz2 rejection path stays exercised.
+    """
 
     home = tmp_path / "home"
     init = _core_module.dispatch("journal.init", {"home": str(home)}, actor_id="agent:default")
     assert init.ok is True
 
     envelope = _core_module.dispatch(
-        "venue.add",
-        {"home": str(home), "name": "NoKey", "kind": "manual"},
+        "journal.backup",
+        {"home": str(home), "dest": str(tmp_path / "backup"), "_confirm": True},
         actor_id="agent:default",
     )
     body = envelope.model_dump(mode="json", exclude_none=True)
     assert body["ok"] is False
     assert body["error"]["code"] == "VALIDATION_ERROR"
     assert body["error"]["details"]["field"] == "idempotency_key"
+    assert body["error"]["details"]["auto_derivation_available"] is False
 
 
 @pytest.mark.strict_idempotency
@@ -314,8 +322,10 @@ def test_dispatch_accepts_write_with_idempotency_key(tmp_path):
 
 @pytest.mark.strict_idempotency
 def test_cli_rejects_write_without_idempotency_key(tmp_path, capsys):
-    """CLI parity: `tt venue add` without `--idempotency-key` and without
-    `--allow-no-idempotency` rejects at dispatch with VALIDATION_ERROR."""
+    """CLI parity: an administrative write tool that is intentionally
+    out of the auto-derivation registry (`journal.backup` here per
+    bead trade-trace-t7hi) still requires `--idempotency-key` or
+    `--allow-no-idempotency`."""
 
     from trade_trace.cli import main as cli_main
 
@@ -330,10 +340,10 @@ def test_cli_rejects_write_without_idempotency_key(tmp_path, capsys):
 
     rc = cli_main([
         "--actor-id", "agent:default",
-        "venue", "add",
+        "journal", "backup",
         "--home", str(home),
-        "--name", "NoKey",
-        "--kind", "manual",
+        "--dest", str(tmp_path / "backup"),
+        "--confirm",
     ])
     out = capsys.readouterr().out.strip().splitlines()[-1]
     body = json.loads(out)

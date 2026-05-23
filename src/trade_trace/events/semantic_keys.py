@@ -16,6 +16,7 @@ be written. This guard surfaces silent contract drift immediately.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, field
 from typing import Any
@@ -297,6 +298,72 @@ def canonicalize_payload(event_type: str, payload: dict[str, Any]) -> str:
     spec = SEMANTIC_KEYS[event_type]
     stripped = _strip(payload, spec)
     return json.dumps(stripped, sort_keys=True, separators=(",", ":"), default=str)
+
+
+# Per bead trade-trace-t7hi: every write tool whose semantic
+# identity is well-defined by the existing SEMANTIC_KEYS registry
+# gets an auto-derived idempotency_key when the agent omits one.
+# Tools that emit per-row events (`import.*`), administrative
+# capability invocations (`journal.backup`, `journal.restore`,
+# `journal.fixture_seed`, `journal.config_set`, `keyring.revoke`,
+# `model.*`, `memory.reindex`, `market.scan.promote`), and
+# attachment helpers that emit two distinct events deliberately
+# stay out of the table — they continue to require an explicit
+# idempotency_key (or the `_allow_no_idempotency` opt-in) so the
+# auto-derivation surface never silently smears across
+# semantically distinct calls.
+TOOL_PRIMARY_EVENT_TYPE: dict[str, str] = {
+    # M1 ledger entity creation
+    "venue.add":              "venue.created",
+    "instrument.add":         "instrument.created",
+    "snapshot.add":           "snapshot.added",
+    "thesis.add":             "thesis.created",
+    "forecast.add":           "forecast.created",
+    "forecast.supersede":     "forecast.superseded",
+    "decision.add":           "decision.created",
+    "outcome.add":            "outcome.recorded",
+    "resolve.record":         "outcome.recorded",  # alias of outcome.add
+    "source.add":             "source.added",
+    # Strategy
+    "strategy.create":        "strategy.created",
+    "strategy.update":        "strategy.updated",
+    # Playbook
+    "playbook.create":            "playbook.created",
+    "playbook.propose_version":   "playbook.proposed_version",
+    # decision.record_adherence emits `playbook_rule.followed` or
+    # `playbook_rule.overridden` depending on status, but both event
+    # types share the same structural_fields set, so either entry
+    # produces the same canonical hash. Pick the `followed` row.
+    "decision.record_adherence":  "playbook_rule.followed",
+    # Memory
+    "memory.retain":          "memory_node.retained",
+    # idea.capture is a thin wrapper on memory.retain (planned KILL
+    # under the v0.0.2 catalog), so it shares the canonical-hash space.
+    "idea.capture":           "memory_node.retained",
+}
+
+
+def derive_idempotency_key(tool_name: str, payload: dict[str, Any]) -> str | None:
+    """Return the deterministic auto-derived idempotency key for a
+    write tool, or `None` when the tool is not in the auto-derivation
+    registry (callers MUST pass `idempotency_key` explicitly for
+    those tools — see `TOOL_PRIMARY_EVENT_TYPE` for the rationale).
+
+    The key is `f"auto:{sha256(tool_name + canonical_json(structural))[:32]}"`.
+    The `auto:` prefix lets the audit trail distinguish auto-derived
+    keys from caller-supplied keys without an extra column.
+
+    Per bead trade-trace-t7hi.
+    """
+
+    event_type = TOOL_PRIMARY_EVENT_TYPE.get(tool_name)
+    if event_type is None:
+        return None
+    canonical = canonicalize_payload(event_type, payload)
+    digest = hashlib.sha256(
+        f"{tool_name}:{canonical}".encode(),
+    ).hexdigest()
+    return f"auto:{digest[:32]}"
 
 
 def payloads_equivalent(
