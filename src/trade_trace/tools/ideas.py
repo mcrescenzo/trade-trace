@@ -26,7 +26,7 @@ from trade_trace.tools._helpers import (
     reject_if_contains_secrets,
     require,
 )
-from trade_trace.tools.ledger import (
+from trade_trace.tools.ledger.source import (
     _source_add_in_uow,
     _source_attach_to_memory_node_in_uow,
 )

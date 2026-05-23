@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
-from trade_trace.contracts.tool_registry import ToolContext
+from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
@@ -34,6 +34,7 @@ from trade_trace.tools.ledger._scoring import (
     _maybe_inject_late_flag,
     _score_one_forecast,
 )
+from trade_trace.tools.ledger._shared import examples_for
 
 _BINARY_TOLERANCE = 1e-6
 
@@ -548,3 +549,14 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
     if auto_scored is not None:
         result["auto_scored"] = auto_scored
     return result
+
+
+def register_forecast_tools(registry: ToolRegistry) -> None:
+    registry.register(
+        "forecast.add", _forecast_add, is_write=True,
+        **examples_for("forecast.add"),
+    )
+    registry.register(
+        "forecast.supersede", _forecast_supersede, is_write=True,
+        **examples_for("forecast.supersede"),
+    )

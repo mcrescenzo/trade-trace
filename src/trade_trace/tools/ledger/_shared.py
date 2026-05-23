@@ -6,6 +6,9 @@ This module owns the tiny utilities every domain handler needs:
 - `_idempotency_key` / `_allow_no_idempotency`: caller-key plumbing.
 - `_TAG_FORBIDDEN_CHARS` + `_store_tags`: decision-tag normalization +
   HTML/whitespace rejection (bead trade-trace-8u3s).
+- `examples_for`: pull example_minimal / example_rich kwargs out of the
+  shared `WRITE_TOOL_EXAMPLES` table; used by each per-domain
+  `register_<x>_tools` function (bead trade-trace-36ui).
 
 Anything domain-specific (forecast validators, scoring, etc.) lives
 in its own submodule and imports from this one.
@@ -16,7 +19,15 @@ from __future__ import annotations
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
+from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 from trade_trace.tools.errors import ToolError
+
+
+def examples_for(tool: str) -> dict[str, Any]:
+    ex = WRITE_TOOL_EXAMPLES.get(tool)
+    if ex is None:
+        return {"example_minimal": None, "example_rich": None}
+    return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
 
 
 def _idempotency_key(args: dict[str, Any]) -> str | None:

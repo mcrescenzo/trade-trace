@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
-from trade_trace.contracts.tool_registry import ToolContext
+from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
@@ -30,6 +30,7 @@ from trade_trace.tools.ledger._scoring import (
     _autoscore_pending_forecasts,
     _emit_forecast_scored,
 )
+from trade_trace.tools.ledger._shared import examples_for
 
 
 def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -164,3 +165,16 @@ def _resolve_pending(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     finally:
         db.close()
     return {"items": items, "count": len(items), "truncated": len(items) == limit}
+
+
+def register_outcome_tools(registry: ToolRegistry) -> None:
+    registry.register(
+        "outcome.add", _outcome_add, is_write=True,
+        **examples_for("outcome.add"),
+    )
+    # resolve.record is an alias for outcome.add (PRD §4.4).
+    registry.register(
+        "resolve.record", _outcome_add, is_write=True,
+        **examples_for("outcome.add"),
+    )
+    registry.register("resolve.pending", _resolve_pending)

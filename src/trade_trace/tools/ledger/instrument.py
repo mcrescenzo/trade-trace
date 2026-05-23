@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from trade_trace.contracts.tool_registry import ToolContext
+from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
@@ -23,6 +23,7 @@ from trade_trace.tools._helpers import (
     require,
     store_metadata_json,
 )
+from trade_trace.tools.ledger._shared import examples_for
 
 
 def _instrument_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -117,3 +118,37 @@ def _instrument_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         "title": title,
         "created_at": created_at,
     }
+
+
+_INSTRUMENT_ADD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "venue_id": {"type": "string"},
+        "asset_class": {"type": "string"},
+        "title": {"type": "string"},
+        "external_id": {"type": "string"},
+        "symbol": {"type": "string"},
+        "currency_or_collateral": {"type": "string"},
+        "expiration_or_resolution_at": {"type": "string"},
+        "resolution_criteria_text": {"type": "string"},
+        "contract_multiplier": {"type": "number"},
+        "metadata_json": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["venue_id", "asset_class", "title", "idempotency_key"],
+    "description": (
+        "instrument.add — create an instrument. Optional audit/venue fields "
+        "are accepted and persisted when provided."
+    ),
+}
+
+
+def register_instrument_tools(registry: ToolRegistry) -> None:
+    registry.register(
+        "instrument.add",
+        _instrument_add,
+        is_write=True,
+        json_schema=_INSTRUMENT_ADD_SCHEMA,
+        **examples_for("instrument.add"),
+    )

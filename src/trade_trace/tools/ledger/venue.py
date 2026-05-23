@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from trade_trace.contracts.tool_registry import ToolContext
+from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
@@ -22,6 +22,7 @@ from trade_trace.tools._helpers import (
     require,
     store_metadata_json,
 )
+from trade_trace.tools.ledger._shared import examples_for
 
 
 def _venue_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -71,3 +72,9 @@ def _venue_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     finally:
         db.close()
     return {"id": venue_id, "name": name, "kind": kind, "created_at": created_at}
+
+
+def register_venue_tools(registry: ToolRegistry) -> None:
+    registry.register(
+        "venue.add", _venue_add, is_write=True, **examples_for("venue.add"),
+    )

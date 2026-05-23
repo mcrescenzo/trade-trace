@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from trade_trace.contracts.tool_registry import ToolContext
+from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
@@ -23,6 +23,7 @@ from trade_trace.tools._helpers import (
     require,
     store_metadata_json,
 )
+from trade_trace.tools.ledger._shared import examples_for
 
 
 def _snapshot_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -99,3 +100,63 @@ def _snapshot_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     finally:
         db.close()
     return {"id": snap_id, "instrument_id": instrument_id, "captured_at": captured_at}
+
+
+# Hand-crafted JSON schema for snapshot.add per agent-continuity Epic A.
+# The runtime persists common run/session provenance fields on snapshots; the
+# advertised schema must expose them even though they remain optional.
+_SNAPSHOT_ADD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "instrument_id": {"type": "string"},
+        "captured_at": {"type": "string"},
+        "source": {"type": "string"},
+        "source_url": {"type": "string"},
+        "price": {"type": "number"},
+        "bid": {"type": "number"},
+        "ask": {"type": "number"},
+        "mid": {"type": "number"},
+        "spread": {"type": "number"},
+        "volume": {"type": "number"},
+        "open_interest": {"type": "number"},
+        "implied_probability": {"type": "number"},
+        "liquidity_depth_json": {"type": "object"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "run_id": {"type": "string"},
+        "metadata_json": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["instrument_id", "captured_at", "idempotency_key"],
+    "description": "snapshot.add — append a caller-supplied local market/context snapshot; optional agent/model/environment/run fields persist as reporting dimensions only.",
+}
+
+
+def register_snapshot_tools(registry: ToolRegistry) -> None:
+    registry.register(
+        "snapshot.add",
+        _snapshot_add,
+        is_write=True,
+        json_schema=_SNAPSHOT_ADD_SCHEMA,
+        optional_keys=(
+            "price",
+            "source",
+            "source_url",
+            "bid",
+            "ask",
+            "mid",
+            "spread",
+            "volume",
+            "open_interest",
+            "implied_probability",
+            "liquidity_depth_json",
+            "agent_id",
+            "model_id",
+            "environment",
+            "run_id",
+            "metadata_json",
+        ),
+        **examples_for("snapshot.add"),
+    )

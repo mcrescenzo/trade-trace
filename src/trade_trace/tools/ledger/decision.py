@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
-from trade_trace.contracts.tool_registry import ToolContext
+from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.projections import rebuild_positions
 from trade_trace.tools._helpers import (
@@ -29,11 +29,14 @@ from trade_trace.tools._helpers import (
     store_metadata_json,
 )
 from trade_trace.tools.decision_matrix import (
+    allowed_decision_types,
+    decision_matrix_contract,
+    material_non_action_taxonomy,
     validate_decision_fields,
     validate_material_non_action,
 )
 from trade_trace.tools.errors import ToolError
-from trade_trace.tools.ledger._shared import _store_tags
+from trade_trace.tools.ledger._shared import _store_tags, examples_for
 
 
 def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -212,3 +215,111 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     finally:
         db.close()
     return result
+
+
+# Hand-crafted JSON schema for decision.add per bead trade-trace-hsnz.
+# Auto-derivation from example_minimal=actual_enter forced `quantity`/`price`
+# as required, but the decision matrix marks them X (forbidden) for `watch`
+# and `skip`. Required set here is the intersection across all matrix rows:
+# every row has `instrument_id` R, and `type` discriminates the row, so
+# `type`, `instrument_id`, and `idempotency_key` are the only schema-level
+# required fields. The runtime decision matrix in `decision_matrix.py`
+# enforces per-type R/X constraints uniformly and returns a typed
+# VALIDATION_ERROR envelope on violation.
+_DECISION_MATRIX_CONTRACT = decision_matrix_contract()
+
+_DECISION_ADD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "type": {
+            "type": "string",
+            "enum": allowed_decision_types(),
+            "description": "Decision discriminator. See x-decision-matrix for per-type required/optional/forbidden fields.",
+        },
+        "instrument_id": {"type": "string"},
+        "thesis_id": {"type": "string"},
+        "forecast_id": {"type": "string"},
+        "snapshot_id": {"type": "string"},
+        "side": {"type": "string"},
+        "quantity": {"type": "number"},
+        "price": {"type": "number"},
+        "fees": {"type": "number"},
+        "slippage": {"type": "number"},
+        "reason": {"type": "string"},
+        "review_by": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "metadata_json": {"type": "object"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "run_id": {"type": "string"},
+        "strategy_id": {"type": "string"},
+        "position_id": {"type": "string"},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["type", "instrument_id", "idempotency_key"],
+    "description": (
+        "decision.add — runtime decision matrix in decision_matrix.py "
+        "enforces per-`type` required/forbidden fields and returns a "
+        "VALIDATION_ERROR envelope on violation. Use x-decision-matrix "
+        "for per-type required/optional/forbidden fields. For `paper_enter`, "
+        "the tool appends one linked position_events.open row, refreshes "
+        "positions, and returns position_id/position_event_id; actual_* and "
+        "paper_exit remain journal records only for projection purposes."
+    ),
+    "x-decision-matrix": _DECISION_MATRIX_CONTRACT,
+    "x-material-non-action-taxonomy": material_non_action_taxonomy(),
+    "x-decision-examples": {
+        "skip": {
+            "type": "skip",
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "reason": "Spread too wide for planned edge.",
+            "idempotency_key": "00000000-0000-4000-8000-000000000000",
+        },
+        "watch": {
+            "type": "watch",
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "reason": "Waiting for liquidity to improve.",
+            "review_by": "2026-05-22T14:30:00Z",
+            "idempotency_key": "00000000-0000-4000-8000-000000000000",
+        },
+        "actual_enter": {
+            "type": "actual_enter",
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "thesis_id": "th_THESIS_ID_HERE",
+            "side": "yes",
+            "quantity": 100,
+            "price": 0.62,
+            "idempotency_key": "00000000-0000-4000-8000-000000000000",
+        },
+        "actual_exit": {
+            "type": "actual_exit",
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "side": "yes",
+            "quantity": 100,
+            "price": 0.78,
+            "idempotency_key": "00000000-0000-4000-8000-000000000000",
+        },
+    },
+}
+
+
+def register_decision_tools(registry: ToolRegistry) -> None:
+    registry.register(
+        "decision.add",
+        _decision_add,
+        is_write=True,
+        json_schema=_DECISION_ADD_SCHEMA,
+        description=(
+            "decision.add type choices: " + ", ".join(allowed_decision_types()) +
+            ". Per-type required/optional/forbidden fields are exposed in "
+            "tool.schema json_schema.x-decision-matrix."
+        ),
+        usage_summary="Record a trade decision against an instrument; choose type and include only fields allowed by the decision matrix.",
+        examples=("tt decision add --instrument-id ins_... --type enter --side long --thesis-id th_... --idempotency-key <uuid>",),
+        enum_notes={"type": "Allowed values and per-type field requirements live in json_schema.x-decision-matrix.", "side": "Use long/short only for directional decision types."},
+        common_failures=("Missing a field required by the selected decision type.", "Providing a forbidden field for the selected decision type."),
+        next_actions=("Inspect `tt tool schema --tool decision.add` before retrying validation failures.",),
+        **examples_for("decision.add"),
+    )
