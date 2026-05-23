@@ -73,8 +73,18 @@ def _reset_auto_key_counter_per_test():
     """Reset the auto-idempotency-key counter between tests so each test
     starts from a known state. Without this the counter accumulates across
     the whole session (trade-trace-r85a), which makes test failures harder
-    to reproduce in isolation."""
+    to reproduce in isolation.
+
+    Per bead trade-trace-8e3b the same hook also drains the deterministic
+    request-id and id-prefix counters so a test that leaks a partially
+    used CLOCK_OVERRIDE context cannot poison the next test's id sequence.
+    """
     _AUTO_KEY_COUNTER[0] = 0
+    from trade_trace.core import _reset_deterministic_request_id_counter
+    from trade_trace.tools._helpers import reset_deterministic_id_counter
+
+    _reset_deterministic_request_id_counter()
+    reset_deterministic_id_counter()
     yield
 
 

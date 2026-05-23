@@ -38,6 +38,15 @@ class McpProcess:
         )
         self._next_id = 1
 
+    # bead trade-trace-8e3b: context-manager support so a test that
+    # raises between McpProcess() construction and the `try:` block
+    # cannot leak the subprocess + its three pipe file descriptors.
+    def __enter__(self) -> McpProcess:
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
+
     def request(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         assert self.proc.stdin is not None
         request_id = self._next_id
@@ -57,29 +66,49 @@ class McpProcess:
 
     def close(self) -> None:
         if self.proc.stdin:
-            self.proc.stdin.close()
+            try:
+                self.proc.stdin.close()
+            except (BrokenPipeError, OSError):
+                pass
         try:
             self.proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             self.proc.kill()
             self.proc.wait(timeout=5)
+        # bead trade-trace-8e3b: explicitly close stdout/stderr so the
+        # GC schedule cannot leave file descriptors open between tests.
+        # subprocess.wait() reaps the child but does not close the
+        # parent-side pipe handles.
+        for stream in (self.proc.stdout, self.proc.stderr):
+            if stream is not None:
+                try:
+                    stream.close()
+                except OSError:
+                    pass
 
 
 def _initialized_server(tmp_path: Path, actor_id: str = "agent:stdio-test") -> McpProcess:
     server = McpProcess(tmp_path, actor_id=actor_id)
-    result = server.request(
-        "initialize",
-        {
-            "protocolVersion": "2025-06-18",
-            "capabilities": {},
-            "clientInfo": {"name": "trade-trace-tests", "version": "0"},
-        },
-    )
-    assert result["serverInfo"]["name"] == "trade-trace"
-    assert result["serverInfo"].get("version")
-    assert isinstance(result["capabilities"], dict)
-    assert "tools" in result["capabilities"]
-    server.notify("notifications/initialized")
+    # bead trade-trace-8e3b: a handshake assertion failure must not
+    # leak the just-spawned subprocess. Catch all here so the caller
+    # never inherits an orphaned McpProcess on setup failure.
+    try:
+        result = server.request(
+            "initialize",
+            {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "trade-trace-tests", "version": "0"},
+            },
+        )
+        assert result["serverInfo"]["name"] == "trade-trace"
+        assert result["serverInfo"].get("version")
+        assert isinstance(result["capabilities"], dict)
+        assert "tools" in result["capabilities"]
+        server.notify("notifications/initialized")
+    except BaseException:
+        server.close()
+        raise
     return server
 
 
