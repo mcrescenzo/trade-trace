@@ -608,9 +608,9 @@ def test_forecast_supersede_atomic_when_edge_insert_fails(home):
     finally:
         db.close()
 
-    import trade_trace.tools.ledger as ledger_mod
+    import trade_trace.tools.ledger.forecast as forecast_mod
 
-    original_new_id = ledger_mod.new_id
+    original_new_id = forecast_mod.new_id
 
     def _new_id(prefix: str) -> str:
         if prefix == "edg":
@@ -620,7 +620,7 @@ def test_forecast_supersede_atomic_when_edge_insert_fails(home):
     pre_forecast_count = _count_table(home, "forecasts")
 
     try:
-        ledger_mod.new_id = _new_id
+        forecast_mod.new_id = _new_id
         env = _envelope(home, "forecast.supersede", {
             "prior_forecast_id": prior_id,
             "kind": "binary",
@@ -631,7 +631,7 @@ def test_forecast_supersede_atomic_when_edge_insert_fails(home):
             ],
         })
     finally:
-        ledger_mod.new_id = original_new_id
+        forecast_mod.new_id = original_new_id
 
     assert env["ok"] is False, (
         "forecast.supersede must surface a typed error when the "
