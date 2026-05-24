@@ -33,7 +33,7 @@ from trade_trace.tools._helpers import (
 )
 from trade_trace.tools.errors import ToolError
 
-FIXTURE_TARGETS = ("mvp-eval", "mvp-eval-rich")
+FIXTURE_TARGETS = ("mvp-eval", "mvp-eval-rich", "agent-continuity-loop")
 
 
 # Anchor timestamp used as the deterministic clock during seeding.
@@ -735,6 +735,130 @@ def _build_mvp_eval_rich_reporting_overlay(
     )
 
 
+def _build_agent_continuity_loop_overlay(
+    ctx: _FixtureSeedContext,
+    counts: _FixtureCounts,
+) -> _FixtureCounts:
+    """Add deterministic agent-continuity loop artifacts.
+
+    The base/rich profiles provide fresh-session recovery material, stale
+    obligations, low-N diagnostics, replay candidates, and local report inputs.
+    This overlay adds an auditable recall receipt with downstream use/misuse
+    evidence plus a quarantined policy candidate reflection. It is local-only:
+    no fetching, execution, scheduler, broker, wallet, or model-runner behavior.
+    """
+
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path, resolve_home
+
+    home_path = resolve_home(ctx.home)
+    db = open_database(db_path(home_path), create_parent=False)
+    try:
+        row = db.connection.execute(
+            """
+            SELECT d.id, d.instrument_id, d.strategy_id
+            FROM decisions d
+            WHERE d.strategy_id IS NOT NULL
+            ORDER BY d.id
+            LIMIT 1
+            """
+        ).fetchone()
+        helpful = db.connection.execute(
+            """
+            SELECT target_id FROM edges
+            WHERE source_kind='thesis' AND target_kind='memory_node'
+              AND edge_type IN ('supports', 'derived_from')
+            ORDER BY id LIMIT 1
+            """
+        ).fetchone()
+        stale = db.connection.execute(
+            """
+            SELECT id FROM memory_nodes
+            WHERE node_type='reflection'
+            ORDER BY id LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        db.close()
+    if row is None or helpful is None or stale is None:
+        raise RuntimeError("agent-continuity-loop requires mvp-eval seed artifacts")
+    decision_id, instrument_id, strategy_id = row
+    helpful_memory_id = helpful[0]
+    stale_memory_id = stale[0]
+
+    db = open_database(db_path(home_path), create_parent=False)
+    try:
+        with db.transaction():
+            db.connection.execute(
+                """
+                INSERT INTO memory_recall_events(
+                    recall_id, query, strategies_used, node_ids_returned,
+                    context_json, limit_k, as_of, created_at, actor_id,
+                    agent_id, model_id, environment, run_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "rec_agent_continuity_0001",
+                    "fresh session recovery obligations memory use misuse",
+                    '["bm25","graph"]',
+                    f'["{helpful_memory_id}","{stale_memory_id}"]',
+                    f'{{"instrument_id":"{instrument_id}","strategy_id":"{strategy_id}"}}',
+                    5,
+                    (_ANCHOR + timedelta(days=40)).isoformat(),
+                    (_ANCHOR + timedelta(days=40)).isoformat(),
+                    "agent:fixture",
+                    "agent-continuity-fixture",
+                    "local-fixture-model",
+                    "paper",
+                    "run-agent-continuity-001",
+                ),
+            )
+            db.connection.execute(
+                """
+                INSERT INTO edges(id, source_kind, source_id, target_kind,
+                                  target_id, edge_type, created_at, actor_id)
+                VALUES (?, 'decision', ?, 'memory_node', ?, 'supports', ?, 'agent:fixture')
+                """,
+                ("edg_agent_continuity_recall_used", decision_id, helpful_memory_id,
+                 (_ANCHOR + timedelta(days=40, minutes=1)).isoformat()),
+            )
+            db.connection.execute(
+                """
+                INSERT INTO edges(id, source_kind, source_id, target_kind,
+                                  target_id, edge_type, created_at, actor_id)
+                VALUES (?, 'decision', ?, 'memory_node', ?, 'contradicts', ?, 'agent:fixture')
+                """,
+                ("edg_agent_continuity_recall_contradicted", decision_id, stale_memory_id,
+                 (_ANCHOR + timedelta(days=40, minutes=2)).isoformat()),
+            )
+    finally:
+        db.close()
+
+    _call(ctx.home, "memory.reflect", {
+        "target_kind": "decision",
+        "target_id": decision_id,
+        "body": "Quarantined process candidate: require more local evidence before changing playbook rules.",
+        "importance": 7,
+        "meta_json": {
+            "policy_candidate": {
+                "status": "quarantined",
+                "candidate_statement": "Require scoped review before promoting this process lesson.",
+                "scope": {"strategy_id": strategy_id},
+                "evidence": {
+                    "reflection_ids": [stale_memory_id],
+                    "support_case_count": 1,
+                    "contradiction_case_count": 1,
+                    "caveats": ["fixture_quarantine", "single_reflection_not_policy"],
+                },
+            }
+        },
+    }, suffix="agent-continuity-quarantined-policy")
+
+    counts["recall_receipts"] = counts.get("recall_receipts", 0) + 1
+    counts["policy_quarantine_reflections"] = counts.get("policy_quarantine_reflections", 0) + 1
+    return counts
+
+
 FIXTURE_PROFILES: dict[str, _FixtureBuilderProfile] = {
     "mvp-eval": _FixtureBuilderProfile(
         target="mvp-eval",
@@ -745,6 +869,14 @@ FIXTURE_PROFILES: dict[str, _FixtureBuilderProfile] = {
         builders=(
             _build_mvp_eval_base_journal,
             _build_mvp_eval_rich_reporting_overlay,
+        ),
+    ),
+    "agent-continuity-loop": _FixtureBuilderProfile(
+        target="agent-continuity-loop",
+        builders=(
+            _build_mvp_eval_base_journal,
+            _build_mvp_eval_rich_reporting_overlay,
+            _build_agent_continuity_loop_overlay,
         ),
     ),
 }
