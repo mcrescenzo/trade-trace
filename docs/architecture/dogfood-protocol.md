@@ -6,7 +6,8 @@
 Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [reports.md](reports.md), [memory-layer.md](memory-layer.md),
-[operability.md](operability.md).
+[operability.md](operability.md), and the
+[agent-continuity dogfood scorecard](agent-continuity-scorecard.md).
 
 ## 1. Purpose
 
