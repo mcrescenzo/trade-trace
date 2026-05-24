@@ -2,7 +2,7 @@
 
 > Status: **contract precursor** for trade-trace-c6ja.2. This local scorecard defines measurable implementation-readiness criteria for the `agent-continuity-loop` fixture and related reports; it is not a trading-results, live-market, or advice evaluation.
 
-Companion docs: [Agent continuity entity contracts](agent-continuity-contracts.md), [MVP dogfood protocol](dogfood-protocol.md), [Agent guide](../AGENT_GUIDE.md).
+Companion docs: [Agent continuity dogfood runbook](agent-continuity-dogfood-runbook.md), [Agent continuity entity contracts](agent-continuity-contracts.md), [MVP dogfood protocol](dogfood-protocol.md), [Agent guide](../AGENT_GUIDE.md).
 
 ## Purpose
 
