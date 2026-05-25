@@ -117,6 +117,26 @@ def test_current_exposure_clean_empty_is_positive(home: Path) -> None:
     assert any("No watch ideas" in hint for hint in data["agent_answer_hints"])
 
 
+def test_current_exposure_omitted_as_of_surfaces_effective_timestamp_in_summary_and_meta(home: Path) -> None:
+    current = _call(home)
+
+    assert current["ok"] is True
+    current_as_of = current["data"]["summary"]["filter"]["as_of"]
+    assert current_as_of is not None
+    assert current_as_of.endswith("Z")
+    assert current["meta"]["normalized_filter"]["as_of"] == current_as_of
+
+
+def test_current_exposure_explicit_as_of_preserved_in_summary_and_meta(home: Path) -> None:
+    as_of = "2026-05-25T12:34:56Z"
+    normalized_as_of = "2026-05-25T12:34:56.000Z"
+
+    current = _call(home, {"as_of": as_of})
+    assert current["ok"] is True
+    assert current["data"]["summary"]["filter"]["as_of"] == normalized_as_of
+    assert current["meta"]["normalized_filter"]["as_of"] == normalized_as_of
+
+
 def test_current_exposure_combines_open_watch_recent_and_anomalies(home: Path) -> None:
     instrument_id = _instrument(home)
     watch = dump_envelope(mcp_call("decision.add", {

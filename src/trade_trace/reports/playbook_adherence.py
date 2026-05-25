@@ -202,10 +202,15 @@ def report_playbook_adherence(
     # `metrics.total_adherence_rows`.
     all_decision_ids = {row[1] for row in rows}
     summary_predicate_audit = _audit_predicates(conn, rows)
+    summary_sample_size = len(all_decision_ids)
+    summary_sample_warning = (
+        f"only {summary_sample_size} decisions with adherence rows; "
+        f"unreliable below {min_sample}"
+    ) if summary_sample_size and summary_sample_size < min_sample else None
 
     summary: dict[str, Any] = {
-        "sample_size": len(all_decision_ids),
-        "sample_warning": None,
+        "sample_size": summary_sample_size,
+        "sample_warning": summary_sample_warning,
         "filter": filter_dict,
         "metrics": {
             **summary_counts,

@@ -447,6 +447,25 @@ def test_report_playbook_adherence_aggregates_by_version(home, adherence_setup):
     assert env.data["summary"]["metrics"]["total_adherence_rows"] == 3
 
 
+def test_report_playbook_adherence_low_sample_summary_and_meta_warning(home, adherence_setup):
+    env = _mcp(home, "decision.record_adherence", {
+        "decision_id": adherence_setup["decision_id"],
+        "playbook_version_id": adherence_setup["version_id"],
+        "rule_node_id": adherence_setup["rule_id"],
+        "status": "followed",
+        "idempotency_key": "00000000-0000-4000-8000-pb-low-001",
+    })
+    assert env.ok, env
+
+    env = _mcp(home, "report.playbook_adherence", {})
+    assert env.ok
+    warning = env.data["summary"]["sample_warning"]
+    assert warning is not None
+    assert "only 1 decisions" in warning
+    assert "10" in warning
+    assert env.meta.sample_warning == warning
+
+
 def test_report_playbook_adherence_predicate_audit_alignment_and_mismatch(home, adherence_setup):
     pass_rule = _seed_rule_node(home, idem_suffix="pred-pass", meta_json={
         "predicate": {"family": "decision_type_in", "values": ["actual_enter"]},

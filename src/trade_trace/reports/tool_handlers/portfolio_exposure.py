@@ -597,9 +597,16 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
     if not isinstance(include_anomalies, bool):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "include_anomalies must be a boolean", details={"field": "include_anomalies", "value": include_anomalies})
 
+    effective_as_of = args.get("as_of")
+    if effective_as_of is None:
+        effective_as_of = to_utc_iso8601(datetime.now(UTC))
+
     open_args = {k: v for k, v in args.items() if k in {"home", "limit", "kind", "instrument_id", "strategy_id", "stale_mark_threshold_days", "as_of"}}
+    open_args["as_of"] = effective_as_of
     open_data = _report_open_positions(open_args, ctx)
+    effective_as_of = open_data.get("summary", {}).get("filter", {}).get("as_of", effective_as_of)
     anomaly_args = {k: v for k, v in args.items() if k in {"home", "stale_mark_threshold_days", "as_of"}}
+    anomaly_args["as_of"] = effective_as_of
     anomaly_data = _report_exposure_anomalies(anomaly_args, ctx) if include_anomalies else None
 
     db = open_db_for_args(args)
@@ -645,7 +652,7 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
                 "include_watchlist": include_watchlist,
                 "include_anomalies": include_anomalies,
                 "stale_mark_threshold_days": args.get("stale_mark_threshold_days", 14),
-                "as_of": args.get("as_of"),
+                "as_of": effective_as_of,
             },
             "agent_answer_hints": hints,
         },
