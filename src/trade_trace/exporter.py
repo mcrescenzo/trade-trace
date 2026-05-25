@@ -27,6 +27,7 @@ from typing import Any
 
 from trade_trace._permissions import chmod_user_only_dirs, chmod_user_only_file
 from trade_trace.events import EventRecord
+from trade_trace.events.log import EVENT_RECORD_SELECT_COLUMNS
 
 RESERVED_TRANSPORT_KEYS = frozenset(
     {"_event_id", "_event_type", "_actor_id", "_created_at", "_contract_version"}
@@ -360,11 +361,10 @@ def _read_outbox_pending(conn: sqlite3.Connection) -> list[tuple[int, int]]:
 def _load_event(conn: sqlite3.Connection, event_id: int) -> EventRecord | None:
     """Return the event record, or None if missing (FK corruption)."""
 
+    columns = ", ".join(EVENT_RECORD_SELECT_COLUMNS)
     cur = conn.execute(
-        """
-        SELECT id, event_type, subject_kind, subject_id, payload_json,
-               actor_id, idempotency_key, created_at, request_id,
-               agent_id, model_id, environment, run_id
+        f"""
+        SELECT {columns}
         FROM events
         WHERE id = ?
         """,
@@ -373,21 +373,7 @@ def _load_event(conn: sqlite3.Connection, event_id: int) -> EventRecord | None:
     row = cur.fetchone()
     if row is None:
         return None
-    return EventRecord(
-        id=row[0],
-        event_type=row[1],
-        subject_kind=row[2],
-        subject_id=row[3],
-        payload_json=row[4],
-        actor_id=row[5],
-        idempotency_key=row[6],
-        created_at=row[7],
-        request_id=row[8],
-        agent_id=row[9],
-        model_id=row[10],
-        environment=row[11],
-        run_id=row[12],
-    )
+    return EventRecord.from_row(row)
 
 
 def drain_outbox(

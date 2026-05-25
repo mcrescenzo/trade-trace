@@ -35,6 +35,23 @@ from trade_trace.events.semantic_keys import (
 from trade_trace.timestamps import to_utc_iso8601
 
 
+EVENT_RECORD_SELECT_COLUMNS = (
+    "id",
+    "event_type",
+    "subject_kind",
+    "subject_id",
+    "payload_json",
+    "actor_id",
+    "idempotency_key",
+    "created_at",
+    "request_id",
+    "agent_id",
+    "model_id",
+    "environment",
+    "run_id",
+)
+
+
 class IdempotencyConflictError(RuntimeError):
     """Raised when an idempotency-key replay carries a semantically different
     payload than the original write. The error carries the structural diff
@@ -77,6 +94,26 @@ class EventRecord:
     environment: str | None
     run_id: str | None
     idempotent_replay: bool = False
+
+    @staticmethod
+    def from_row(row: sqlite3.Row | tuple[Any, ...]) -> "EventRecord":
+        """Hydrate an event row selected with EVENT_RECORD_SELECT_COLUMNS."""
+
+        return EventRecord(
+            id=row[0],
+            event_type=row[1],
+            subject_kind=row[2],
+            subject_id=row[3],
+            payload_json=row[4],
+            actor_id=row[5],
+            idempotency_key=row[6],
+            created_at=row[7],
+            request_id=row[8],
+            agent_id=row[9],
+            model_id=row[10],
+            environment=row[11],
+            run_id=row[12],
+        )
 
     def to_jsonl_line(self) -> dict[str, Any]:
         """Shape the row for JSONL export per operability.md §9.2 and
@@ -141,11 +178,10 @@ class EventWriter:
     def _find_existing(
         self, *, event_type: str, actor_id: str, idempotency_key: str
     ) -> EventRecord | None:
+        columns = ", ".join(EVENT_RECORD_SELECT_COLUMNS)
         cur = self.conn.execute(
-            """
-            SELECT id, event_type, subject_kind, subject_id, payload_json,
-                   actor_id, idempotency_key, created_at, request_id,
-                   agent_id, model_id, environment, run_id
+            f"""
+            SELECT {columns}
             FROM events
             WHERE event_type = ? AND actor_id = ? AND idempotency_key = ?
             """,
@@ -154,21 +190,7 @@ class EventWriter:
         row = cur.fetchone()
         if row is None:
             return None
-        return EventRecord(
-            id=row[0],
-            event_type=row[1],
-            subject_kind=row[2],
-            subject_id=row[3],
-            payload_json=row[4],
-            actor_id=row[5],
-            idempotency_key=row[6],
-            created_at=row[7],
-            request_id=row[8],
-            agent_id=row[9],
-            model_id=row[10],
-            environment=row[11],
-            run_id=row[12],
-        )
+        return EventRecord.from_row(row)
 
     # -- public surface ----------------------------------------------------
 
