@@ -29,6 +29,10 @@ def _iter_python_sources() -> list[Path]:
 
 
 def _registered_tool_names() -> list[str]:
+    return list(default_registry().public_names())
+
+
+def _all_dispatchable_tool_names() -> list[str]:
     return list(default_registry().names())
 
 
@@ -90,10 +94,10 @@ def test_deferred_report_tools_not_registered(deferred_tool):
 
 MEMORY_IN_SCOPE = (
     "memory.retain", "memory.reflect", "memory.link", "memory.recall",
-    "reflection.prompt_for_outcome",
 )
 MEMORY_OUT_OF_SCOPE = (
     "memory.expire", "memory.purge", "memory.subscribe", "memory.bulk_delete",
+    "reflection.prompt_for_outcome",
 )
 
 
@@ -191,7 +195,35 @@ def test_no_credential_columns_in_schema(tmp_path):
     )
 
 
-# -- 6. shipped report tool list pinned -------------------
+# -- 6. shipped v0.0.2 catalog pins -------------------
+
+SHIPPED_PUBLIC_TOOLS = {
+    "decision.add",
+    "export.drain",
+    "forecast.add",
+    "import.commit",
+    "journal.backup",
+    "journal.config_set",
+    "journal.fixture_seed",
+    "journal.init",
+    "journal.restore",
+    "journal.schema",
+    "journal.status",
+    "market.bind",
+    "memory.link",
+    "memory.recall",
+    "memory.reflect",
+    "memory.retain",
+    "playbook.record_adherence",
+    "playbook.upsert",
+    "replay.case_bundle",
+    "replay.evaluate_output",
+    "resolution.add",
+    "review.bundle",
+    "snapshot.add",
+    "strategy.upsert",
+    "tool.schema",
+}
 
 
 SHIPPED_REPORTS = {
@@ -224,6 +256,89 @@ SHIPPED_REPORTS = {
     "report.strategy_health",
     "report.strategy_performance",
 }
+
+
+def test_shipped_public_tool_catalog_is_locked():
+    """Pin the default v0.0.2 model-facing catalog.
+
+    Transitional legacy handlers may remain dispatchable for local compatibility,
+    but they must be hidden from the default catalog unless explicitly requested.
+    """
+
+    names = set(_registered_tool_names())
+    expected = SHIPPED_PUBLIC_TOOLS | SHIPPED_REPORTS
+    assert names == expected, (
+        f"shipped public tool catalog drifted from pin. "
+        f"added: {names - expected}; "
+        f"removed: {expected - names}"
+    )
+
+
+LEGACY_HIDDEN_TOOLS = {
+    "venue.add",
+    "instrument.add",
+    "thesis.add",
+    "forecast.supersede",
+    "outcome.add",
+    "decision.record_adherence",
+    "source.add",
+    "source.attach_to_thesis",
+    "source.attach_to_decision",
+    "source.attach_to_forecast",
+    "source.attach_to_memory_node",
+    "strategy.create",
+    "strategy.list",
+    "strategy.show",
+    "strategy.update",
+    "playbook.create",
+    "playbook.list",
+    "playbook.show",
+    "playbook.list_versions",
+    "playbook.propose_version",
+    "playbook.adherence",
+    "resolve.record",
+    "resolve.pending",
+    "idea.capture",
+    "market.scan.dry_run",
+    "market.scan.promote",
+    "journal.bundle.plan",
+    "journal.bundle.status",
+    "journal.rescan_scoring",
+    "reflection.prompt_for_outcome",
+    "import.validate",
+    "import.csv_fills",
+    "memory.reindex",
+    "model.import",
+    "model.warm",
+    "keyring.revoke",
+}
+
+
+def test_legacy_catalog_tools_are_hidden_but_metadata_explains_transition():
+    registry = default_registry()
+    public = set(registry.public_names())
+    missing_dispatch = LEGACY_HIDDEN_TOOLS - set(_all_dispatchable_tool_names())
+    assert missing_dispatch == set()
+    assert LEGACY_HIDDEN_TOOLS.isdisjoint(public)
+    missing_transition_metadata = []
+    for tool in LEGACY_HIDDEN_TOOLS:
+        reg = registry.get(tool)
+        metadata = reg.metadata()
+        if metadata.get("catalog_visibility") != "legacy":
+            missing_transition_metadata.append((tool, metadata))
+        if not (metadata.get("redirect") is not None or metadata.get("renamed_to") is not None or metadata.get("removed_in") == "0.0.2"):
+            missing_transition_metadata.append((tool, metadata))
+    assert missing_transition_metadata == []
+
+
+def test_admin_tools_are_not_in_default_catalog():
+    registry = default_registry()
+    assert {"journal.rebuild_projections", "journal.repair", "signal.scan"}.isdisjoint(
+        registry.public_names()
+    )
+    assert {"journal.rebuild_projections", "journal.repair", "signal.scan"}.issubset(
+        registry.public_names(include_admin=True)
+    )
 
 
 def test_shipped_report_tool_set_is_locked():

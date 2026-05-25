@@ -43,6 +43,22 @@ SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
         structural_fields=frozenset({"name", "kind"}),
         free_text_fields=frozenset({"metadata_json"}),
     ),
+    "market.bound": SemanticKeySpec(
+        structural_fields=frozenset(
+            {"source", "external_id", "state", "mechanism", "bound_via"}
+        ),
+        free_text_fields=frozenset(
+            {
+                "title",
+                "question",
+                "url",
+                "resolution_source",
+                "ambiguity_kind",
+                "venue_metadata_json",
+                "metadata_json",
+            }
+        ),
+    ),
     "instrument.created": SemanticKeySpec(
         structural_fields=frozenset(
             {
@@ -315,12 +331,14 @@ def canonicalize_payload(event_type: str, payload: dict[str, Any]) -> str:
 TOOL_PRIMARY_EVENT_TYPE: dict[str, str] = {
     # M1 ledger entity creation
     "venue.add":              "venue.created",
+    "market.bind":            "market.bound",
     "instrument.add":         "instrument.created",
     "snapshot.add":           "snapshot.added",
     "thesis.add":             "thesis.created",
     "forecast.add":           "forecast.created",
     "forecast.supersede":     "forecast.superseded",
     "decision.add":           "decision.created",
+    "resolution.add":         "outcome.recorded",
     "outcome.add":            "outcome.recorded",
     "resolve.record":         "outcome.recorded",  # alias of outcome.add
     "source.add":             "source.added",
@@ -334,6 +352,7 @@ TOOL_PRIMARY_EVENT_TYPE: dict[str, str] = {
     # `playbook_rule.overridden` depending on status, but both event
     # types share the same structural_fields set, so either entry
     # produces the same canonical hash. Pick the `followed` row.
+    "playbook.record_adherence":  "playbook_rule.followed",
     "decision.record_adherence":  "playbook_rule.followed",
     # Memory
     "memory.retain":          "memory_node.retained",

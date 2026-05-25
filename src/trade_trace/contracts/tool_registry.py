@@ -11,7 +11,7 @@ the runtime check is defense in depth.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from trade_trace.contracts.json_schema_derive import derive_schema
@@ -113,11 +113,29 @@ class ToolRegistration:
     enum_notes: dict[str, str] = field(default_factory=dict)
     common_failures: list[str] = field(default_factory=list)
     next_actions: list[str] = field(default_factory=list)
+    catalog_visibility: str = "public"
+    is_admin: bool = False
+    legacy_name: str | None = None
+    renamed_to: str | None = None
+    removed_in: str | None = None
+    redirect: str | None = None
 
     def metadata(self) -> dict[str, Any]:
         """Self-describing metadata shared by CLI help, tool.schema, and MCP."""
 
-        out: dict[str, Any] = {}
+        out: dict[str, Any] = {
+            "catalog_visibility": self.catalog_visibility,
+        }
+        if self.is_admin:
+            out["is_admin"] = True
+        if self.legacy_name:
+            out["legacy_name"] = self.legacy_name
+        if self.renamed_to:
+            out["renamed_to"] = self.renamed_to
+        if self.removed_in:
+            out["removed_in"] = self.removed_in
+        if self.redirect is not None:
+            out["redirect"] = self.redirect
         if self.usage_summary:
             out["usage_summary"] = self.usage_summary
         if self.examples:
@@ -156,6 +174,12 @@ class ToolRegistry:
         enum_notes: dict[str, str] | None = None,
         common_failures: list[str] | tuple[str, ...] | None = None,
         next_actions: list[str] | tuple[str, ...] | None = None,
+        catalog_visibility: str = "public",
+        is_admin: bool = False,
+        legacy_name: str | None = None,
+        renamed_to: str | None = None,
+        removed_in: str | None = None,
+        redirect: str | None = None,
     ) -> None:
         if name in self.by_name:
             raise CLINameCollisionError(
@@ -186,6 +210,12 @@ class ToolRegistry:
             enum_notes=dict(enum_notes or {}),
             common_failures=list(common_failures or ()),
             next_actions=list(next_actions or ()),
+            catalog_visibility=catalog_visibility,
+            is_admin=is_admin,
+            legacy_name=legacy_name,
+            renamed_to=renamed_to,
+            removed_in=removed_in,
+            redirect=redirect,
         )
         self.by_cli[invocation] = name
 
@@ -197,6 +227,83 @@ class ToolRegistry:
 
     def cli_invocations(self) -> list[tuple[str, ...]]:
         return sorted(self.by_cli)
+
+    def public_names(self, *, include_admin: bool = False, include_legacy: bool = False) -> list[str]:
+        """Return tool names visible in the default v0.0.2 catalog."""
+
+        out: list[str] = []
+        for name, reg in self.by_name.items():
+            if not include_legacy and reg.catalog_visibility != "public":
+                continue
+            if not include_admin and reg.is_admin:
+                continue
+            out.append(name)
+        return sorted(out)
+
+    def public_registrations(
+        self, *, include_admin: bool = False, include_legacy: bool = False
+    ) -> list[ToolRegistration]:
+        return [self.by_name[name] for name in self.public_names(
+            include_admin=include_admin, include_legacy=include_legacy,
+        )]
+
+    def mark(
+        self,
+        name: str,
+        *,
+        catalog_visibility: str | None = None,
+        is_admin: bool | None = None,
+        legacy_name: str | None = None,
+        renamed_to: str | None = None,
+        removed_in: str | None = None,
+        redirect: str | None = None,
+    ) -> None:
+        """Update catalog metadata for an already-registered tool."""
+
+        reg = self.by_name[name]
+        self.by_name[name] = replace(
+            reg,
+            catalog_visibility=(catalog_visibility if catalog_visibility is not None else reg.catalog_visibility),
+            is_admin=(is_admin if is_admin is not None else reg.is_admin),
+            legacy_name=(legacy_name if legacy_name is not None else reg.legacy_name),
+            renamed_to=(renamed_to if renamed_to is not None else reg.renamed_to),
+            removed_in=(removed_in if removed_in is not None else reg.removed_in),
+            redirect=(redirect if redirect is not None else reg.redirect),
+        )
+
+    def alias(
+        self,
+        new_name: str,
+        existing_name: str,
+        *,
+        legacy_name: str | None = None,
+        description: str | None = None,
+        catalog_visibility: str = "public",
+        is_admin: bool | None = None,
+        example_minimal: dict[str, Any] | None = None,
+        example_rich: dict[str, Any] | None = None,
+        json_schema: dict[str, Any] | None = None,
+    ) -> None:
+        """Register a new public name backed by an existing handler."""
+
+        existing = self.by_name[existing_name]
+        self.register(
+            new_name,
+            existing.handler,
+            description=description if description is not None else existing.description,
+            is_write=existing.is_write,
+            example_minimal=example_minimal if example_minimal is not None else existing.example_minimal,
+            example_rich=example_rich if example_rich is not None else existing.example_rich,
+            json_schema=json_schema if json_schema is not None else existing.json_schema,
+            usage_summary=existing.usage_summary,
+            examples=existing.examples,
+            enum_notes=existing.enum_notes,
+            common_failures=existing.common_failures,
+            next_actions=existing.next_actions,
+            catalog_visibility=catalog_visibility,
+            is_admin=existing.is_admin if is_admin is None else is_admin,
+            legacy_name=legacy_name,
+        )
 
     def validate(self) -> None:
         """Re-validates the entire registry. Called at process startup as

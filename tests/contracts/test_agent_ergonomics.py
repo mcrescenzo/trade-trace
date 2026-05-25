@@ -99,14 +99,16 @@ def test_tool_schema_unknown_tool_returns_not_found(home):
     assert env.error.details["entity_kind"] == "tool"
 
 
-def test_tool_schema_catalog_lists_every_registered_tool(home):
+def test_tool_schema_catalog_lists_default_public_catalog(home):
     env = _mcp(home, "tool.schema", {})
     assert env.ok, env
     names = {t["name"] for t in env.data["tools"]}
-    # A representative slice: core write surface + introspection.
-    for required in ("venue.add", "thesis.add", "decision.add",
-                     "outcome.add", "tool.schema", "report.calibration"):
+    # Representative default v0.0.2 surface: new catalog names plus stable reports.
+    for required in ("market.bind", "decision.add", "resolution.add",
+                     "playbook.record_adherence", "tool.schema", "report.calibration"):
         assert required in names
+    for legacy_hidden in ("venue.add", "thesis.add", "outcome.add", "playbook.propose_version"):
+        assert legacy_hidden not in names
 
 
 def test_tool_schema_catalog_includes_json_schema_for_mcp_parity(home):
@@ -145,7 +147,7 @@ def test_tool_schema_catalog_includes_json_schema_for_mcp_parity(home):
 
     # Spot-check: the catalog row's json_schema matches per-tool
     # drilldown output (no drift between the two surfaces).
-    for sample in ("decision.add", "venue.add", "playbook.propose_version"):
+    for sample in ("decision.add", "market.bind", "playbook.upsert"):
         row = next(t for t in catalog if t["name"] == sample)
         drill = _mcp(home, "tool.schema", {"tool": sample})
         assert drill.ok, drill

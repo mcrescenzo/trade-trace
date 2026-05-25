@@ -192,7 +192,7 @@ def test_agent_bootstrap_registry_schema_and_mcp_parity(home):
     assert agent.is_write is False
     assert report.is_write is False
 
-    specs = {spec["name"]: spec for spec in mcp_tool_specs(reg)}
+    specs = {spec["name"]: spec for spec in mcp_tool_specs(reg, include_legacy=True)}
     assert specs["agent.bootstrap"]["is_write"] is False
     assert specs["agent.bootstrap"]["input_schema"] == specs["report.bootstrap"]["input_schema"]
     assert "bootstrap.v0" in specs["agent.bootstrap"]["description"]

@@ -51,6 +51,14 @@
       "reason": "Tests seed or assert legacy compatibility during the additive transition; runtime behavior is covered by focused PM-native tests."
     },
     {
+      "pattern": "src/trade_trace/core.py",
+      "terms": [
+        "source.attach"
+      ],
+      "category": "v002_catalog_transition_metadata",
+      "reason": "The v0.0.2 catalog overlay records source attachment legacy redirects while preserving dispatch compatibility during the additive transition."
+    },
+    {
       "pattern": "src/trade_trace/storage/migrations/**",
       "terms": [
         "forecast_outcomes",

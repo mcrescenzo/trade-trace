@@ -35,7 +35,7 @@ def test_journal_bundle_plan_registered_cli_and_mcp_self_describing(capsys):
     assert rc == 0
     assert "--arc-type" in out.out + out.err
 
-    specs = [spec for spec in mcp_tool_specs() if spec["name"] == "journal.bundle.plan"]
+    specs = [spec for spec in mcp_tool_specs(include_legacy=True) if spec["name"] == "journal.bundle.plan"]
     assert len(specs) == 1
     assert specs[0]["input_schema"]["properties"]["arc_type"]["enum"] == ["watch", "skip", "paper_enter"]
 
@@ -125,7 +125,7 @@ def test_journal_bundle_plan_paper_enter_guides_required_fields_without_broker_e
 
 
 def test_journal_bundle_status_mcp_spec_omits_private_auth_fragments():
-    specs = [spec for spec in mcp_tool_specs() if spec["name"] == "journal.bundle.status"]
+    specs = [spec for spec in mcp_tool_specs(include_legacy=True) if spec["name"] == "journal.bundle.status"]
     assert len(specs) == 1
     rendered = json.dumps(specs[0], sort_keys=True).lower()
     forbidden_fragments = sorted(

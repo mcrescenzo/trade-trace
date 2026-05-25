@@ -37,6 +37,7 @@ from trade_trace.tools.imports import register_import_stubs
 from trade_trace.tools.journal import register_journal_tools
 from trade_trace.tools.journal_bundle_status import register_journal_bundle_status
 from trade_trace.tools.ledger import register_ledger_tools
+from trade_trace.tools.market_bind import register_market_bind_tool
 from trade_trace.tools.market_scan import register_market_scan_tools
 from trade_trace.tools.memory import register_memory_tools
 from trade_trace.tools.playbook import register_playbook_tools
@@ -47,6 +48,114 @@ from trade_trace.tools.signals import register_signal_tools
 from trade_trace.tools.strategy import register_strategy_tools
 
 _DEFAULT_REGISTRY: ToolRegistry | None = None
+
+V002_RENAMED_TO: dict[str, str] = {
+    "outcome.add": "resolution.add",
+    "decision.record_adherence": "playbook.record_adherence",
+}
+
+V002_FOLDED_OR_REMOVED: dict[str, str | None] = {
+    "venue.add": "market.bind",
+    "instrument.add": "market.bind",
+    "thesis.add": "forecast.add",
+    "forecast.supersede": "forecast.add",
+    "source.add": None,
+    "source.attach_to_thesis": "forecast.add",
+    "source.attach_to_decision": "decision.add",
+    "source.attach_to_forecast": "forecast.add",
+    "source.attach_to_memory_node": "memory.retain",
+    "strategy.create": "strategy.upsert",
+    "strategy.update": "strategy.upsert",
+    "strategy.list": "report.strategy_health",
+    "strategy.show": "report.strategy_health",
+    "playbook.create": "playbook.upsert",
+    "playbook.list": "playbook.upsert",
+    "playbook.show": "playbook.upsert",
+    "playbook.list_versions": "playbook.upsert",
+    "playbook.propose_version": "playbook.upsert",
+    "import.validate": "import.commit",
+    "journal.rescan_scoring": "journal.rebuild_projections",
+    "agent.bootstrap": "report.bootstrap",
+    "agent.next_actions": "report.work_queue",
+    "playbook.adherence": "report.playbook_adherence",
+    "resolve.record": "resolution.add",
+    "resolve.pending": "report.work_queue",
+    "idea.capture": "memory.retain",
+    "market.scan.dry_run": "market.bind",
+    "market.scan.promote": "market.bind",
+    "journal.bundle.plan": None,
+    "journal.bundle.status": None,
+    "reflection.prompt_for_outcome": None,
+    "import.csv_fills": "import.commit",
+    "memory.reindex": None,
+    "model.import": None,
+    "model.warm": None,
+    "keyring.revoke": None,
+}
+
+V002_ADMIN_TOOLS = {
+    "journal.rebuild_projections",
+    "journal.repair",
+    "signal.scan",
+}
+
+
+def _apply_v002_catalog_overlay(registry: ToolRegistry) -> None:
+    """Add v0.0.2 canonical catalog names while preserving legacy dispatch.
+
+    Bead trade-trace-rooi consolidates the tool catalog without destructively
+    removing old local handlers in the same slice. Legacy names remain callable
+    for existing tests/import paths, but default catalog listings hide them and
+    advertise redirect/rename metadata.
+    """
+
+    register_market_bind_tool(registry)
+    registry.alias("resolution.add", "outcome.add", legacy_name="outcome.add")
+    registry.alias(
+        "playbook.record_adherence",
+        "decision.record_adherence",
+        legacy_name="decision.record_adherence",
+    )
+    registry.alias(
+        "strategy.upsert",
+        "strategy.create",
+        legacy_name="strategy.create",
+        description=(
+            "Create/update strategy surface for the v0.0.2 catalog. The current "
+            "additive implementation delegates create-mode to the legacy handler; "
+            "update/read cleanup remains guarded by legacy redirect metadata."
+        ),
+    )
+    registry.alias(
+        "playbook.upsert",
+        "playbook.create",
+        legacy_name="playbook.create",
+        description=(
+            "Create/propose playbook surface for the v0.0.2 catalog. The current "
+            "additive implementation delegates create-mode to the legacy handler; "
+            "version/read cleanup remains guarded by legacy redirect metadata."
+        ),
+    )
+
+    for old, new in V002_RENAMED_TO.items():
+        if old in registry.by_name:
+            registry.mark(
+                old,
+                catalog_visibility="legacy",
+                renamed_to=new,
+                removed_in="0.0.2",
+            )
+    for old, redirect in V002_FOLDED_OR_REMOVED.items():
+        if old in registry.by_name:
+            registry.mark(
+                old,
+                catalog_visibility="legacy",
+                redirect=redirect,
+                removed_in="0.0.2",
+            )
+    for name in V002_ADMIN_TOOLS:
+        if name in registry.by_name:
+            registry.mark(name, is_admin=True)
 
 
 def build_registry() -> ToolRegistry:
@@ -73,6 +182,7 @@ def build_registry() -> ToolRegistry:
     register_csv_import(registry)
     register_report_tools(registry)
     register_signal_tools(registry)
+    _apply_v002_catalog_overlay(registry)
     registry.validate()
     return registry
 

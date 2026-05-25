@@ -69,8 +69,7 @@ Reflections may optionally carry `metadata_json.policy_candidate` (legacy rows:
 `meta_json.policy_candidate`) to make the reflection-to-policy lifecycle
 explicit while preserving the separation between subjective memory and durable
 playbook policy. This is metadata on `reflection` nodes only; it is not a new
-durable table and it never creates, updates, or deletes playbook
-versions/rules.
+durable table and it never creates, updates, or deletes playbook versions/rules.
 
 Allowed lifecycle statuses are exactly:
 

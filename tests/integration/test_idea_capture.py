@@ -21,7 +21,7 @@ def test_idea_capture_registered_and_self_describing():
 
 
 def test_idea_capture_mcp_spec_omits_private_auth_fragments():
-    specs = [spec for spec in mcp_tool_specs() if spec["name"] == "idea.capture"]
+    specs = [spec for spec in mcp_tool_specs(include_legacy=True) if spec["name"] == "idea.capture"]
     assert len(specs) == 1
     rendered = json.dumps(specs[0], sort_keys=True).lower()
     forbidden_fragments = sorted(

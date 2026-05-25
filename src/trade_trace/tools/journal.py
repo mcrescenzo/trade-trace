@@ -42,7 +42,15 @@ _TOOL_SCHEMA_JSON_SCHEMA: dict[str, Any] = {
     "properties": {
         "tool": {
             "type": "string",
-            "description": "Registered tool name to introspect; omit to enumerate the full catalog.",
+            "description": "Registered tool name to introspect; omit to enumerate the default v0.0.2 catalog.",
+        },
+        "include_admin": {
+            "type": "boolean",
+            "description": "Include admin-only tools in catalog mode.",
+        },
+        "include_legacy": {
+            "type": "boolean",
+            "description": "Include legacy/folded tools preserved for transitional dispatch.",
         },
     },
     "required": [],
@@ -263,6 +271,8 @@ def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
     registry = default_registry()
     wanted = args.get("tool")
+    include_admin = bool(args.get("include_admin"))
+    include_legacy = bool(args.get("include_legacy"))
     if wanted is None:
         # Per bead trade-trace-dgdq: catalog mode mirrors MCP list-tools
         # by exposing each tool's `json_schema` so agents can discover
@@ -279,7 +289,10 @@ def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     "json_schema": reg.json_schema,
                     "metadata": reg.metadata(),
                 }
-                for reg in sorted(registry.by_name.values(), key=lambda r: r.name)
+                for reg in registry.public_registrations(
+                    include_admin=include_admin,
+                    include_legacy=include_legacy,
+                )
             ],
         }
 

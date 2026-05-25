@@ -25,7 +25,7 @@ isn't an unknown.
 The `events` table currently emits these `event_type` values
 (per `src/trade_trace/events/semantic_keys.py`):
 
-- M0/M1 ledger: `venue.created`, `instrument.created`,
+- M0/M1 ledger: `venue.created`, `market.bound`, `instrument.created`,
   `snapshot.added`, `thesis.created`, `source.added`, `source.attached`,
   `decision.created`, `outcome.recorded`, `forecast.created`,
   `forecast.scored`, `forecast.superseded`, `edge.created`,
@@ -51,8 +51,11 @@ row.
 
 **Members:** M0/M1 ledger + M3 memory write families:
 
-- `venue.created` → `venue.add`
-- `instrument.created` → `instrument.add`
+- `venue.created` → `venue.add` (legacy replay surface; default v0.0.2
+  catalog folds new market setup into `market.bind`)
+- `market.bound` → `market.bind`
+- `instrument.created` → `instrument.add` (legacy replay surface; default
+  v0.0.2 catalog folds new instrument setup into `market.bind`)
 - `snapshot.added` → `snapshot.add`
 - `thesis.created` → `thesis.add`
 - `source.added` → `source.add`

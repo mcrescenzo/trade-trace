@@ -121,17 +121,23 @@ def test_mcp_tool_specs_are_derived_from_supplied_registry_only():
     assert "handler" not in specs[0]
 
 
-def test_mcp_tool_specs_default_registry_matches_dispatch_known_tools():
-    """Default exposure is exactly the process default_registry tool surface."""
+def test_mcp_tool_specs_default_registry_matches_default_public_catalog():
+    """Default MCP exposure is the v0.0.2 public catalog, not legacy/admin dispatch internals."""
 
     specs = mcp_tool_specs()
     exposed = {spec["name"] for spec in specs}
 
-    missing = mcp_call("definitely.not_registered", {}).model_dump(mode="json")["error"][
-        "details"
-    ]["known_tools"]
-    assert exposed == set(missing)
+    from trade_trace.core import default_registry
+
+    registry = default_registry()
+    assert exposed == set(registry.public_names())
     assert "tool.schema" in exposed
+    assert "venue.add" not in exposed
+    assert "journal.repair" not in exposed
+    legacy_specs = {spec["name"] for spec in mcp_tool_specs(include_legacy=True)}
+    assert "venue.add" in legacy_specs
+    admin_specs = {spec["name"] for spec in mcp_tool_specs(include_admin=True)}
+    assert "journal.repair" in admin_specs
 
 
 def test_mcp_tool_specs_do_not_use_dynamic_import_exec_or_eval():

@@ -80,7 +80,7 @@ def test_help_and_mcp_specs_advertise_instrument_and_decision_optional_fields(ca
     assert rc == 0
     assert "--snapshot-id <string>" in decision_help
 
-    specs = {s["name"]: s for s in mcp_tool_specs()}
+    specs = {s["name"]: s for s in mcp_tool_specs(include_legacy=True)}
     instrument_props = specs["instrument.add"]["input_schema"]["properties"]
     decision_props = specs["decision.add"]["input_schema"]["properties"]
     assert "snapshot_id" in decision_props
@@ -122,7 +122,7 @@ def test_source_freshness_help_and_mcp_schema_are_self_describing(capsys):
     assert "--retrieved-at <string>" in help_text
     assert "does not drive report.source_quality stale_sources" in help_text
 
-    spec = next(s for s in mcp_tool_specs() if s["name"] == "source.add")
+    spec = next(s for s in mcp_tool_specs(include_legacy=True) if s["name"] == "source.add")
     props = spec["input_schema"]["properties"]
     assert "stale_sources uses this field" in props["freshness_at"]["description"]
     assert "does not drive report.source_quality stale_sources" in props["retrieved_at"]["description"]

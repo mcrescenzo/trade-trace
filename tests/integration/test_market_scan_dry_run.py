@@ -51,7 +51,7 @@ def test_market_scan_dry_run_registered_cli_mcp_and_schema(capsys):
     assert reg.is_write is False
     assert reg.json_schema and reg.json_schema["examples"]
     assert "paper_enter" in reg.json_schema["properties"]["decision"]["properties"]["action"]["enum"]
-    assert any(spec["name"] == "market.scan.dry_run" for spec in mcp_tool_specs())
+    assert any(spec["name"] == "market.scan.dry_run" for spec in mcp_tool_specs(include_legacy=True))
 
     env = mcp_call("tool.schema", {"tool": "market.scan.dry_run"}, actor_id="agent:test")
     assert env.ok
@@ -193,7 +193,7 @@ def test_market_scan_promote_registered_mcp_and_schema():
     assert reg.is_write is True
     assert reg.json_schema and "promote_hash" in reg.json_schema["properties"]
     assert "_fail_after_step" not in reg.json_schema["properties"]
-    assert any(spec["name"] == "market.scan.promote" for spec in mcp_tool_specs())
+    assert any(spec["name"] == "market.scan.promote" for spec in mcp_tool_specs(include_legacy=True))
     env = mcp_call("tool.schema", {"tool": "market.scan.promote"}, actor_id="agent:test")
     assert env.ok
     assert env.data["is_write"] is True

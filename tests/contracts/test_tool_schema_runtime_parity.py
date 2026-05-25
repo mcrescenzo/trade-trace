@@ -61,34 +61,35 @@ def test_playbook_propose_version_schema_does_not_require_stale_rules_json():
 
 
 def test_decision_record_adherence_schema_uses_runtime_field_names():
-    schema = _schema_for("decision.record_adherence")
+    for tool_name in ("decision.record_adherence", "playbook.record_adherence"):
+        schema = _schema_for(tool_name)
 
-    required = schema.get("required", [])
-    properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        properties = schema.get("properties", {})
 
-    # Stale aliases must not appear; runtime takes `rule_node_id` and
-    # `status`, not `rule_id` / `outcome`.
-    for stale in ("rule_id", "outcome"):
-        assert stale not in required, (
-            f"{stale!r} is a stale alias not consumed by "
-            "decision.record_adherence; do not require it."
-        )
-        assert stale not in properties, (
-            f"{stale!r} is a stale alias; remove from example_minimal so "
-            "the derived schema stops advertising it."
-        )
+        # Stale aliases must not appear; runtime takes `rule_node_id` and
+        # `status`, not `rule_id` / `outcome`.
+        for stale in ("rule_id", "outcome"):
+            assert stale not in required, (
+                f"{stale!r} is a stale alias not consumed by "
+                f"{tool_name}; do not require it."
+            )
+            assert stale not in properties, (
+                f"{stale!r} is a stale alias; remove from example_minimal so "
+                "the derived schema stops advertising it."
+            )
 
-    for runtime_required in (
-        "decision_id",
-        "playbook_version_id",
-        "rule_node_id",
-        "status",
-        "idempotency_key",
-    ):
-        assert runtime_required in required, (
-            f"runtime requires {runtime_required!r} for "
-            "decision.record_adherence; advertised schema must list it"
-        )
+        for runtime_required in (
+            "decision_id",
+            "playbook_version_id",
+            "rule_node_id",
+            "status",
+            "idempotency_key",
+        ):
+            assert runtime_required in required, (
+                f"runtime requires {runtime_required!r} for "
+                f"{tool_name}; advertised schema must list it"
+            )
 
 
 def test_report_opportunity_schema_treats_defaulted_args_as_optional():
