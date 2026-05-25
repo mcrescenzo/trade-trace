@@ -137,6 +137,11 @@ Sometimes-present fields:
 - `idempotent_replay: true`: when the call was a successful replay of a
   prior write with the same `idempotency_key` (see
   [persistence.md](persistence.md) §5).
+- `idempotency_source`: set on write tools when idempotency enforcement
+  applies. Value is `"auto"` when the dispatcher derived a deterministic
+  `auto:` key from the tool name and structural payload fields, and
+  `"caller"` when the agent supplied `idempotency_key` explicitly. See
+  [persistence.md](persistence.md) §5.3.
 - `contract_version`: the contract version string (`"1.0"` for MVP).
   Always set on success and error envelopes regardless of `--human`.
 - `bin_policy`: set by `report.calibration` to identify the

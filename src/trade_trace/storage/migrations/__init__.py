@@ -42,6 +42,10 @@ from trade_trace.storage.migrations.m010_strategy_id_new_row_triggers import (
 from trade_trace.storage.migrations.m011_agent_continuity_provenance import (
     _migration_011_agent_continuity_provenance,
 )
+from trade_trace.storage.migrations.m012_markets import _migration_012_markets
+from trade_trace.storage.migrations.m013_forecast_snapshot_anchor import (
+    _migration_013_forecast_snapshot_anchor,
+)
 
 MIGRATIONS: list[Migration] = [
     _migration_001_meta_table,
@@ -55,6 +59,8 @@ MIGRATIONS: list[Migration] = [
     _migration_009_events_append_only,
     _migration_010_strategy_id_new_row_triggers,
     _migration_011_agent_continuity_provenance,
+    _migration_012_markets,
+    _migration_013_forecast_snapshot_anchor,
 ]
 
 
@@ -84,6 +90,8 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
     (9, ["memory_node_embeddings"]),
     (10, []),
     (11, []),
+    (12, ["markets"]),
+    (13, ["forecast_snapshot_anchor"]),
 ]
 
 
@@ -125,6 +133,8 @@ _MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
         "snapshots": ["agent_id", "model_id", "environment", "run_id"],
         "sources": ["agent_id", "model_id", "environment", "run_id"],
     }),
+    (12, {}),
+    (13, {}),
 ]
 
 
@@ -147,6 +157,8 @@ __all__ = [
     "_migration_009_events_append_only",
     "_migration_010_strategy_id_new_row_triggers",
     "_migration_011_agent_continuity_provenance",
+    "_migration_012_markets",
+    "_migration_013_forecast_snapshot_anchor",
     "_require_fts5",
     "apply_pending_migrations",
     "current_version",

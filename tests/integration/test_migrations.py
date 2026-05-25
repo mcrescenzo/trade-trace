@@ -39,6 +39,133 @@ def test_apply_all_migrations(tmp_path: Path):
         db.close()
 
 
+def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def _index_names(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {row[1] for row in conn.execute(f"PRAGMA index_list({table})")}
+
+
+def _table_sql(conn: sqlite3.Connection, table: str) -> str:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table,),
+    ).fetchone()
+    assert row is not None
+    return row[0]
+
+
+def test_migration_012_markets_schema(tmp_path: Path):
+    db = _open(tmp_path)
+    try:
+        before, after = apply_pending_migrations(db.connection)
+        assert before == 0
+        assert after == len(MIGRATIONS)
+        assert current_version(db.connection) == len(MIGRATIONS)
+
+        assert {
+            "id", "source", "external_id", "title", "question", "url",
+            "state", "mechanism", "resolution_source", "ambiguity_kind",
+            "bound_via", "opened_at", "close_at", "closed_for_trading_at",
+            "resolving_at", "resolved_at", "voided_at", "ambiguous_at",
+            "venue_metadata_json", "metadata_json", "created_at", "actor_id",
+        }.issubset(_columns(db.connection, "markets"))
+        assert {
+            "idx_markets_source_external", "idx_markets_state", "idx_markets_close_at",
+        }.issubset(_index_names(db.connection, "markets"))
+        sql = _table_sql(db.connection, "markets")
+        for fragment in (
+            "UNIQUE (source, external_id)",
+            "'open','closed_for_trading','resolving','resolved','voided','ambiguous'",
+            "'clob','amm','scalar','hybrid'",
+            "'market_contract','oracle_feed','manual_review','arbitration'",
+            "'market_rules_unclear','oracle_dispute'",
+            "'polymarket','kalshi','manifold','predictit','manual'",
+            "'adapter','manual'",
+            "venue_metadata_json TEXT NOT NULL DEFAULT '{}'",
+            "metadata_json TEXT NOT NULL DEFAULT '{}'",
+        ):
+            assert fragment in sql
+
+        db.connection.execute(
+            """
+            INSERT INTO markets(
+                id, source, external_id, state, mechanism, resolution_source,
+                ambiguity_kind, bound_via, created_at, actor_id
+            ) VALUES (
+                'm_1', 'polymarket', 'ext_1', 'open', 'clob',
+                'market_contract', 'market_rules_unclear', 'adapter',
+                '2026-05-25T00:00:00Z', 'agent:default'
+            )
+            """
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            db.connection.execute(
+                "INSERT INTO markets(id, source, external_id, state, mechanism, bound_via, created_at, actor_id) "
+                "VALUES ('m_2', 'polymarket', 'ext_1', 'open', 'clob', 'adapter', '2026-05-25T00:00:00Z', 'agent:default')"
+            )
+        with pytest.raises(sqlite3.IntegrityError):
+            db.connection.execute(
+                "INSERT INTO markets(id, source, external_id, state, mechanism, bound_via, created_at, actor_id) "
+                "VALUES ('m_bad', 'polymarket', 'ext_bad', 'paused', 'clob', 'adapter', '2026-05-25T00:00:00Z', 'agent:default')"
+            )
+    finally:
+        db.close()
+
+
+def test_migration_013_forecast_snapshot_anchor_schema(tmp_path: Path):
+    db = _open(tmp_path)
+    try:
+        before, after = apply_pending_migrations(db.connection)
+        assert before == 0
+        assert after == len(MIGRATIONS)
+        assert current_version(db.connection) == len(MIGRATIONS)
+
+        assert {
+            "id", "forecast_id", "snapshot_id", "market_implied_probability",
+            "agent_id", "model_id", "environment", "run_id", "metadata_json",
+            "created_at", "actor_id",
+        }.issubset(_columns(db.connection, "forecast_snapshot_anchor"))
+        assert {
+            "idx_fsa_forecast", "idx_fsa_snapshot",
+        }.issubset(_index_names(db.connection, "forecast_snapshot_anchor"))
+        sql = _table_sql(db.connection, "forecast_snapshot_anchor")
+        for fragment in (
+            "id TEXT PRIMARY KEY",
+            "forecast_id TEXT NOT NULL UNIQUE REFERENCES forecasts(id)",
+            "snapshot_id TEXT NOT NULL REFERENCES snapshots(id)",
+            "market_implied_probability REAL",
+            "metadata_json TEXT NOT NULL DEFAULT '{}'",
+        ):
+            assert fragment in sql
+
+        db.connection.execute(
+            "INSERT INTO venues(id, name, kind, created_at, actor_id) VALUES ('v_1', 'manual', 'manual', '2026-05-25T00:00:00Z', 'agent:default')"
+        )
+        db.connection.execute(
+            "INSERT INTO instruments(id, venue_id, title, asset_class, created_at, actor_id) VALUES ('i_1', 'v_1', 'Test', 'prediction_market', '2026-05-25T00:00:00Z', 'agent:default')"
+        )
+        db.connection.execute(
+            "INSERT INTO snapshots(id, instrument_id, captured_at, implied_probability, created_at, actor_id) VALUES ('s_1', 'i_1', '2026-05-25T00:00:00Z', 0.42, '2026-05-25T00:00:00Z', 'agent:default')"
+        )
+        db.connection.execute(
+            "INSERT INTO theses(id, instrument_id, side, body, created_at, actor_id) VALUES ('t_1', 'i_1', 'yes', 'body', '2026-05-25T00:00:00Z', 'agent:default')"
+        )
+        db.connection.execute(
+            "INSERT INTO forecasts(id, thesis_id, kind, created_at, actor_id) VALUES ('f_1', 't_1', 'binary', '2026-05-25T00:00:00Z', 'agent:default')"
+        )
+        db.connection.execute(
+            "INSERT INTO forecast_snapshot_anchor(id, forecast_id, snapshot_id, market_implied_probability, created_at, actor_id) VALUES ('a_1', 'f_1', 's_1', 0.42, '2026-05-25T00:00:00Z', 'agent:default')"
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            db.connection.execute(
+                "INSERT INTO forecast_snapshot_anchor(id, forecast_id, snapshot_id, created_at, actor_id) VALUES ('a_2', 'f_1', 's_1', '2026-05-25T00:00:00Z', 'agent:default')"
+            )
+    finally:
+        db.close()
+
+
 def test_apply_is_idempotent(tmp_path: Path):
     db = _open(tmp_path)
     try:

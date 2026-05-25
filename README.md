@@ -140,7 +140,7 @@ Use `tool.schema` as the source of truth for exact fields, enums, examples, dry-
 - **No telemetry:** no analytics, phone-home, auto-update, or background sync.
 - **No credential persistence:** credential-shaped inputs are dropped or rejected; secret-looking free text is scanned before insertion.
 - **Append-only audit posture:** source/event tables are immutable; corrections append new rows/events instead of overwriting history.
-- **Replay-safe writes:** retryable writes require idempotency keys; safe replays return the original event; semantic conflicts return `IDEMPOTENCY_CONFLICT`.
+- **Replay-safe writes:** retryable writes use idempotency keys. For supported write tools, the server auto-derives a deterministic `auto:` key when callers omit one; callers may still pass an explicit key to control the dedupe domain. Safe replays return the original event; semantic conflicts return `IDEMPOTENCY_CONFLICT`.
 - **Verified backups:** backup manifests use SHA-256 verification before restore.
 
 Read [`SECURITY.md`](./SECURITY.md) for vulnerability reporting and supported-version policy.
