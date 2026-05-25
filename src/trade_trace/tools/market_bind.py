@@ -23,6 +23,7 @@ from trade_trace.tools._helpers import (
     require,
     store_metadata_json,
 )
+from trade_trace.tools._market_rows import MARKET_BIND_ROW_SELECT, market_bind_row_dict
 from trade_trace.tools.adapter_polymarket import _upsert_market
 from trade_trace.tools.errors import ToolError
 
@@ -131,11 +132,7 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             if replay is not None:
                 replay_id = replay.get("id") or replay.get("market_id")
                 row = uow.conn.execute(
-                    "SELECT id, source, external_id, title, question, url, state, mechanism, "
-                    "resolution_source, ambiguity_kind, bound_via, opened_at, close_at, "
-                    "closed_for_trading_at, resolving_at, resolved_at, voided_at, ambiguous_at, "
-                    "venue_metadata_json, metadata_json, created_at, actor_id "
-                    "FROM markets WHERE id = ?",
+                    f"SELECT {MARKET_BIND_ROW_SELECT} FROM markets WHERE id = ?",
                     (replay_id,),
                 ).fetchone()
                 if row is not None:
@@ -150,18 +147,14 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                         idempotency_key=idempotency_key,
                         ctx=ctx,
                     )
-                    return _market_row_dict(row) | {"idempotent_replay": True}
+                    return market_bind_row_dict(row) | {"idempotent_replay": True}
 
             existing = uow.conn.execute(
-                "SELECT id, source, external_id, title, question, url, state, mechanism, "
-                "resolution_source, ambiguity_kind, bound_via, opened_at, close_at, "
-                "closed_for_trading_at, resolving_at, resolved_at, voided_at, ambiguous_at, "
-                "venue_metadata_json, metadata_json, created_at, actor_id "
-                "FROM markets WHERE source = ? AND external_id = ?",
+                f"SELECT {MARKET_BIND_ROW_SELECT} FROM markets WHERE source = ? AND external_id = ?",
                 (source, external_id),
             ).fetchone()
             if existing is not None:
-                payload = _market_row_dict(existing) | {"already_bound": True}
+                payload = market_bind_row_dict(existing) | {"already_bound": True}
                 existing_id = str(existing[0])
                 emit_event(
                     uow,
@@ -238,33 +231,6 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             return payload
     finally:
         db.close()
-
-
-def _market_row_dict(row: Any) -> dict[str, Any]:
-    return {
-        "id": row[0],
-        "source": row[1],
-        "external_id": row[2],
-        "title": row[3],
-        "question": row[4],
-        "url": row[5],
-        "state": row[6],
-        "mechanism": row[7],
-        "resolution_source": row[8],
-        "ambiguity_kind": row[9],
-        "bound_via": row[10],
-        "opened_at": row[11],
-        "close_at": row[12],
-        "closed_for_trading_at": row[13],
-        "resolving_at": row[14],
-        "resolved_at": row[15],
-        "voided_at": row[16],
-        "ambiguous_at": row[17],
-        "venue_metadata_json": row[18],
-        "metadata_json": row[19],
-        "created_at": row[20],
-        "actor_id": row[21],
-    }
 
 
 def register_market_bind_tool(registry: ToolRegistry) -> None:

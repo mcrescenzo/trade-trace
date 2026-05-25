@@ -10,6 +10,7 @@ from trade_trace.adapters.polymarket.config import PolymarketConfig
 from trade_trace.adapters.polymarket.errors import AdapterError
 from trade_trace.adapters.polymarket.retry import retry_policy_kwargs
 from trade_trace.mcp_server import mcp_call
+from trade_trace.tools._market_rows import adapter_cache_hit_row_dict
 from trade_trace.tools.adapter_polymarket import _market_cache_hit
 
 
@@ -121,6 +122,46 @@ def test_market_cache_policy_enforces_state_ttls():
         None,
         now="2026-05-25T12:00:01.000Z",
     ) is False
+
+
+def test_market_cache_hit_row_surface_stays_narrow_and_ordered():
+    row = (
+        "mkt_1",
+        "polymarket",
+        "ext-1",
+        "Title",
+        "Question?",
+        "https://example.invalid/market/ext-1",
+        "open",
+        "clob",
+        "market_contract",
+        None,
+        "adapter",
+        '{"adapter":"polymarket"}',
+        '{"raw":true}',
+        "2026-05-25T12:00:00.000Z",
+    )
+
+    data = adapter_cache_hit_row_dict(row) | {"cache_hit": True, "state_changed": False}
+
+    assert list(data) == [
+        "id",
+        "source",
+        "external_id",
+        "title",
+        "question",
+        "url",
+        "state",
+        "mechanism",
+        "resolution_source",
+        "ambiguity_kind",
+        "bound_via",
+        "metadata_json",
+        "venue_metadata_json",
+        "created_at",
+        "cache_hit",
+        "state_changed",
+    ]
 
 
 class _FakeResponse:

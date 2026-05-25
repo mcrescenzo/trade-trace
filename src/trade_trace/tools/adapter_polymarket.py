@@ -26,6 +26,7 @@ from trade_trace.tools._helpers import (
     require,
     store_metadata_json,
 )
+from trade_trace.tools._market_rows import ADAPTER_CACHE_HIT_ROW_SELECT, adapter_cache_hit_row_dict
 from trade_trace.tools.errors import ToolError
 
 
@@ -145,22 +146,11 @@ def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id:
                 external_id = row[0]
                 current_now = now_iso()
                 if _market_cache_hit(row[1], row[2], row[3], now=current_now):
-                    cached = db.connection.execute("SELECT id,source,external_id,title,question,url,state,mechanism,resolution_source,ambiguity_kind,bound_via,metadata_json,venue_metadata_json,created_at FROM markets WHERE id=?", (refresh_market_id,)).fetchone()
-                    return {
-                        "id": cached[0],
-                        "source": cached[1],
-                        "external_id": cached[2],
-                        "title": cached[3],
-                        "question": cached[4],
-                        "url": cached[5],
-                        "state": cached[6],
-                        "mechanism": cached[7],
-                        "resolution_source": cached[8],
-                        "ambiguity_kind": cached[9],
-                        "bound_via": cached[10],
-                        "metadata_json": cached[11],
-                        "venue_metadata_json": cached[12],
-                        "created_at": cached[13],
+                    cached = db.connection.execute(
+                        f"SELECT {ADAPTER_CACHE_HIT_ROW_SELECT} FROM markets WHERE id=?",
+                        (refresh_market_id,),
+                    ).fetchone()
+                    return adapter_cache_hit_row_dict(cached) | {
                         "cache_hit": True,
                         "state_changed": False,
                     }

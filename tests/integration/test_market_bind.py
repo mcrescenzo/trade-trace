@@ -44,6 +44,31 @@ def test_market_bind_idempotency_replay_sets_envelope_meta(tmp_path):
     assert second.meta.event_id == first.meta.event_id
     assert second.meta.idempotent_replay is True
     assert second.data["idempotent_replay"] is True
+    assert list(second.data) == [
+        "id",
+        "source",
+        "external_id",
+        "title",
+        "question",
+        "url",
+        "state",
+        "mechanism",
+        "resolution_source",
+        "ambiguity_kind",
+        "bound_via",
+        "opened_at",
+        "close_at",
+        "closed_for_trading_at",
+        "resolving_at",
+        "resolved_at",
+        "voided_at",
+        "ambiguous_at",
+        "venue_metadata_json",
+        "metadata_json",
+        "created_at",
+        "actor_id",
+        "idempotent_replay",
+    ]
 
 
 def test_market_bind_duplicate_natural_key_returns_existing_without_adapter(tmp_path):
@@ -60,3 +85,28 @@ def test_market_bind_duplicate_natural_key_returns_existing_without_adapter(tmp_
     assert isinstance(duplicate, SuccessEnvelope), duplicate
     assert duplicate.data["id"] == first.data["id"]
     assert duplicate.data["already_bound"] is True
+    assert list(duplicate.data) == [
+        "id",
+        "source",
+        "external_id",
+        "title",
+        "question",
+        "url",
+        "state",
+        "mechanism",
+        "resolution_source",
+        "ambiguity_kind",
+        "bound_via",
+        "opened_at",
+        "close_at",
+        "closed_for_trading_at",
+        "resolving_at",
+        "resolved_at",
+        "voided_at",
+        "ambiguous_at",
+        "venue_metadata_json",
+        "metadata_json",
+        "created_at",
+        "actor_id",
+        "already_bound",
+    ]
