@@ -159,6 +159,40 @@ def test_report_open_positions_surfaces_latest_mark_and_stale_caveat(rich_home: 
     assert body["data"]["summary"]["filter"]["as_of"] == "2026-05-21T00:00:00.000Z"
 
 
+@pytest.mark.parametrize(
+    ("args", "message", "details"),
+    [
+        (
+            {"stale_mark_threshold_days": -1},
+            "stale_mark_threshold_days must be a non-negative integer",
+            {"field": "stale_mark_threshold_days", "value": -1},
+        ),
+        (
+            {"stale_mark_threshold_days": "14"},
+            "stale_mark_threshold_days must be a non-negative integer",
+            {"field": "stale_mark_threshold_days", "value": "14"},
+        ),
+        (
+            {"as_of": 123},
+            "as_of must be an ISO timestamp string",
+            {"field": "as_of", "value": 123},
+        ),
+    ],
+)
+def test_report_open_positions_temporal_validation_errors_are_stable(
+    home: Path,
+    args: dict,
+    message: str,
+    details: dict,
+) -> None:
+    body = _call(home, args)
+
+    assert body["ok"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert body["error"]["message"] == message
+    assert body["error"]["details"] == details
+
+
 def test_report_open_positions_lists_actual_recorded_position_when_backed_by_projection(rich_home: Path) -> None:
     _insert_actual_open_position(rich_home)
 

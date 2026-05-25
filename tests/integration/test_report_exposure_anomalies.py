@@ -145,6 +145,40 @@ def test_exposure_anomalies_flags_missing_and_stale_mark(home: Path) -> None:
     assert "STALE_MARK" in _codes(body)
 
 
+@pytest.mark.parametrize(
+    ("args", "message", "details"),
+    [
+        (
+            {"stale_mark_threshold_days": -1},
+            "stale_mark_threshold_days must be a non-negative integer",
+            {"field": "stale_mark_threshold_days", "value": -1},
+        ),
+        (
+            {"stale_mark_threshold_days": "14"},
+            "stale_mark_threshold_days must be a non-negative integer",
+            {"field": "stale_mark_threshold_days", "value": "14"},
+        ),
+        (
+            {"as_of": 123},
+            "as_of must be an ISO timestamp string",
+            {"field": "as_of", "value": 123},
+        ),
+    ],
+)
+def test_exposure_anomalies_temporal_validation_errors_are_stable(
+    home: Path,
+    args: dict,
+    message: str,
+    details: dict,
+) -> None:
+    body = _call(home, args)
+
+    assert body["ok"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert body["error"]["message"] == message
+    assert body["error"]["details"] == details
+
+
 def test_exposure_anomalies_flags_projection_missing_and_stale(home: Path) -> None:
     instrument_id = _instrument(home)
     _insert_position(home, instrument_id=instrument_id, position_id="pos_stale_projection", updated_at="2026-05-01T00:00:00Z")

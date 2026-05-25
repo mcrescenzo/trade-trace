@@ -58,24 +58,7 @@ def _report_watchlist(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     return data
 
 
-
-def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    """`report.open_positions` — row-level current open exposure."""
-
-    limit = args.get("limit")
-    if limit is not None and (not isinstance(limit, int) or limit < 1):
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "limit must be a positive integer",
-            details={"field": "limit", "value": limit},
-        )
-    kind = args.get("kind")
-    if kind is not None and kind not in ("paper", "actual", "simulation"):
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "kind must be one of: paper, actual, simulation",
-            details={"field": "kind", "value": kind, "allowed": ["paper", "actual", "simulation"]},
-        )
+def _exposure_temporal_bounds(args: dict[str, Any]) -> tuple[datetime, int, datetime]:
     stale_mark_threshold_days = args.get("stale_mark_threshold_days", 14)
     if not isinstance(stale_mark_threshold_days, int) or stale_mark_threshold_days < 0:
         raise ToolError(
@@ -95,6 +78,27 @@ def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             details={"field": "as_of", "value": as_of_raw},
         )
     stale_cutoff = as_of - timedelta(days=stale_mark_threshold_days)
+    return as_of, stale_mark_threshold_days, stale_cutoff
+
+
+def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.open_positions` — row-level current open exposure."""
+
+    limit = args.get("limit")
+    if limit is not None and (not isinstance(limit, int) or limit < 1):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "limit must be a positive integer",
+            details={"field": "limit", "value": limit},
+        )
+    kind = args.get("kind")
+    if kind is not None and kind not in ("paper", "actual", "simulation"):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "kind must be one of: paper, actual, simulation",
+            details={"field": "kind", "value": kind, "allowed": ["paper", "actual", "simulation"]},
+        )
+    as_of, stale_mark_threshold_days, stale_cutoff = _exposure_temporal_bounds(args)
     db = open_db_for_args(args)
     try:
         from trade_trace.reporting.position_rows import list_positions
@@ -182,25 +186,7 @@ def _exposure_anomaly(code: str, summary: str, affected_ids: dict[str, list[str]
 def _report_exposure_anomalies(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`report.exposure_anomalies` — current-exposure ambiguity caveats."""
 
-    stale_mark_threshold_days = args.get("stale_mark_threshold_days", 14)
-    if not isinstance(stale_mark_threshold_days, int) or stale_mark_threshold_days < 0:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "stale_mark_threshold_days must be a non-negative integer",
-            details={"field": "stale_mark_threshold_days", "value": stale_mark_threshold_days},
-        )
-    as_of_raw = args.get("as_of")
-    if as_of_raw is None:
-        as_of = datetime.now(UTC)
-    elif isinstance(as_of_raw, str):
-        as_of = _parse_report_timestamp(as_of_raw, field="as_of")
-    else:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "as_of must be an ISO timestamp string",
-            details={"field": "as_of", "value": as_of_raw},
-        )
-    stale_cutoff = as_of - timedelta(days=stale_mark_threshold_days)
+    as_of, stale_mark_threshold_days, stale_cutoff = _exposure_temporal_bounds(args)
     anomalies: list[dict[str, Any]] = []
 
     db = open_db_for_args(args)
