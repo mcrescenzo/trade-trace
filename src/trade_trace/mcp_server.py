@@ -14,10 +14,12 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
-import jsonschema
-
 from trade_trace.contracts.envelope import ErrorEnvelope, Meta, SuccessEnvelope, error_envelope
 from trade_trace.contracts.errors import ErrorCode
+from trade_trace.contracts.schema_validation import (
+    MCP_STDIO_FULL_SCHEMA,
+    reportable_schema_validation_error,
+)
 from trade_trace.contracts.tool_registry import ToolRegistry
 from trade_trace.core import default_registry, dispatch, new_request_id
 
@@ -197,19 +199,18 @@ def _build_stdio_server(registry: ToolRegistry | None = None):
         registration = reg.get(name) if name in reg.names() else None
         schema = registration.json_schema if registration is not None else None
         if schema:
-            try:
-                jsonschema.validate(instance=arguments, schema=schema)
-            except jsonschema.ValidationError as exc:
+            validation_error = reportable_schema_validation_error(
+                tool=name,
+                instance=arguments,
+                schema=schema,
+                policy=MCP_STDIO_FULL_SCHEMA,
+            )
+            if validation_error is not None:
                 return _stdio_validation_error(
                     name,
-                    f"Input validation error: {exc.message}",
+                    validation_error.message,
                     actor_id=actor_id,
-                    details={
-                        "tool": name,
-                        "field": ".".join(str(part) for part in exc.path) or None,
-                        "validator": exc.validator,
-                        "validator_value": exc.validator_value,
-                    },
+                    details=validation_error.details,
                 )
 
         envelope = mcp_call(
