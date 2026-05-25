@@ -2,6 +2,10 @@
 # ruff: noqa: I001
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any
+
 from trade_trace.contracts.tool_registry import ToolRegistry
 from trade_trace.reports import report_mistakes, report_pnl, report_risk, report_strengths
 from trade_trace.reports.tool_schemas import _REPORT_SCHEMAS
@@ -30,13 +34,43 @@ from .portfolio_exposure import (
 )
 from .replay import _replay_case_bundle, _replay_evaluate_output
 
-def register_report_tools(registry: ToolRegistry) -> None:
-    """Register `report.*` tools on the supplied registry.
+@dataclass(frozen=True)
+class ReportToolRegistration:
+    name: str
+    handler: Any
+    description: str = ""
+    example_minimal: Mapping[str, Any] | None = None
+    example_rich: Mapping[str, Any] | None = None
+    json_schema: Mapping[str, Any] | None = None
+    optional_keys: tuple[str, ...] | None = None
+    usage_summary: str = ""
+    examples: tuple[str, ...] | None = None
+    enum_notes: Mapping[str, str] | None = None
+    common_failures: tuple[str, ...] | None = None
+    next_actions: tuple[str, ...] | None = None
 
-    Currently registers only `report.filter_schema`; the 7 deterministic
-    reports + the coach are wired in their dedicated beads."""
+    def register(self, registry: ToolRegistry) -> None:
+        kwargs: dict[str, Any] = {}
+        for key in (
+            "description",
+            "example_minimal",
+            "example_rich",
+            "json_schema",
+            "optional_keys",
+            "usage_summary",
+            "examples",
+            "enum_notes",
+            "common_failures",
+            "next_actions",
+        ):
+            value = getattr(self, key)
+            if value is not None:
+                kwargs[key] = value
+        registry.register(self.name, self.handler, **kwargs)
 
-    registry.register(
+
+_REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
+    ReportToolRegistration(
         "report.bootstrap",
         _report_bootstrap,
         description=(
@@ -69,8 +103,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "Use source_refs and suggested_process_calls for local drilldowns; callers choose whether to run any follow-up.",
             "Treat partial/truncated sections as absence-unsafe; check truncation and omitted_counts before relying on missing items.",
         ),
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "agent.bootstrap",
         _report_bootstrap,
         description=(
@@ -102,8 +136,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "Use source_refs and suggested_process_calls for local drilldowns; callers choose whether to run any follow-up.",
             "Treat partial/truncated sections as absence-unsafe; check truncation and omitted_counts before relying on missing items.",
         ),
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "replay.case_bundle",
         _replay_case_bundle,
         description=(
@@ -116,8 +150,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         optional_keys=("kind", "contract_version", "case_selection", "task", "budgets"),
         json_schema=_REPORT_SCHEMAS["replay.case_bundle"],
         usage_summary="Export deterministic local point-in-time replay cases; no writes, fetches, model runs, simulation, or advice.",
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "replay.evaluate_output",
         _replay_evaluate_output,
         description=(
@@ -129,8 +163,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         optional_keys=("kind", "contract_version", "rubric_version"),
         json_schema=_REPORT_SCHEMAS["replay.evaluate_output"],
         usage_summary="Evaluate a candidate replay output for structural process criteria only; no writes, fetches, model runs, scoring engine, simulation, or advice.",
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.filter_schema",
         _report_filter_schema,
         description=(
@@ -141,8 +175,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "agents can build filter UIs without reading the docs."
         ),
         json_schema=_REPORT_SCHEMAS["report.filter_schema"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.calibration",
         _report_calibration,
         description=(
@@ -156,57 +190,57 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "report.calibration_integrity under data.integrity_diagnostics."
         ),
         json_schema=_REPORT_SCHEMAS["report.calibration"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.calibration_anchored",
         _report_calibration_anchored,
         description="Calibration over scored binary forecasts anchored to caller-supplied local market snapshots; baseline and skill use snapshot implied probabilities.",
         optional_keys=("filter", "min_sample"),
         json_schema=_REPORT_SCHEMAS["report.calibration"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.calibration_terminal",
         _report_calibration_terminal,
         description="Calibration over scored binary forecasts with terminal local market snapshot baseline at or before resolution; no network or live market fetch.",
         optional_keys=("filter", "min_sample"),
         json_schema=_REPORT_SCHEMAS["report.calibration"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.calibration_trajectory",
         _report_calibration_trajectory,
         description="Time-to-resolution trajectory calibration over scored binary forecasts using equal-mass bins; local journal only, no market calls.",
         optional_keys=("filter", "min_sample"),
         json_schema=_REPORT_SCHEMAS["report.calibration_trajectory"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.market_lifecycle",
         _report_market_lifecycle,
         description="Local market lifecycle durations and engagement counts across open/closed/resolving/resolved states; no external market calls.",
         optional_keys=("filter",),
         json_schema=_REPORT_SCHEMAS["report.market_lifecycle"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.resolution_quality",
         _report_resolution_quality,
         description="Local resolution quality diagnostics: status mix, ambiguous/void/disputed/cancelled counts, and pre-resolution uncertainty flags.",
         optional_keys=("filter",),
         json_schema=_REPORT_SCHEMAS["report.resolution_quality"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.amm_slippage",
         _report_amm_slippage,
         description="AMM decision price versus linked local snapshot mark, reported in basis points; no broker, wallet, external quote, or advice path.",
         optional_keys=("filter",),
         json_schema=_REPORT_SCHEMAS["report.amm_slippage"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.time_decay_sharpening",
         _report_time_decay_sharpening,
         description="Time-to-resolution sharpening diagnostics for scored binary forecasts, grouped by hours before resolution.",
         optional_keys=("filter", "min_sample"),
         json_schema=_REPORT_SCHEMAS["report.time_decay_sharpening"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.forecast_diagnostics",
         _report_forecast_diagnostics,
         description=(
@@ -219,8 +253,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}, "min_sample": 20},
         optional_keys=("filter", "min_sample"),
         json_schema=_REPORT_SCHEMAS["report.forecast_diagnostics"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.playbook_adherence",
         _report_playbook_adherence,
         description=(
@@ -231,8 +265,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "across decisions). Per bead fbq."
         ),
         json_schema=_REPORT_SCHEMAS["report.playbook_adherence"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.source_quality",
         _report_source_quality,
         description=(
@@ -246,8 +280,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"stale_threshold_days": 7},
         optional_keys=("stale_threshold_days",),
         json_schema=_REPORT_SCHEMAS["report.source_quality"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.audit_readiness",
         _report_audit_readiness,
         description=(
@@ -259,8 +293,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"stale_snapshot_threshold_days": 1, "stale_source_threshold_days": 7},
         optional_keys=("stale_snapshot_threshold_days", "stale_source_threshold_days"),
         json_schema=_REPORT_SCHEMAS["report.audit_readiness"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.calibration_integrity",
         _report_calibration_integrity,
         description=(
@@ -274,8 +308,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "sample_warning='no_data'."
         ),
         json_schema=_REPORT_SCHEMAS["report.calibration_integrity"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.unscored_forecasts",
         _report_unscored_forecasts,
         description=(
@@ -287,8 +321,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}},
         optional_keys=("filter",),
         json_schema=_REPORT_SCHEMAS["report.unscored_forecasts"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.decision_velocity",
         _report_decision_velocity,
         description=(
@@ -297,8 +331,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "groups[] are ordered by bucket key ascending."
         ),
         json_schema=_REPORT_SCHEMAS["report.decision_velocity"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.mistakes",
         _make_filter_only_report(report_mistakes),
         description=(
@@ -307,8 +341,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "decision_count, scored_forecast_count, mean_brier."
         ),
         json_schema=_REPORT_SCHEMAS["report.mistakes"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.strengths",
         _make_filter_only_report(report_strengths),
         description=(
@@ -316,8 +350,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "Mirror of report.mistakes."
         ),
         json_schema=_REPORT_SCHEMAS["report.strengths"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.pnl",
         _make_filter_only_report(report_pnl),
         description=(
@@ -344,8 +378,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "If summary.metrics.open_position_count > 0, run report.current_exposure for the recommended agent packet or report.open_positions for row-level open-position detail.",
             "State that P&L/open-position rows are local journal/projection records; Trade Trace does not execute trades or prove broker portfolio truth.",
         ),
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.risk",
         _make_filter_only_report(report_risk),
         description=(
@@ -359,8 +393,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "in metrics.n_pending_with_risk."
         ),
         json_schema=_REPORT_SCHEMAS["report.risk"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.opportunity",
         _report_opportunity,
         description=(
@@ -388,8 +422,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "min_sample",
         ),
         json_schema=_REPORT_SCHEMAS["report.opportunity"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.compare",
         _report_compare,
         description=(
@@ -406,8 +440,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         enum_notes={"base_report": "calibration or pnl", "group_by": "Allowed values depend on base_report and are validated by the report schema."},
         common_failures=("group_by is not allowed for the selected base_report.",),
         next_actions=("Use report.filter_schema to build the filter object before calling report.compare.",),
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.strategy_performance",
         _report_strategy_performance,
         description=(
@@ -418,8 +452,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         ),
         example_minimal={"strategy_id": "strat_example", "filter": {}},
         json_schema=_REPORT_SCHEMAS["report.strategy_performance"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.watchlist",
         _report_watchlist,
         description=(
@@ -430,8 +464,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}, "mode": "all", "stale_threshold_days": 14},
         optional_keys=("filter", "mode", "stale_threshold_days"),
         json_schema=_REPORT_SCHEMAS["report.watchlist"]
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.lifecycle",
         _report_lifecycle,
         description=(
@@ -443,8 +477,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}, "states": ["pending_review"], "as_of": "2026-01-20T00:00:00Z", "stale_threshold_days": 14},
         optional_keys=("filter", "states", "status", "as_of", "stale_threshold_days"),
         json_schema=_REPORT_SCHEMAS["report.lifecycle"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.strategy_health",
         _report_strategy_health,
         description=(
@@ -457,8 +491,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}, "status": "active", "as_of": "2026-01-20T00:00:00Z", "min_sample": 5},
         optional_keys=("filter", "status", "as_of", "min_sample"),
         json_schema=_REPORT_SCHEMAS["report.strategy_health"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.recall_receipts",
         _report_recall_receipts,
         description=(
@@ -470,8 +504,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"recall_id": "recall_..."},
         optional_keys=("recall_id", "node_id", "consumer_kind", "consumer_id", "run_id", "agent_id", "model_id", "environment", "instrument_id", "strategy_id", "as_of", "limit"),
         json_schema=_REPORT_SCHEMAS["report.recall_receipts"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.memory_usefulness",
         _report_memory_usefulness,
         description=(
@@ -483,8 +517,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"recall_id": "recall_...", "as_of": "2026-01-20T00:00:00Z"},
         optional_keys=("recall_id", "node_id", "consumer_kind", "consumer_id", "run_id", "agent_id", "model_id", "environment", "instrument_id", "strategy_id", "memory_kind", "as_of", "limit"),
         json_schema=_REPORT_SCHEMAS["report.memory_usefulness"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.policy_candidates",
         _report_policy_candidates,
         description=(
@@ -494,8 +528,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"status": "candidate", "as_of": "2026-01-20T00:00:00Z"},
         optional_keys=("status", "strategy_id", "playbook_id", "as_of", "limit"),
         json_schema=_REPORT_SCHEMAS["report.policy_candidates"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.work_queue",
         _report_work_queue,
         description=(
@@ -505,8 +539,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}, "as_of": "2026-01-20T00:00:00Z", "stale_threshold_days": 14},
         optional_keys=("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
         json_schema=_REPORT_SCHEMAS["report.work_queue"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "agent.next_actions",
         _agent_next_actions,
         description=(
@@ -515,8 +549,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         example_minimal={"filter": {}, "as_of": "2026-01-20T00:00:00Z", "stale_threshold_days": 14},
         optional_keys=("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
         json_schema=_REPORT_SCHEMAS["agent.next_actions"],
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.open_positions",
         _report_open_positions,
         description=(
@@ -542,8 +576,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         usage_summary="List canonical row-level open positions/current exposure; do not query or infer from decisions.",
         examples=("tt report open_positions --home <journal-home>",),
         next_actions=("Use these rows directly to summarize open exposure; do not run raw SQLite for open positions.",),
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.exposure_anomalies",
         _report_exposure_anomalies,
         description=(
@@ -559,8 +593,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         usage_summary="List local journal/projection anomalies that caveat current-exposure answers; do not treat them as open trades.",
         examples=("tt report exposure_anomalies --home <journal-home>",),
         next_actions=("Use report.open_positions for canonical exposure rows; mention these caveats separately.",),
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.current_exposure",
         _report_current_exposure,
         description=(
@@ -575,8 +609,8 @@ def register_report_tools(registry: ToolRegistry) -> None:
         usage_summary="Recommended trader-agent entry point for answering open trades/current exposure and recently traded questions without raw queries.",
         examples=("tt report current_exposure --home <journal-home> --recent-limit 10",),
         next_actions=("Use open_positions for canonical exposure; mention watchlist/recent activity/anomalies separately as caveats/context.",),
-    )
-    registry.register(
+    ),
+    ReportToolRegistration(
         "report.coach",
         _report_coach,
         description=(
@@ -590,6 +624,13 @@ def register_report_tools(registry: ToolRegistry) -> None:
         optional_keys=("filter", "stale_threshold_days"),
         json_schema=_REPORT_SCHEMAS["report.coach"]
     )
+)
 
+
+def register_report_tools(registry: ToolRegistry) -> None:
+    """Register `report.*` tools on the supplied registry."""
+
+    for registration in _REPORT_TOOL_REGISTRATIONS:
+        registration.register(registry)
 
 __all__ = [name for name in globals() if not name.startswith("__")]
