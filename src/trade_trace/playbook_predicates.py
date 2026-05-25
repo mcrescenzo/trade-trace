@@ -175,6 +175,13 @@ def validate_predicate(predicate: dict[str, Any]) -> None:
             raise PredicateValidationError("source_count_at_least requires a closed edge_type")
 
 
+def _load_decisions_for_predicate(conn: sqlite3.Connection, decision_id: str) -> list[dict[str, Any]]:
+    cursor = conn.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,))
+    rows = cursor.fetchall()
+    names = [d[0] for d in cursor.description]
+    return [dict(zip(names, row, strict=True)) for row in rows]
+
+
 def evaluate_predicate(
     conn: sqlite3.Connection,
     *,
@@ -200,14 +207,12 @@ def evaluate_predicate(
         return PredicateEvaluation("ambiguous", decision_id=decision_id, rule_node_id=rule_node_id, caveats=[str(exc)])
 
     family = str(predicate["family"])
-    rows = conn.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).fetchall()
-    if not rows:
+    decisions = _load_decisions_for_predicate(conn, decision_id)
+    if not decisions:
         return PredicateEvaluation("not_computable", family=family, decision_id=decision_id, rule_node_id=rule_node_id, caveats=["decision_id not found"])
-    if len(rows) > 1:
+    if len(decisions) > 1:
         return PredicateEvaluation("ambiguous", family=family, decision_id=decision_id, rule_node_id=rule_node_id, caveats=["multiple decision rows found"])
-    row = rows[0]
-    names = [d[0] for d in conn.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).description]
-    decision = dict(zip(names, row, strict=True))
+    decision = decisions[0]
     scope_status = _scope_status(decision, predicate.get("scope", {}))
     if scope_status is not None:
         return PredicateEvaluation(scope_status, family=family, decision_id=decision_id, rule_node_id=rule_node_id, record_refs=[{"table": "decisions", "id": decision_id}], caveats=["predicate scope does not apply to this decision"])
