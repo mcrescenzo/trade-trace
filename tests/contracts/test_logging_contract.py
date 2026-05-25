@@ -83,6 +83,23 @@ def test_redaction_strips_known_secret_patterns(tmp_path: Path):
     assert "***" in rec["message"], rec
 
 
+def test_redaction_strips_secret_patterns_inside_tuple_extra_payload(tmp_path: Path):
+    from trade_trace.logging import get_logger
+
+    log = get_logger("trade_trace.test_logging")
+    eth = "0x1234567890abcdef1234567890abcdef12345678"
+    log.warning(
+        "tuple payload probe",
+        extra={"verb": "scan", "payload": ("safe", {"nested": (eth,)})},
+    )
+
+    rec = _read_lines(_log_file(tmp_path))[0]
+    dumped = json.dumps(rec)
+    assert eth not in dumped, rec
+    assert rec["payload"][0] == "safe"
+    assert rec["payload"][1]["nested"][0] == "***"
+
+
 def test_mcp_mode_does_not_attach_stderr_handler(monkeypatch, tmp_path):
     monkeypatch.setenv("TRADE_TRACE_TRANSPORT", "mcp")
     import sys

@@ -111,6 +111,10 @@ def _redact(value: Any) -> Any:
         return {k: _redact(v) for k, v in value.items()}
     if isinstance(value, list):
         return [_redact(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_redact(v) for v in value)
+    if isinstance(value, (set, frozenset)):
+        return type(value)(_redact(v) for v in value)
     return value
 
 
