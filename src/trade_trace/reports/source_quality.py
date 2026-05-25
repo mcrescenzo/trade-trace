@@ -25,6 +25,7 @@ drill into the originating decision/thesis/source rows.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timedelta
 from typing import Any
@@ -57,11 +58,28 @@ def report_source_quality(
     duplicated = _duplicated_sources(conn)
     sensitive = _sensitive_sources(conn)
 
-    total_sources = _count(conn, "SELECT COUNT(*) FROM sources")
-    total_attachments = _count(
-        conn,
-        "SELECT COUNT(*) FROM edges WHERE source_kind = 'source'",
-    )
+    inline_attachments = _inline_source_attachments(conn)
+    inline_source_ids = {att["id"] for att in inline_attachments if att.get("id")}
+    legacy_source_ids = {
+        str(row[0]) for row in conn.execute("SELECT id FROM sources").fetchall()
+    }
+    total_sources = len(inline_source_ids | legacy_source_ids)
+
+    inline_attachment_keys = {
+        (att.get("id"), att.get("target_kind"), att.get("target_id"))
+        for att in inline_attachments
+    }
+    legacy_attachment_keys = {
+        (str(source_id), str(target_kind), str(target_id))
+        for source_id, target_kind, target_id in conn.execute(
+            """
+            SELECT source_id, target_kind, target_id
+            FROM edges
+            WHERE source_kind = 'source'
+            """
+        ).fetchall()
+    }
+    total_attachments = len(inline_attachment_keys | legacy_attachment_keys)
     sample_warning = "no_data" if total_sources == 0 else None
 
     return {
@@ -87,6 +105,39 @@ def report_source_quality(
 def _count(conn: sqlite3.Connection, sql: str) -> int:
     row = conn.execute(sql).fetchone()
     return int(row[0]) if row else 0
+
+
+def _safe_metadata(raw: str | None) -> dict[str, Any]:
+    try:
+        parsed = json.loads(raw or "{}")
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _inline_source_attachments(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    attachments: list[dict[str, Any]] = []
+    for table, kind in (("forecasts", "forecast"), ("decisions", "decision"), ("memory_nodes", "memory_node")):
+        for target_id, metadata_json in conn.execute(f"SELECT id, metadata_json FROM {table}").fetchall():
+            sources = _safe_metadata(metadata_json).get("sources")
+            if not isinstance(sources, list):
+                continue
+            for idx, source in enumerate(sources):
+                if not isinstance(source, dict):
+                    continue
+                source_id = source.get("id") or source.get("source_id") or f"inline:{kind}:{target_id}:{idx}"
+                stance = source.get("stance") or source.get("edge_type") or "about"
+                attachments.append({
+                    **source,
+                    "id": str(source_id),
+                    "target_kind": kind,
+                    "target_id": target_id,
+                    "stance": stance if stance in ("supports", "contradicts", "about") else "about",
+                    "freshness_at": source.get("freshness_at") or source.get("captured_at"),
+                    "content_hash": source.get("content_hash") or source.get("hash"),
+                    "redaction_status": source.get("redaction_status"),
+                })
+    return attachments
 
 
 def _bundle(
@@ -187,6 +238,30 @@ def _stale_sources(
         try:
             fresh_iso = to_utc_iso8601(fresh)
             d_ts_iso = to_utc_iso8601(d_ts)
+        except Exception:
+            continue
+        fresh_dt = datetime.fromisoformat(fresh_iso.replace("Z", "+00:00"))
+        d_dt = datetime.fromisoformat(d_ts_iso.replace("Z", "+00:00"))
+        if d_dt - fresh_dt > timedelta(days=stale_threshold_days):
+            items.append({
+                "id": s_id, "decision_id": d_id,
+                "freshness_at": fresh_iso, "decision_at": d_ts_iso,
+                "staleness_days": (d_dt - fresh_dt).days,
+            })
+    for att in _inline_source_attachments(conn):
+        if att.get("target_kind") != "decision" or not att.get("freshness_at"):
+            continue
+        s_id = str(att.get("id"))
+        d_id = str(att.get("target_id"))
+        if (s_id, d_id) in seen:
+            continue
+        d_row = conn.execute("SELECT created_at FROM decisions WHERE id = ?", (d_id,)).fetchone()
+        if d_row is None:
+            continue
+        seen.add((s_id, d_id))
+        try:
+            fresh_iso = to_utc_iso8601(str(att.get("freshness_at")))
+            d_ts_iso = to_utc_iso8601(d_row[0])
         except Exception:
             continue
         fresh_dt = datetime.fromisoformat(fresh_iso.replace("Z", "+00:00"))
@@ -316,6 +391,18 @@ def _sensitive_sources(conn: sqlite3.Connection) -> dict[str, Any]:
         }
         for s_id, status, target_kind, target_id in cur.fetchall()
     ]
+    seen = {(it["id"], it["target_kind"], it["target_id"]) for it in items}
+    for att in _inline_source_attachments(conn):
+        if att.get("redaction_status") != "sensitive":
+            continue
+        key = (att["id"], att["target_kind"], att["target_id"])
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append({
+            "id": att["id"], "redaction_status": "sensitive",
+            "target_kind": att["target_kind"], "target_id": att["target_id"],
+        })
     return _bundle(
         diagnostic="sensitive_sources",
         items=items, sample_kind="sources",

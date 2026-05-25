@@ -244,7 +244,7 @@ def test_migration_014_backfills_only_deterministic_forecast_and_memory_fields(t
         row = db.connection.execute(
             "SELECT meta_json, metadata_json FROM memory_nodes WHERE id = 'mem_1'"
         ).fetchone()
-        assert tuple(row) == ('{"legacy": true}', '{"legacy": true}')
+        assert tuple(row) == ('{"legacy": true}', '{"legacy": true, "sources": []}')
     finally:
         db.close()
 

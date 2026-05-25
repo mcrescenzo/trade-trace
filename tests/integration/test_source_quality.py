@@ -510,3 +510,98 @@ def test_diagnostic_count_reflects_true_total_when_samples_capped(home):
     )
     assert diag["truncated"] is True
     assert len(diag["sample_ids"]["sources"]) == MAX_SAMPLE_IDS
+
+
+def test_attach_dual_writes_inline_sources_for_forecast_decision_and_memory_node(home):
+    import json
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+
+    seeds = _seed_thesis_and_decision(home)
+    mem = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "Inline source projection fixture.",
+        "idempotency_key": "00000000-0000-4000-8000-inline-mem001",
+    }).data["id"]
+    source = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports", "title": "Inline source",
+        "uri": "https://example.invalid/inline-source",
+        "content_hash": "sha256:inline-source",
+        "captured_at": "2026-05-20T00:00:00Z",
+        "idempotency_key": "00000000-0000-4000-8000-inline-src001",
+    }).data["id"]
+    for tool, target in (
+        ("source.attach_to_forecast", seeds["forecast"]),
+        ("source.attach_to_decision", seeds["decision"]),
+        ("source.attach_to_memory_node", mem),
+    ):
+        env = _mcp(home, tool, {
+            "source_id": source, "target_id": target,
+            "idempotency_key": f"00000000-0000-4000-8000-{tool[-8:].replace('_', '')}1"[:36],
+        })
+        assert env.ok, env
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        for table, row_id in (("forecasts", seeds["forecast"]), ("decisions", seeds["decision"]), ("memory_nodes", mem)):
+            raw = db.connection.execute(f"SELECT metadata_json FROM {table} WHERE id = ?", (row_id,)).fetchone()[0]
+            sources = json.loads(raw)["sources"]
+            assert any(s["id"] == source and s["stance"] == "supports" and s["url"] == "https://example.invalid/inline-source" for s in sources)
+    finally:
+        db.close()
+
+
+def _replace_decision_metadata_for_inline_source_test(home, decision_id: str, raw: str) -> None:
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        db.connection.execute("DROP TRIGGER trg_decisions_no_update")
+        db.connection.execute(
+            "UPDATE decisions SET metadata_json = ? WHERE id = ?",
+            (raw, decision_id),
+        )
+        db.connection.execute(
+            """
+            CREATE TRIGGER trg_decisions_no_update
+            BEFORE UPDATE ON decisions
+            BEGIN
+                SELECT RAISE(ABORT, 'append-only invariant: UPDATE on decisions is forbidden; use a supersedes edge to record a correction (persistence.md §8)');
+            END
+            """
+        )
+        db.connection.commit()
+    finally:
+        db.close()
+
+
+def test_source_quality_counts_inline_only_decision_sources(home):
+    seeds = _seed_thesis_and_decision(home)
+    _replace_decision_metadata_for_inline_source_test(
+        home,
+        seeds["decision"],
+        '{"sources":[{"id":"inline_stale","kind":"url","title":"Old inline","stance":"supports","freshness_at":"2026-01-01T00:00:00Z","hash":"inline-hash","redaction_status":"sensitive"}]}',
+    )
+
+    env = _mcp(home, "report.source_quality", {})
+    assert env.ok, env
+    assert env.data["summary"]["total_sources"] >= 1
+    assert env.data["summary"]["total_source_attachments"] >= 1
+    stale = env.data["diagnostics"]["stale_sources"]
+    assert any(sample["id"] == "inline_stale" and sample["decision_id"] == seeds["decision"] for sample in stale["samples"])
+    sensitive = env.data["diagnostics"]["sensitive_sources"]
+    assert any(sample["id"] == "inline_stale" and sample["target_kind"] == "decision" for sample in sensitive["samples"])
+
+
+def test_source_quality_tolerates_malformed_inline_metadata_in_summary(home):
+    seeds = _seed_thesis_and_decision(home)
+    _replace_decision_metadata_for_inline_source_test(
+        home,
+        seeds["decision"],
+        '{not valid json',
+    )
+
+    env = _mcp(home, "report.source_quality", {})
+    assert env.ok, env
+    assert env.data["summary"]["total_sources"] >= 0

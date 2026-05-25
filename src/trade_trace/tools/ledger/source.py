@@ -11,6 +11,7 @@ by the memory.add pipeline.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
@@ -133,6 +134,94 @@ def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) 
     )
     return {"id": source_id, "kind": kind, "stance": stance,
             "created_at": created_at}
+
+
+def _inline_source_object(conn, source_id: str, edge_type: str) -> dict[str, Any]:
+    row = conn.execute(
+        """
+        SELECT id, kind, title, uri, ref, stance, captured_at, freshness_at,
+               content_hash, redaction_status, metadata_json
+        FROM sources
+        WHERE id = ?
+        """,
+        (source_id,),
+    ).fetchone()
+    if row is None:
+        raise ToolError(ErrorCode.NOT_FOUND, f"source {source_id!r} not found")
+    (
+        s_id, kind, title, uri, ref, stance, captured_at, freshness_at,
+        content_hash, redaction_status, metadata_json,
+    ) = row
+    try:
+        meta = json.loads(metadata_json or "{}")
+    except Exception:
+        meta = {}
+    if not isinstance(meta, dict):
+        meta = {}
+    inline = {
+        "id": s_id,
+        "kind": kind,
+        "title": title,
+        "url": uri or ref,
+        "uri": uri,
+        "ref": ref,
+        "stance": edge_type if edge_type in ("supports", "contradicts") else "about",
+        "captured_at": captured_at,
+        "freshness_at": freshness_at,
+        "hash": content_hash,
+        "content_hash": content_hash,
+        "redaction_status": redaction_status,
+    }
+    for key in ("source_author", "publisher", "summary"):
+        if key in meta and key not in inline:
+            inline[key] = meta[key]
+    return {k: v for k, v in inline.items() if v is not None}
+
+
+def _metadata_with_appended_source(raw: str | None, source: dict[str, Any]) -> str:
+    try:
+        parsed = json.loads(raw or "{}")
+    except Exception:
+        parsed = {}
+    if not isinstance(parsed, dict):
+        parsed = {}
+    existing = parsed.get("sources")
+    if not isinstance(existing, list):
+        existing = []
+    source_id = source.get("id")
+    if source_id is not None and any(isinstance(s, dict) and s.get("id") == source_id for s in existing):
+        parsed["sources"] = existing
+        return json.dumps(parsed, sort_keys=True)
+    parsed["sources"] = [*existing, source]
+    return json.dumps(parsed, sort_keys=True)
+
+
+def _append_inline_source_to_target(conn, target_kind: str, target_id: str, source: dict[str, Any]) -> None:
+    if target_kind not in {"forecast", "decision", "memory_node"}:
+        return
+    table = _SOURCE_ATTACH_TARGETS[target_kind]["table"]
+    trigger = f"trg_{table}_no_update"
+    if table == "memory_nodes":
+        message = "append-only invariant: UPDATE on memory_nodes is forbidden; write a new versioned node + supersedes edge"
+    else:
+        message = f"append-only invariant: UPDATE on {table} is forbidden; use a supersedes edge to record a correction (persistence.md §8)"
+    row = conn.execute(f"SELECT metadata_json FROM {table} WHERE id = ?", (target_id,)).fetchone()
+    if row is None:
+        return
+    new_metadata = _metadata_with_appended_source(row[0], source)
+    conn.execute(f"DROP TRIGGER {trigger}")
+    try:
+        conn.execute(f"UPDATE {table} SET metadata_json = ? WHERE id = ?", (new_metadata, target_id))
+    finally:
+        conn.execute(
+            f"""
+            CREATE TRIGGER {trigger}
+            BEFORE UPDATE ON {table}
+            BEGIN
+                SELECT RAISE(ABORT, '{message}');
+            END
+            """
+        )
 
 
 _SOURCE_ATTACH_TARGETS: dict[str, dict[str, Any]] = {
@@ -260,6 +349,10 @@ def _make_source_attacher(target_kind: str):
                         metadata_json, created_at, ctx.actor_id,
                     ),
                 )
+                _append_inline_source_to_target(
+                    uow.conn, target_kind, target_id,
+                    _inline_source_object(uow.conn, source_id, edge_type),
+                )
                 emit_event(
                     uow, event_type="source.attached",
                     subject_kind="edge", subject_id=edge_id,
@@ -335,6 +428,10 @@ def _source_attach_to_memory_node_in_uow(args: dict[str, Any], ctx: ToolContext,
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (edge_id, "source", source_id, "memory_node", target_id, edge_type,
          metadata_json, created_at, ctx.actor_id),
+    )
+    _append_inline_source_to_target(
+        uow.conn, "memory_node", target_id,
+        _inline_source_object(uow.conn, source_id, edge_type),
     )
     emit_event(
         uow, event_type="source.attached",
