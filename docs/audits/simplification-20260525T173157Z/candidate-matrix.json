@@ -1,0 +1,1296 @@
+[
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-uvjl",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "CLCM-001",
+    "candidate_fingerprint": "CLCM-001:Unify CLI and MCP-stdio schema-validation policy behind a shared contract helper",
+    "source_lane": "contracts-cli-mcp",
+    "proposed_title": "Unify CLI and MCP-stdio schema-validation policy behind a shared contract helper",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic",
+      "contract-drift"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/cli.py:436-475 validates JSON Schema only for numeric-bound validators before handler fallback; src/trade_trace/mcp_server.py:197-214 validates full schema at stdio boundary; tests/contracts/test_min_sample_validation_parity.py pins numeric-bound parity.",
+    "current_behavior_contract": "CLI must keep its narrowed numeric-bound prevalidation and handler-owned friendly required/type/enum errors; MCP stdio must keep full schema rejection; mcp_call shim behavior remains unchanged unless explicitly characterized.",
+    "complexity_cost": "Transport validation policy is split across two entrypoints, so schema constraints can drift and parity tests become special-case patches.",
+    "expected_benefit": [
+      "Single helper/policy module makes CLI-vs-MCP validation rules explicit.",
+      "Reduces future schema drift without flattening intentional transport differences."
+    ],
+    "suggested_refactor_shape": "Extract a shared validation helper with explicit policy knobs such as CLI_NUMERIC_BOUNDS_ONLY vs MCP_STDIO_FULL_SCHEMA; reuse from cli.py and mcp_server.py while preserving current envelope details.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/contracts/test_min_sample_validation_parity.py tests/contracts/test_tool_schema_runtime_parity.py tests/golden/test_cli_mcp_parity.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P2",
+    "confidence": "high",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:contracts-cli-mcp",
+      "complexity:contract-drift",
+      "complexity:duplicate-logic",
+      "risk:medium"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Additive, evidence-backed, behavior-preserving simplification candidate.",
+    "observed_facts": [
+      "src/trade_trace/cli.py:436-475 validates JSON Schema only for numeric-bound validators before handler fallback; src/trade_trace/mcp_server.py:197-214 validates full schema at stdio boundary; tests/contracts/test_min_sample_validation_parity.py pins numeric-bound parity."
+    ],
+    "inferences": [
+      "Transport validation policy is split across two entrypoints, so schema constraints can drift and parity tests become special-case patches."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-uuax",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "STORAGE-001",
+    "candidate_fingerprint": "STORAGE-001:Centralize DB-row to EventRecord hydration for events/outbox paths",
+    "source_lane": "storage-events-models",
+    "proposed_title": "Centralize DB-row to EventRecord hydration for events/outbox paths",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic",
+      "contract-drift"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/events/log.py:_find_existing selects and manually constructs EventRecord from events row; src/trade_trace/exporter.py:_load_event repeats the same events column list and EventRecord construction; fresh write construction separately spells the same field order.",
+    "current_behavior_contract": "EventWriter idempotency replay and exporter/outbox JSONL drain must preserve event metadata fields, event row values, and JSONL output shape.",
+    "complexity_cost": "Two positional event-row hydration paths can diverge when metadata fields change.",
+    "expected_benefit": [
+      "One row-hydration contract for EventRecord.",
+      "Lower risk when event metadata columns evolve."
+    ],
+    "suggested_refactor_shape": "Add EVENT_RECORD_SELECT_COLUMNS and EventRecord.from_row() or private equivalent; use it for _find_existing and exporter _load_event; leave fresh write semantics unchanged unless covered.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/integration/test_idempotency.py tests/integration/test_outbox_export.py tests/integration/test_semantic_keys.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "S",
+    "risk_level": "low",
+    "priority": "P2",
+    "confidence": "high",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "Prior trade-trace-0apb decided canonical JSONL serialization; this is additive row-hydration alignment, not serialization-path choice.",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:storage-events",
+      "complexity:duplicate-logic",
+      "risk:low"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Additive, evidence-backed, behavior-preserving simplification candidate.",
+    "observed_facts": [
+      "src/trade_trace/events/log.py:_find_existing selects and manually constructs EventRecord from events row; src/trade_trace/exporter.py:_load_event repeats the same events column list and EventRecord construction; fresh write construction separately spells the same field order."
+    ],
+    "inferences": [
+      "Two positional event-row hydration paths can diverge when metadata fields change."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-4xyp",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "TLMW-01",
+    "candidate_fingerprint": "TLMW-01:Extract a shared internal source-attachment write kernel for public and in-UoW memory-node attach paths",
+    "source_lane": "tools-ledger-memory-workflows",
+    "proposed_title": "Extract a shared internal source-attachment write kernel for public and in-UoW memory-node attach paths",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic",
+      "tangled-ownership"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/tools/ledger/source.py has public _make_source_attacher(target_kind) workflow and internal _source_attach_to_memory_node_in_uow with parallel source lookup, target validation, edge-type derivation, idempotency replay, inline metadata append, event emission, and response shaping.",
+    "current_behavior_contract": "All source.attach_to_* public tools and internal memory-node attach in a UnitOfWork must preserve NOT_FOUND/VALIDATION_ERROR envelopes, edge_type derivation, idempotency replay, inline metadata, source.attached event payload, response fields, and UnitOfWork boundary.",
+    "complexity_cost": "Duplicated transactional write kernels can diverge on idempotency, events, or envelope details.",
+    "expected_benefit": [
+      "One private kernel makes public and internal attach behavior align by construction.",
+      "Reduces risk left after registration metadata was centralized."
+    ],
+    "suggested_refactor_shape": "Introduce _source_attach_in_uow(args, ctx, uow, *, target_kind) returning the current response shape; route public and memory-node internal paths through it without changing registration.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/contracts/test_tool_schema_runtime_parity.py tests/contracts/test_agent_ergonomics.py tests/integration/test_source_quality.py tests/integration/test_source_attach_to_memory_node.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P2",
+    "confidence": "high",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "Prior trade-trace-4v31 centralized source.attach target metadata/registration only; it explicitly did not target the write kernel.",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:ledger-tools-projections",
+      "complexity:duplicate-logic",
+      "risk:medium"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Additive, evidence-backed, behavior-preserving simplification candidate.",
+    "observed_facts": [
+      "src/trade_trace/tools/ledger/source.py has public _make_source_attacher(target_kind) workflow and internal _source_attach_to_memory_node_in_uow with parallel source lookup, target validation, edge-type derivation, idempotency replay, inline metadata append, event emission, and response shaping."
+    ],
+    "inferences": [
+      "Duplicated transactional write kernels can diverge on idempotency, events, or envelope details."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-w56a",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "TLMW-02",
+    "candidate_fingerprint": "TLMW-02:Introduce small endpoint-validation helpers for playbook workflow handlers",
+    "source_lane": "tools-ledger-memory-workflows",
+    "proposed_title": "Introduce small endpoint-validation helpers for playbook workflow handlers",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/tools/playbook.py repeats playbook, playbook_version, decision, and memory_node type existence checks across _playbook_propose_version, _decision_record_adherence, and _playbook_adherence with repeated ToolError envelope construction.",
+    "current_behavior_contract": "Unknown playbook/version/decision/node and wrong node-type errors must preserve ErrorCode, message, details, and validation order for playbook workflow tools.",
+    "complexity_cost": "Repeated validation boilerplate increases drift risk in future playbook handlers.",
+    "expected_benefit": [
+      "Named helpers clarify endpoint preconditions.",
+      "Keeps error-envelope behavior consistent."
+    ],
+    "suggested_refactor_shape": "Add domain-specific _require_playbook/_require_playbook_version/_require_decision/_require_memory_node_type helpers or equivalent; call from existing handlers without changing business logic.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/integration/test_playbook.py tests/contracts/test_tool_schema_runtime_parity.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "S",
+    "risk_level": "low",
+    "priority": "P2",
+    "confidence": "high",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:playbook",
+      "complexity:duplicate-logic",
+      "risk:low"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Additive, evidence-backed, behavior-preserving simplification candidate.",
+    "observed_facts": [
+      "src/trade_trace/tools/playbook.py repeats playbook, playbook_version, decision, and memory_node type existence checks across _playbook_propose_version, _decision_record_adherence, and _playbook_adherence with repeated ToolError envelope construction."
+    ],
+    "inferences": [
+      "Repeated validation boilerplate increases drift risk in future playbook handlers."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-ualn",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "TLMW-03",
+    "candidate_fingerprint": "TLMW-03:Create a small decision-row loader for playbook predicate evaluation",
+    "source_lane": "tools-ledger-memory-workflows",
+    "proposed_title": "Create a small decision-row loader for playbook predicate evaluation",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic",
+      "test-drag"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/playbook_predicates.py:evaluate_predicate executes SELECT * FROM decisions WHERE id = ? to fetch rows and repeats the same execute only to read cursor.description for dict construction.",
+    "current_behavior_contract": "Predicate evaluation must preserve missing-decision not_computable, multiple-row ambiguous, one-row decision dict contents, scope checks, and predicate semantics.",
+    "complexity_cost": "A duplicated DB query obscures the exact single-decision-row contract and adds avoidable evaluator ceremony.",
+    "expected_benefit": [
+      "One named loader makes exact-one-row handling testable and easier to scan."
+    ],
+    "suggested_refactor_shape": "Introduce _load_decision_for_predicate or narrower helper using one cursor for rows and description; keep all PredicateEvaluation outcomes unchanged.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/integration/test_playbook_predicates.py tests/integration/test_playbook.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "XS",
+    "risk_level": "low",
+    "priority": "P3",
+    "confidence": "high",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:playbook",
+      "complexity:duplicate-logic",
+      "risk:low"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Additive, evidence-backed, behavior-preserving simplification candidate.",
+    "observed_facts": [
+      "src/trade_trace/playbook_predicates.py:evaluate_predicate executes SELECT * FROM decisions WHERE id = ? to fetch rows and repeats the same execute only to read cursor.description for dict construction."
+    ],
+    "inferences": [
+      "A duplicated DB query obscures the exact single-decision-row contract and adds avoidable evaluator ceremony."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-l03c",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "RPT-A",
+    "candidate_fingerprint": "RPT-A:Convert report tool registration blocks into a descriptor table plus loop",
+    "source_lane": "reports-reporting",
+    "proposed_title": "Convert report tool registration blocks into a descriptor table plus loop",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic",
+      "god-object"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/reports/tool_handlers/registration.py register_report_tools is a ~560-line function with repeated registry.register blocks carrying name, handler, description, examples, optional_keys, json_schema, usage_summary, enum_notes, failures, and next_actions.",
+    "current_behavior_contract": "All report tool names, handlers, registration order, descriptions, examples, schemas, enum notes, common failures, next_actions, and discoverability metadata must remain byte/field equivalent where tests inspect them.",
+    "complexity_cost": "Long repeated registration calls make metadata changes high-churn and increase copy/paste drift risk in public tool schemas.",
+    "expected_benefit": [
+      "Descriptor table lowers churn while preserving explicit metadata.",
+      "Makes registration completeness easier to audit."
+    ],
+    "suggested_refactor_shape": "Create typed descriptor/dataclass/table for report registrations; loop over descriptors calling registry.register with the exact existing values and order.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/contracts/test_tool_schema_runtime_parity.py tests/contracts/test_report_envelope_completeness.py tests/integration/test_report_filter.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P2",
+    "confidence": "high",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "Prior trade-trace-73w6/qnxt handled report row/envelope/tool adapter boilerplate; this candidate is narrower registration metadata sprawl.",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:reports",
+      "complexity:duplicate-logic",
+      "risk:medium"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Additive, evidence-backed, behavior-preserving simplification candidate.",
+    "observed_facts": [
+      "src/trade_trace/reports/tool_handlers/registration.py register_report_tools is a ~560-line function with repeated registry.register blocks carrying name, handler, description, examples, optional_keys, json_schema, usage_summary, enum_notes, failures, and next_actions."
+    ],
+    "inferences": [
+      "Long repeated registration calls make metadata changes high-churn and increase copy/paste drift risk in public tool schemas."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-ng5c",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "RPT-B",
+    "candidate_fingerprint": "RPT-B:Reuse/generalize composite pagination helper in trade and position read-models",
+    "source_lane": "reports-reporting",
+    "proposed_title": "Reuse/generalize composite pagination helper in trade and position read-models",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic",
+      "contract-drift"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/reporting/pagination.py has paginate_created_at_id_query for composite keyset pagination; src/trade_trace/reporting/trade_rows.py:list_trades and position_rows.py:list_positions manually duplicate limit clamp, cursor decode, lexicographic predicate, order, limit+1, and next_cursor encoding for d.created_at/d.id and p.opened_at/p.id.",
+    "current_behavior_contract": "Cursor token shape [timestamp,id], descending order, limit clamping, invalid cursor behavior, filter semantics, and next_cursor behavior must remain unchanged for list_trades/list_positions.",
+    "complexity_cost": "Pagination mechanics are duplicated despite an existing helper, creating cursor drift risk.",
+    "expected_benefit": [
+      "One helper extension improves cursor consistency.",
+      "Reduces future pagination bug surface."
+    ],
+    "suggested_refactor_shape": "Generalize pagination helper to accept qualified timestamp/id columns or a builder, preserve defaults, and route trade/position read-models through it after characterization.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/contracts/test_reporting_pagination.py tests/integration/test_reporting_read_model.py tests/integration/test_reporting_pagination_perf_baseline.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P2",
+    "confidence": "high",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:reports",
+      "complexity:duplicate-logic",
+      "risk:medium"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Additive, evidence-backed, behavior-preserving simplification candidate.",
+    "observed_facts": [
+      "src/trade_trace/reporting/pagination.py has paginate_created_at_id_query for composite keyset pagination; src/trade_trace/reporting/trade_rows.py:list_trades and position_rows.py:list_positions manually duplicate limit clamp, cursor decode, lexicographic predicate, order, limit+1, and next_cursor encoding for d.created_at/d.id and p.opened_at/p.id."
+    ],
+    "inferences": [
+      "Pagination mechanics are duplicated despite an existing helper, creating cursor drift risk."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-nr33",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "RPT-C",
+    "candidate_fingerprint": "RPT-C:Extract common as_of and stale-threshold validation in portfolio exposure handlers",
+    "source_lane": "reports-reporting",
+    "proposed_title": "Extract common as_of and stale-threshold validation in portfolio exposure handlers",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/reports/tool_handlers/portfolio_exposure.py:_report_open_positions lines 79-97 and _report_exposure_anomalies lines 185-203 repeat stale_mark_threshold_days validation, as_of parsing/defaulting, and stale_cutoff computation; _report_current_exposure composes both and may parse the same args twice.",
+    "current_behavior_contract": "Validation errors, details, default datetime.now(UTC) behavior, lower-level report composition, summary filters, and stale caveat semantics must remain unchanged.",
+    "complexity_cost": "Repeated temporal validation risks drift between exposure report handlers.",
+    "expected_benefit": [
+      "Shared helper makes temporal validation consistent.",
+      "Small localized reduction in handler ceremony."
+    ],
+    "suggested_refactor_shape": "Add private helper returning as_of, stale_mark_threshold_days, stale_cutoff; use in open positions/anomalies; only normalize current_exposure echo if characterized and covered.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/integration/test_report_current_exposure.py tests/contracts/test_report_envelope_completeness.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "S",
+    "risk_level": "low",
+    "priority": "P2",
+    "confidence": "high",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:reports",
+      "complexity:duplicate-logic",
+      "risk:low"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Additive, evidence-backed, behavior-preserving simplification candidate.",
+    "observed_facts": [
+      "src/trade_trace/reports/tool_handlers/portfolio_exposure.py:_report_open_positions lines 79-97 and _report_exposure_anomalies lines 185-203 repeat stale_mark_threshold_days validation, as_of parsing/defaulting, and stale_cutoff computation; _report_current_exposure composes both and may parse the same args twice."
+    ],
+    "inferences": [
+      "Repeated temporal validation risks drift between exposure report handlers."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-kzpa",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "AMS-001",
+    "candidate_fingerprint": "AMS-001:Extract shared markets row projection/serializer for bind, refresh, and cache-hit returns",
+    "source_lane": "adapter-market-security",
+    "proposed_title": "Extract shared markets row projection/serializer for bind, refresh, and cache-hit returns",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic",
+      "contract-drift"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/tools/adapter_polymarket.py repeats market row projections/cache-hit dicts; src/trade_trace/tools/market_bind.py has idempotency/natural-key projections and _market_row_dict tuple-index serializer for overlapping markets shape.",
+    "current_behavior_contract": "market.bind, market.refresh/cache-hit response keys, idempotency replay metadata, adapter/manual separation, and no-network boundaries must remain unchanged.",
+    "complexity_cost": "Several tuple-index/projection shapes for the same markets table can drift as market fields evolve.",
+    "expected_benefit": [
+      "Single projection/serializer surface reduces schema drift.",
+      "Makes market row response contracts explicit."
+    ],
+    "suggested_refactor_shape": "Introduce private tools/_market_rows.py or adjacent helper with explicit full/subset serializers; call from market_bind and adapter_polymarket without forcing one response superset.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/integration/test_market_bind.py tests/integration/test_adapter_polymarket_offline.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "S",
+    "risk_level": "medium",
+    "priority": "P2",
+    "confidence": "high",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:adapter-market-security",
+      "complexity:duplicate-logic",
+      "risk:medium"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Additive, evidence-backed, behavior-preserving simplification candidate.",
+    "observed_facts": [
+      "src/trade_trace/tools/adapter_polymarket.py repeats market row projections/cache-hit dicts; src/trade_trace/tools/market_bind.py has idempotency/natural-key projections and _market_row_dict tuple-index serializer for overlapping markets shape."
+    ],
+    "inferences": [
+      "Several tuple-index/projection shapes for the same markets table can drift as market fields evolve."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-17k1",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "AMS-002",
+    "candidate_fingerprint": "AMS-002:Consolidate Polymarket HTTP/JSON-RPC retry loop without changing endpoint policy",
+    "source_lane": "adapter-market-security",
+    "proposed_title": "Consolidate Polymarket HTTP/JSON-RPC retry loop without changing endpoint policy",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic",
+      "state-branching"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/adapters/polymarket/client.py:get_json lines 113-147 and polygon_rpc lines 161-199 implement similar bounded retry/error/status/JSON parsing/logging/backoff loops with local GET/POST and JSON-RPC differences.",
+    "current_behavior_contract": "Disabled-by-default behavior, HTTPS/host/suffix endpoint validation before client use, retry bounds/backoff/Retry-After, timeout vs transport vs HTTP error codes/messages, invalid JSON handling, JSON-RPC error handling, scrubbed endpoint details, and no body logging must remain unchanged.",
+    "complexity_cost": "Duplicated security-sensitive retry paths can diverge in endpoint/scrubbing/retry semantics.",
+    "expected_benefit": [
+      "One private HTTP JSON helper makes security behavior easier to audit.",
+      "Reduces duplicated control-flow while retaining explicit RPC specifics."
+    ],
+    "suggested_refactor_shape": "Introduce _request_json helper parameterized by send function/error labels; keep JSON-RPC payload error handling in polygon_rpc after parsed payload; do not introduce new dependencies.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/security/test_adapter_endpoint_policy.py tests/security/test_adapter_url_scrubbing.py tests/integration/test_adapter_polymarket_offline.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P2",
+    "confidence": "high",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:adapter-market-security",
+      "complexity:state-branching",
+      "risk:medium"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Additive, evidence-backed, behavior-preserving simplification candidate.",
+    "observed_facts": [
+      "src/trade_trace/adapters/polymarket/client.py:get_json lines 113-147 and polygon_rpc lines 161-199 implement similar bounded retry/error/status/JSON parsing/logging/backoff loops with local GET/POST and JSON-RPC differences."
+    ],
+    "inferences": [
+      "Duplicated security-sensitive retry paths can diverge in endpoint/scrubbing/retry semantics."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-xoff",
+    "merged_into_bead_id": "trade-trace-eijx (prior findings reference; new bead is reconciliation only)",
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "STORAGE-003",
+    "candidate_fingerprint": "STORAGE-003:Investigate safe derivation of event-type to tool registries without weakening explicit audits",
+    "source_lane": "storage-events-models",
+    "proposed_title": "Investigate safe derivation of event-type to tool registries without weakening explicit audits",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic",
+      "contract-drift"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/exporter.py:_STATIC_EVENT_TOOL_MAP maps event types to replay tools; src/trade_trace/events/semantic_keys.py:TOOL_PRIMARY_EVENT_TYPE maps tools to event types; tests/contracts/test_event_type_registry_alignment.py acknowledges registry alignment but current subset/default behavior is intentionally explicit.",
+    "current_behavior_contract": "SEMANTIC_KEYS remains canonical for writable event types; exporter map remains replayable subset; source.attached payload disambiguation and audit/system defaults must remain unchanged unless downstream plan proves safety.",
+    "complexity_cost": "Two overlapping registries can drift, but prior work shows some explicit duplication is intentional.",
+    "expected_benefit": [
+      "Finds safe derivation subset, if any, without forcing a broad registry rewrite."
+    ],
+    "suggested_refactor_shape": "Investigation/design only: compare prior SIMP-004 findings, inventory aliases/source.attached/system events, and either propose exact follow-up or record intentional explicitness.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/contracts/test_event_type_registry_alignment.py tests/integration/test_semantic_keys.py tests/integration/test_outbox_export.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P2",
+    "confidence": "medium",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "Overlaps prior trade-trace-eijx SIMP-004; materialized as reconciliation/investigation only, not direct refactor.",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:storage-events",
+      "complexity:contract-drift",
+      "investigation",
+      "needs-more-evidence",
+      "risk:medium"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "High-value but overlaps prior registry decision and can alter replay contracts; needs characterization first.",
+    "observed_facts": [
+      "src/trade_trace/exporter.py:_STATIC_EVENT_TOOL_MAP maps event types to replay tools; src/trade_trace/events/semantic_keys.py:TOOL_PRIMARY_EVENT_TYPE maps tools to event types; tests/contracts/test_event_type_registry_alignment.py acknowledges registry alignment but current subset/default behavior is intentionally explicit."
+    ],
+    "inferences": [
+      "Two overlapping registries can drift, but prior work shows some explicit duplication is intentional."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-lj9u",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "RPT-D",
+    "candidate_fingerprint": "RPT-D:Investigate a shared report timestamp parsing helper with explicit compatibility modes",
+    "source_lane": "reports-reporting",
+    "proposed_title": "Investigate a shared report timestamp parsing helper with explicit compatibility modes",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic",
+      "contract-drift"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "Report modules repeat timestamp parsing with differing semantics: reports/pm_native.py and opportunity.py local _parse_ts return None on invalid; lifecycle.py matches strategy_health and treats naive timestamps as UTC; decision_velocity.py parses inline; source_quality.py normalizes through to_utc_iso8601 then reparses.",
+    "current_behavior_contract": "Historical report behavior for invalid, missing, timezone-aware, Z-suffixed, and naive timestamps must remain unchanged per module unless a downstream contract change is approved.",
+    "complexity_cost": "Timestamp parsing duplication is real, but local semantics differ and may encode historical compatibility.",
+    "expected_benefit": [
+      "Characterize modes before consolidating.",
+      "Avoids accidental strictness changes on historical journal data."
+    ],
+    "suggested_refactor_shape": "Investigation/design first: inventory timestamp parse semantics/tests, define helper modes only where equivalent, and create downstream narrow implementation beads if safe.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/integration/test_report_opportunity.py tests/integration/test_report_unscored_velocity.py tests/integration/test_reporting_read_model.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P2",
+    "confidence": "medium",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:reports",
+      "complexity:contract-drift",
+      "investigation",
+      "needs-more-evidence",
+      "risk:medium"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Valid complexity but behavior-sensitive because invalid/naive timestamp semantics differ across modules.",
+    "observed_facts": [
+      "Report modules repeat timestamp parsing with differing semantics: reports/pm_native.py and opportunity.py local _parse_ts return None on invalid; lifecycle.py matches strategy_health and treats naive timestamps as UTC; decision_velocity.py parses inline; source_quality.py normalizes through to_utc_iso8601 then reparses."
+    ],
+    "inferences": [
+      "Timestamp parsing duplication is real, but local semantics differ and may encode historical compatibility."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": "trade-trace-4u0o",
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "AMS-003",
+    "candidate_fingerprint": "AMS-003:Investigate sharing market.scan schema/action metadata from runtime constants without contract drift",
+    "source_lane": "adapter-market-security",
+    "proposed_title": "Investigate sharing market.scan schema/action metadata from runtime constants without contract drift",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "duplicate-logic",
+      "contract-drift"
+    ],
+    "evidence_type": [
+      "static-trace",
+      "duplicate-code"
+    ],
+    "evidence": "src/trade_trace/tools/market_scan.py defines Pydantic input models plus manual _SCHEMA/_PROMOTE_SCHEMA; allowed actions repeat in _ALLOWED_ACTIONS, schema enum, runtime error message, and registry enum notes.",
+    "current_behavior_contract": "market.scan.dry_run remains read-only/no-fetch/no-advice/no-trade/no-DB-write; accepted inputs, validation errors, tool schema semantics/order, ordered call plan, and promote hash behavior must remain unchanged.",
+    "complexity_cost": "Manual schema/action metadata can drift from runtime validation, but generated Pydantic schema could be behavior-visible.",
+    "expected_benefit": [
+      "Characterizes safe constant-fragment sharing.",
+      "Protects no-advice action boundary from future drift."
+    ],
+    "suggested_refactor_shape": "Investigation/design first unless limited to shared constants/schema fragments; do not switch wholesale to generated JSON Schema without semantic/shape proof.",
+    "non_goals": [
+      "Do not change public CLI/MCP/tool/report/API behavior.",
+      "Do not broaden the refactor beyond cited files.",
+      "Do not change storage schema, event semantics, security policy, or execution boundaries unless explicitly stated."
+    ],
+    "behavior_preservation_plan": [
+      "Characterize current behavior before editing.",
+      "Preserve current response/envelope keys, error codes/messages/details, ordering, idempotency, and security constraints for the cited surface."
+    ],
+    "validation_commands": [
+      "python -m pytest tests/integration/test_market_scan_dry_run.py tests/integration/test_market_scan_guided_e2e.py tests/contracts/test_tool_schema_runtime_parity.py -q"
+    ],
+    "validation_gap": "",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P2",
+    "confidence": "medium",
+    "why_not_style": "The finding cites duplicated or divergent behavior-bearing code paths with a concrete drift/testability cost, not naming/style preference.",
+    "intentional_complexity_check": "Preserve explicitness where it encodes compatibility, public contract, security, audit, idempotency, or historical data semantics.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "",
+    "proposed_bead_type": "task",
+    "proposed_labels": [
+      "simplification",
+      "repo-simplification",
+      "behavior-preserving",
+      "domain:adapter-market-security",
+      "complexity:contract-drift",
+      "investigation",
+      "needs-more-evidence",
+      "risk:medium"
+    ],
+    "acceptance_criteria": [
+      "Current behavior is characterized before refactor.",
+      "Simplification is limited to the cited surface and no unrelated behavior changes are made.",
+      "Listed validation passes or any gap is resolved before close.",
+      "Implementation notes document why intentional complexity was preserved."
+    ],
+    "coordinator_disposition": "accept",
+    "disposition_reason": "Public contract duplication is real, but schema generation is behavior-visible; start with design/characterization.",
+    "observed_facts": [
+      "src/trade_trace/tools/market_scan.py defines Pydantic input models plus manual _SCHEMA/_PROMOTE_SCHEMA; allowed actions repeat in _ALLOWED_ACTIONS, schema enum, runtime error message, and registry enum notes."
+    ],
+    "inferences": [
+      "Manual schema/action metadata can drift from runtime validation, but generated Pydantic schema could be behavior-visible."
+    ],
+    "assumptions": [
+      "Existing tests describe the behavior-preservation contract unless a bead explicitly requires adding characterization first."
+    ],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": null,
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "STORAGE-002",
+    "candidate_fingerprint": "STORAGE-002:Stream rebuild_positions by ordered groups instead of materializing all events",
+    "source_lane": "storage-events-models",
+    "proposed_title": "Stream rebuild_positions by ordered groups instead of materializing all events",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "other"
+    ],
+    "evidence_type": [
+      "static-trace"
+    ],
+    "evidence": "src/trade_trace/projections.py fetches all position_events and groups by position_id although SQL order allows streaming.",
+    "current_behavior_contract": "No behavior-changing work accepted.",
+    "complexity_cost": "Possible maintenance drag but not enough additive evidence for a new simplification bead.",
+    "expected_benefit": [],
+    "suggested_refactor_shape": "None.",
+    "non_goals": [],
+    "behavior_preservation_plan": [],
+    "validation_commands": [],
+    "validation_gap": "Not materialized.",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P4",
+    "confidence": "medium",
+    "why_not_style": "Rejected/deferred because evidence did not clear threshold or duplicates prior work.",
+    "intentional_complexity_check": "Prior coverage or intentional scenario-specific explicitness likely applies.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "Deferred/rejected for this backlog: projection replay is behavior-heavy and current memory/cost pressure was not proven; create only if performance evidence or characterization need appears.",
+    "proposed_bead_type": "none",
+    "proposed_labels": [],
+    "acceptance_criteria": [],
+    "coordinator_disposition": "defer",
+    "disposition_reason": "Deferred/rejected for this backlog: projection replay is behavior-heavy and current memory/cost pressure was not proven; create only if performance evidence or characterization need appears.",
+    "observed_facts": [
+      "src/trade_trace/projections.py fetches all position_events and groups by position_id although SQL order allows streaming."
+    ],
+    "inferences": [],
+    "assumptions": [],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": null,
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "TESTDOCS-001",
+    "candidate_fingerprint": "TESTDOCS-001:Further consolidate residual test home/MCP helpers",
+    "source_lane": "tests-docs-release",
+    "proposed_title": "Further consolidate residual test home/MCP helpers",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "other"
+    ],
+    "evidence_type": [
+      "static-trace"
+    ],
+    "evidence": "tests still contain local home/_init_home/_mcp helper variants.",
+    "current_behavior_contract": "No behavior-changing work accepted.",
+    "complexity_cost": "Possible maintenance drag but not enough additive evidence for a new simplification bead.",
+    "expected_benefit": [],
+    "suggested_refactor_shape": "None.",
+    "non_goals": [],
+    "behavior_preservation_plan": [],
+    "validation_commands": [],
+    "validation_gap": "Not materialized.",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P4",
+    "confidence": "medium",
+    "why_not_style": "Rejected/deferred because evidence did not clear threshold or duplicates prior work.",
+    "intentional_complexity_check": "Prior coverage or intentional scenario-specific explicitness likely applies.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "Rejected as prior-covered by closed qs5v/alwf and often intentional scenario-specific setup; new bead would be graph noise.",
+    "proposed_bead_type": "none",
+    "proposed_labels": [],
+    "acceptance_criteria": [],
+    "coordinator_disposition": "reject",
+    "disposition_reason": "Rejected as prior-covered by closed qs5v/alwf and often intentional scenario-specific setup; new bead would be graph noise.",
+    "observed_facts": [
+      "tests still contain local home/_init_home/_mcp helper variants."
+    ],
+    "inferences": [],
+    "assumptions": [],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": null,
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "RELEASE-001",
+    "candidate_fingerprint": "RELEASE-001:Single-source release checklist/proof/final-gate commands",
+    "source_lane": "tests-docs-release",
+    "proposed_title": "Single-source release checklist/proof/final-gate commands",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "other"
+    ],
+    "evidence_type": [
+      "static-trace"
+    ],
+    "evidence": "release docs and CI repeat gate commands.",
+    "current_behavior_contract": "No behavior-changing work accepted.",
+    "complexity_cost": "Possible maintenance drag but not enough additive evidence for a new simplification bead.",
+    "expected_benefit": [],
+    "suggested_refactor_shape": "None.",
+    "non_goals": [],
+    "behavior_preservation_plan": [],
+    "validation_commands": [],
+    "validation_gap": "Not materialized.",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P4",
+    "confidence": "medium",
+    "why_not_style": "Rejected/deferred because evidence did not clear threshold or duplicates prior work.",
+    "intentional_complexity_check": "Prior coverage or intentional scenario-specific explicitness likely applies.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "Rejected as prior-covered unless concrete drift appears; current state is truthful and this is not an additive simplification candidate.",
+    "proposed_bead_type": "none",
+    "proposed_labels": [],
+    "acceptance_criteria": [],
+    "coordinator_disposition": "reject",
+    "disposition_reason": "Rejected as prior-covered unless concrete drift appears; current state is truthful and this is not an additive simplification candidate.",
+    "observed_facts": [
+      "release docs and CI repeat gate commands."
+    ],
+    "inferences": [],
+    "assumptions": [],
+    "open_questions": []
+  },
+  {
+    "audit_run_id": "trade-trace-simplification-20260525T173157Z",
+    "scope_fingerprint": "trade-trace@d37136e9684138d9f9540f2a71860f36eba354f5:full-repo-additive-after-prior-backlogs",
+    "source_skill": "repo-simplification-review",
+    "remediation_track": "repo-simplification",
+    "owner_track": "trade-trace",
+    "sibling_route": "delta-only-selective-materialization-after-prior-closed-backlogs",
+    "materialized_bead_id": null,
+    "merged_into_bead_id": null,
+    "artifact_refs": [
+      "docs/audits/simplification-20260525T173157Z"
+    ],
+    "id": "BROAD-MEM-001",
+    "candidate_fingerprint": "BROAD-MEM-001:Decompose memory.py/report modules by line count",
+    "source_lane": "tools-ledger-memory-workflows",
+    "proposed_title": "Decompose memory.py/report modules by line count",
+    "subsystem_paths": [],
+    "complexity_class": [
+      "other"
+    ],
+    "evidence_type": [
+      "static-trace"
+    ],
+    "evidence": "Large modules exist.",
+    "current_behavior_contract": "No behavior-changing work accepted.",
+    "complexity_cost": "Possible maintenance drag but not enough additive evidence for a new simplification bead.",
+    "expected_benefit": [],
+    "suggested_refactor_shape": "None.",
+    "non_goals": [],
+    "behavior_preservation_plan": [],
+    "validation_commands": [],
+    "validation_gap": "Not materialized.",
+    "estimated_size": "M",
+    "risk_level": "medium",
+    "priority": "P4",
+    "confidence": "medium",
+    "why_not_style": "Rejected/deferred because evidence did not clear threshold or duplicates prior work.",
+    "intentional_complexity_check": "Prior coverage or intentional scenario-specific explicitness likely applies.",
+    "duplicate_of": null,
+    "related_to": [],
+    "prior_overlap_notes": "Rejected: LOC alone is not simplification evidence; prior memory/report decomposition work already covered concrete hotspots.",
+    "proposed_bead_type": "none",
+    "proposed_labels": [],
+    "acceptance_criteria": [],
+    "coordinator_disposition": "reject",
+    "disposition_reason": "Rejected: LOC alone is not simplification evidence; prior memory/report decomposition work already covered concrete hotspots.",
+    "observed_facts": [
+      "Large modules exist."
+    ],
+    "inferences": [],
+    "assumptions": [],
+    "open_questions": []
+  }
+]
