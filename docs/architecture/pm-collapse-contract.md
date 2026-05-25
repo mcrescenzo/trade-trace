@@ -2,6 +2,8 @@
 
 > Status: **decision document for trade-trace-pg7q** — implementation contract for `trade-trace-4lki` and its split blockers.
 > This file is intentionally a contract artifact, not a migration. It exists because a previous one-shot mechanical rewrite made the narrow grep/tests pass while making the broad test suite fail massively.
+>
+> **Execution update (schema gate trade-trace-q0c9):** the original hard-break target below remains the long-term PM-only direction, but the landed m014/m015/4lki implementation is deliberately additive. Runtime now writes/reads PM-native `markets`, `forecast_snapshot_anchor`, `forecasts.probability`/`market_id`, `memory_nodes.metadata_json`, and inline `metadata_json.sources` while preserving legacy tables/tools as guarded compatibility fallbacks. Residual legacy references are reviewed in `tests/allowlists/mhy1_legacy_grep_allowlist.json`; downstream catalog/CLI/import-export/docs beads own further hard-break surface cleanup.
 
 ## Product boundary
 
