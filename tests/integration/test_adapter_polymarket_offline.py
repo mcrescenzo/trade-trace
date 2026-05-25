@@ -284,6 +284,21 @@ def test_polygon_rpc_retries_retryable_json_rpc_error():
     assert client.sleeps == [(0, None)]
 
 
+def test_polygon_rpc_http_and_payload_retries_share_attempt_budget():
+    client = _FakePolymarketClient(
+        [
+            _FakeResponse(429, {"error": "rate"}, headers={"Retry-After": "2"}),
+            _FakeResponse(200, {"error": {"code": -32005, "message": "rate limited"}}),
+            _FakeResponse(200, {"result": "0x1"}),
+        ],
+        polygon_rpc_url="https://polygon-rpc.com/rpc/secret-token",
+    )
+
+    assert client.polygon_rpc("eth_call", []) == {"result": "0x1"}
+    assert client.calls == ["post:eth_call", "post:eth_call", "post:eth_call"]
+    assert client.sleeps == [(0, "2"), (1, None)]
+
+
 def test_polygon_rpc_fails_closed_on_non_retryable_http_4xx():
     client = _FakePolymarketClient(
         [_FakeResponse(403, {"error": "forbidden"})],

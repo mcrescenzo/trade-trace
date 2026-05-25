@@ -18,12 +18,20 @@ report.current_exposure, report.exposure_anomalies,
 report.audit_readiness, report.source_quality,
 report.playbook_adherence, report.recall_receipts,
 report.memory_usefulness, report.strategy_performance,
-report.mistakes, report.strengths, report.opportunity,
+report.opportunity,
 report.unscored_forecasts, and report.decision_velocity are retained
 only as hidden/legacy compatibility metadata or consolidated into the
 reports above. Deferred (post-v0.0.2): trading-native
 calibration-by-liquidity-bucket, skipped-positive-edge review, and
 broader replay/evaluation surfaces.
+
+Current-vs-target audit note (trade-trace-0rxr): the live registry still
+includes `report.mistakes` and `report.strengths`, but their shipped
+implementation is narrower than the earlier product target. They are
+legacy-compatible tag aggregate reports over decision tags with scored
+forecast Brier ranking, not the broader decision+review tag
+count/co-occurrence contract. See §4.3 for the exact shipped behavior and
+the deferred target.
 
 Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
@@ -301,9 +309,23 @@ forecast scores, and strategies where applicable.
 
 ### 4.3 `report.mistakes` / `report.strengths`
 
-Group by tag. Per-group metrics: tag count, distinct decisions,
-co-occurrence with other tags (top-5), tag-vs-outcome conditional rates
-where outcomes exist.
+Current shipped behavior: these compatibility reports group by
+`decision_tags` only and rank tags by mean binary Brier score from scored
+forecasts attached to the tagged decisions. `report.mistakes` orders worst
+mean Brier first; `report.strengths` orders best mean Brier first.
+Per-group metrics are `decision_count`, `scored_forecast_count`, and
+`mean_brier`; drill-down IDs include contributing decisions and forecasts.
+Decisions without a scored forecast still contribute to `decision_count`
+and decision drill-down IDs but not to `mean_brier`.
+
+Filter support is intentionally empty today: non-default `ReportFilter`
+fields are rejected rather than silently ignored.
+
+Deferred target behavior from older product language: broader tag counts,
+tag co-occurrence, and conditional outcome rates across both decisions and
+reviews (`review_tags`). That broader decision+review tag aggregate is not
+shipped by the current implementation and must be tracked as follow-up
+implementation work before docs can describe it as live behavior.
 
 ### 4.3 `report.pnl`
 
@@ -753,10 +775,13 @@ bootstrap packet or receipt table is implied.
 
 ### 5.5 MVP commitment
 
-MVP ships the **contract** (envelope shape, redaction rules, hashing).
-The **implementation** is P1. Until the implementation ships, the
-contract serves as the spec for `report.coach`'s richer-packet variant
-and for external review-tool authors who want to integrate.
+Historical note: this section originally said MVP shipped only the
+contract and deferred implementation to P1. That is no longer current.
+`review.bundle` is implemented and tested as a deterministic bounded
+review packet with supported-filter rejection, source redaction,
+recall-receipt composition, stable bundle hashing, and CLI/MCP parity.
+The contract in §§5.1-5.4 describes the live surface; future work should
+be documented as additive changes rather than as an implementation stub.
 
 ## 6. Bucketing Policies
 
