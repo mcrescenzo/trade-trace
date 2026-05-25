@@ -1128,6 +1128,259 @@ Mandatory section contract:
   introduces no `tt console serve`, `trade_trace.console`, browser dashboard,
   or frontend scope.
 
+## 6A. Target contract: `report.process_analytics`
+
+> Status: **target / not implemented**. This section defines the
+> read-only backend/reporting contract a future `report.process_analytics`
+> implementation MUST satisfy before any non-UI consumer claims tag
+> frequency, tag-pair co-occurrence, review classification, process-cost, or
+> cost-coverage analytics. It does not describe shipped runtime behavior.
+> It is a distinct target report contract, not a broadening of `report.mistakes` or `report.strengths`.
+
+### 6A.1 Inputs
+
+`report.process_analytics` accepts one request object. Unknown fields are
+rejected. All timestamps are UTC ISO 8601 with millisecond precision. The
+request is deterministic for a fixed local database snapshot and `as_of`.
+
+```jsonc
+{
+  "filter": { /* ReportFilter-compatible scope */ },
+  "dimensions": [
+    "tag_frequency",
+    "tag_pair_cooccurrence",
+    "review_classification",
+    "decision_type",
+    "strategy"
+  ],
+  "group_by": ["tag_frequency"],
+  "metrics": [
+    "decision_count",
+    "review_count",
+    "tag_count",
+    "pair_count",
+    "support",
+    "jaccard"
+  ],
+  "features": ["examples", "contributing_ids", "coverage", "cost_family"],
+  "include_costs": false,
+  "min_sample": 10,
+  "max_groups": 100,
+  "max_record_ids_per_group": 1000,
+  "as_of": "2026-02-02T00:00:00.000Z"
+}
+```
+
+Input rules:
+
+- `filter` is the caller's ReportFilter-compatible scope. The response MUST
+  echo it in `requested_scope.filter` and record the exact supported subset in
+  `applied_scope.filter`. A requested non-empty filter path that cannot be
+  applied MUST be rejected with `VALIDATION_ERROR` or listed in
+  `unsupported_filter_paths`; it MUST NOT be silently ignored.
+- `dimensions` names the analytic dimensions the caller wants available in
+  groups or sections. Supported target dimensions are `tag_frequency`,
+  `tag_pair_cooccurrence`, `review_classification`, `decision_type`,
+  `strategy`, and actor/run/model/environment dimensions (`actor_id`,
+  `agent_id`, `run_id`, `model_id`, `environment`) only where the local
+  SQL/read-model columns exist for the contributing row kinds.
+- `group_by` controls group keys. Multi-dimensional grouping is allowed only
+  when the implementation lists the exact combination in `supported_features`;
+  otherwise each unsupported grouping must appear as a machine-readable
+  `unsupported_feature` object under `unsupported_features`.
+- `metrics` declares requested metrics. Stable target metrics are
+  `decision_count`, `review_count`, `tag_count`, `pair_count`, `support`, and
+  `jaccard`. `lift` and `confidence` are optional metrics: an implementation
+  may expose them only with explicit `metric_definitions`, denominator notes,
+  and `DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM` caveats.
+- `features` declares optional report features such as examples, contributing
+  IDs, coverage, cost family, lift/confidence, or actor panels. Unsupported
+  features require machine-readable metadata; omission is not enough.
+- `include_costs` requests the cost family. If false, cost metrics appear as
+  `omitted_by_request` or are absent from requested metrics. If true, every
+  unavailable cost component MUST be represented by `unsupported_features` or
+  `insufficient_data`, never by zero-filled values.
+- `min_sample`, `max_groups`, and `max_record_ids_per_group` control warning
+  and truncation behavior only. They MUST NOT change metric denominators unless
+  a metric explicitly declares itself page-local.
+- `as_of` is required when reproducibility depends on mutable local rows or
+  projections, including review classification changes, redaction state,
+  position projections, outcome appends, or strategy metadata. If `as_of`
+  cannot be honored, reject the request or emit unsupported metadata.
+
+### 6A.2 Dimensions, metrics, and cost-family semantics
+
+The process analytics contract is descriptive and diagnostic over local rows:
+
+- `tag_frequency`: one group per normalized decision or review tag, with
+  counts, support, coverage, contributing IDs, and examples.
+- `tag_pair_cooccurrence`: unordered normalized tag pairs within a single
+  eligible record, or across an explicitly documented decision/review join
+  boundary. The pair key order is deterministic (`tag_a <= tag_b`).
+- `review_classification`: groups over stored review classes, review tags, or
+  review outcomes only where the read model has those fields.
+- `decision_type`: groups over `decisions.type` values.
+- `strategy`: groups over `strategy.strategy_id`, including the `"__none__"`
+  sentinel for rows without a strategy when supported.
+- `actor_id`, `agent_id`, `run_id`, `model_id`, and `environment`: allowed only
+  for row kinds whose local tables carry those columns. Mixed decision/review
+  groups MUST report per-kind coverage when a dimension is unavailable for one
+  side.
+
+Metric definitions:
+
+- `decision_count`: count of distinct decisions in the applied group.
+- `review_count`: count of distinct reviews in the applied group.
+- `tag_count`: count of tag occurrences contributing to a tag-frequency group.
+- `pair_count`: count of eligible records containing both tags in a pair group.
+- `support`: group count divided by the eligible denominator declared in
+  `metric_definitions.denominator_kind`; for example tag occurrences over
+  eligible decisions, eligible reviews, or eligible decision+review records.
+- `jaccard`: `pair_count / count(records containing tag_a OR tag_b)` for the
+  same eligible denominator. If the denominator cannot be materialized, return
+  `null` plus `insufficient_data` metadata.
+- `lift`: optional diagnostic only, defined as
+  `support(tag_a AND tag_b) / (support(tag_a) * support(tag_b))` over the same
+  denominator. It is not causal evidence or advice.
+- `confidence`: optional diagnostic only, defined directionally as
+  `pair_count(tag_a AND tag_b) / count(records containing antecedent_tag)`;
+  the response must name the antecedent and consequent tags.
+
+Cost family semantics are local-only and coverage-caveated:
+
+- `local_pnl_projection`: historical P&L projection only from local
+  `positions`/`position_events`/decision-linked rows where the read model can
+  compute it. It is not broker truth and does not imply live exposure.
+- `r_multiple`: computed only where a declared risk unit or equivalent local
+  risk row exists. Missing declared risk yields `insufficient_data`.
+- `fees_slippage`: sums or averages only stored `fees` and `slippage` fields.
+  Missing fields are coverage gaps, not zeros unless the row explicitly stores
+  zero.
+- `opportunity_path_diagnostics`: allowed only where local snapshots or local
+  opportunity/path rows support a diagnostic. No invented counterfactual profit,
+  no broker truth, no external market/source/outcome fetch, no advice, and no
+  alpha/edge or profitability claim is permitted.
+
+### 6A.3 Output envelope
+
+The response uses the shared §3.0 report conventions. Groups are standard
+report groups with metrics, coverage, caveats/sample warnings, contributing
+IDs, examples, unsupported feature metadata, and explicit truncation.
+
+```jsonc
+{
+  "ok": true,
+  "data": {
+    "contract_version": "1.0",
+    "requested_scope": {
+      "filter": {"decision": {"tags_any": ["liquidity-ignored"]}},
+      "dimensions": ["tag_pair_cooccurrence", "decision_type"],
+      "group_by": ["tag_pair_cooccurrence"],
+      "metrics": ["decision_count", "pair_count", "support", "jaccard", "local_pnl_projection"],
+      "features": ["coverage", "examples", "contributing_ids", "cost_family"],
+      "include_costs": true,
+      "min_sample": 10,
+      "max_groups": 50,
+      "max_record_ids_per_group": 100,
+      "as_of": "2026-02-02T00:00:00.000Z"
+    },
+    "applied_scope": {
+      "filter": {"decision": {"tags_any": ["liquidity-ignored"]}},
+      "dimensions": ["tag_pair_cooccurrence"],
+      "group_by": ["tag_pair_cooccurrence"],
+      "metrics": ["decision_count", "pair_count", "support", "jaccard"],
+      "include_costs": false,
+      "as_of": "2026-02-02T00:00:00.000Z"
+    },
+    "supported_filter_paths": ["decision.tags_any", "decision.tags_all", "strategy.strategy_id", "time_window.decision_at_gte", "time_window.decision_at_lt"],
+    "unsupported_filter_paths": [],
+    "supported_features": ["tag_pair_cooccurrence", "coverage", "examples", "contributing_ids"],
+    "unsupported_features": [
+      {
+        "unsupported_feature": "cost_family.local_pnl_projection",
+        "path": "metrics.local_pnl_projection",
+        "reason_code": "cost_read_model_not_available",
+        "message": "local P&L projection is unavailable for this journal/read model",
+        "requested_value": true,
+        "applied": false
+      },
+      {
+        "unsupported_feature": "dimension.decision_type",
+        "path": "dimensions.decision_type",
+        "reason_code": "multi_dimension_grouping_not_supported",
+        "requested_value": "decision_type",
+        "applied": false
+      }
+    ],
+    "metric_definitions": {
+      "pair_count": "count of eligible records containing both normalized tags",
+      "support": "pair_count divided by eligible decision denominator",
+      "jaccard": "pair_count divided by records containing either tag in the same eligible denominator"
+    },
+    "coverage": {"eligible_count": 42, "included_count": 39, "missing_count": 3, "coverage_pct": 92.9, "denominator_kind": "decisions"},
+    "groups": [
+      {
+        "key": "liquidity-ignored|late-source",
+        "label": "Tag pair liquidity-ignored + late-source",
+        "dimensions": {"tag_a": "liquidity-ignored", "tag_b": "late-source"},
+        "metrics": {"decision_count": 7, "review_count": 0, "tag_count": null, "pair_count": 7, "support": 0.1667, "jaccard": 0.3043, "local_pnl_projection": null},
+        "filter": {"decision": {"tags_all": ["liquidity-ignored", "late-source"]}},
+        "coverage": {"eligible_count": 42, "included_count": 7, "missing_count": 0, "coverage_pct": 100.0, "denominator_kind": "decisions"},
+        "record_ids": {"decisions": ["dec_..."], "reviews": [], "forecasts": [], "outcomes": [], "sources": []},
+        "examples": [{"kind": "decision", "id": "dec_...", "summary": "local row excerpt"}],
+        "sample_size": 7,
+        "sample_warning": "only 7 records; process analytics is unreliable below min_sample=10",
+        "caveat_codes": ["LOCAL_ROWS_ONLY", "LOW_SAMPLE_SIZE", "PARTIAL_COVERAGE", "DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM"],
+        "unsupported_features": [{"unsupported_feature": "cost_family.local_pnl_projection", "reason_code": "cost_read_model_not_available", "applied": false}],
+        "truncated": false
+      }
+    ],
+    "caveat_codes": ["LOCAL_ROWS_ONLY", "DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM", "PARTIAL_COVERAGE"],
+    "sample_warning": "some requested metrics/features are unsupported or below sample thresholds"
+  },
+  "meta": {"tool": "report.process_analytics", "contract_version": "1.0", "truncated": false, "next_cursor": null}
+}
+```
+
+Output invariants:
+
+- Every included metric MUST have `metric_definitions`, coverage, caveats where
+  applicable, and contributing `record_ids` or a machine-readable
+  `record_ids_unavailable` reason.
+- Unsupported analytics MUST appear in `unsupported_features`,
+  `unsupported_filter_paths`, or `insufficient_data` metadata. Silent omission,
+  zero-filled metrics, fabricated empty groups, and unscoped global fallbacks
+  are contract violations.
+- Redaction follows `review.bundle` §5.3. Source text is not needed for tag
+  counts unless the implementation explicitly adds a text-derived feature; if
+  redaction prevents a feature from being computed, emit coverage and caveats.
+- Ordering is deterministic: primary sort by requested metric descending (or
+  documented report default), then stable group key. `max_groups` truncation
+  sets group/report `truncated` and `meta.next_cursor` without changing metric
+  denominators.
+
+### 6A.4 Compatibility and boundaries
+
+- Current shipped `report.mistakes` and `report.strengths` semantics remain unchanged:
+  they group decision tags by mean Brier over scored forecasts and
+  reject non-empty filters. They must not be silently broadened into decision +
+  review tag counts, co-occurrence, costs, strategy panels, or actor panels.
+- `report.process_analytics` is the target home for backend process frequency,
+  co-occurrence, and cost-coverage analytics when implemented. Compatibility
+  aliases from older product language MAY point here only after preserving the
+  legacy `report.mistakes` / `report.strengths` behavior or documenting a major
+  version migration.
+- The contract is read-only and local-only. It MUST NOT fetch external market,
+  source, outcome, broker, wallet, or execution data; call brokers; place or cancel orders;
+  schedule alerts; emit trading advice; provide buy/sell/hold signals; claim
+  alpha/edge; or make profit claims.
+- Cost output is diagnostic process context only. It may say what local stored
+  rows imply under explicitly defined formulas and coverage, but it must not
+  claim true realized broker P&L, missed profit, optimal counterfactual trades,
+  or expected future performance.
+- This target contract does not make Console/UI claims and introduces no
+  `tt console serve`, `trade_trace.console`, browser dashboard, or frontend scope.
+
 ## 7. Bucketing Policies
 
 Several filter fields use deterministic buckets to make report filters
