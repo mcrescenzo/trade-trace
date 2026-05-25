@@ -65,7 +65,12 @@ A retrospective synthesis written by the agent after a decision, position, perio
 
 #### 3.2.1 Policy-candidate quarantine metadata (G1)
 
-Reflections may optionally carry `meta_json.policy_candidate` to make the reflection-to-policy lifecycle explicit while preserving the separation between subjective memory and durable playbook policy. This is metadata on `reflection` nodes only; it is not a new durable table and it never creates, updates, or deletes playbook versions/rules.
+Reflections may optionally carry `metadata_json.policy_candidate` (legacy rows:
+`meta_json.policy_candidate`) to make the reflection-to-policy lifecycle
+explicit while preserving the separation between subjective memory and durable
+playbook policy. This is metadata on `reflection` nodes only; it is not a new
+durable table and it never creates, updates, or deletes playbook
+versions/rules.
 
 Allowed lifecycle statuses are exactly:
 
@@ -94,7 +99,7 @@ A codified procedural rule belonging to a specific `playbook_version`.
 - **Examples**: "Do not enter prediction-market positions when spread > 8% of expected edge"; "Require 2x base liquidity for any entry within 7 days of resolution".
 - **Required meta**: `playbook_version_id` and `rule_meta` (`trigger_kind`, `applicable_decision_types`, optional `applicable_asset_classes`).
 - **Body** holds the free-text rule the agent reads when reasoning. MVP rules are advisory; automatic violation detection requires explicit predicate fields added later.
-- **Machine-checkable predicate metadata** may be stored under `meta_json.predicate` for rules that fit the closed-set evaluator in `trade_trace.playbook_predicates`. This is a library substrate only, not a registered report/tool in this bead. Supported families are intentionally narrow (`field_exists`, `field_equals`, `decision_type_in`, `link_exists`, `source_count_at_least`, `timestamp_present`, `forecast_resolution_rule_present`) and evaluate only recorded local fields/links. Missing predicate metadata leaves a rule self-reported-only; rule body/prose is never parsed as executable logic.
+- **Machine-checkable predicate metadata** may be stored under `metadata_json.predicate` (legacy rows: `meta_json.predicate`) for rules that fit the closed-set evaluator in `trade_trace.playbook_predicates`. This is a library substrate only, not a registered report/tool in this bead. Supported families are intentionally narrow (`field_exists`, `field_equals`, `decision_type_in`, `link_exists`, `source_count_at_least`, `timestamp_present`, `forecast_resolution_rule_present`) and evaluate only recorded local fields/links. Missing predicate metadata leaves a rule self-reported-only; rule body/prose is never parsed as executable logic.
 - **Default decay**: `0.0`. Rules are superseded by new versions, not faded.
 - **Typical importance**: `7`–`10`. Procedural rules are high-leverage by construction; default importance for new rules is `8`.
 - **`valid_to`**: typically `NULL` until the rule is superseded by a new playbook version, at which point `invalidated_at` and `invalidated_by` are set.
@@ -311,7 +316,7 @@ Lazy re-embed at recall time is rejected because the vector index needs a fixed 
 
 All operations are exposed as MCP tools and CLI subcommands with semantic parity (see `contracts.md`).
 
-- **`memory.retain(node_type, body, *, title?, tags?, meta_json?, importance?, confidence_base?, decay_rate_per_day?, valid_from?, valid_to?, edges?)`** — write a memory node. `node_type ∈ {observation, reflection, playbook_rule}`. The `edges` parameter lets the caller specify outgoing edges in the same call so reflection-without-edges never happens.
+- **`memory.retain(node_type, body, *, title?, tags?, metadata_json?, meta_json?, importance?, confidence_base?, decay_rate_per_day?, valid_from?, valid_to?, edges?)`** — write a memory node. `node_type ∈ {observation, reflection, playbook_rule}`. The additive schema transition prefers `metadata_json` and still accepts/writes legacy `meta_json` for compatibility until cleanup. The `edges` parameter lets the caller specify outgoing edges in the same call so reflection-without-edges never happens.
 - **`memory.recall(query, context?, strategies?, k?, max_chars?, compact?, include_body?, include_provenance?, min_confidence?, node_types?, mode?, as_of?)`** — read with required `query`, multi-strategy retrieval, context-budget shaping, and optional bi-temporal `as_of` filtering. Optional `context` narrows ranking/provenance; it does not replace `query`.
 - **`memory.reflect(target, body, *, importance?, ...)`** — sugar over `retain(node_type=reflection, ...)` that auto-wires the required `about` edge to `target`. The live schema does not accept `derived_from`; add supporting/provenance edges separately with `memory.link` or `memory.retain(edges=...)`.
 - **`memory.link(from, to, edge_type, *, weight?)`** — explicit edge creation between two existing endpoints. Validates endpoint kind and ID.

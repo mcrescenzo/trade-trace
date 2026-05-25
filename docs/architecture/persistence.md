@@ -82,6 +82,35 @@ replaced via DELETE+INSERT inside one transaction during a re-embed pass
 (see [`memory-layer.md`](memory-layer.md) §8.4). This is the only DELETE
 permitted on a memory-side table and is gated behind explicit user action.
 
+### 2.1 v0.0.2 PM schema-transition surfaces
+
+The v0.0.2 schema phase is additive and transitional. It introduces PM-native
+surfaces while preserving legacy tables/columns until the final cleanup wave:
+
+- `markets(id, source, external_id, title, question, url, state, mechanism,
+  resolution_source, ambiguity_kind, bound_via, opened_at, close_at,
+  closed_for_trading_at, resolving_at, resolved_at, voided_at,
+  ambiguous_at, venue_metadata_json, metadata_json, created_at, actor_id)`;
+  `state ∈ {open, closed_for_trading, resolving, resolved, voided,
+  ambiguous}`, `mechanism ∈ {clob, amm, scalar, hybrid}`, and the six
+  state-history timestamps support lifecycle reporting.
+- `forecast_snapshot_anchor(id, forecast_id UNIQUE, snapshot_id,
+  market_implied_probability, agent_id, model_id, environment, run_id,
+  metadata_json, created_at, actor_id)` pins the market snapshot used as the
+  local reference for a forecast.
+- `forecasts` now has nullable PM-native fields including `market_id`,
+  `probability`, `rationale_body`, `falsification_criteria`,
+  `updated_rationale_at`, and `updated_rationale_by`; binary readers prefer
+  these fields and fall back to `forecast_outcomes`/thesis joins for legacy
+  rows.
+- `memory_nodes.metadata_json` is the preferred metadata column while legacy
+  `meta_json` remains dual-written/read as fallback.
+- Forecast, decision, and memory-node provenance may also be projected into
+  `metadata_json.sources` arrays with shape `{kind, title, url, stance,
+  captured_at, hash}`. The legacy `sources` table and source-attach edges
+  still exist during transition; a `source_attachments` table did not exist
+  and must not be invented.
+
 ## 3. The `events` Table
 
 Every committed ledger write produces exactly one `events` row in the same

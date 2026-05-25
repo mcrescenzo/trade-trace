@@ -326,8 +326,9 @@ Group by playbook version. Per-group: counts of self-reported
 `decision_playbook_rules.status` values (`considered`, `followed`,
 `overridden`, `not_applicable`); override-outcome breakdown where
 outcomes exist. The report also includes an audit-only `predicate_audit`
-section at summary and group level. This section evaluates only explicit
-`memory_nodes.meta_json.predicate` metadata through the closed-set
+section at summary and group level. This section evaluates explicit
+`memory_nodes.metadata_json.predicate` metadata (legacy fallback:
+`memory_nodes.meta_json.predicate`) through the closed-set
 predicate evaluator and reports machine-checkable statuses (`pass`,
 `fail`, `not_computable`, `ambiguous`, `not_applicable`), alignment
 labels, mismatches, missing/unresolved metadata, record refs, source refs,
@@ -390,10 +391,15 @@ Source: bead trade-trace-jzn.
 
 ### 4.9 `report.source_quality` (MVP hardening)
 
-Five provenance hygiene diagnostics over the source-attachment graph:
+Five provenance hygiene diagnostics over the legacy source-attachment graph and
+the v0.0.2 inline provenance projections. During the additive PM-source
+transition, source-quality readers count direct forecast/decision/memory-node
+source edges and `metadata_json.sources` arrays, with legacy thesis-edge
+fallback for old journals:
 
-1. `missing_sources_on_actual_enter` — decisions with
-   `type='actual_enter'` whose linked thesis has zero attached sources.
+1. `missing_sources_on_actual_enter` — `actual_enter` decisions with no direct
+   decision/forecast/inline provenance and no linked-thesis legacy source
+   attachments.
 2. `stale_sources` — sources whose `freshness_at` predates the linked
    decision's `created_at` by more than `stale_threshold_days` (default
    7). The live diagnostic only considers rows where `sources.freshness_at`
@@ -556,8 +562,8 @@ checks are intentionally limited to missing thesis source references; broader
 source freshness/contradiction diagnostics remain in `report.source_quality`.
 Policy candidate support status is sourced from the shipped read-only
 `report.policy_candidates` local surface over reflection `memory_nodes` with
-`meta_json.policy_candidate`; it remains caveated and does not promote or mutate
-policy/playbook state.
+`metadata_json.policy_candidate` (legacy fallback: `meta_json.policy_candidate`);
+it remains caveated and does not promote or mutate policy/playbook state.
 
 Forbidden interpretations: not a strategy ranking, performance leaderboard,
 signal/edge detector, trading advice, policy promotion engine, scheduler,

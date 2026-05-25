@@ -25,9 +25,12 @@ forecast row from `pending` to `scored`, the resolution status enum on
 outcomes, and the rules for when auto-scoring is allowed to fire.
 
 Supported scoring scope is binary, categorical/multiclass, and normalized
-scalar forecasts. All three use the existing append-only schema: forecast
-probabilities/point estimates are stored in `forecast_outcomes`, score events
-are appended to `forecast_scores`, and immutable source rows are not rewritten.
+scalar forecasts. The v0.0.2 PM schema transition adds canonical
+`forecasts.probability` for binary YES probability; binary scorers and reports
+prefer that value when present and keep guarded fallback to legacy
+`forecast_outcomes` rows. Categorical and scalar forecasts still use the
+existing append-only outcome-row representation. Score events are appended to
+`forecast_scores`, and immutable source rows are not rewritten.
 
 ## 2. Binary Forecast Invariants
 
@@ -35,10 +38,11 @@ A forecast with `kind = 'binary'` MUST satisfy all of the following on write.
 Violating any of them returns `INVARIANT_VIOLATION` (see
 [contracts.md](contracts.md)).
 
-- Exactly two rows in `forecast_outcomes` for this forecast.
+- Exactly two legacy compatibility rows in `forecast_outcomes` for this forecast.
 - Each `forecast_outcomes.probability ∈ [0.0, 1.0]`.
 - The two probabilities sum to `1.0` within tolerance `1e-6`.
 - The two `outcome_label` values are distinct.
+- During the additive PM transition, `forecasts.probability` stores the canonical binary YES probability derived from those rows and constrained to `[0.0, 1.0]`; consumers prefer it when present but still validate labels/fallback rows to preserve legacy failure semantics.
 - At least one outcome label, after the outcome resolves, must match the
   resolved `outcomes.outcome_label`. Labels are compared case-insensitively
   with leading/trailing whitespace stripped. If neither label matches, the
@@ -129,10 +133,12 @@ Lower is better; a perfect categorical forecast scores `0`.
 ### 3.4 Scalar scoring
 
 A forecast with `kind = 'scalar'` is a normalized point forecast on `[0, 1]`.
-Backcompat/schema decision: because the current schema has no general numeric
-prediction column, the point estimate is stored in the single
-`forecast_outcomes.probability` value. The `outcome_label` may be any
-non-empty label (callers commonly use `"value"`). Invariants on write:
+Schema-transition note: `forecasts.probability` is currently the canonical PM
+binary YES probability, not a general scalar-prediction column. Scalar point
+estimates therefore remain stored in the single `forecast_outcomes.probability`
+value until a later non-PM scoring pass changes that representation. The
+`outcome_label` may be any non-empty label (callers commonly use `"value"`).
+Invariants on write:
 
 - Exactly one `forecast_outcomes` row.
 - The row's `probability` is numeric and in `[0, 1]`.
