@@ -54,9 +54,3 @@ def classify_http_status(status_code: int) -> ErrorCode:
     if status_code >= 500:
         return ErrorCode.EXTERNAL_API_ERROR
     return ErrorCode.ADAPTER_PROTOCOL_ERROR
-
-
-def structured_response_log(status_code: int, latency_ms: int) -> dict[str, int]:
-    """Safe log payload: status + latency only; never include response bodies."""
-
-    return {"status_code": int(status_code), "latency_ms": int(latency_ms)}

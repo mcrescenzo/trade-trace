@@ -24,20 +24,6 @@ BUSY_TIMEOUT_MS = 5000
 _SAVEPOINT_COUNTER = itertools.count(1)
 
 
-def _configured_embeddings_provider(conn: sqlite3.Connection) -> str:
-    """Return persisted embeddings.provider, defaulting to air-gapped none."""
-
-    try:
-        row = conn.execute(
-            "SELECT value FROM config WHERE key = 'embeddings.provider'"
-        ).fetchone()
-    except sqlite3.OperationalError:
-        return "none"
-    if row is None or row[0] in (None, ""):
-        return "none"
-    return str(row[0])
-
-
 def load_sqlite_vec_extension(conn: sqlite3.Connection) -> None:  # pragma: no cover - legacy
     """Legacy no-op kept for callers that only report capability.
 

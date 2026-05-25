@@ -346,26 +346,6 @@ def _report_exposure_anomalies(args: dict[str, Any], ctx: ToolContext) -> dict[s
     return data
 
 
-def _watchlist_rows_for_current_exposure(watch_data: dict[str, Any]) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for group in watch_data.get("groups", []):
-        record_ids = group.get("record_ids") or {}
-        examples = group.get("examples") or []
-        metrics = group.get("metrics") or {}
-        rows.append({
-            "decision_id": (record_ids.get("decisions") or [group.get("key")])[0],
-            "instrument_id": (record_ids.get("instruments") or [None])[0],
-            "reason": examples[0].get("summary") if examples else None,
-            "created_at": metrics.get("created_at"),
-            "review_by": metrics.get("review_by"),
-            "overdue": metrics.get("overdue"),
-            "age_days": metrics.get("age_days"),
-            "caveat_codes": ["WATCH_ONLY_IDEA"],
-            "exposure_hint": "Watch idea only; not counted as exposure.",
-        })
-    return rows
-
-
 def _watchlist_for_current_exposure(
     connection: Any,
     *,
