@@ -39,6 +39,30 @@ from trade_trace.tools.ledger._shared import examples_for
 _BINARY_TOLERANCE = 1e-6
 
 
+def _canonical_binary_probability(
+    *, kind: str, outcomes: list[dict[str, Any]], yes_label: str | None,
+) -> float | None:
+    """Return the canonical PM binary YES probability for the forecast row.
+
+    Legacy `forecast_outcomes` rows are still written during the transition,
+    but m014 introduced `forecasts.probability` as the PM-native read path.
+    """
+
+    if kind != "binary":
+        return None
+    labels = {
+        str(o.get("outcome_label") or o.get("label")).strip().lower(): float(o["probability"])
+        for o in outcomes
+    }
+    yes_norm = yes_label.strip().lower() if yes_label else None
+    if yes_norm is None:
+        if "yes" in labels:
+            yes_norm = "yes"
+        elif "true" in labels:
+            yes_norm = "true"
+    return labels.get(yes_norm) if yes_norm else None
+
+
 def _validate_binary_forecast(outcomes: list[dict[str, Any]]) -> None:
     if len(outcomes) != 2:
         raise ToolError(
@@ -146,18 +170,34 @@ def _insert_forecast_in_transaction(
     Callers own event ordering and any surrounding lineage/scoring writes.
     """
 
+    canonical_probability = _canonical_binary_probability(
+        kind=kind, outcomes=outcomes, yes_label=yes_label,
+    )
+    market_row = uow.conn.execute(
+        """
+        SELECT m.id
+        FROM theses t
+        JOIN markets m ON m.id = t.instrument_id
+        WHERE t.id = ?
+        """,
+        (thesis_id,),
+    ).fetchone()
+    market_id = market_row[0] if market_row else args.get("market_id")
     uow.execute(
         "INSERT INTO forecasts(id, thesis_id, kind, resolution_at, yes_label, "
         "resolution_rule_text, scoring_support, scoring_state, valid_from, valid_to, "
-        "agent_id, model_id, environment, run_id, metadata_json, created_at, actor_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "agent_id, model_id, environment, run_id, metadata_json, market_id, "
+        "rationale_body, falsification_criteria, probability, created_at, actor_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             forecast_id, thesis_id, kind, resolution_at, yes_label,
             args.get("resolution_rule_text"), scoring_support,
             normalize_timestamp(args, "valid_from") or created_at,
             normalize_timestamp(args, "valid_to"),
             seg["agent_id"], seg["model_id"], seg["environment"], seg["run_id"],
-            metadata_json, created_at, ctx.actor_id,
+            metadata_json, market_id, args.get("rationale_body"),
+            args.get("falsification_criteria"), canonical_probability,
+            created_at, ctx.actor_id,
         ),
     )
     for o in outcomes:
@@ -178,6 +218,10 @@ def _insert_forecast_in_transaction(
         "resolution_at": resolution_at,
         "yes_label": yes_label,
         "resolution_rule_text": args.get("resolution_rule_text"),
+        "market_id": market_id,
+        "probability": canonical_probability,
+        "rationale_body": args.get("rationale_body"),
+        "falsification_criteria": args.get("falsification_criteria"),
         "outcomes": [
             {
                 "outcome_label": str(o.get("outcome_label") or o.get("label")),

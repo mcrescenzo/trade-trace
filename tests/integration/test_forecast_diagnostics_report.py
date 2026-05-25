@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import re
 import socket
+import sqlite3
 import urllib.request
 from pathlib import Path
 
 from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
+from trade_trace.storage.paths import db_path
 
 
 def _init_home(tmp_path) -> Path:
@@ -78,6 +80,29 @@ def test_binary_scored_forecast_with_caller_snapshot_reference(tmp_path):
     assert ids["forecast"] in data["groups"][0]["record_ids"]["forecasts"]
     assert ids["decision"] in data["groups"][0]["record_ids"]["decisions"]
     assert data["summary"]["decision_coverage"]["by_decision_type"]["skip"]["with_forecast_count"] == 1
+
+
+def test_forecast_diagnostics_prefers_canonical_probability_when_legacy_outcomes_disagree(tmp_path):
+    home = _init_home(tmp_path)
+    ids = _seed_binary_case(home, implied_probability=0.55, decision_type="skip")
+    with sqlite3.connect(db_path(home)) as conn:
+        conn.execute("DROP TRIGGER trg_forecasts_no_update")
+        conn.execute("UPDATE forecasts SET probability = 0.8 WHERE id = ?", (ids["forecast"],))
+        conn.execute(
+            """
+            CREATE TRIGGER trg_forecasts_no_update
+            BEFORE UPDATE ON forecasts
+            BEGIN
+                SELECT RAISE(ABORT, 'append-only invariant: UPDATE on forecasts is forbidden; use a supersedes edge to record a correction (persistence.md §8)');
+            END
+            """
+        )
+        conn.commit()
+
+    data = _envelope(home, "report.forecast_diagnostics", {"min_sample": 1})["data"]
+    assert data["summary"]["sample_size"] == 1
+    assert data["summary"]["metrics"]["brier"] == 0.04
+    assert data["summary"]["market_reference"]["mean_recorded_market_reference_gap"] == 0.25
 
 
 def test_multiple_decisions_do_not_duplicate_forecast_metrics(tmp_path):

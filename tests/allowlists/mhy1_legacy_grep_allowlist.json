@@ -1,0 +1,628 @@
+{
+  "version": 1,
+  "bead": "trade-trace-mhy1",
+  "description": "Reviewed residual legacy-term hits after the additive PM collapse call-site migration. Production entries are exact file paths; broad runtime globs are intentionally avoided so new legacy files fail the enforcement test.",
+  "terms": [
+    "forecast_outcomes",
+    "thesis_id",
+    "source.attach",
+    "meta_json",
+    "instrument_id",
+    "venue_id"
+  ],
+  "allowed": [
+    {
+      "pattern": "docs/**",
+      "terms": [
+        "forecast_outcomes",
+        "thesis_id",
+        "source.attach",
+        "meta_json",
+        "instrument_id",
+        "venue_id"
+      ],
+      "category": "historical_or_architecture_doc",
+      "reason": "Architecture, PRD, and audit documents describe old-to-new mappings and historical contracts."
+    },
+    {
+      "pattern": "next-steps.md",
+      "terms": [
+        "forecast_outcomes",
+        "thesis_id",
+        "source.attach",
+        "meta_json",
+        "instrument_id",
+        "venue_id"
+      ],
+      "category": "planning_doc",
+      "reason": "Planning context may mention legacy terms while tracking migration state."
+    },
+    {
+      "pattern": "tests/**",
+      "terms": [
+        "forecast_outcomes",
+        "thesis_id",
+        "source.attach",
+        "meta_json",
+        "instrument_id",
+        "venue_id"
+      ],
+      "category": "test_or_fixture_compatibility",
+      "reason": "Tests seed or assert legacy compatibility during the additive transition; runtime behavior is covered by focused PM-native tests."
+    },
+    {
+      "pattern": "src/trade_trace/storage/migrations/**",
+      "terms": [
+        "forecast_outcomes",
+        "thesis_id",
+        "source.attach",
+        "meta_json",
+        "instrument_id",
+        "venue_id"
+      ],
+      "category": "historical_or_transitional_migration",
+      "reason": "Migrations preserve and backfill legacy schema names until the destructive cleanup bead lands."
+    },
+    {
+      "pattern": "src/trade_trace/contracts/report_filter.py",
+      "terms": [
+        "instrument_id",
+        "venue_id"
+      ],
+      "category": "public_filter_compatibility",
+      "reason": "ReportFilter still accepts legacy instrument/venue filters while PM-native market filters are phased in."
+    },
+    {
+      "pattern": "src/trade_trace/events/semantic_keys.py",
+      "terms": [
+        "instrument_id",
+        "meta_json",
+        "source.attach",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "legacy_event_idempotency_compatibility",
+      "reason": "Existing event semantic keys remain stable for replay/idempotency until replacement event versions are introduced."
+    },
+    {
+      "pattern": "src/trade_trace/exporter.py",
+      "terms": [
+        "source.attach"
+      ],
+      "category": "legacy_import_export_compatibility",
+      "reason": "Import/export code must classify historical journal events during additive transition."
+    },
+    {
+      "pattern": "src/trade_trace/models/ledger.py",
+      "terms": [
+        "forecast_outcomes",
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_model_compatibility",
+      "reason": "Typed models mirror legacy rows that remain present until destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/models/memory.py",
+      "terms": [
+        "meta_json"
+      ],
+      "category": "legacy_model_compatibility",
+      "reason": "Typed models mirror legacy rows that remain present until destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/playbook_predicates.py",
+      "terms": [
+        "instrument_id",
+        "meta_json",
+        "source.attach",
+        "thesis_id"
+      ],
+      "category": "playbook_rule_compatibility",
+      "reason": "Playbook predicate metadata and source-attachment predicates are legacy rule surfaces outside this additive PM collapse slice."
+    },
+    {
+      "pattern": "src/trade_trace/projections.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "position_projection_compatibility",
+      "reason": "Position projections remain instrument-scoped and are outside PM forecast/source collapse."
+    },
+    {
+      "pattern": "src/trade_trace/reporting/position_rows.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "legacy_read_model_compatibility",
+      "reason": "Read-model rows still expose legacy local ledger IDs during the additive transition."
+    },
+    {
+      "pattern": "src/trade_trace/reporting/trade_rows.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "legacy_read_model_compatibility",
+      "reason": "Read-model rows still expose legacy local ledger IDs during the additive transition."
+    },
+    {
+      "pattern": "src/trade_trace/reports/_filter_support.py",
+      "terms": [
+        "instrument_id",
+        "venue_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/audit_readiness.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/calibration.py",
+      "terms": [
+        "forecast_outcomes",
+        "instrument_id",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "pm_native_with_legacy_fallback",
+      "reason": "Report now prefers forecasts.probability and keeps legacy joins/outcomes for compatibility fallback/filter support."
+    },
+    {
+      "pattern": "src/trade_trace/reports/coach.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/compare.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/forecast_diagnostics.py",
+      "terms": [
+        "forecast_outcomes",
+        "instrument_id",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "pm_native_with_legacy_fallback",
+      "reason": "Report now prefers forecasts.probability and keeps legacy joins/outcomes for compatibility fallback/filter support."
+    },
+    {
+      "pattern": "src/trade_trace/reports/integrity.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/lifecycle.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/memory_usefulness.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/opportunity.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/playbook_adherence.py",
+      "terms": [
+        "meta_json"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/pnl.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/policy_candidates.py",
+      "terms": [
+        "meta_json"
+      ],
+      "category": "pm_native_with_legacy_fallback",
+      "reason": "Report now prefers memory_nodes.metadata_json and falls back to meta_json for legacy rows."
+    },
+    {
+      "pattern": "src/trade_trace/reports/recall_receipts.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/replay.py",
+      "terms": [
+        "forecast_outcomes",
+        "instrument_id",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "legacy_replay_bundle_compatibility",
+      "reason": "Replay bundles preserve historical forecast outcome/thesis/instrument context until a versioned PM-native replay format lands."
+    },
+    {
+      "pattern": "src/trade_trace/reports/replay_evaluate.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/risk.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/source_quality.py",
+      "terms": [
+        "thesis_id"
+      ],
+      "category": "legacy_source_fallback",
+      "reason": "Report recognizes inline/direct PM sources while preserving thesis-edge diagnostics for legacy journals."
+    },
+    {
+      "pattern": "src/trade_trace/reports/strategy_health.py",
+      "terms": [
+        "thesis_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/tool_handlers/common.py",
+      "terms": [
+        "instrument_id",
+        "venue_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/tool_handlers/memory_recall.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/tool_handlers/portfolio_exposure.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/tool_handlers/registration.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/tool_schemas.py",
+      "terms": [
+        "instrument_id",
+        "meta_json"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/unscored.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/watchlist.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/reports/work_queue.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "legacy_report_compatibility",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+    },
+    {
+      "pattern": "src/trade_trace/storage/policy.py",
+      "terms": [
+        "source.attach"
+      ],
+      "category": "legacy_policy_event_compatibility",
+      "reason": "Policy storage references historical source attachment event names."
+    },
+    {
+      "pattern": "src/trade_trace/tools/_examples.py",
+      "terms": [
+        "instrument_id",
+        "meta_json",
+        "source.attach",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/_helpers.py",
+      "terms": [
+        "meta_json"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/csv_import.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/decision_matrix.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/fixture.py",
+      "terms": [
+        "instrument_id",
+        "meta_json",
+        "source.attach",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/ideas.py",
+      "terms": [
+        "meta_json",
+        "source.attach"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/imports.py",
+      "terms": [
+        "instrument_id",
+        "source.attach",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "legacy_import_export_compatibility",
+      "reason": "Import/export code must classify historical journal events during additive transition."
+    },
+    {
+      "pattern": "src/trade_trace/tools/journal.py",
+      "terms": [
+        "forecast_outcomes",
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/journal_bundle_status.py",
+      "terms": [
+        "instrument_id",
+        "meta_json",
+        "source.attach",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/ledger/_scoring.py",
+      "terms": [
+        "forecast_outcomes",
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "pm_native_with_legacy_fallback",
+      "reason": "Scoring prefers forecasts.probability for binary forecasts and keeps forecast_outcomes/instrument fallback for legacy/categorical/scalar cases."
+    },
+    {
+      "pattern": "src/trade_trace/tools/ledger/decision.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/ledger/forecast.py",
+      "terms": [
+        "forecast_outcomes",
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "dual_write_forecast_transition",
+      "reason": "forecast.add writes forecasts.probability while dual-writing legacy forecast_outcomes/thesis compatibility rows."
+    },
+    {
+      "pattern": "src/trade_trace/tools/ledger/instrument.py",
+      "terms": [
+        "venue_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/ledger/outcome.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/ledger/snapshot.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/ledger/source.py",
+      "terms": [
+        "source.attach"
+      ],
+      "category": "dual_write_source_transition",
+      "reason": "Source tools remain compatibility adapters and dual-write inline metadata_json.sources for PM records."
+    },
+    {
+      "pattern": "src/trade_trace/tools/ledger/thesis.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/ledger/venue.py",
+      "terms": [
+        "venue_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/market_scan.py",
+      "terms": [
+        "instrument_id",
+        "source.attach",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/memory.py",
+      "terms": [
+        "meta_json"
+      ],
+      "category": "dual_write_memory_transition",
+      "reason": "memory.retain writes metadata_json and meta_json during transition; public meta_json alias remains accepted."
+    },
+    {
+      "pattern": "src/trade_trace/tools/reflection.py",
+      "terms": [
+        "forecast_outcomes",
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/review_bundle.py",
+      "terms": [
+        "instrument_id",
+        "meta_json",
+        "thesis_id",
+        "venue_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/signals.py",
+      "terms": [
+        "instrument_id",
+        "meta_json",
+        "thesis_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/strategy.py",
+      "terms": [
+        "meta_json",
+        "thesis_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    }
+  ]
+}

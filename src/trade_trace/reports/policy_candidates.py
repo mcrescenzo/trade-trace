@@ -21,6 +21,23 @@ CAVEAT_CODES = (
 )
 
 
+def _memory_metadata_expr(conn: sqlite3.Connection) -> str:
+    """Return a safe SQL expression for canonical memory metadata.
+
+    m014 added `memory_nodes.metadata_json` as the PM-native metadata column,
+    but older tests and compatibility fixtures can still expose only `meta_json`.
+    When both exist, prefer a non-empty canonical payload and fall back to the
+    legacy column so pre-m014-compatible writers remain readable.
+    """
+
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(memory_nodes)").fetchall()}
+    if "metadata_json" not in columns:
+        return "meta_json"
+    if "meta_json" not in columns:
+        return "metadata_json"
+    return "CASE WHEN metadata_json IS NOT NULL AND metadata_json != '{}' THEN metadata_json ELSE meta_json END"
+
+
 def report_policy_candidates(
     conn: sqlite3.Connection,
     *,
@@ -46,9 +63,10 @@ def report_policy_candidates(
         except TimestampValidationError as exc:
             raise ValueError(str(exc)) from exc
 
+    metadata_expr = _memory_metadata_expr(conn)
     rows = conn.execute(
-        """
-        SELECT id, title, body, meta_json, confidence_base, importance,
+        f"""
+        SELECT id, title, body, {metadata_expr} AS metadata_payload, confidence_base, importance,
                valid_from, valid_to, invalidated_at, created_at, actor_id,
                agent_id, model_id, environment, run_id
         FROM memory_nodes

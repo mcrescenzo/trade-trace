@@ -167,29 +167,70 @@ def _bundle(
 # -- (a) missing_sources_on_actual_enter ----------------------------
 
 
+def _has_inline_sources(metadata_json: str | None) -> bool:
+    sources = _safe_metadata(metadata_json).get("sources")
+    return isinstance(sources, list) and any(isinstance(source, dict) for source in sources)
+
+
 def _missing_sources_on_actual_enter(conn: sqlite3.Connection) -> dict[str, Any]:
-    """Decisions of type=actual_enter whose linked thesis has zero
-    `source.attached` edges. The decision-without-thesis case is excluded
-    (decision.thesis_id IS NULL means the agent declared no provenance to
-    check; the existing ledger validation handles missing-required-thesis).
+    """Actual-enter decisions with no usable legacy or inline provenance.
+
+    During the PM-source transition, provenance may live on legacy thesis edges,
+    direct decision/forecast source edges, or inline `metadata_json.sources` on
+    the decision/forecast rows. Treat any of those as coverage.
     """
 
     cur = conn.execute(
         """
-        SELECT d.id, d.thesis_id
+        SELECT d.id, d.thesis_id, d.forecast_id, d.metadata_json,
+               f.metadata_json AS forecast_metadata_json
         FROM decisions d
+        LEFT JOIN forecasts f ON f.id = d.forecast_id
         WHERE d.type = 'actual_enter'
-          AND d.thesis_id IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM edges e
-            WHERE e.source_kind = 'source'
-              AND e.target_kind = 'thesis'
-              AND e.target_id = d.thesis_id
-          )
         ORDER BY d.created_at, d.id
         """
     )
-    items = [{"id": d_id, "thesis_id": t_id} for d_id, t_id in cur.fetchall()]
+    items: list[dict[str, Any]] = []
+    for d_id, thesis_id, forecast_id, decision_meta, forecast_meta in cur.fetchall():
+        legacy_thesis_source = thesis_id is not None and conn.execute(
+            """
+            SELECT 1 FROM edges e
+            WHERE e.source_kind = 'source'
+              AND e.target_kind = 'thesis'
+              AND e.target_id = ?
+            LIMIT 1
+            """,
+            (thesis_id,),
+        ).fetchone() is not None
+        direct_decision_source = conn.execute(
+            """
+            SELECT 1 FROM edges e
+            WHERE e.source_kind = 'source'
+              AND e.target_kind = 'decision'
+              AND e.target_id = ?
+            LIMIT 1
+            """,
+            (d_id,),
+        ).fetchone() is not None
+        direct_forecast_source = forecast_id is not None and conn.execute(
+            """
+            SELECT 1 FROM edges e
+            WHERE e.source_kind = 'source'
+              AND e.target_kind = 'forecast'
+              AND e.target_id = ?
+            LIMIT 1
+            """,
+            (forecast_id,),
+        ).fetchone() is not None
+        if any((
+            legacy_thesis_source,
+            direct_decision_source,
+            direct_forecast_source,
+            _has_inline_sources(decision_meta),
+            _has_inline_sources(forecast_meta),
+        )):
+            continue
+        items.append({"id": d_id, "thesis_id": thesis_id, "forecast_id": forecast_id})
     return _bundle(
         diagnostic="missing_sources_on_actual_enter",
         items=items, sample_kind="decisions",

@@ -215,6 +215,15 @@ def _load_rows(conn: sqlite3.Connection, rf: ReportFilter) -> dict[str, list[dic
 
 def _resolve_binary_probability(conn: sqlite3.Connection, forecast_id: str, yes_label: str | None) -> tuple[float | None, None]:
     rows = conn.execute("SELECT outcome_label, probability FROM forecast_outcomes WHERE forecast_id = ?", (forecast_id,)).fetchall()
+    if rows and any(r[0] is None for r in rows):
+        return None, None
+
+    canonical_row = conn.execute(
+        "SELECT probability FROM forecasts WHERE id = ?", (forecast_id,),
+    ).fetchone()
+    if canonical_row is not None and canonical_row[0] is not None:
+        return float(canonical_row[0]), None
+
     if len(rows) != 2:
         return None, None
     # NULL outcome_label is a schema invariant violation (forecast_outcomes

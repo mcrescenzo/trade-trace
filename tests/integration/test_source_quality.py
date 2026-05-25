@@ -209,6 +209,22 @@ def test_missing_sources_silent_when_source_attached(home):
     assert diag["count"] == 0
 
 
+def test_missing_sources_silent_when_source_attached_directly_to_pm_records(home):
+    seeds = _seed_thesis_and_decision(home, decision_type="actual_enter")
+    src = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports", "uri": "https://e.x/direct-pm",
+        "idempotency_key": "00000000-0000-4000-8000-200000000101",
+    }).data["id"]
+    _mcp(home, "source.attach_to_decision", {
+        "source_id": src, "target_id": seeds["decision"],
+        "idempotency_key": "00000000-0000-4000-8000-200000000102",
+    })
+
+    env = _mcp(home, "report.source_quality", {})
+    diag = env.data["diagnostics"]["missing_sources_on_actual_enter"]
+    assert diag["count"] == 0
+
+
 # -- 5. (b) stale_sources -----------------------------------------
 
 

@@ -12,11 +12,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
+import sqlite3
 
+import pytest
 from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
+from trade_trace.storage.paths import db_path
 
 
 @pytest.fixture
@@ -103,6 +105,31 @@ def test_single_forecast_brier_matches_reference(home):
     env = _envelope(home, "report.calibration", {})
     data = env["data"]
     assert data["summary"]["metrics"]["brier"] == pytest.approx(0.16)
+    assert data["summary"]["sample_size"] == 1
+
+
+def test_calibration_prefers_canonical_forecast_probability_when_legacy_outcomes_disagree(home):
+    forecast_id = _seed_one_scored_forecast(home, p_yes=0.6)
+    with sqlite3.connect(db_path(home)) as conn:
+        assert conn.execute(
+            "SELECT probability FROM forecasts WHERE id = ?", (forecast_id,),
+        ).fetchone()[0] == pytest.approx(0.6)
+        conn.execute("DROP TRIGGER trg_forecasts_no_update")
+        conn.execute("UPDATE forecasts SET probability = 0.8 WHERE id = ?", (forecast_id,))
+        conn.execute(
+            """
+            CREATE TRIGGER trg_forecasts_no_update
+            BEFORE UPDATE ON forecasts
+            BEGIN
+                SELECT RAISE(ABORT, 'append-only invariant: UPDATE on forecasts is forbidden; use a supersedes edge to record a correction (persistence.md §8)');
+            END
+            """
+        )
+        conn.commit()
+
+    env = _envelope(home, "report.calibration", {})
+    data = env["data"]
+    assert data["summary"]["metrics"]["brier"] == pytest.approx(0.04)
     assert data["summary"]["sample_size"] == 1
 
 

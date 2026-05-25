@@ -296,13 +296,31 @@ def _resolve_p_yes_and_y(
         (forecast_id,),
     )
     rows = cur.fetchall()
-    if len(rows) != 2:
+    if rows and any(r[0] is None for r in rows):
         return None, None
-    if any(r[0] is None for r in rows):
-        return None, None
-    labels = {r[0].strip().lower(): r[1] for r in rows}
+
+    canonical_row = conn.execute(
+        "SELECT probability FROM forecasts WHERE id = ?", (forecast_id,),
+    ).fetchone()
+    canonical_probability = canonical_row[0] if canonical_row else None
     resolved_norm = outcome_label.strip().lower()
     yes_norm = yes_label.strip().lower() if yes_label else None
+    if canonical_probability is not None:
+        legacy_labels = {r[0].strip().lower() for r in rows if r[0] is not None}
+        if legacy_labels and resolved_norm not in legacy_labels:
+            return None, None
+        if yes_norm is None:
+            if resolved_norm in {"yes", "true"}:
+                yes_norm = resolved_norm
+            elif resolved_norm in {"no", "false"}:
+                yes_norm = "yes" if resolved_norm == "no" else "true"
+        if yes_norm is not None:
+            y = 1 if resolved_norm == yes_norm else 0
+            return float(canonical_probability), y
+
+    if len(rows) != 2:
+        return None, None
+    labels = {r[0].strip().lower(): r[1] for r in rows}
     if yes_norm is None:
         if "yes" in labels:
             yes_norm = "yes"

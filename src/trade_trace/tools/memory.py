@@ -406,14 +406,14 @@ def _memory_retain_in_uow(
     effective_valid_from = valid_from or created_at
     uow.execute(
         "INSERT INTO memory_nodes(id, node_type, version, "
-        "parent_node_id, title, body, meta_json, confidence_base, "
+        "parent_node_id, title, body, meta_json, metadata_json, confidence_base, "
         "decay_rate_per_day, importance, valid_from, valid_to, "
         "invalidated_at, invalidated_by, agent_id, model_id, "
         "environment, run_id, created_at, actor_id) VALUES "
-        "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)",
+        "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)",
         (
             node_id, node_type, args.get("version", 1), parent_node_id,
-            title, body, meta_json, confidence_base, decay_rate_per_day,
+            title, body, meta_json, meta_json, confidence_base, decay_rate_per_day,
             importance, effective_valid_from, valid_to,
             seg["agent_id"], seg["model_id"], seg["environment"],
             seg["run_id"], created_at, ctx.actor_id,

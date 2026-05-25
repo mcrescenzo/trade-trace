@@ -47,6 +47,35 @@ def test_policy_candidates_positive_source_backed_report(tmp_path):
     assert result["groups"][0]["record_ids"]["memory_nodes"] == ["mem-c1"]
 
 
+def test_policy_candidates_prefers_metadata_json_with_meta_json_fallback(tmp_path):
+    home = _init_home(tmp_path)
+    conn = sqlite3.connect(db_path(home))
+    try:
+        conn.execute(
+            """
+            INSERT INTO memory_nodes(
+                id, node_type, title, body, meta_json, metadata_json,
+                valid_from, created_at, actor_id
+            ) VALUES (?, 'reflection', ?, ?, '{}', ?, ?, ?, 'tester')
+            """,
+            (
+                "mem-canonical",
+                "canonical title",
+                "body",
+                json.dumps({"policy_candidate": {"status": "candidate", "candidate_statement": "Canonical metadata candidate", "scope": {"strategy_id": "s1"}}}),
+                NOW,
+                NOW,
+            ),
+        )
+        _insert_candidate(conn, "mem-legacy", {"status": "candidate", "candidate_statement": "Legacy metadata candidate", "scope": {"strategy_id": "s1"}})
+        conn.commit()
+        result = report_policy_candidates(conn, strategy_id="s1")
+    finally:
+        conn.close()
+
+    assert [item["node_id"] for item in result["policy_candidates"]] == ["mem-canonical", "mem-legacy"]
+
+
 def test_policy_candidates_rejected_superseded_missing_evidence_and_ordering(tmp_path):
     home = _init_home(tmp_path)
     conn = sqlite3.connect(db_path(home))

@@ -173,10 +173,20 @@ def _score_one_forecast(
         (forecast_id,),
     )
     rows = outcomes_cur.fetchall()
-    labels = {r[1].strip().lower(): (r[0], r[2]) for r in rows}
+    legacy_has_null_label = any(r[1] is None for r in rows)
+    labels = {r[1].strip().lower(): (r[0], r[2]) for r in rows if r[1] is not None}
 
     yes_norm = yes_label.strip().lower() if yes_label else None
-    if kind == "binary" and yes_norm is None:
+    canonical_row = conn.execute(
+        "SELECT probability FROM forecasts WHERE id = ?", (forecast_id,),
+    ).fetchone()
+    canonical_probability = canonical_row[0] if canonical_row else None
+    if kind == "binary" and canonical_probability is not None and yes_norm is None:
+        if resolved_label_norm in {"yes", "true"}:
+            yes_norm = resolved_label_norm
+        elif resolved_label_norm in {"no", "false"}:
+            yes_norm = "yes" if resolved_label_norm == "no" else "true"
+    if kind == "binary" and canonical_probability is None and yes_norm is None:
         # Heuristic per scoring.md §3.2.
         if "yes" in labels:
             yes_norm = "yes"
@@ -187,9 +197,20 @@ def _score_one_forecast(
 
     failure_reason: str | None = None
     score: float | None = None
-    if kind == "binary" and len(rows) != 2:
+    if legacy_has_null_label:
         failure_reason = "yes_label_ambiguous"
-    elif kind == "binary" and (yes_norm is None or yes_norm not in labels):
+    elif kind == "binary" and yes_norm is None:
+        failure_reason = "yes_label_ambiguous"
+    elif kind == "binary" and canonical_probability is not None:
+        if labels and resolved_label_norm not in labels:
+            failure_reason = "label_mismatch"
+        else:
+            p_yes = float(canonical_probability)
+            y = 1.0 if resolved_label_norm == yes_norm else 0.0
+            score = (p_yes - y) ** 2
+    elif kind == "binary" and len(rows) != 2:
+        failure_reason = "yes_label_ambiguous"
+    elif kind == "binary" and yes_norm not in labels:
         failure_reason = "yes_label_ambiguous"
     elif kind in ("binary", "categorical") and resolved_label_norm not in labels:
         failure_reason = "label_mismatch"
