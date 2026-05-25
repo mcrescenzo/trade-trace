@@ -12,6 +12,7 @@ from tests._direct_sql_builders import (
     insert_venue,
 )
 from trade_trace.mcp_server import mcp_call
+from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.storage import apply_pending_migrations, find_orphan_edges, open_database
 from trade_trace.storage.paths import db_path
 
@@ -104,14 +105,14 @@ def test_public_write_tool_rejects_missing_edge_endpoint(tmp_path: Path):
 
     env = mcp_call(
         "memory.link",
-        {
+        with_legacy_idempotency_key("memory.link", {
             "home": str(home),
             "source_kind": "memory_node",
             "source_id": source,
             "target_kind": "thesis",
             "target_id": "t_missing",
             "edge_type": "about",
-        },
+        }),
     )
 
     assert env.ok is False
@@ -137,14 +138,14 @@ def test_public_write_tool_valid_edge_still_works(tmp_path: Path):
 
     env = mcp_call(
         "memory.link",
-        {
+        with_legacy_idempotency_key("memory.link", {
             "home": str(home),
             "source_kind": "memory_node",
             "source_id": a,
             "target_kind": "memory_node",
             "target_id": b,
             "edge_type": "about",
-        },
+        }),
     )
 
     assert env.ok, env

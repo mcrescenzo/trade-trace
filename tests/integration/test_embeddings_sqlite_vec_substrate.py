@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from trade_trace.mcp_server import mcp_call
+from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.migrations import _migration_009_events_append_only
 from trade_trace.storage.paths import db_path
@@ -43,12 +44,12 @@ def test_embeddings_provider_local_does_not_load_sqlite_vec(monkeypatch, tmp_pat
     home = tmp_path / "home"
     _init(home)
 
-    env = mcp_call("journal.config_set", {
+    env = mcp_call("journal.config_set", with_legacy_idempotency_key("journal.config_set", {
         "home": str(home),
         "key": "embeddings.provider",
         "value": "local",
         "_confirm": True,
-    })
+    }))
     assert env.ok, env
 
     calls: list[object] = []
@@ -88,10 +89,10 @@ def test_vec_insert_and_similarity_query_round_trip(monkeypatch, tmp_path: Path)
     home = tmp_path / "home"
     _init(home)
     retain_a = mcp_call("memory.retain", {
-        "home": str(home), "node_type": "observation", "body": "alpha vector",
+        "home": str(home), "node_type": "observation", "body": "alpha vector", "id": "mem_alpha_vector", "idempotency_key": "test:retain-alpha-vector",
     })
     retain_b = mcp_call("memory.retain", {
-        "home": str(home), "node_type": "observation", "body": "beta vector",
+        "home": str(home), "node_type": "observation", "body": "beta vector", "id": "mem_beta_vector", "idempotency_key": "test:retain-beta-vector",
     })
     assert retain_a.ok and retain_b.ok
 

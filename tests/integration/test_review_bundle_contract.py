@@ -41,16 +41,21 @@ from trade_trace.tools.review_bundle import (
 
 
 def _seed_decision(home: Path, *, actor_id: str = "agent:default") -> dict:
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        suffix = db.connection.execute("SELECT COUNT(*) FROM decisions").fetchone()[0] + 1
+    finally:
+        db.close()
     venue = _mcp(home, "venue.add", {
-        "name": "PM", "kind": "prediction_market",
+        "name": f"PM {suffix}", "kind": "prediction_market",
     })
     instrument = _mcp(home, "instrument.add", {
-        "venue_id": venue.data["id"], "title": "T",
+        "venue_id": venue.data["id"], "title": f"T {suffix}",
         "asset_class": "prediction_market",
     })
     decision = mcp_call("decision.add", {
         "home": str(home), "instrument_id": instrument.data["id"],
-        "type": "skip", "reason": "no edge today",
+        "type": "skip", "reason": f"no edge today {suffix}",
     }, actor_id=actor_id)
     assert decision.ok
     return {

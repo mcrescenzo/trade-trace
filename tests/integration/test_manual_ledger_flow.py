@@ -485,6 +485,7 @@ def test_source_add_and_attach(home):
     attach = _envelope(home, "source.attach_to_thesis", {
         "source_id": source["data"]["id"],
         "target_id": thesis["data"]["id"],
+        "idempotency_key": "test:source-attach-to-thesis",
     })
     assert attach["ok"] is True
     assert attach["data"]["edge_type"] == "supports"
@@ -499,6 +500,7 @@ def test_source_attach_to_memory_node_m3_functional(home):
     env = _envelope(home, "source.attach_to_memory_node", {
         "source_id": "s_does_not_exist",
         "target_id": "mem_does_not_exist",
+        "idempotency_key": "test:source-attach-to-memory-node-missing",
     })
     assert env["ok"] is False
     assert env["error"]["code"] == "NOT_FOUND"

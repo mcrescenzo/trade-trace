@@ -24,7 +24,7 @@ def test_status_enabled_without_rpc_reports_config_booleans_and_network_active(t
     assert mcp_call("journal.init", {"home": str(home)}).ok
     assert mcp_call(
         "journal.config_set",
-        {"home": str(home), "key": "network.polymarket.enabled", "value": "true", "_confirm": True},
+        {"home": str(home), "key": "network.polymarket.enabled", "value": "true", "_confirm": True, "idempotency_key": "test-legacy:pm-enabled"},
     ).ok
     assert mcp_call(
         "journal.config_set",
@@ -33,6 +33,7 @@ def test_status_enabled_without_rpc_reports_config_booleans_and_network_active(t
             "key": "network.polymarket.gamma_base_url",
             "value": "https://gamma.example.test?secret=not-returned",
             "_confirm": True,
+            "idempotency_key": "test-legacy:pm-gamma-url",
         },
     ).ok
     env = mcp_call("journal.status", {"home": str(home)})

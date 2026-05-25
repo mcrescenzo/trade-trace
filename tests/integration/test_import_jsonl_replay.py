@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
@@ -20,7 +21,7 @@ def _write_jsonl(path: Path, lines: list[dict]) -> None:
 
 
 def _call(tool: str, args: dict, actor_id: str = "agent:default") -> dict:
-    return mcp_call(tool, args, actor_id=actor_id).model_dump(mode="json", exclude_none=True)
+    return mcp_call(tool, with_legacy_idempotency_key(tool, args), actor_id=actor_id).model_dump(mode="json", exclude_none=True)
 
 
 def _venue_line(key: str = "ven-1", venue_id: str | None = "ven_import_1") -> dict:

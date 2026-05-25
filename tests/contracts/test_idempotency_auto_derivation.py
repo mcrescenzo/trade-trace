@@ -11,16 +11,16 @@ the auto-derivation registry (administrative capabilities, per-row
 batch importers, attachment helpers that emit two distinct events)
 keep the strict cpz2 rejection path.
 
-Tests are `@pytest.mark.strict_idempotency` because the project-wide
-conftest patches `dispatch` to inject a counter-based key for every
-write call that lacks one — exactly the path this bead replaces.
-The marker drops the patch so the production auto-derivation runs.
+These tests are intentionally allowed to use normal project-wide pytest
+configuration: conftest must not inject test-only keys that mask production
+auto-derivation.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -31,6 +31,7 @@ from trade_trace.events.semantic_keys import (
     TOOL_PRIMARY_EVENT_TYPE,
     derive_idempotency_key,
 )
+from trade_trace.storage.paths import db_path
 
 
 def _init_home(tmp_path: Path) -> Path:
@@ -68,6 +69,31 @@ def test_auto_derived_key_matches_manual_canonical_hash(tmp_path):
     altered = dict(payload)
     altered["home"] = str(home) + "-x"
     assert derive_idempotency_key("venue.add", altered) == expected
+
+
+def test_default_pytest_dispatch_uses_production_auto_key_not_test_auto(tmp_path):
+    """Ordinary tests must see production `auto:` keys, not the former
+    global `test-auto:` injector."""
+
+    home = _init_home(tmp_path)
+    payload = {"home": str(home), "name": "DefaultAuto", "kind": "manual"}
+    expected = derive_idempotency_key("venue.add", payload)
+    assert expected is not None and expected.startswith("auto:")
+
+    body = _core_module.dispatch(
+        "venue.add", dict(payload), actor_id="agent:default",
+    ).model_dump(mode="json", exclude_none=True)
+    assert body["ok"] is True
+    assert body["meta"]["idempotency_source"] == "auto"
+
+    with sqlite3.connect(db_path(home)) as conn:
+        stored_key = conn.execute(
+            "SELECT idempotency_key FROM events WHERE event_type = ?",
+            ("venue.created",),
+        ).fetchone()[0]
+    assert stored_key == expected
+    assert stored_key.startswith("auto:")
+    assert not stored_key.startswith("test-auto:")
 
 
 @pytest.mark.strict_idempotency

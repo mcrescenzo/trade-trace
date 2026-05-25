@@ -8,6 +8,7 @@ import pytest
 from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope
 from trade_trace.mcp_server import mcp_call
+from tests._mcp_helpers import with_legacy_idempotency_key
 
 FIXTURES = Path(__file__).parent / "fixtures" / "polymarket"
 
@@ -19,13 +20,17 @@ def _fixture(name: str) -> dict:
 def _enable_adapter(home: str, *, polygon_rpc_url: str | None = None) -> None:
     assert mcp_call(
         "journal.config_set",
-        {"home": home, "key": "network.polymarket.enabled", "value": "true", "confirm": True},
+        with_legacy_idempotency_key("journal.config_set", {"home": home, "key": "network.polymarket.enabled", "value": "true", "confirm": True}),
     ).ok
     if polygon_rpc_url is not None:
         assert mcp_call(
             "journal.config_set",
-            {"home": home, "key": "network.polymarket.polygon_rpc_url", "value": polygon_rpc_url, "confirm": True},
+            with_legacy_idempotency_key("journal.config_set", {"home": home, "key": "network.polymarket.polygon_rpc_url", "value": polygon_rpc_url, "confirm": True}),
         ).ok
+
+
+def _legacy_call(tool: str, args: dict):
+    return mcp_call(tool, with_legacy_idempotency_key(tool, args))
 
 
 def test_outcome_fetch_disabled_fails_closed(tmp_path: Path):
@@ -37,7 +42,7 @@ def test_outcome_fetch_disabled_fails_closed(tmp_path: Path):
     )
     assert market.ok, market
     assert isinstance(market, SuccessEnvelope)
-    env = mcp_call("outcome.fetch", {"home": home, "market_id": market.data["id"]})
+    env = _legacy_call("outcome.fetch", {"home": home, "market_id": market.data["id"]})
     assert not env.ok
     assert isinstance(env, ErrorEnvelope)
     assert env.error.code == "ADAPTER_DISABLED"
@@ -52,7 +57,7 @@ def test_outcome_fetch_enabled_requires_polygon_rpc(tmp_path: Path, monkeypatch:
     assert market.ok, market
     assert isinstance(market, SuccessEnvelope)
 
-    env = mcp_call("outcome.fetch", {"home": home, "market_id": market.data["id"]})
+    env = _legacy_call("outcome.fetch", {"home": home, "market_id": market.data["id"]})
 
     assert not env.ok
     assert isinstance(env, ErrorEnvelope)
@@ -71,8 +76,8 @@ def test_outcome_fetch_enabled_records_fixture_resolution_idempotently(tmp_path:
     assert market.ok, market
     assert isinstance(market, SuccessEnvelope)
 
-    first = mcp_call("outcome.fetch", {"home": home, "market_id": market.data["id"]})
-    second = mcp_call("outcome.fetch", {"home": home, "market_id": market.data["id"]})
+    first = _legacy_call("outcome.fetch", {"home": home, "market_id": market.data["id"]})
+    second = _legacy_call("outcome.fetch", {"home": home, "market_id": market.data["id"]})
 
     assert first.ok, first
     assert isinstance(first, SuccessEnvelope)

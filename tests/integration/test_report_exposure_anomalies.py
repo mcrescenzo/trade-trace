@@ -23,12 +23,12 @@ def _call(home: Path, args: dict | None = None) -> dict:
     return dump_envelope(env)
 
 
-def _instrument(home: Path) -> str:
+def _instrument(home: Path, title: str = "Will X happen?") -> str:
     venue = dump_envelope(mcp_call("venue.add", {"home": str(home), "name": "Test", "kind": "prediction_market"}))
     assert venue["ok"] is True, venue
     inst = dump_envelope(mcp_call(
         "instrument.add",
-        {"home": str(home), "venue_id": venue["data"]["id"], "asset_class": "prediction_market", "title": "Will X happen?"},
+        {"home": str(home), "venue_id": venue["data"]["id"], "asset_class": "prediction_market", "title": title},
     ))
     assert inst["ok"] is True, inst
     return inst["data"]["id"]
@@ -133,8 +133,8 @@ def test_exposure_anomalies_flags_duplicate_record_only_and_missing_position_eve
 
 
 def test_exposure_anomalies_flags_missing_and_stale_mark(home: Path) -> None:
-    instr_missing = _instrument(home)
-    instr_stale = _instrument(home)
+    instr_missing = _instrument(home, "Missing mark instrument")
+    instr_stale = _instrument(home, "Stale mark instrument")
     _insert_position(home, instrument_id=instr_missing, position_id="pos_missing_mark", unrealized_pnl=None)
     _insert_position(home, instrument_id=instr_stale, position_id="pos_stale_mark", unrealized_pnl=1.5)
     _insert_snapshot(home, instrument_id=instr_stale, captured_at="2026-05-01T00:00:00Z")

@@ -34,7 +34,7 @@ def _fixture(name: str) -> dict:
 def _enable_adapter(home: str) -> None:
     assert mcp_call(
         "journal.config_set",
-        {"home": home, "key": "network.polymarket.enabled", "value": "true", "confirm": True},
+        {"home": home, "key": "network.polymarket.enabled", "value": "true", "confirm": True, "idempotency_key": "test-legacy:config-polymarket-enabled"},
     ).ok
 
 

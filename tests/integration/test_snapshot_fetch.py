@@ -8,6 +8,7 @@ import pytest
 from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope
 from trade_trace.mcp_server import mcp_call
+from tests._mcp_helpers import with_legacy_idempotency_key
 
 FIXTURES = Path(__file__).parent / "fixtures" / "polymarket"
 
@@ -29,15 +30,19 @@ def _manual_market(home: str, external_id: str = "pm-snap") -> str:
 def _enable_adapter(home: str) -> None:
     assert mcp_call(
         "journal.config_set",
-        {"home": home, "key": "network.polymarket.enabled", "value": "true", "confirm": True},
+        with_legacy_idempotency_key("journal.config_set", {"home": home, "key": "network.polymarket.enabled", "value": "true", "confirm": True}),
     ).ok
+
+
+def _legacy_call(tool: str, args: dict):
+    return mcp_call(tool, with_legacy_idempotency_key(tool, args))
 
 
 def test_snapshot_fetch_disabled_fails_closed(tmp_path: Path):
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok
     market_id = _manual_market(home)
-    env = mcp_call("snapshot.fetch", {"home": home, "market_id": market_id})
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id})
     assert not env.ok
     assert isinstance(env, ErrorEnvelope)
     assert env.error.code == "ADAPTER_DISABLED"
@@ -47,7 +52,7 @@ def test_snapshot_fetch_series_disabled_fails_closed(tmp_path: Path):
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok
     market_id = _manual_market(home)
-    env = mcp_call(
+    env = _legacy_call(
         "snapshot.fetch_series",
         {"home": home, "market_id": market_id, "from": "2026-01-01T00:00:00Z", "to": "2026-01-02T00:00:00Z"},
     )
@@ -64,7 +69,7 @@ def test_snapshot_fetch_enabled_captures_fixture_book(tmp_path: Path, monkeypatc
 
     monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: _fixture("snapshot_thick_book.json"))
 
-    env = mcp_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
 
     assert env.ok, env
     assert isinstance(env, SuccessEnvelope)
@@ -92,7 +97,7 @@ def test_snapshot_fetch_rejects_invalid_numeric_book_fields_with_typed_error(
 
     monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: raw)
 
-    env = mcp_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
     assert not env.ok
     assert isinstance(env, ErrorEnvelope)
     assert env.error.code == "ADAPTER_PROTOCOL_ERROR"
@@ -106,7 +111,7 @@ def test_snapshot_fetch_blank_and_missing_numeric_book_fields_stay_none(tmp_path
 
     monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: {"volume": "10"})
 
-    env = mcp_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
     assert env.ok, env
     assert isinstance(env, SuccessEnvelope)
     assert env.data["bid"] is None
@@ -127,7 +132,7 @@ def test_snapshot_fetch_blank_string_numeric_book_fields_stay_none(tmp_path: Pat
         lambda self, path: {"bestBid": "", "bestAsk": "", "price": "", "volume": "10"},
     )
 
-    env = mcp_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
     assert env.ok, env
     assert isinstance(env, SuccessEnvelope)
     assert env.data["bid"] is None
@@ -148,7 +153,7 @@ def test_snapshot_fetch_series_enabled_writes_each_fixture_point(tmp_path: Path,
     ]
     monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: {"points": points})
 
-    env = mcp_call(
+    env = _legacy_call(
         "snapshot.fetch_series",
         {"home": home, "market_id": market_id, "from": "2026-01-01T00:00:00Z", "to": "2026-01-01T02:00:00Z"},
     )

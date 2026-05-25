@@ -103,9 +103,11 @@ def test_decision_velocity_counts_per_day(home):
     })
     _envelope(home, "decision.add", {
         "instrument_id": inst["data"]["id"], "type": "skip", "reason": "a",
+        "idempotency_key": "test:decision-velocity-a",
     })
     _envelope(home, "decision.add", {
         "instrument_id": inst["data"]["id"], "type": "skip", "reason": "b",
+        "idempotency_key": "test:decision-velocity-b",
     })
     env = _envelope(home, "report.decision_velocity", {"bucket": "day"})
     assert env["data"]["summary"]["sample_size"] == 2

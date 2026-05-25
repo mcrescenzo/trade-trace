@@ -18,6 +18,7 @@ from pathlib import Path
 from trade_trace.cli import main as cli_main
 from trade_trace.core import default_registry, dispatch
 from trade_trace.mcp_server import mcp_call
+from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.tools.imports import (
     ImportCommitOutput,
     ImportJSONLLine,
@@ -42,7 +43,7 @@ def test_import_validate_reports_missing_path():
 
 
 def test_import_commit_reports_missing_path():
-    env = mcp_call("import.commit", {"path": "/tmp/x.jsonl"}).model_dump(
+    env = mcp_call("import.commit", with_legacy_idempotency_key("import.commit", {"path": "/tmp/x.jsonl"})).model_dump(
         mode="json", exclude_none=True
     )
     assert env["ok"] is False
@@ -120,15 +121,16 @@ def test_jsonl_envelope_replay_through_core(tmp_path: Path):
 
 
 def test_cli_import_commit_parity():
-    mcp = mcp_call("import.commit", {"path": "/tmp/x.jsonl"}).model_dump(
-        mode="json", exclude_none=True
-    )
+    mcp = mcp_call(
+        "import.commit", {"path": "/tmp/x.jsonl", "_allow_no_idempotency": True}
+    ).model_dump(mode="json", exclude_none=True)
 
     buf = io.StringIO()
     with redirect_stdout(buf):
         rc = cli_main([
             "--actor-id", "agent:default",
             "--request-id", "rid",
+            "--allow-no-idempotency",
             "import", "commit",
             "--path", "/tmp/x.jsonl",
         ])

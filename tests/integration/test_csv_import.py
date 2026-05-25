@@ -4,13 +4,14 @@ import json
 import socket
 from pathlib import Path
 
+from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.core import default_registry, dispatch
 from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
 
 
 def _env(tool: str, args: dict, *, actor_id: str = "import:test") -> dict:
-    return dispatch(tool, args, actor_id=actor_id).model_dump(mode="json", exclude_none=True)
+    return dispatch(tool, with_legacy_idempotency_key(tool, args), actor_id=actor_id).model_dump(mode="json", exclude_none=True)
 
 
 def _init_with_instrument(home: Path) -> str:

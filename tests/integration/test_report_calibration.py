@@ -11,6 +11,7 @@ Covers acceptance:
 from __future__ import annotations
 
 import sqlite3
+from itertools import count
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,8 @@ from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage.paths import db_path
+
+_SEED_COUNTER = count(1)
 
 
 @pytest.fixture
@@ -36,16 +39,23 @@ def _seed_one_scored_forecast(
     """Resolve one forecast end-to-end via the public surface. Returns the
     forecast_id."""
 
-    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    seed = next(_SEED_COUNTER)
+    venue = _envelope(home, "venue.add", {
+        "name": f"PM {seed}", "kind": "prediction_market",
+        "idempotency_key": f"test:calibration-venue-{seed}",
+    })
     inst = _envelope(home, "instrument.add", {
         "venue_id": venue["data"]["id"],
-        "asset_class": "prediction_market", "title": "X",
+        "asset_class": "prediction_market", "title": f"X {seed}",
+        "idempotency_key": f"test:calibration-instrument-{seed}",
     })
     thesis = _envelope(home, "thesis.add", {
         "instrument_id": inst["data"]["id"], "side": "yes", "body": "...",
+        "idempotency_key": f"test:calibration-thesis-{seed}",
     })
     f = _envelope(home, "forecast.add", {
         "thesis_id": thesis["data"]["id"], "kind": "binary", "yes_label": yes_label,
+        "idempotency_key": f"test:calibration-forecast-{seed}",
         "outcomes": [
             {"outcome_label": yes_label, "probability": p_yes},
             {"outcome_label": "no", "probability": 1.0 - p_yes},
@@ -55,6 +65,7 @@ def _seed_one_scored_forecast(
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": resolved_label, "status": "resolved_final",
+        "idempotency_key": f"test:calibration-outcome-{seed}",
     })
     return f["data"]["id"]
 

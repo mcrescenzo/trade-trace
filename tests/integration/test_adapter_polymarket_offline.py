@@ -10,6 +10,7 @@ from trade_trace.adapters.polymarket.config import PolymarketConfig
 from trade_trace.adapters.polymarket.errors import AdapterError
 from trade_trace.adapters.polymarket.retry import retry_policy_kwargs
 from trade_trace.mcp_server import mcp_call
+from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.tools._market_rows import adapter_cache_hit_row_dict
 from trade_trace.tools.adapter_polymarket import _market_cache_hit
 
@@ -48,21 +49,21 @@ def test_journal_init_reread_reports_enabled_adapter_without_endpoint_values(tmp
     assert mcp_call("journal.init", {"home": home}).ok
     assert mcp_call(
         "journal.config_set",
-        {
+        with_legacy_idempotency_key("journal.config_set", {
             "home": home,
             "key": "network.polymarket.enabled",
             "value": "true",
             "confirm": True,
-        },
+        }),
     ).ok
     assert mcp_call(
         "journal.config_set",
-        {
+        with_legacy_idempotency_key("journal.config_set", {
             "home": home,
             "key": "network.polymarket.polygon_rpc_url",
             "value": "https://polygon-rpc.com/rpc/super-secret-key?token=***",
             "confirm": True,
-        },
+        }),
     ).ok
 
     env = mcp_call("journal.init", {"home": home})
