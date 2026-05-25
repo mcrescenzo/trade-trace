@@ -73,6 +73,31 @@ def test_strategy_performance_wrapper_no_strategy_edge(home):
     assert env["data"]["groups"][0]["metrics"]["closed_count"] == 2
 
 
+def test_strategy_performance_contract_is_wrapper_only_not_old_prd_metric_stack(home):
+    _seed_positions(home)
+    env = _env(home, "report.strategy_performance", {})
+    assert env["ok"], env
+
+    data = env["data"]
+    assert data["summary"]["base_report"] == "pnl"
+    assert data["summary"]["group_by"] == "strategy_id"
+    assert data["groups"]
+
+    deferred_top_level_fields = {
+        "calibration_trend",
+        "mistake_tag_frequency",
+        "playbook_adherence_summary",
+    }
+    assert deferred_top_level_fields.isdisjoint(data)
+    assert deferred_top_level_fields.isdisjoint(data["summary"])
+
+    for group in data["groups"]:
+        assert set(group["metrics"]) >= {"closed_count", "realized_pnl", "unrealized_pnl", "mark_to_market_pnl"}
+        assert "positions" in group["record_ids"]
+        assert deferred_top_level_fields.isdisjoint(group)
+        assert deferred_top_level_fields.isdisjoint(group["metrics"])
+
+
 def test_strategy_performance_single_strategy_absent_is_empty(home):
     _seed_positions(home)
     env = _env(home, "report.strategy_performance", {"strategy_id": "strat_missing"})

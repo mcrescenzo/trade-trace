@@ -542,12 +542,43 @@ per group; the summary aggregates over all groups.
 
 ### 4.7.1 `report.strategy_performance` (shipped wrapper)
 
-Decision for trade-trace-4md: this is implemented as a convenience
-wrapper over `report.compare(base_report='pnl', group_by='strategy_id')`,
-not as a separate metric stack. Optional `strategy_id` narrows to one
-strategy; omission compares all strategies and includes the `__none__`
-no-strategy bucket when positions cannot be traced to a strategy-linked
-decision.
+Decision for trade-trace-4md, reaffirmed for trade-trace-7h9n: this is
+implemented as a convenience wrapper over
+`report.compare(base_report='pnl', group_by='strategy_id')`; it is not a
+separate metric stack. Optional `strategy_id` narrows to one strategy;
+omission compares all strategies and includes the `__none__` no-strategy
+bucket when positions cannot be traced to a strategy-linked decision.
+
+Current output fields are the `report.compare`/`ReportResult` fields for
+the P&L base report: `summary.base_report="pnl"`,
+`summary.group_by="strategy_id"`, `groups[]`, per-group filters,
+per-group `record_ids.positions`, examples, sample warnings, and P&L
+metrics inherited from `report.compare`/`report.pnl` (`realized_pnl`,
+`unrealized_pnl`, `mark_to_market_pnl`, `closed_count`, `open_count`).
+Those position IDs are the contributing record IDs for the shipped
+contract.
+
+Deferred old-PRD fields are explicitly not emitted by
+`report.strategy_performance`: calibration trend, mistake-tag frequency,
+and playbook-adherence summary remain future/separate contract work.
+Use the following drill-downs instead of inferring those metrics from the
+wrapper:
+
+- Calibration trend: run `report.calibration` for one strategy, or
+  `report.compare(base_report='calibration', group_by='strategy_id')` to
+  compare strategies. Drill down with the returned forecast,
+  forecast-score, and outcome IDs.
+- Mistake-tag frequency: run `report.mistakes` with a strategy/time
+  filter when that compatibility report supports the desired slice, and
+  drill down using its returned decision/forecast IDs and filter.
+- Playbook-adherence summary: run `report.playbook_adherence` with the
+  same strategy/time filter and drill down using its returned decision or
+  adherence row IDs.
+
+Caveats: the wrapper reports local journal rows only; unsupported or
+missing source data is not backfilled, estimated, or inferred into the
+deferred fields. It is deterministic, read-only, and does not provide trading advice,
+signals, edge claims, or profit recommendations.
 
 ### 4.8 `report.calibration_integrity` (MVP hardening)
 

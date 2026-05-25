@@ -269,7 +269,10 @@ def test_journal_backup_outputs_are_0600_with_0700_dir(
 
     dest = tmp_path / "backup-dest"
     env = mcp_call("journal.backup", {
-        "home": str(home), "dest": str(dest), "_confirm": True,
+        "home": str(home),
+        "dest": str(dest),
+        "_confirm": True,
+        "idempotency_key": "security-perms-backup-output",
     })
     assert env.ok, env
 
@@ -306,7 +309,10 @@ def test_journal_restore_tightens_permissive_backup_modes(
 
     backup = tmp_path / "backup-src"
     env = mcp_call("journal.backup", {
-        "home": str(home), "dest": str(backup), "_confirm": True,
+        "home": str(home),
+        "dest": str(backup),
+        "_confirm": True,
+        "idempotency_key": "security-perms-restore-backup",
     })
     assert env.ok, env
 
@@ -320,7 +326,10 @@ def test_journal_restore_tightens_permissive_backup_modes(
 
     restored_home = tmp_path / "restored-home"
     env = mcp_call("journal.restore", {
-        "home": str(restored_home), "src": str(backup), "_confirm": True,
+        "home": str(restored_home),
+        "src": str(backup),
+        "_confirm": True,
+        "idempotency_key": "security-perms-restore-output",
     })
     assert env.ok, env
 

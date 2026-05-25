@@ -59,7 +59,10 @@ def test_keyring_revoke_is_legacy_noop_and_secret_free(monkeypatch, tmp_path):
     home = tmp_path / "home"
     _init_home(home)
 
-    preview = mcp_call("keyring.revoke", {"home": str(home)})
+    preview = mcp_call(
+        "keyring.revoke",
+        {"home": str(home), "_allow_no_idempotency": True},
+    )
     assert preview.ok, preview
     assert preview.data == {
         "preview_only": True,
