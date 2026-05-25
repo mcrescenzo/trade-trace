@@ -159,6 +159,38 @@ def test_propose_version_rejects_non_reflection_node(home):
     assert env.error.details["field"] == "provenance_reflection_node_id"
 
 
+def test_propose_version_endpoint_errors_are_exact_and_ordered(home):
+    ref = _seed_reflection(home, idem_suffix="missing-pb-order")
+    missing_pb = _mcp(home, "playbook.propose_version", {
+        "playbook_id": "pbk_missing_for_propose",
+        "provenance_reflection_node_id": ref,
+        "idempotency_key": "00000000-0000-4000-8000-pb-pv-mpb",
+    })
+    assert missing_pb.ok is False
+    assert missing_pb.error.code.value == "NOT_FOUND"
+    assert missing_pb.error.message == "playbook 'pbk_missing_for_propose' not found"
+    assert missing_pb.error.details == {
+        "entity_kind": "playbook",
+        "playbook_id": "pbk_missing_for_propose",
+    }
+
+    pb = _mcp(home, "playbook.create", {
+        "name": "PB-MissingRef", "idempotency_key": "00000000-0000-4000-8000-pb-mr-1",
+    }).data["id"]
+    missing_ref = _mcp(home, "playbook.propose_version", {
+        "playbook_id": pb,
+        "provenance_reflection_node_id": "mem_missing_ref_for_propose",
+        "idempotency_key": "00000000-0000-4000-8000-pb-pv-mrf",
+    })
+    assert missing_ref.ok is False
+    assert missing_ref.error.code.value == "NOT_FOUND"
+    assert missing_ref.error.message == "reflection node 'mem_missing_ref_for_propose' not found"
+    assert missing_ref.error.details == {
+        "entity_kind": "memory_node",
+        "memory_node_id": "mem_missing_ref_for_propose",
+    }
+
+
 def test_propose_version_rejects_rules_json_without_creating_bare_version(home):
     pb = _mcp(home, "playbook.create", {
         "name": "PB-RulesJson", "idempotency_key": "00000000-0000-4000-8000-pb-rj-1",
@@ -399,6 +431,67 @@ def test_record_adherence_rejects_non_playbook_rule_node(home, adherence_setup):
     assert env.error.details["field"] == "rule_node_id"
 
 
+def test_record_adherence_endpoint_errors_are_exact_and_ordered(home, adherence_setup):
+    cases = [
+        (
+            {"decision_id": "dec_missing_for_adherence"},
+            "NOT_FOUND",
+            "decision 'dec_missing_for_adherence' not found",
+            {"entity_kind": "decision", "decision_id": "dec_missing_for_adherence"},
+        ),
+        (
+            {"playbook_version_id": "pbv_missing_for_adherence"},
+            "NOT_FOUND",
+            "playbook_version 'pbv_missing_for_adherence' not found",
+            {
+                "entity_kind": "playbook_version",
+                "playbook_version_id": "pbv_missing_for_adherence",
+            },
+        ),
+        (
+            {"rule_node_id": "mem_missing_rule_for_adherence"},
+            "NOT_FOUND",
+            "rule node 'mem_missing_rule_for_adherence' not found",
+            {"entity_kind": "memory_node", "memory_node_id": "mem_missing_rule_for_adherence"},
+        ),
+    ]
+
+    for i, (override, code, message, details) in enumerate(cases):
+        args = {
+            "decision_id": adherence_setup["decision_id"],
+            "playbook_version_id": adherence_setup["version_id"],
+            "rule_node_id": adherence_setup["rule_id"],
+            "status": "considered",
+            "idempotency_key": f"00000000-0000-4000-8000-pb-adh-ep{i}",
+            **override,
+        }
+        env = _mcp(home, "decision.record_adherence", args)
+        assert env.ok is False
+        assert env.error.code.value == code
+        assert env.error.message == message
+        assert env.error.details == details
+
+    non_rule = _seed_reflection(home, idem_suffix="bad-rule-exact")
+    wrong_type = _mcp(home, "decision.record_adherence", {
+        "decision_id": adherence_setup["decision_id"],
+        "playbook_version_id": adherence_setup["version_id"],
+        "rule_node_id": non_rule,
+        "status": "considered",
+        "idempotency_key": "00000000-0000-4000-8000-pb-adh-wrt",
+    })
+    assert wrong_type.ok is False
+    assert wrong_type.error.code.value == "VALIDATION_ERROR"
+    assert wrong_type.error.message == (
+        "rule_node_id must reference a memory_node with "
+        "node_type='playbook_rule'; got 'reflection'"
+    )
+    assert wrong_type.error.details == {
+        "field": "rule_node_id",
+        "memory_node_id": non_rule,
+        "actual_node_type": "reflection",
+    }
+
+
 def test_record_adherence_unknown_status_rejected(home, adherence_setup):
     env = _mcp(home, "decision.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
@@ -629,6 +722,17 @@ def test_playbook_adherence_and_report_match_missing_playbook(home):
     assert wrapper_env.ok is False
     assert report_env.error.code.value == wrapper_env.error.code.value == "NOT_FOUND"
     assert report_env.error.details == wrapper_env.error.details
+
+
+def test_playbook_adherence_missing_playbook_error_is_exact(home):
+    env = _mcp(home, "playbook.adherence", {"playbook_id": "pb_missing_for_wrapper_exact"})
+    assert env.ok is False
+    assert env.error.code.value == "NOT_FOUND"
+    assert env.error.message == "playbook 'pb_missing_for_wrapper_exact' not found"
+    assert env.error.details == {
+        "entity_kind": "playbook",
+        "playbook_id": "pb_missing_for_wrapper_exact",
+    }
 
 
 def test_report_playbook_adherence_filter_by_strategy(home):

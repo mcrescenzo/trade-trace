@@ -50,6 +50,94 @@ from trade_trace.tools.errors import ToolError
 ADHERENCE_STATUSES = ("considered", "followed", "overridden", "not_applicable")
 
 
+def _require_playbook(conn: Any, playbook_id: str) -> None:
+    if conn.execute(
+        "SELECT 1 FROM playbooks WHERE id = ?", (playbook_id,),
+    ).fetchone() is None:
+        raise ToolError(
+            ErrorCode.NOT_FOUND,
+            f"playbook {playbook_id!r} not found",
+            details={"entity_kind": "playbook", "playbook_id": playbook_id},
+        )
+
+
+def _require_decision(conn: Any, decision_id: str) -> None:
+    if conn.execute(
+        "SELECT 1 FROM decisions WHERE id = ?", (decision_id,),
+    ).fetchone() is None:
+        raise ToolError(
+            ErrorCode.NOT_FOUND,
+            f"decision {decision_id!r} not found",
+            details={"entity_kind": "decision", "decision_id": decision_id},
+        )
+
+
+def _require_playbook_version(conn: Any, playbook_version_id: str) -> None:
+    if conn.execute(
+        "SELECT 1 FROM playbook_versions WHERE id = ?",
+        (playbook_version_id,),
+    ).fetchone() is None:
+        raise ToolError(
+            ErrorCode.NOT_FOUND,
+            f"playbook_version {playbook_version_id!r} not found",
+            details={
+                "entity_kind": "playbook_version",
+                "playbook_version_id": playbook_version_id,
+            },
+        )
+
+
+def _require_reflection_node(conn: Any, reflection_node_id: str) -> None:
+    ref_row = conn.execute(
+        "SELECT node_type FROM memory_nodes WHERE id = ?",
+        (reflection_node_id,),
+    ).fetchone()
+    if ref_row is None:
+        raise ToolError(
+            ErrorCode.NOT_FOUND,
+            f"reflection node {reflection_node_id!r} not found",
+            details={
+                "entity_kind": "memory_node",
+                "memory_node_id": reflection_node_id,
+            },
+        )
+    if ref_row[0] != "reflection":
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "provenance_reflection_node_id must reference a "
+            f"memory_node with node_type='reflection'; got {ref_row[0]!r}",
+            details={
+                "field": "provenance_reflection_node_id",
+                "memory_node_id": reflection_node_id,
+                "actual_node_type": ref_row[0],
+            },
+        )
+
+
+def _require_playbook_rule_node(conn: Any, rule_node_id: str) -> None:
+    rule_row = conn.execute(
+        "SELECT node_type FROM memory_nodes WHERE id = ?",
+        (rule_node_id,),
+    ).fetchone()
+    if rule_row is None:
+        raise ToolError(
+            ErrorCode.NOT_FOUND,
+            f"rule node {rule_node_id!r} not found",
+            details={"entity_kind": "memory_node", "memory_node_id": rule_node_id},
+        )
+    if rule_row[0] != "playbook_rule":
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "rule_node_id must reference a memory_node with "
+            f"node_type='playbook_rule'; got {rule_row[0]!r}",
+            details={
+                "field": "rule_node_id",
+                "memory_node_id": rule_node_id,
+                "actual_node_type": rule_row[0],
+            },
+        )
+
+
 def _schema(properties: dict[str, Any], *, required: list[str] | None = None, description: str = "") -> dict[str, Any]:
     return {
         "type": "object",
@@ -428,38 +516,8 @@ def _playbook_propose_version(
     db = open_db_for_args(args)
     try:
         with UnitOfWork(db.connection) as uow:
-            # Endpoint validation: playbook exists.
-            pb_row = uow.conn.execute(
-                "SELECT 1 FROM playbooks WHERE id = ?", (playbook_id,),
-            ).fetchone()
-            if pb_row is None:
-                raise ToolError(
-                    ErrorCode.NOT_FOUND,
-                    f"playbook {playbook_id!r} not found",
-                    details={"entity_kind": "playbook",
-                             "playbook_id": playbook_id},
-                )
-            # The reflection node must exist AND be of type='reflection'.
-            ref_row = uow.conn.execute(
-                "SELECT node_type FROM memory_nodes WHERE id = ?",
-                (reflection_node_id,),
-            ).fetchone()
-            if ref_row is None:
-                raise ToolError(
-                    ErrorCode.NOT_FOUND,
-                    f"reflection node {reflection_node_id!r} not found",
-                    details={"entity_kind": "memory_node",
-                             "memory_node_id": reflection_node_id},
-                )
-            if ref_row[0] != "reflection":
-                raise ToolError(
-                    ErrorCode.VALIDATION_ERROR,
-                    "provenance_reflection_node_id must reference a "
-                    f"memory_node with node_type='reflection'; got {ref_row[0]!r}",
-                    details={"field": "provenance_reflection_node_id",
-                             "memory_node_id": reflection_node_id,
-                             "actual_node_type": ref_row[0]},
-                )
+            _require_playbook(uow.conn, playbook_id)
+            _require_reflection_node(uow.conn, reflection_node_id)
 
             replay = check_idempotency_replay(
                 uow, event_type="playbook.proposed_version",
@@ -588,46 +646,9 @@ def _decision_record_adherence(
     db = open_db_for_args(args)
     try:
         with UnitOfWork(db.connection) as uow:
-            # Validate endpoints.
-            if uow.conn.execute(
-                "SELECT 1 FROM decisions WHERE id = ?", (decision_id,),
-            ).fetchone() is None:
-                raise ToolError(
-                    ErrorCode.NOT_FOUND,
-                    f"decision {decision_id!r} not found",
-                    details={"entity_kind": "decision",
-                             "decision_id": decision_id},
-                )
-            if uow.conn.execute(
-                "SELECT 1 FROM playbook_versions WHERE id = ?",
-                (playbook_version_id,),
-            ).fetchone() is None:
-                raise ToolError(
-                    ErrorCode.NOT_FOUND,
-                    f"playbook_version {playbook_version_id!r} not found",
-                    details={"entity_kind": "playbook_version",
-                             "playbook_version_id": playbook_version_id},
-                )
-            rule_row = uow.conn.execute(
-                "SELECT node_type FROM memory_nodes WHERE id = ?",
-                (rule_node_id,),
-            ).fetchone()
-            if rule_row is None:
-                raise ToolError(
-                    ErrorCode.NOT_FOUND,
-                    f"rule node {rule_node_id!r} not found",
-                    details={"entity_kind": "memory_node",
-                             "memory_node_id": rule_node_id},
-                )
-            if rule_row[0] != "playbook_rule":
-                raise ToolError(
-                    ErrorCode.VALIDATION_ERROR,
-                    "rule_node_id must reference a memory_node with "
-                    f"node_type='playbook_rule'; got {rule_row[0]!r}",
-                    details={"field": "rule_node_id",
-                             "memory_node_id": rule_node_id,
-                             "actual_node_type": rule_row[0]},
-                )
+            _require_decision(uow.conn, decision_id)
+            _require_playbook_version(uow.conn, playbook_version_id)
+            _require_playbook_rule_node(uow.conn, rule_node_id)
 
             event_type = (
                 "playbook_rule.overridden" if status == "overridden"
@@ -709,16 +730,7 @@ def _playbook_adherence(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
     try:
         # Confirm the playbook exists so the report doesn't silently
         # return zero rows for a typo.
-        pb_row = db.connection.execute(
-            "SELECT 1 FROM playbooks WHERE id = ?", (playbook_id,),
-        ).fetchone()
-        if pb_row is None:
-            raise ToolError(
-                ErrorCode.NOT_FOUND,
-                f"playbook {playbook_id!r} not found",
-                details={"entity_kind": "playbook",
-                         "playbook_id": playbook_id},
-            )
+        _require_playbook(db.connection, playbook_id)
         return report_playbook_adherence(
             db.connection,
             playbook_id=playbook_id,
