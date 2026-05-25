@@ -17,6 +17,9 @@ audits/
 docs/audits/
 docs/reviews/
 
+# Local agent state
+.claude/
+
 # Python package artifacts
 __pycache__/
 *.egg-info/
