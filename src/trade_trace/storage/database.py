@@ -11,6 +11,7 @@ journal.init tool wraps this to provide the user-facing idempotent setup.
 
 from __future__ import annotations
 
+import itertools
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -20,6 +21,7 @@ from pathlib import Path
 from trade_trace._permissions import chmod_user_only_dir, chmod_user_only_file
 
 BUSY_TIMEOUT_MS = 5000
+_SAVEPOINT_COUNTER = itertools.count(1)
 
 
 def _configured_embeddings_provider(conn: sqlite3.Connection) -> str:
@@ -88,8 +90,30 @@ class Database:
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
         """Run a block in a single SQLite transaction. Commits on success,
-        rolls back on exception."""
+        rolls back on exception.
 
+        `open_database` keeps SQLite in autocommit mode so ordinary statements
+        persist immediately outside this context manager. Start an explicit
+        transaction here; otherwise rollback after an exception cannot undo
+        statements that SQLite has already autocommitted.
+
+        Nested callers use a savepoint so an inner failure rolls back only the
+        inner block, and an inner success remains owned by the outer transaction.
+        """
+
+        if self.connection.in_transaction:
+            savepoint = f"__trade_trace_txn_{next(_SAVEPOINT_COUNTER)}"
+            self.connection.execute(f"SAVEPOINT {savepoint}")
+            try:
+                yield self.connection
+                self.connection.execute(f"RELEASE SAVEPOINT {savepoint}")
+            except Exception:
+                self.connection.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                self.connection.execute(f"RELEASE SAVEPOINT {savepoint}")
+                raise
+            return
+
+        self.connection.execute("BEGIN")
         try:
             yield self.connection
             self.connection.commit()
