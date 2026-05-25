@@ -289,6 +289,10 @@ _ALLOWED_NETWORK_IMPORT_FILES: tuple[str, ...] = (
     # still run under the socket/DNS no_network fixture, preserving the default
     # air-gap guarantee.
     "src/trade_trace/tools/admin.py",
+    # trade-trace-mmze: opt-in Polymarket adapter client imports httpx only in
+    # the adapter code path. journal.init/status/schema remain offline and the
+    # adapter fails closed unless network.polymarket.enabled=true.
+    "src/trade_trace/adapters/polymarket/client.py",
 )
 """Paths under src/ allowed to import a forbidden network library.
 Narrow by design — default MVP behavior makes no outbound calls. Adding an
@@ -303,10 +307,13 @@ def test_no_forbidden_network_imports_in_src():
     VISION safety §) is a first-class invariant. Adding a real network
     dependency is a docs + bead change, not a silent import."""
 
-    assert _ALLOWED_NETWORK_IMPORT_FILES == ("src/trade_trace/tools/admin.py",), (
-        "Only the trade-trace-89x opt-in local embeddings model.import path may "
-        "import urllib.request; future network imports need explicit docs + bead "
-        "review and must not weaken default no-network behavior."
+    assert _ALLOWED_NETWORK_IMPORT_FILES == (
+        "src/trade_trace/tools/admin.py",
+        "src/trade_trace/adapters/polymarket/client.py",
+    ), (
+        "Only reviewed opt-in network paths may import network libraries; future "
+        "network imports need explicit docs + bead review and must not weaken "
+        "default no-network behavior."
     )
 
     root = Path(__file__).resolve().parents[2] / "src" / "trade_trace"

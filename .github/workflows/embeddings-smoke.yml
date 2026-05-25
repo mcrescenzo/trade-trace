@@ -1,0 +1,28 @@
+name: Embeddings optional-deps smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly non-blocking smoke to catch upstream wheel availability drift.
+    - cron: "17 9 * * 1"
+
+jobs:
+  embeddings-smoke:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+        python-version: ["3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install optional embeddings extra
+        run: python -m pip install -e ".[embeddings]"
+      - name: Import optional embeddings dependencies
+        run: python -c "import onnxruntime, tokenizers; print('embeddings optional deps import ok')"

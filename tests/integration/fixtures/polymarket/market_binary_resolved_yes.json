@@ -1,0 +1,1 @@
+{"id":"pm-res-yes","question":"Resolved YES?","closed":true,"resolved":true,"winningOutcome":"Yes","resolvedAt":"2026-01-02T00:00:00Z","resolution_tx":"0xresolutionyes","outcome":{"status":"resolved_final","label":"Yes","resolved_at":"2026-01-02T00:00:00Z","tx_hash":"0xresolutionyes"},"outcomes":[{"name":"Yes"},{"name":"No"}]}

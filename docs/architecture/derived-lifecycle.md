@@ -62,4 +62,4 @@ Representative case shape:
 }
 ```
 
-`report.work_queue` and `agent.next_actions` are projections over this lifecycle substrate. They may turn `pending_review`, `stale`, `reflection_due`, or `adherence_due` cases into process-obligation items, but they remain derived/read-only and close only when source journal rows change or are superseded. They must not be interpreted as scheduler state, assignments, human dashboard tickets, market signals, advice, broker truth, or permission to fetch outcomes/market data.
+`report.work_queue` is a projection over this lifecycle substrate. It may turn `pending_review`, `stale`, `reflection_due`, or `adherence_due` cases into process-obligation items, but they remain derived/read-only and close only when source journal rows change or are superseded. They must not be interpreted as scheduler state, assignments, human dashboard tickets, market signals, advice, broker truth, or permission to fetch outcomes/market data.

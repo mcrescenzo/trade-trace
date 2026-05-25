@@ -29,8 +29,8 @@ disagreeing on the report's identity."""
 DEFAULT_MIN_SAMPLE = 20
 """Per reports.md §3.2 / scoring.md §7.1: N=20 is the calibration floor."""
 
-DEFAULT_BIN_POLICY = "equal_width_0.1"
-"""Reliability-bin policy. 10 equal-width bins is the MVP per scoring.md §9.2."""
+DEFAULT_BIN_POLICY = "equal_mass"
+"""Reliability-bin policy. Equal-mass bins are the v0.0.2 calibration default."""
 
 LOG_EPS = 1e-9
 
@@ -46,6 +46,7 @@ class _ScoredRow:
     p_yes: float
     y: int  # 0 or 1
     late_recorded: bool
+    baseline_probability: float | None = None
 
 
 def report_calibration(
@@ -136,6 +137,102 @@ def report_calibration(
     )
 
 
+
+def report_calibration_anchored(
+    conn: sqlite3.Connection,
+    *,
+    raw_filter: dict[str, Any] | None = None,
+    min_sample: int = DEFAULT_MIN_SAMPLE,
+) -> dict[str, Any]:
+    return _market_baseline_report(conn, raw_filter=raw_filter, min_sample=min_sample, mode="anchored")
+
+
+def report_calibration_terminal(
+    conn: sqlite3.Connection,
+    *,
+    raw_filter: dict[str, Any] | None = None,
+    min_sample: int = DEFAULT_MIN_SAMPLE,
+) -> dict[str, Any]:
+    return _market_baseline_report(conn, raw_filter=raw_filter, min_sample=min_sample, mode="terminal")
+
+
+def _market_baseline_report(conn: sqlite3.Connection, *, raw_filter: dict[str, Any] | None, min_sample: int, mode: str) -> dict[str, Any]:
+    rf = ReportFilter.model_validate(raw_filter or {})
+    enforce_supported_filter(rf, report=f"report.calibration_{mode}")
+    all_rows, unanchored = _load_market_baseline_rows(conn, rf, mode=mode)
+    if rf.outcome.include_late_recorded:
+        excluded_late = 0
+        rows = all_rows
+    else:
+        excluded_late = sum(1 for r in all_rows if r.late_recorded)
+        rows = [r for r in all_rows if not r.late_recorded]
+    sample_size = len(rows)
+    sample_warning = None if sample_size >= min_sample else f"only {sample_size} scored forecasts; calibration is unreliable below {min_sample}"
+    metrics = _compute_metrics(rows) if rows else _empty_metrics()
+    metrics["late_recorded_excluded"] = excluded_late
+    metrics["unanchored_forecast_count"] = unanchored
+    caveats = []
+    if unanchored:
+        caveats.append(f"{unanchored} scored forecast(s) lacked a {mode} market baseline and were excluded from market-baseline metrics.")
+    summary = {"sample_size": sample_size, "sample_warning": sample_warning, "filter": applied_filter_view(rf, report=f"report.calibration_{mode}"), "metrics": metrics, "caveats": caveats, "late_recorded_excluded": excluded_late, "unanchored_forecast_count": unanchored}
+    groups = [{"key": "all", "label": f"All scored binary forecasts with {mode} market baseline", "metrics": metrics, "filter": summary["filter"], "record_ids": {"forecasts": sorted({r.forecast_id for r in rows}), "forecast_scores": sorted({r.score_id for r in rows}), "outcomes": sorted({r.outcome_id for r in rows})}, "examples": _build_examples(conn, rows, max_examples=3), "sample_size": sample_size, "sample_warning": sample_warning, "truncated": False}]
+    return standard_report_result(summary=summary, groups=groups, extra={"bin_policy": DEFAULT_BIN_POLICY, "baseline_mode": mode})
+
+
+def _load_market_baseline_rows(conn: sqlite3.Connection, rf: ReportFilter, *, mode: str) -> tuple[list[_ScoredRow], int]:
+    base = _load_scored_rows(conn, rf)
+    if not base:
+        return [], 0
+    score_ids = [r.score_id for r in base]
+    forecast_ids = [r.forecast_id for r in base]
+    probabilities: dict[str, float] = {}
+    if mode == "anchored":
+        rows = conn.execute(
+            f"""
+            SELECT forecast_id, market_implied_probability
+            FROM forecast_snapshot_anchor
+            WHERE forecast_id IN ({_placeholders(len(forecast_ids))})
+              AND market_implied_probability IS NOT NULL
+            """,
+            forecast_ids,
+        ).fetchall()
+        anchor_probs = {str(forecast_id): float(prob) for forecast_id, prob in rows}
+        probabilities = {r.score_id: anchor_probs[r.forecast_id] for r in base if r.forecast_id in anchor_probs}
+    else:
+        rows = conn.execute(
+            f"""
+            WITH terminal_candidates AS (
+                SELECT fs.id AS score_id,
+                       s.implied_probability,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY fs.id
+                           ORDER BY s.captured_at DESC, s.created_at DESC, s.id DESC
+                       ) AS rn
+                FROM forecast_scores fs
+                JOIN forecasts f ON f.id = fs.forecast_id
+                JOIN outcomes o ON o.id = fs.outcome_id
+                JOIN snapshots s ON s.instrument_id = f.market_id
+                WHERE fs.id IN ({_placeholders(len(score_ids))})
+                  AND s.implied_probability IS NOT NULL
+                  AND (o.resolved_at IS NULL OR s.captured_at <= o.resolved_at)
+            )
+            SELECT score_id, implied_probability
+            FROM terminal_candidates
+            WHERE rn = 1
+            """,
+            score_ids,
+        ).fetchall()
+        probabilities = {str(score_id): float(prob) for score_id, prob in rows}
+    output: list[_ScoredRow] = []
+    missing = 0
+    for r in base:
+        prob = probabilities.get(r.score_id)
+        if prob is None:
+            missing += 1
+            continue
+        output.append(_ScoredRow(r.forecast_id, r.score_id, r.outcome_id, r.p_yes, r.y, r.late_recorded, float(prob)))
+    return output, missing
+
 # -- data loading --------------------------------------------------------
 
 
@@ -207,6 +304,7 @@ def _materialize_scored_row(
     metadata_json: str | None,
     yes_label: str | None,
     outcome_label: str | None,
+    baseline_probability: float | None = None,
 ) -> _ScoredRow | None:
     """Shared post-fetch reconstruction (trade-trace-qnxt). Returns None
     when the p_yes/y pair can't be resolved (the original loaders both
@@ -232,6 +330,7 @@ def _materialize_scored_row(
         p_yes=p_yes,
         y=y,
         late_recorded=late,
+        baseline_probability=baseline_probability,
     )
 
 
@@ -338,7 +437,7 @@ def _resolve_p_yes_and_y(
 # -- metrics -------------------------------------------------------------
 
 
-def _compute_metrics(rows: list[_ScoredRow]) -> dict[str, Any]:
+def _compute_metrics(rows: list[_ScoredRow], *, bin_policy: str = DEFAULT_BIN_POLICY) -> dict[str, Any]:
     n = len(rows)
     p_values = [r.p_yes for r in rows]
     y_values = [r.y for r in rows]
@@ -350,15 +449,24 @@ def _compute_metrics(rows: list[_ScoredRow]) -> dict[str, Any]:
     ) / n
     p_bar = sum(p_values) / n
     sharpness = sum((p - p_bar) ** 2 for p in p_values) / n
-    baseline = sum(y_values) / n
-    brier_baseline = baseline * (1 - baseline)
-    log_baseline = (
-        -baseline * math.log(max(baseline, LOG_EPS))
-        - (1 - baseline) * math.log(max(1 - baseline, LOG_EPS))
-    )
+    baseline_values = [r.baseline_probability for r in rows if r.baseline_probability is not None]
+    if len(baseline_values) == n:
+        baseline = sum(baseline_values) / n
+        brier_baseline = sum((p - y) ** 2 for p, y in zip(baseline_values, y_values, strict=True)) / n
+        log_baseline = sum(
+            -y * math.log(max(p, LOG_EPS)) - (1 - y) * math.log(max(1 - p, LOG_EPS))
+            for p, y in zip(baseline_values, y_values, strict=True)
+        ) / n
+    else:
+        baseline = sum(y_values) / n
+        brier_baseline = baseline * (1 - baseline)
+        log_baseline = (
+            -baseline * math.log(max(baseline, LOG_EPS))
+            - (1 - baseline) * math.log(max(1 - baseline, LOG_EPS))
+        )
     skill = 1.0 - (brier / brier_baseline) if brier_baseline > 0 else None
 
-    ece, reliability_bins = _ece_and_bins(rows)
+    ece, reliability_bins = _ece_and_bins(rows, bin_policy=bin_policy)
 
     return {
         "brier": round(brier, 6),
@@ -382,7 +490,11 @@ def _empty_metrics() -> dict[str, Any]:
     }
 
 
-def _ece_and_bins(rows: list[_ScoredRow]) -> tuple[float, list[dict[str, Any]]]:
+def _ece_and_bins(rows: list[_ScoredRow], *, bin_policy: str = "equal_width_0.1") -> tuple[float, list[dict[str, Any]]]:
+    if bin_policy == "equal_mass":
+        return _ece_equal_mass(rows)
+    if bin_policy != "equal_width_0.1":
+        raise ValueError(f"unsupported ECE bin_policy {bin_policy!r}")
     """Equal-width 10-bin reliability per scoring.md §7.2 default policy.
 
     Bin assignment is fixed:
@@ -430,6 +542,38 @@ def _ece_and_bins(rows: list[_ScoredRow]) -> tuple[float, list[dict[str, Any]]]:
             "lower": lower,
             "upper": upper,
             "bin_midpoint": midpoint,
+            "count": len(bin_rows),
+            "mean_probability": round(mean_p, 6),
+            "observed_frequency": round(mean_y, 6),
+            "gap": round(gap, 6),
+        })
+    return ece, panel
+
+
+def _ece_equal_mass(rows: list[_ScoredRow], *, bin_count: int = 10) -> tuple[float, list[dict[str, Any]]]:
+    if not rows:
+        return 0.0, []
+    ordered = sorted(rows, key=lambda r: (r.p_yes, r.forecast_id, r.score_id))
+    n = len(ordered)
+    bins: list[list[_ScoredRow]] = []
+    for idx in range(min(bin_count, n)):
+        start = (idx * n) // min(bin_count, n)
+        end = ((idx + 1) * n) // min(bin_count, n)
+        bins.append(ordered[start:end])
+    ece = 0.0
+    panel: list[dict[str, Any]] = []
+    for idx, bin_rows in enumerate(bins):
+        lower = min(r.p_yes for r in bin_rows)
+        upper = max(r.p_yes for r in bin_rows)
+        mean_p = sum(r.p_yes for r in bin_rows) / len(bin_rows)
+        mean_y = sum(r.y for r in bin_rows) / len(bin_rows)
+        gap = mean_p - mean_y
+        ece += (len(bin_rows) / n) * abs(gap)
+        panel.append({
+            "bin_index": idx,
+            "lower": round(lower, 6),
+            "upper": round(upper, 6),
+            "bin_midpoint": round((lower + upper) / 2.0, 6),
             "count": len(bin_rows),
             "mean_probability": round(mean_p, 6),
             "observed_frequency": round(mean_y, 6),

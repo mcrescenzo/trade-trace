@@ -37,6 +37,14 @@ from trade_trace.storage.paths import db_path
 from trade_trace.tools.errors import ToolError
 from trade_trace.version import CONTRACT_VERSION, __version__
 
+
+def _polymarket_adapter_status(conn=None) -> tuple[dict[str, Any], bool]:
+    from trade_trace.adapters.polymarket.config import adapter_state_from_config, load_config
+
+    config = load_config(conn)
+    return adapter_state_from_config(config), config.outbound_network_active
+
+
 _TOOL_SCHEMA_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -89,6 +97,7 @@ def _journal_init(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         from trade_trace.storage.database import has_sqlite_vec
 
         vec = has_sqlite_vec(db.connection)
+        adapter_state, outbound_network_active = _polymarket_adapter_status(db.connection)
     finally:
         db.close()
 
@@ -101,7 +110,8 @@ def _journal_init(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         "fts5_available": fts5,
         "sqlite_vec_available": vec,
         "embeddings_provider": "none",
-        "outbound_network_active": False,
+        "outbound_network_active": outbound_network_active,
+        "adapter_state": adapter_state,
     }
 
 
@@ -116,8 +126,11 @@ def _journal_status(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         db = open_database(path, create_parent=False)
         try:
             schema_version = current_version(db.connection)
+            adapter_state, outbound_network_active = _polymarket_adapter_status(db.connection)
         finally:
             db.close()
+    else:
+        adapter_state, outbound_network_active = _polymarket_adapter_status()
 
     return {
         "home": str(home),
@@ -127,7 +140,8 @@ def _journal_status(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         "contract_version": CONTRACT_VERSION,
         "schema_version": schema_version,
         "embeddings_provider": "none",
-        "outbound_network_active": False,
+        "outbound_network_active": outbound_network_active,
+        "adapter_state": adapter_state,
     }
 
 

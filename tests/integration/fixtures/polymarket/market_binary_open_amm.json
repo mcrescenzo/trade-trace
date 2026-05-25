@@ -1,0 +1,1 @@
+{"id":"pm-open-amm","question":"Will AMM market resolve yes?","closed":false,"resolved":false,"amm":true,"ammCurve":{"points":[{"price":0.25,"shares":100},{"price":0.5,"shares":220},{"price":0.75,"shares":120}]},"outcomes":[{"name":"Yes"},{"name":"No"}]}

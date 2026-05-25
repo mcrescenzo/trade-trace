@@ -18,6 +18,13 @@ from .common import (
     report_calibration_integrity,
     report_decision_velocity,
     report_filter_validation_to_tool_error,
+    report_calibration_anchored,
+    report_calibration_terminal,
+    report_calibration_trajectory,
+    report_amm_slippage,
+    report_market_lifecycle,
+    report_resolution_quality,
+    report_time_decay_sharpening,
     report_forecast_diagnostics,
     report_unscored_forecasts,
 )
@@ -51,6 +58,106 @@ def _report_calibration(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         # Embed integrity diagnostics in the panel so the panel can never
         # be read without the denominator/hygiene context.
         data["integrity_diagnostics"] = report_calibration_integrity(db.connection)
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_calibration_anchored(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_calibration_anchored(
+                db.connection,
+                raw_filter=args.get("filter"),
+                min_sample=args.get("min_sample") if args.get("min_sample") is not None else 20,
+            )
+        except ValidationError as exc:
+            raise report_filter_validation_to_tool_error(exc) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_calibration_terminal(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    db = open_db_for_args(args)
+    try:
+        try:
+            data = report_calibration_terminal(
+                db.connection,
+                raw_filter=args.get("filter"),
+                min_sample=args.get("min_sample") if args.get("min_sample") is not None else 20,
+            )
+        except ValidationError as exc:
+            raise report_filter_validation_to_tool_error(exc) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_calibration_trajectory(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    db = open_db_for_args(args)
+    try:
+        try:
+            min_sample = args.get("min_sample")
+            data = report_calibration_trajectory(
+                db.connection,
+                raw_filter=args.get("filter"),
+                min_sample=int(min_sample) if min_sample is not None else 20,
+            )
+        except ValidationError as exc:
+            raise report_filter_validation_to_tool_error(exc) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _pm_native_report_handler(func):
+    def _handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        db = open_db_for_args(args)
+        try:
+            try:
+                data = func(db.connection, raw_filter=args.get("filter"))
+            except ValidationError as exc:
+                raise report_filter_validation_to_tool_error(exc) from exc
+            except UnsupportedFilterError as exc:
+                raise _unsupported_filter_to_tool_error(exc) from exc
+        finally:
+            db.close()
+        _propagate_report_meta(ctx, data)
+        return data
+    return _handler
+
+
+_report_market_lifecycle = _pm_native_report_handler(report_market_lifecycle)
+_report_resolution_quality = _pm_native_report_handler(report_resolution_quality)
+_report_amm_slippage = _pm_native_report_handler(report_amm_slippage)
+
+
+def _report_time_decay_sharpening(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    db = open_db_for_args(args)
+    try:
+        try:
+            min_sample = args.get("min_sample")
+            data = report_time_decay_sharpening(
+                db.connection,
+                raw_filter=args.get("filter"),
+                min_sample=int(min_sample) if min_sample is not None else 20,
+            )
+        except ValidationError as exc:
+            raise report_filter_validation_to_tool_error(exc) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
     finally:
         db.close()
     _propagate_report_meta(ctx, data)

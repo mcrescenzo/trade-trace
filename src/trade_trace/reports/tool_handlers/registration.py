@@ -8,7 +8,10 @@ from trade_trace.reports.tool_schemas import _REPORT_SCHEMAS
 
 from .audit_quality import _report_audit_readiness, _report_playbook_adherence, _report_source_quality
 from .calibration_diagnostics import (
-    _report_calibration, _report_calibration_integrity, _report_decision_velocity,
+    _report_calibration, _report_calibration_anchored, _report_calibration_integrity,
+    _report_calibration_terminal, _report_calibration_trajectory,
+    _report_amm_slippage, _report_market_lifecycle, _report_resolution_quality,
+    _report_time_decay_sharpening, _report_decision_velocity,
     _report_forecast_diagnostics, _report_unscored_forecasts,
 )
 from .common import _make_filter_only_report
@@ -144,7 +147,7 @@ def register_report_tools(registry: ToolRegistry) -> None:
         _report_calibration,
         description=(
             "Calibration metric panel over scored binary forecasts: Brier, "
-            "log score, ECE (equal-width 0.1 bins), sharpness, baseline + "
+            "log score, ECE (equal-mass bins), sharpness, baseline + "
             "skill, plus reliability bins (scoring.md §7). Excludes "
             "late-recorded forecasts by default per dogfood-protocol §2.2 "
             "(opt in via filter.outcome.include_late_recorded). Emits a "
@@ -153,6 +156,55 @@ def register_report_tools(registry: ToolRegistry) -> None:
             "report.calibration_integrity under data.integrity_diagnostics."
         ),
         json_schema=_REPORT_SCHEMAS["report.calibration"]
+    )
+    registry.register(
+        "report.calibration_anchored",
+        _report_calibration_anchored,
+        description="Calibration over scored binary forecasts anchored to caller-supplied local market snapshots; baseline and skill use snapshot implied probabilities.",
+        optional_keys=("filter", "min_sample"),
+        json_schema=_REPORT_SCHEMAS["report.calibration"],
+    )
+    registry.register(
+        "report.calibration_terminal",
+        _report_calibration_terminal,
+        description="Calibration over scored binary forecasts with terminal local market snapshot baseline at or before resolution; no network or live market fetch.",
+        optional_keys=("filter", "min_sample"),
+        json_schema=_REPORT_SCHEMAS["report.calibration"],
+    )
+    registry.register(
+        "report.calibration_trajectory",
+        _report_calibration_trajectory,
+        description="Time-to-resolution trajectory calibration over scored binary forecasts using equal-mass bins; local journal only, no market calls.",
+        optional_keys=("filter", "min_sample"),
+        json_schema=_REPORT_SCHEMAS["report.calibration_trajectory"],
+    )
+    registry.register(
+        "report.market_lifecycle",
+        _report_market_lifecycle,
+        description="Local market lifecycle durations and engagement counts across open/closed/resolving/resolved states; no external market calls.",
+        optional_keys=("filter",),
+        json_schema=_REPORT_SCHEMAS["report.market_lifecycle"],
+    )
+    registry.register(
+        "report.resolution_quality",
+        _report_resolution_quality,
+        description="Local resolution quality diagnostics: status mix, ambiguous/void/disputed/cancelled counts, and pre-resolution uncertainty flags.",
+        optional_keys=("filter",),
+        json_schema=_REPORT_SCHEMAS["report.resolution_quality"],
+    )
+    registry.register(
+        "report.amm_slippage",
+        _report_amm_slippage,
+        description="AMM decision price versus linked local snapshot mark, reported in basis points; no broker, wallet, external quote, or advice path.",
+        optional_keys=("filter",),
+        json_schema=_REPORT_SCHEMAS["report.amm_slippage"],
+    )
+    registry.register(
+        "report.time_decay_sharpening",
+        _report_time_decay_sharpening,
+        description="Time-to-resolution sharpening diagnostics for scored binary forecasts, grouped by hours before resolution.",
+        optional_keys=("filter", "min_sample"),
+        json_schema=_REPORT_SCHEMAS["report.time_decay_sharpening"],
     )
     registry.register(
         "report.forecast_diagnostics",

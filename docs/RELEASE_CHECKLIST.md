@@ -1,100 +1,91 @@
-# Release checklist
+# v0.0.2 release checklist
 
-Trade Trace publishes pre-releases via the
-[`Publish to PyPI`](../.github/workflows/workflow.yml) workflow.
-Releases are gated on a `v<version>` tag that matches `pyproject.toml`
-and `src/trade_trace/version.py`, but the tag-triggered workflow is not
-complete release proof by itself. The GitHub Actions lane only runs the
-shared Python ruff/mypy/pytest gate, verifies the tag/package version,
-builds distributions, runs `twine check`, and then waits on the PyPI
-environment before trusted publishing. Fresh wheel smoke and any
-GitHub/PyPI remote environment-protection checks below are manual
-candidate evidence unless a future workflow explicitly automates them.
+Trade Trace v0.0.2 is a prediction-market-only, local-first release candidate. This checklist is pre-tag evidence, not permission to publish. Pushing a public branch, pushing a release tag, and PyPI publishing each require explicit owner approval for the exact candidate SHA.
 
-## Version + tag policy
+## Release boundary
 
-- The package stays on `0.0.x` pre-releases until the owner approves
-  a stable `0.0.1` cut. Each release is a `0.0.1rc<N>` (e.g.
-  `0.0.1rc3`).
-- `pyproject.toml` uses dynamic versioning and reads the package
-  version from `src/trade_trace/version.py` (`__version__`). The
-  source version and the git tag (stripped of its `v` prefix) must
-  agree before tagging.
-- The publish workflow builds from that dynamic version source and
-  aborts if the tag does not match the package metadata. See the
-  `Verify tag matches package versions` step in
-  [`workflow.yml`](../.github/workflows/workflow.yml).
+- Product: local calibration journal, memory, and evaluation substrate for LLM prediction-market agents.
+- Default posture: offline/local by default; Polymarket adapter disabled unless explicitly configured and called.
+- Non-goals: trade execution, broker/wallet credentials, financial advice, human dashboard/frontend, background scheduler/fetch daemon, default RPC endpoint, and generic continuous-asset trading journal support.
+- Hard break: v0.0.1rc-style fixtures/imports are not silently migrated. Legacy imports must fail with explicit transform-required guidance.
 
-## Pre-publish checks (run from a clean checkout)
+## Required gates before a v0.0.2 tag
 
-Record the candidate SHA, tag name, command outputs, and any skipped
-manual gate with a reason before pushing the release tag. A green PR/main
-CI run or a pushed tag is not sufficient proof that the candidate is
-ready to publish.
+Run from a clean checkout and record the candidate SHA plus command output.
 
-```bash
-ruff check src tests
-mypy src
-pytest -q                       # record the fresh current-HEAD result
-python -m build                 # no warnings; SPDX license + classifiers
-python -m twine check dist/*    # PASSED on both wheel and sdist
-```
+1. Install dev + embeddings extras:
+   ```bash
+   python -m pip install -e '.[dev,embeddings]'
+   python -c "import onnxruntime, tokenizers"
+   ```
+2. Static lint:
+   ```bash
+   ruff check src tests
+   ```
+3. Type check:
+   ```bash
+   mypy src
+   ```
+4. Full test suite:
+   ```bash
+   PYTHONPATH=src pytest -q
+   ```
+5. Fresh journal smoke:
+   ```bash
+   tt journal init
+   tt journal status
+   ```
+6. Offline/manual market-bind smoke, no adapter/network:
+   ```bash
+   tt market bind --external-id polymarket:test-condition --title "Test PM market" --idempotency-key release:test-market
+   ```
+7. Manual live-adapter HITL gate (not CI, not default): only if the owner supplies a disposable Polygon RPC URL and real public Polymarket condition. Configure in a throwaway `$TRADE_TRACE_HOME`, run `market.bind`, `snapshot.fetch`, and `outcome.fetch` when applicable, and record sanitized evidence only. If not supplied, explicitly record: live-adapter smoke not exercised; mocked/offline adapter coverage only.
+8. Documentation tests:
+   ```bash
+   PYTHONPATH=src pytest tests/docs -q
+   ```
+9. Documentation truthfulness review: README, SECURITY, PRD, VISION, agent guide, MCP setup, architecture docs, and this checklist must match runtime tool names and v0.0.2 scope.
+10. Security suite:
+    ```bash
+    PYTHONPATH=src pytest tests/security -q
+    ```
+11. Boundary audit:
+    ```bash
+    PYTHONPATH=src pytest tests/security/test_mvp_boundary_audit.py -q
+    ```
+12. Offline-default adapter gate:
+    ```bash
+    PYTHONPATH=src pytest tests/security/test_no_network_default.py tests/integration/test_adapter_polymarket_no_rpc.py -q
+    ```
+13. Adapter URL/secret scrubbing gate:
+    ```bash
+    PYTHONPATH=src pytest tests/security/test_adapter_url_scrubbing.py tests/security/test_adapter_endpoint_policy.py -q
+    ```
+14. Opt-in perf smoke:
+    ```bash
+    TRADE_TRACE_RUN_PERF_TESTS=1 PYTHONPATH=src pytest -q tests/integration/test_bootstrap_perf_baseline.py tests/integration/test_adapter_perf_baseline.py
+    ```
+15. Package build:
+    ```bash
+    python -m build
+    python -m twine check dist/*
+    ```
+16. Fresh wheel smoke in a new venv:
+    ```bash
+    python -m venv /tmp/trade-trace-v002-smoke
+    /tmp/trade-trace-v002-smoke/bin/pip install dist/trade_trace-<version>-py3-none-any.whl
+    /tmp/trade-trace-v002-smoke/bin/tt --help
+    /tmp/trade-trace-v002-smoke/bin/trade-trace-mcp --help || true
+    /tmp/trade-trace-v002-smoke/bin/pip check
+    ```
+17. Publication gate: verify PyPI trusted publisher / GitHub environment protection for the exact candidate before any tag or upload. Do not publish from local evidence alone.
 
-Smoke the wheel in a fresh venv built from the exact candidate. This is
-manual candidate proof today; CI/publish does not install the freshly
-built artifact before upload. Cover every shipped console script plus
-optional extras that apply to the candidate.
+## CI expectations
 
-```bash
-python -m venv /tmp/rc-smoke
-/tmp/rc-smoke/bin/pip install dist/trade_trace-<version>-py3-none-any.whl
-/tmp/rc-smoke/bin/tt --help
-/tmp/rc-smoke/bin/trade-trace --help
-/tmp/rc-smoke/bin/trade-trace-mcp --help    # or `echo | trade-trace-mcp`
-/tmp/rc-smoke/bin/pip check
-```
+- Ordinary CI must run adapter tests with network disabled or mocked.
+- Live adapter smoke is best-effort/manual and must not block default CI without explicit credentials.
+- `.github/workflows/embeddings-smoke.yml` runs a non-blocking weekly/workflow_dispatch optional-dependencies smoke on macOS arm64 and Windows.
 
-Scan refs intended for publication for leftover private/raw
-Beads/audit/review artifacts, personal info, or secret-shaped strings. For
-the current public release, use the selected clean public export/branch
-strategy and record reachable-history proof before any push:
+## Sanitization rules for release notes
 
-```bash
-git ls-files | grep -E '^(\.beads/|audits/|docs/audits/|docs/reviews/)'  # must be empty
-git ls-files docs/audits docs/reviews                                      # must be empty
-```
-
-Generated audit/review run directories are internal artifacts and must
-not be tracked in public HEAD. Release evidence intended for the public
-repo must be concise, curated proof/summary documentation such as this
-checklist and release proof docs, not raw run exports, candidate
-matrices, coverage ledgers, mutation logs, or Beads readbacks.
-
-Do not treat dated pytest counts in older release proof documents as
-current proof. Rerun `pytest -q` for the current HEAD and record the
-fresh result, or explicitly label any reused count as historical
-snapshot evidence.
-
-## Cut a release
-
-Before cutting a public release from this private working history, create or
-select the clean public export/branch candidate and verify its proof. Do not
-force-push/rewrite private `main` as part of the selected path. Pushing the
-public branch/export, pushing a release tag, and PyPI publishing each require
-separate explicit approval for the exact candidate SHA.
-
-1. Bump `src/trade_trace/version.py` (`__version__`). `pyproject.toml`
-   reads this dynamically; do not add a separate static project version.
-2. Commit on `main`. Open a PR; require maintainer approval.
-3. After merge, tag the merge commit: `git tag v0.0.1rc<N>` and push.
-4. GitHub Actions reruns only the shared Python test gate, verifies the
-   tag/package version, builds, and runs `twine check`. It does not rerun
-   the fresh-wheel smoke above.
-5. Verify the GitHub/PyPI trusted-publishing settings for the exact
-   candidate before pushing a release tag. Record the sanitized result in
-   [`docs/architecture/release-remote-publisher-proof.md`](architecture/release-remote-publisher-proof.md)
-   or a successor proof. Remote environment protection and PyPI trusted
-   publisher bindings are release gates; do not assume the local workflow
-   shape proves the remote settings are protected.
-
-Do not publish stable `0.0.1` until the owner records explicit approval.
+Never paste RPC URLs with keys, request/response bodies, API tokens, private Beads audit dumps, raw emails, or unredacted logs. Acceptable evidence: command names, status codes, latency summaries, public condition IDs, generated market IDs, test counts, and scrubbed error envelopes.

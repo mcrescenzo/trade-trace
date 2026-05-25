@@ -492,12 +492,12 @@ def test_non_late_forecast_does_not_carry_late_flag(home):
     assert json.loads(meta or "{}").get("late_recorded") is not True
 
 
-# -- unsupported forecasts stay pending ---------------------------------
+# -- binary-only v0.0.2 scoring boundary --------------------------------
 
 
-def test_categorical_kind_auto_scores(home):
-    """Categorical forecasts are scoring-supported and auto-score on a
-    resolved_final outcome."""
+def test_categorical_kind_rejected_and_not_auto_scored(home):
+    """v0.0.2 forecast.add rejects categorical forecasts, so outcome scoring does
+    not revive non-binary lifecycle paths."""
 
     instr_id, thesis_id = _setup_venue_instr_thesis(home)
     f = _envelope(home, "forecast.add", {
@@ -509,16 +509,13 @@ def test_categorical_kind_auto_scores(home):
             {"outcome_label": "c", "probability": 0.3},
         ],
     })
+    assert f["ok"] is False
+    assert f["error"]["code"] == "VALIDATION_ERROR"
+
     out = _envelope(home, "outcome.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "a",
         "status": "resolved_final",
     })
-    assert len(out["data"]["auto_scored_forecasts"]) == 1
-    db = open_database(db_path(home))
-    try:
-        state = derive_scoring_state(db.connection, f["data"]["id"])
-    finally:
-        db.close()
-    assert state == "scored"
+    assert out["data"]["auto_scored_forecasts"] == []

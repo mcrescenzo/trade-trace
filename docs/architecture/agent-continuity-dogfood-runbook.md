@@ -46,8 +46,10 @@ export AS_OF="2026-02-15T00:00:00Z"
 PYTHONPATH=src tt journal init --home "$TT_HOME"
 PYTHONPATH=src tt journal fixture_seed --home "$TT_HOME" --target agent-continuity-loop --allow-no-idempotency
 
-PYTHONPATH=src tt agent bootstrap --home "$TT_HOME" --as-of "$AS_OF" --filter-json '{}'
-PYTHONPATH=src tt agent next_actions --home "$TT_HOME" --as-of "$AS_OF" --stale-threshold-days 14
+PYTHONPATH=src tt report bootstrap --home "$TT_HOME" --as-of "$AS_OF" --filter-json '{}'
+PYTHONPATH=src tt report work_queue --home "$TT_HOME" --as-of "$AS_OF" --stale-threshold-days 14
+# Legacy removed examples: use `tt report bootstrap` instead of `tt agent bootstrap`,
+# and `tt report work_queue` instead of `tt agent next_actions`.
 PYTHONPATH=src tt report recall_receipts --home "$TT_HOME" --recall-id rec_agent_continuity_0001
 PYTHONPATH=src tt report strategy_health --home "$TT_HOME" --as-of "$AS_OF" --min-sample 20
 PYTHONPATH=src tt report forecast_diagnostics --home "$TT_HOME" --min-sample 20
@@ -80,7 +82,7 @@ PYTHONPATH=src tt replay case_bundle --home "$TT_HOME" \
 
 A passing run produces local JSON envelopes for each command above and enough evidence to mark AC-01..AC-09 pass/fail:
 
-- AC-01/AC-02: `agent.bootstrap` includes obligations and `agent.next_actions` includes at least one stale-review or due-resolution work item with local `source_refs` and forbidden actions.
+- AC-01/AC-02: `report.bootstrap` includes obligations and `report.work_queue` includes at least one stale-review or due-resolution work item with local `source_refs` and forbidden actions.
 - AC-03: `report.recall_receipts --recall-id rec_agent_continuity_0001` returns the deterministic receipt, two returned memory node IDs, and at least one `cited_or_used` item.
 - AC-04: recall/health/diagnostics outputs surface caveats for contradicted or low-sample evidence and avoid advice/ranking/profit language.
 - AC-05: read reports do not change core journal table counts; the focused integration test is the authoritative check.
@@ -97,7 +99,7 @@ Treat failures as fixture/contract/test signals, not subjective operator judgmen
 
 | Failure signal | Interpretation | Operator control |
 |---|---|---|
-| Missing obligations in `agent.bootstrap` or no stale/due items in `agent.next_actions` | AC-01/AC-02 cannot prove continuity recovery. | Inspect fixture inventory and lifecycle/work-queue report contracts; update fixture rows or scorecard expectations before claiming pass. |
+| Missing obligations in `report.bootstrap` or no stale/due items in `report.work_queue` | AC-01/AC-02 cannot prove continuity recovery. | Inspect fixture inventory and lifecycle/work-queue report contracts; update fixture rows or scorecard expectations before claiming pass. |
 | Stale ideas not surfaced | Staleness thresholds, local source rows, or work-queue synthesis are misaligned. | Use fixed `AS_OF`; adjust deterministic fixture or report tests, not ad hoc operator memory. |
 | Recall receipt mismatch or missing `rec_agent_continuity_0001` | AC-03 provenance is broken or fixture IDs drifted. | Re-seed fresh `TT_HOME`; if still failing, update fixture seed and recall receipt tests together. |
 | False confidence, advice, ranking, or profit language appears | AC-04/boundary failure. | Tighten report caveats and forbidden-language tests; do not sanitize after the fact and call it pass. |
@@ -124,7 +126,7 @@ All artifacts remain CLI/MCP/JSON-first, local-first SQLite, and based on caller
 Current roadmap decisions from the H3-H5 research/docs chain remain deferred unless repeated deterministic dogfood failures demand escalation:
 
 - **AgentRun table/API:** defer while row-level `actor_id`, `agent_id`, `model_id`, `environment`, `run_id`, request IDs, and idempotency are enough for attribution and replay grouping.
-- **Durable work-item state:** defer while derived `agent.bootstrap`, `report.lifecycle`, `report.work_queue`, and `agent.next_actions` expose obligations without assignment, claiming, snooze, locks, or scheduler semantics.
+- **Durable work-item state:** defer while derived `report.bootstrap`, `report.lifecycle`, and `report.work_queue` expose obligations without assignment, claiming, snooze, locks, or scheduler semantics.
 - **Standalone handoff coordination:** defer while bootstrap/work-queue/recall receipts support single-agent continuity; any future handoff must be a bounded packet over existing local surfaces, not a coordination service.
 
 Escalate only with repeated, reproducible failures in the local runbook that cannot be fixed by fixture, scorecard, report, or test updates under the existing boundaries.

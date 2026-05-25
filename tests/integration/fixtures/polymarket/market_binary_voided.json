@@ -1,0 +1,1 @@
+{"id":"pm-voided","question":"Voided market?","closed":true,"resolved":true,"voided":true,"outcome":{"status":"void","label":"void","resolution_source":"market_contract"},"outcomes":[{"name":"Yes"},{"name":"No"}]}

@@ -22,6 +22,8 @@ from trade_trace.tools._helpers import (
     require,
     store_metadata_json,
 )
+from trade_trace.adapters.polymarket.config import load_config
+from trade_trace.tools.adapter_polymarket import _upsert_market
 from trade_trace.tools.errors import ToolError
 
 _ALLOWED_SOURCES = {"polymarket", "kalshi", "manifold", "predictit", "manual"}
@@ -93,6 +95,13 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
     source = _required_enum(args, "source", _ALLOWED_SOURCES)
     external_id = require(args, "external_id")
+    if source == "polymarket" and args.get("bound_via") != "manual":
+        probe_db = open_db_for_args(args)
+        try:
+            if load_config(probe_db.connection).enabled:
+                return _upsert_market(args, ctx)
+        finally:
+            probe_db.close()
     state = _required_enum(args, "state", _ALLOWED_STATES)
     mechanism = _required_enum(args, "mechanism", _ALLOWED_MECHANISMS)
     resolution_source = _optional_enum(args, "resolution_source", _ALLOWED_RESOLUTION_SOURCES)

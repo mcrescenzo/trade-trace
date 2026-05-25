@@ -27,6 +27,7 @@ from trade_trace.events.log import IdempotencyConflictError
 from trade_trace.events.semantic_keys import derive_idempotency_key
 from trade_trace.events.unit_of_work import DRY_RUN_FLAG
 from trade_trace.storage.paths import HomePathValidationError
+from trade_trace.tools.adapter_polymarket import register_adapter_polymarket_tools
 from trade_trace.tools.admin import register_admin_tools
 from trade_trace.tools.csv_import import register_csv_import
 from trade_trace.tools.errors import ToolError
@@ -110,6 +111,7 @@ def _apply_v002_catalog_overlay(registry: ToolRegistry) -> None:
     """
 
     register_market_bind_tool(registry)
+    register_adapter_polymarket_tools(registry)
     registry.alias("resolution.add", "outcome.add", legacy_name="outcome.add")
     registry.alias(
         "playbook.record_adherence",

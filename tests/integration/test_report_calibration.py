@@ -402,16 +402,11 @@ def test_reliability_bins_emitted(home):
     _seed_one_scored_forecast(home, p_yes=0.6)
     env = _envelope(home, "report.calibration", {})
     bins = env["data"]["summary"]["metrics"]["reliability_bins"]
-    # 10 equal-width bins, canonical field names per scoring.md §7.2
-    assert len(bins) == 10
-    # p_yes=0.6 lands in bin idx=6 (0.6..0.7)
-    bin_with_data = next(b for b in bins if b["count"] > 0)
-    assert bin_with_data["bin_index"] == 6
+    # v0.0.2 default is equal-mass ECE; with one forecast there is one non-empty bin.
+    assert len(bins) == 1
+    bin_with_data = bins[0]
+    assert bin_with_data["bin_index"] == 0
     assert bin_with_data["lower"] == pytest.approx(0.6)
-    assert bin_with_data["upper"] == pytest.approx(0.7)
-    assert bin_with_data["bin_midpoint"] == pytest.approx(0.65)
-    # empty bins surface count=0 with null means
-    empty_bin = next(b for b in bins if b["count"] == 0)
-    assert empty_bin["mean_probability"] is None
-    assert empty_bin["observed_frequency"] is None
-    assert empty_bin["gap"] is None
+    assert bin_with_data["upper"] == pytest.approx(0.6)
+    assert bin_with_data["bin_midpoint"] == pytest.approx(0.6)
+    assert env["data"]["bin_policy"] == "equal_mass"

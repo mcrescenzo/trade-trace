@@ -12,17 +12,17 @@ A minimal agent loop is ordered so every later record can point back to the evid
 
 For a fresh/stateless run, start with the local bootstrap packet before creating a new thesis, forecast, decision, outcome, or reflection. Bootstrap and its follow-up reports are read-only/process-only views over caller-supplied local journal rows. They do **not** fetch market data, verify broker truth, fetch outcomes, schedule work, assign tasks, execute anything, or provide a trading recommendation, market ranking, or return claim.
 
-1. Inspect the current schema for `agent.bootstrap` (or its report alias `report.bootstrap`) before calling it.
-2. Call `agent.bootstrap` with a fixed `as_of`, the narrowest supported `filter`, and explicit `sections`/`budgets` when the packet could be large.
+1. Inspect the current schema for `report.bootstrap` before calling it.
+2. Call `report.bootstrap` with a fixed `as_of`, the narrowest supported `filter`, and explicit `sections`/`budgets` when the packet could be large.
 3. Inspect `truncation`, `omitted_counts`, `caveats`, `source_refs`, and `suggested_process_calls`. If a section is partial or omitted, do not treat missing items as absent.
-4. Before any new write, make targeted local read calls such as `report.lifecycle`, `report.work_queue` / `agent.next_actions`, `report.recall_receipts`, `review.bundle`, or another specific report/drilldown suggested by the packet.
+4. Before any new write, make targeted local read calls such as `report.lifecycle`, `report.work_queue`, `report.recall_receipts`, `review.bundle`, or another specific report/drilldown suggested by the packet.
 5. Only then write new thesis/decision/outcome/reflection rows, and only when supported by local evidence or caller-supplied evidence that you can cite with source IDs.
 
 Safe CLI examples:
 
 ```bash
-tt tool schema --home <journal-home> --tool agent.bootstrap
-tt agent bootstrap --home <journal-home> \
+tt tool schema --home <journal-home> --tool report.bootstrap
+tt report bootstrap --home <journal-home> \
   --as-of 2026-05-22T00:00:00Z \
   --filter-json '{"run_id":"run-2026-05-22","strategy_ids":["strat-a"]}' \
   --sections-json '["current_scope","obligations","memory_context","caveats","suggested_process_calls"]' \
@@ -42,7 +42,7 @@ After reading the packet, use targeted process/read surfaces rather than jumping
 ```bash
 tt report lifecycle --home <journal-home> --as-of 2026-05-22T00:00:00Z --states-json '["pending_review","stale","reflection_due","adherence_due"]'
 tt report work_queue --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["resolve_due_forecast","record_reflection"]'
-tt agent next_actions --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["review_due_watch","record_playbook_adherence"]'
+tt report work_queue --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["review_due_watch","record_playbook_adherence"]'
 tt report recall_receipts --home <journal-home> --as-of 2026-05-22T00:00:00Z --run-id run-2026-05-22 --limit 25
 tt review bundle --home <journal-home> --filter-json '{"strategy":{"strategy_id":"strat-a"}}' --max-records 25
 ```
@@ -51,7 +51,7 @@ MCP JSON example for bootstrap:
 
 ```json
 {
-  "tool": "agent.bootstrap",
+  "tool": "report.bootstrap",
   "args": {
     "as_of": "2026-05-22T00:00:00Z",
     "filter": {"run_id": "run-2026-05-22", "strategy_ids": ["strat-a"]},
@@ -77,60 +77,54 @@ Anti-patterns for bootstrap and continuity reports:
 - Do not start a stateless run with writes; inspect bootstrap, lifecycle/work-queue, and targeted recall/review/report drilldowns first.
 - Do not invent memory, citations, outcomes, or lessons not backed by returned `source_refs`, recall IDs, memory node IDs, or caller-supplied evidence.
 
-If you only have an unstructured market thought after checking bootstrap and continuity surfaces, start with `idea.capture` to create a local draft source/observation and promote it later. When a run is partially complete, call `journal.bundle.status` with the known `instrument_id`, `thesis_id`, `forecast_id`, `decision_id`, `source_id`, or `memory_node_id`; it is read-only and returns concrete `next_calls` for missing local journal steps.
+When a run is partially complete, use `report.lifecycle`, `report.work_queue`, `review.bundle`, and `tool.schema` to identify the next local journal step; do not use removed draft/bundle helper names as current commands.
 
-1. `venue.add` — create or identify the source venue.
-
-```json
-{"tool":"venue.add","args":{"name":"Polymarket","kind":"prediction_market","idempotency_key":"agent-run-42:venue:polymarket"}}
-```
-
-2. `instrument.add` — create or identify the market/instrument under that venue. Keep `resolution_criteria_text` explicit enough that future outcome resolution is auditable.
+1. `market.bind` — create or identify the market metadata row for the external market/instrument.
 
 ```json
-{"tool":"instrument.add","args":{"venue_id":"ven_manual","asset_class":"prediction_market","title":"Will event X happen by 2026-06-30?","resolution_criteria_text":"Final result from named source by date.","idempotency_key":"agent-run-42:instrument:event-x"}}
+{"tool":"market.bind","args":{"external_id":"polymarket:event-x","title":"Will event X happen by 2026-06-30?","idempotency_key":"agent-run-42:market:event-x"}}
 ```
 
-3. `thesis.add` — record why the trade/skip is being considered, including falsification criteria and optional `strategy_id`.
+2. `snapshot.add` — record caller-supplied market state when relevant. Keep resolution criteria/evidence explicit enough that future resolution is auditable.
 
 ```json
-{"tool":"thesis.add","args":{"instrument_id":"ins_...","side":"yes","body":"Base rate and new evidence imply fair probability above market.","falsification_criteria":"Official source contradicts premise before resolution.","strategy_id":"str_...","idempotency_key":"agent-run-42:thesis:event-x"}}
+{"tool":"snapshot.add","args":{"market_id":"mkt_...","as_of":"2026-05-22T00:00:00Z","prices":{"YES":0.58,"NO":0.42},"idempotency_key":"agent-run-42:snapshot:event-x"}}
 ```
 
-4. `forecast.add` — commit the probability before the outcome is known. Late forecasts are accepted for auditability but marked; see pitfalls.
+3. `forecast.add` — commit the probability before the outcome is known. Late forecasts are accepted for auditability but marked; see pitfalls.
 
 ```json
-{"tool":"forecast.add","args":{"thesis_id":"ths_...","kind":"binary","yes_label":"YES","outcomes":[{"outcome_label":"YES","probability":0.58},{"outcome_label":"NO","probability":0.42}],"idempotency_key":"agent-run-42:forecast:event-x:v1"}}
+{"tool":"forecast.add","args":{"market_id":"mkt_...","kind":"binary","yes_label":"YES","outcomes":[{"outcome_label":"YES","probability":0.58},{"outcome_label":"NO","probability":0.42}],"rationale":"Base rate and new evidence imply fair probability above market.","idempotency_key":"agent-run-42:forecast:event-x:v1"}}
 ```
 
-5. `decision.add` — record the actual action (`buy`, `sell`, `hold`, `skip`, etc. per schema), rationale, tags, and optional strategy linkage.
+4. `decision.add` — record the actual action (`buy`, `sell`, `hold`, `skip`, etc. per schema), rationale, tags, and optional strategy linkage.
 
 ```json
-{"tool":"decision.add","args":{"instrument_id":"ins_...","thesis_id":"ths_...","forecast_id":"fcst_...","type":"actual_enter","side":"yes","quantity":100,"price":0.62,"tags":["spread-discipline"],"idempotency_key":"agent-run-42:decision:event-x"}}
+{"tool":"decision.add","args":{"market_id":"mkt_...","forecast_id":"fcst_...","type":"actual_enter","side":"yes","quantity":100,"price":0.62,"tags":["spread-discipline"],"idempotency_key":"agent-run-42:decision:event-x"}}
 ```
 
-6. `outcome.add` — resolve the instrument when the result is known. This enables scoring and later review.
+5. `resolution.add` — resolve the market when the result is known. This enables scoring and later review.
 
 ```json
-{"tool":"outcome.add","args":{"instrument_id":"ins_...","outcome_label":"NO","outcome_value":0,"status":"resolved_final","resolved_at":"2026-06-30T00:00:00Z","idempotency_key":"agent-run-42:outcome:event-x"}}
+{"tool":"resolution.add","args":{"market_id":"mkt_...","outcome_label":"NO","outcome_value":0,"status":"resolved_final","resolved_at":"2026-06-30T00:00:00Z","idempotency_key":"agent-run-42:resolution:event-x"}}
 ```
 
-7. `memory.recall` — before writing the next thesis, retrieve relevant reflections, observations, and playbook rules with a required natural-language `query`. Use optional `context` only to narrow graph/provenance ranking metadata such as instrument or strategy; it is not a substitute for `query`.
+6. `memory.recall` — before writing the next forecast/decision, retrieve relevant reflections, observations, and playbook rules with a required natural-language `query`. Use optional `context` only to narrow graph/provenance ranking metadata such as market or strategy; it is not a substitute for `query`.
 
 ```json
 {"tool":"memory.recall","args":{"query":"prior lessons about event X and recorded spread-adjusted thesis gap","context":{"kind":"strategy","id":"str_..."},"node_types":["observation","reflection","playbook_rule"],"k":10,"max_chars":6000,"compact":true}}
 ```
 
-8. `memory.reflect` — after the outcome, write the lesson and bind it to the row it is about. Prefer this safe helper over raw `memory.retain` for retrospective learning.
+7. `memory.reflect` — after the outcome, write the lesson and bind it to the row it is about. Prefer this safe helper over raw `memory.retain` for retrospective learning.
 
 ```json
 {"tool":"memory.reflect","args":{"target":{"kind":"decision","id":"dec_..."},"body":"The skip was correct in retrospective process review: the recorded thesis gap disappeared after fees and spread.","importance":7,"idempotency_key":"agent-run-42:reflection:event-x"}}
 ```
 
-9. `playbook.propose_version` — when a reflection should change future procedure, propose a new playbook version anchored to the reflection node.
+8. `playbook.upsert` — when a reflection should change future procedure, upsert a playbook rule/version anchored by your own provenance notes.
 
 ```json
-{"tool":"playbook.propose_version","args":{"playbook_id":"pbk_...","provenance_reflection_node_id":"mem_...","description":"Require an explicit recorded spread-adjusted thesis gap before acting; this is a process rule, not Trade Trace advice.","idempotency_key":"agent-run-42:playbook:event-x"}}
+{"tool":"playbook.upsert","args":{"name":"Spread discipline","rule":"Require an explicit recorded spread-adjusted forecast gap before acting; this is a process rule, not Trade Trace advice.","idempotency_key":"agent-run-42:playbook:event-x"}}
 ```
 
 ## 3. Patterns
@@ -150,9 +144,9 @@ Error code taxonomy, with one recovery example per code:
 - `UNSUPPORTED_CAPABILITY`: requested feature is registered but intentionally deferred; fall back to the MVP manual loop.
 - `STORAGE_ERROR`: local database or filesystem operation failed; stop and surface the journal path and envelope to the operator.
 - `SCORING_UNSUPPORTED`: score kind is not implemented for the forecast/outcome shape; record the outcome but do not expect a score.
-- `SCORING_NOT_READY`: score cannot be computed yet; wait until `outcome.add` or the required resolution fields are present.
+- `SCORING_NOT_READY`: score cannot be computed yet; wait until `resolution.add` or the required resolution fields are present.
 - `INVARIANT_VIOLATION`: journal state violates an internal consistency rule; stop automated writes and ask for repair/audit.
-- `MARKET_NOT_RESOLVED`: resolution was requested before final market outcome; defer `outcome.add` or use a non-final status allowed by schema.
+- `MARKET_NOT_RESOLVED`: resolution was requested before final market outcome; defer `resolution.add` or use a non-final status allowed by schema.
 - `MARKET_AMBIGUOUS`: supplied outcome criteria/result is ambiguous; add clearer source text or resolve manually before scoring.
 
 ## 4. Common pitfalls
@@ -175,6 +169,6 @@ Use `tool.schema` for self-discovery instead of relying on stale examples. Omit 
 {"tool":"tool.schema","args":{"tool":"forecast.add"}}
 ```
 
-Per bead trade-trace-dgdq, catalog mode mirrors MCP `list_tools`: each row carries `name`, `cli_invocation`, `is_write`, `has_example`, and `json_schema` (None when no example/explicit schema). Agents can discover the full call shape for every tool in one round-trip without N drilldowns. Per-tool drilldown still adds `description`, `example_minimal`, `example_rich`, and `required_metadata`.
+Per bead trade-trace-dgdq, catalog mode mirrors MCP `list_tools` for the current 60-tool public catalog: each row carries `name`, `cli_invocation`, `is_write`, `has_example`, and `json_schema` (None when no example/explicit schema). Agents can discover the full call shape for every tool in one round-trip without N drilldowns. Per-tool drilldown still adds `description`, `example_minimal`, `example_rich`, and `required_metadata`. Renamed surfaces expose `legacy_name` metadata (for example `resolution.add` for legacy `outcome.add`) and removed-tool hints so legacy callers get a clear migration path instead of stale current examples.
 
 For validation, compare the loop against PRD §10 dogfood criteria: the agent should create a complete journal trail, resolve outcomes, review reports, write reflections, update a playbook when warranted, and recall those lessons before the next decision. For beta/workbench dogfood runs, retain only sanitized public evidence in tracked docs and keep raw/private transcripts ignored per [agent-workbench-dogfood-evidence.md](./architecture/agent-workbench-dogfood-evidence.md).

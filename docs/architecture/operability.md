@@ -298,11 +298,15 @@ The shipped admin surface for the recovery scenarios — verified by
 Trade Trace uses Python's standard `logging` module. The package's
 loggers are namespaced under `trade_trace.<module>`. By default:
 
-- Console handler at `WARNING` level on stderr.
-- Optional file handler at `INFO` level when
-  `TRADE_TRACE_LOG_FILE=$path` is set. File path created with `0600`
-  permissions where the platform supports it.
-- `TRADE_TRACE_LOG_LEVEL` env var overrides the default level globally.
+- Console handler at `WARNING` level on stderr outside MCP stdio mode.
+- Rotating JSONL file handler under `<trade-trace home>/logs/` (or
+  `$TRADE_TRACE_LOG_DIR`) with `0700` log directory and `0600` log files
+  where the platform supports it.
+- `TRADE_TRACE_LOG_MAX_BYTES` and `TRADE_TRACE_LOG_BACKUP_COUNT` tune
+  local rotation.
+- Adapter request logs are operational metadata only: method, scrubbed
+  endpoint (host + path), HTTP status, and latency. Response bodies,
+  URL credentials, query strings, and fragments are not logged.
 
 ### 6.2 Structured log records
 
@@ -318,7 +322,7 @@ JSON-line by default to make ingestion into local log tools trivial.
 
 ### 6.3 What MUST NOT be logged
 
-- Embedding-provider API keys. Reads from keyring are never logged.
+- API keys or RPC URLs supplied to explicit adapter smoke/config paths. Remote/API embedding keys are unsupported in v0.0.2.
 - `body`, `note`, `excerpt`, `extracted_text`, `summary` fields from
   sources, memory nodes, or theses at `INFO` or higher. (The DEBUG level
   may include them under explicit user opt-in via

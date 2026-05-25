@@ -36,16 +36,15 @@ def _configured_embeddings_provider(conn: sqlite3.Connection) -> str:
     return str(row[0])
 
 
-def load_sqlite_vec_extension(conn: sqlite3.Connection) -> None:  # pragma: no cover - optional
-    """Load sqlite-vec lazily so base installs do not require the extra."""
+def load_sqlite_vec_extension(conn: sqlite3.Connection) -> None:  # pragma: no cover - legacy
+    """Legacy no-op kept for callers that only report capability.
 
-    import sqlite_vec  # type: ignore[import-not-found]
+    Trade Trace's embeddings path is now local ONNX + brute-force cosine over
+    the ordinary SQLite table, so opening a configured journal must not require
+    sqlite-vec or any loadable extension.
+    """
 
-    conn.enable_load_extension(True)
-    try:
-        sqlite_vec.load(conn)
-    finally:
-        conn.enable_load_extension(False)
+    _ = conn
 
 
 def _chmod_wal_shm_siblings(db_path_: Path) -> None:
@@ -235,8 +234,6 @@ def open_database(path: Path, *, create_parent: bool = True) -> Database:
     conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA synchronous = NORMAL")
-    if _configured_embeddings_provider(conn) != "none":
-        load_sqlite_vec_extension(conn)
     return Database(path=path, connection=conn)
 
 
@@ -254,16 +251,8 @@ def has_fts5(conn: sqlite3.Connection) -> bool:
         return False
 
 
-def has_sqlite_vec(conn: sqlite3.Connection) -> bool:  # pragma: no cover - optional
-    """Best-effort sqlite-vec detection. The package ships sqlite-vec as a
-    runtime dep but the extension may not be loadable in every build context.
-    Vectors are off by default in MVP; this is informational only."""
+def has_sqlite_vec(conn: sqlite3.Connection) -> bool:  # pragma: no cover - legacy
+    """sqlite-vec is no longer part of the default or embeddings posture."""
 
-    try:
-        load_sqlite_vec_extension(conn)
-        # Smoke-test by creating a vec0 virtual table.
-        conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS __veccheck USING vec0(x float[4])")
-        conn.execute("DROP TABLE IF EXISTS __veccheck")
-        return True
-    except Exception:
-        return False
+    _ = conn
+    return False

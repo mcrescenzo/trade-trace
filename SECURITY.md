@@ -64,10 +64,16 @@ startup are expected to make no outbound network calls; the repository keeps
 security tests for those default boundaries.
 
 Outbound network is in scope as a vulnerability when it happens without an
-explicit operator request. Documented opt-in features are different: embeddings
-support may download pinned local model files from HuggingFace or call an API
-embedding provider such as OpenAI after the operator enables/configures that
-provider. Those paths are not telemetry, are not enabled by default, and should
-not transmit broker credentials or market-data fetches. API embedding providers
-may receive the memory text being embedded, as documented in the embeddings
-architecture notes.
+explicit operator request. The optional embeddings path is local-only in
+v0.0.2: operators may install the `[embeddings]` extra and manually import
+trusted, pre-staged ONNX/tokenizer assets, but Trade Trace does not download
+model files from configuration and does not support remote/API embedding
+providers or keyring-backed embedding credentials.
+
+The v0.0.2 Polymarket adapter is opt-in and fail-closed:
+`network.polymarket.enabled` must be true before adapter-backed market,
+snapshot, or resolution tools can open a socket. Configured adapter endpoints
+must use HTTPS, are checked against the adapter host policy before an HTTP
+client is used, and error/log details scrub URL scheme, credentials, query
+strings, and fragments. Adapter operational logs include method, scrubbed
+endpoint, status, and latency only; response bodies are never logged.

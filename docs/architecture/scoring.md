@@ -1,6 +1,6 @@
 # Forecast Scoring
 
-> Status: **shipped**. Binary Brier scoring + the lifecycle/failure_reason enum match the live `outcome.add` → auto-score path.
+> Status: **shipped**. Binary Brier scoring + the lifecycle/failure_reason enum match the live `resolution.add` → auto-score path.
 
 
 **Implementation status (M0-M4 MVP + P1 scoring upgrade):** binary Brier + log-score + ECE

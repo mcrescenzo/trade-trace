@@ -25,6 +25,13 @@ from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
 
+pytestmark = pytest.mark.skip(
+    reason=(
+        "Legacy 0.0.1 dogfood fixture gate superseded by the v0.0.2 "
+        "PM-only fixture/report gate; mvp-eval target is intentionally removed."
+    )
+)
+
 DOGFOOD_FULL_SUITE_ENV = "TRADE_TRACE_RUN_DOGFOOD_FULL_SUITE"
 """Opt-in env flag for the c1r closing condition's full-suite re-run
 (bead trade-trace-4rp / DEBT-031). The nested pytest invocation

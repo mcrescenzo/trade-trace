@@ -1,0 +1,1 @@
+{"id":"pm-open-clob","question":"Will CR6J ship?","title":"Will CR6J ship?","url":"https://polymarket.example/market/pm-open-clob","closed":false,"resolved":false,"outcomes":[{"name":"Yes","token_id":"yes-token"},{"name":"No","token_id":"no-token"}],"bestBid":0.61,"bestAsk":0.63,"volume":12345,"openInterest":678,"mechanism":"clob"}

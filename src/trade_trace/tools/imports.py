@@ -76,6 +76,7 @@ class ParsedRow:
     line: int
     tool: str
     args: dict[str, Any]
+    contract_version: str | None = None
 
 
 _ID_FIELDS = {"id"}
@@ -129,6 +130,14 @@ _DIAGNOSTIC_EVENT_TOOLS = {
     "memory_node.invalidated",
     "signal.emitted",
 }
+
+_LEGACY_HARD_BREAK_CONTRACT_VERSIONS = {"0.0.1", "0.0.1rc3", "0.0.1-rc3"}
+"""Export contract markers that predate the v0.0.2 PM hard break.
+
+Automatic legacy transforms are intentionally out of scope: reject these
+imports with an actionable operator message before any dry-run or commit
+replay touches the journal.
+"""
 """Event-type names that the importer skips with a `cascaded_skipped`
 counter rather than rejecting as "not import-ready". A real journal
 export emits `tool=edge.created` lines when the runtime emitted an
@@ -166,6 +175,7 @@ _IMPORT_READY_WRITERS = {
     "memory.retain",
     "memory.reflect",
     "memory.link",
+    "market.bind",
 }
 
 
@@ -233,13 +243,14 @@ def _parse_rows(args: dict[str, Any], *, max_errors: int) -> tuple[list[ParsedRo
                 if not isinstance(raw, dict):
                     truncated = not _add_error(errors, max_errors, {"code": str(ErrorCode.VALIDATION_ERROR), "message": "JSONL line must be an object", "details": {"file": str(file), "line": lineno}}) or truncated
                     continue
+                contract_version = raw.get("_contract_version")
                 raw = strip_transport_keys(raw)
                 try:
                     line = ImportJSONLLine.model_validate(raw)
                 except ValidationError as exc:
                     truncated = not _add_error(errors, max_errors, {"code": str(ErrorCode.VALIDATION_ERROR), "message": "invalid import line shape", "details": {"file": str(file), "line": lineno, "validation_errors": exc.errors()}}) or truncated
                     continue
-                rows.append(ParsedRow(str(file), lineno, line.tool, dict(line.args)))
+                rows.append(ParsedRow(str(file), lineno, line.tool, dict(line.args), contract_version if isinstance(contract_version, str) else None))
     return rows, errors, truncated
 
 
@@ -367,6 +378,22 @@ def _forward_reference_errors(rows: list[ParsedRow], max_errors: int) -> list[di
 def _tool_errors(rows: list[ParsedRow], max_errors: int) -> list[dict[str, Any]]:
     errors: list[dict[str, Any]] = []
     for row in rows:
+        if row.contract_version in _LEGACY_HARD_BREAK_CONTRACT_VERSIONS:
+            _add_error(
+                errors,
+                max_errors,
+                _error(
+                    row,
+                    ErrorCode.VALIDATION_ERROR,
+                    "legacy 0.0.1rc3 JSONL exports are not importable under the v0.0.2 hard-break schema; re-export from v0.0.2 or run an explicit one-time transform before import",
+                    {
+                        "contract_version": row.contract_version,
+                        "reason": "legacy_schema_hard_break",
+                        "action": "Use a v0.0.2 export, or transform the legacy export outside import.commit; automatic legacy transforms are intentionally out of scope.",
+                    },
+                ),
+            )
+            continue
         # Translate event-type aliases to their write tool names first
         # (trade-trace-ths0). A legacy journal export with
         # tool="memory_node.retained" is the same row as
@@ -477,6 +504,8 @@ def _import_commit(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     if truncated:
         ctx.meta_hints["truncated"] = True
     out = ImportCommitOutput(**validation.model_dump(mode="json"))
+    if bool(args.get("dry_run", False)):
+        return out.model_dump(mode="json")
     if out.errors:
         return out.model_dump(mode="json")
 

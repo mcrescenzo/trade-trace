@@ -1,8 +1,8 @@
 # Trade Trace
 
 <p align="center">
-  <strong>Local journal, memory, and calibration for LLM trading agents.</strong><br>
-  Trade Trace is a grader and continuity layer for an agent's trading process. It is not a trader.
+  <strong>Local calibration journal for LLM prediction-market trading agents.</strong><br>
+  Trade Trace is a continuity and evaluation layer for an agent's prediction-market process. It is not a trader.
 </p>
 
 <p align="center">
@@ -13,11 +13,11 @@
   <a href="./SECURITY.md"><img alt="Local first" src="https://img.shields.io/badge/default-local--first-10243b"></a>
 </p>
 
-Trade Trace helps an LLM trading agent keep an auditable record of what it believed, what evidence it used, what it decided, what happened later, and what lessons should carry into the next session.
+Trade Trace helps an LLM prediction-market agent keep an auditable local record of market context, probability forecasts, decisions, resolutions, and lessons that should carry into the next session.
 
-It stores a local SQLite journal, scores supported forecasts when outcomes are supplied, produces deterministic retrospective reports, and gives the agent a typed memory graph for observations, reflections, and playbook rules. Agents can use it through MCP stdio, a JSON-first CLI, and Python report/read-model functions.
+It stores a local SQLite journal, scores binary prediction-market forecasts when resolutions are supplied, produces deterministic retrospective reports, and gives the agent a typed memory graph for observations, reflections, and playbook rules. Agents can use it through MCP stdio, a JSON-first CLI, and Python report/read-model functions.
 
-Trade Trace never places trades, fetches market data, resolves outcomes from external venues, stores broker or wallet credentials, phones home, or gives financial advice.
+Trade Trace never places trades, stores broker or wallet credentials, phones home, or gives financial advice. Its Polymarket adapter is opt-in, agent-triggered, disabled by default, and requires caller-supplied configuration; there is no default RPC endpoint.
 
 ## Why it exists
 
@@ -38,36 +38,36 @@ The product question is simple: can an agent become more auditable, calibratable
 
 The loop is intentionally narrow:
 
-1. The agent records sources, snapshots, theses, forecasts, and decisions.
-2. The caller supplies outcomes when they are known.
-3. Trade Trace scores supported binary forecasts and produces deterministic reports.
-4. The agent writes reflections and proposes playbook updates.
-5. The next session recalls relevant lessons before forming a new thesis.
+1. The agent binds or records a prediction market and captures snapshots.
+2. The agent records binary probability forecasts and optional decisions.
+3. The caller supplies or explicitly fetches resolutions when they are known.
+4. Trade Trace scores supported forecasts and produces deterministic reports.
+5. The agent writes reflections/playbook updates; the next session recalls relevant lessons.
 
 Trade Trace supplies the storage, contracts, scoring, and reporting substrate. The calling agent supplies judgment, market data, outcomes, and any trading action outside this project.
 
 ## What it includes
 
-- **Agent-native journal:** venues, instruments, snapshots, sources, theses, forecasts, decisions, outcomes, reviews, positions, and tags.
+- **Agent-native PM journal:** markets, snapshots, binary forecasts, optional decisions, resolutions/outcomes, reflections, playbooks, strategies, and tags.
 - **Forecast scoring:** supported binary forecasts can be scored against final outcomes, including Brier and calibration diagnostics.
 - **Deterministic reports:** calibration, forecast diagnostics, source quality, audit readiness, risk/opportunity diagnostics, P&L where local projection data exists, strategy health/performance, recall receipts, review bundles, lifecycle, and work-queue views.
 - **Typed memory graph:** retain, recall, and reflect over observations, reflections, and playbook rules, with typed links back to journal rows.
-- **Strategies and playbooks:** group related decisions under named strategy theses and version process rules without turning either into trading recommendations.
-- **Agent continuity:** `agent.next_actions`, `report.work_queue`, and `report.lifecycle` expose local process obligations for fresh sessions. They do not schedule work, assign tasks, fetch data, or recommend trades.
+- **Strategies and playbooks:** group related market decisions under named strategies and version process rules without turning either into trading recommendations.
+- **Agent continuity:** `report.work_queue`, `report.lifecycle`, and `report.bootstrap` expose local process obligations for fresh sessions. They do not schedule work, assign tasks, fetch data, or recommend trades.
 - **MCP and CLI parity:** the same tool registry, JSON envelopes, validation semantics, stable error codes, schemas, and dry-run/idempotency contracts back both transports.
 - **Local-first storage:** one SQLite database, append-only/auditable events, JSONL export/import surfaces, and SHA-256-verified backup/restore.
 
 ## What it is not
 
 - **Not a trade executor:** no order placement, routing, signing, broker keys, wallet keys, seed phrases, or private keys.
-- **Not a market-data fetcher:** no venue queries, market-data APIs, outcome APIs, order books, broker state, or webhooks.
+- **Not a default market-data fetcher:** no background venue queries, scheduler, broker state, order books, or webhooks. The Polymarket adapter is explicit opt-in and agent-triggered.
 - **Not a dashboard:** the former human Console UI was removed. Supported surfaces are MCP stdio, CLI, and Python/reporting APIs.
 - **Not financial advice:** reports are retrospective diagnostics and process review, not trade recommendations or edge claims.
-- **Not a generic memory framework, backtester, scheduler, tax tool, or social platform:** the schema is trading-shaped and local.
+- **Not a generic memory framework, backtester, scheduler, tax tool, or social platform:** the schema is prediction-market-shaped and local.
 
 ## Install from source
 
-Trade Trace is pre-release. The current source version is `0.0.1rc3`; no stable `0.0.1` release has been cut yet. Until a public release artifact is available, install from a checkout:
+Trade Trace is pre-release. The current source is being prepared for the v0.0.2 prediction-market pivot; no stable public release has been cut yet. Until a public release artifact is available, install from a checkout:
 
 ```bash
 python3 -m pip install -e .
@@ -83,7 +83,9 @@ Optional vector recall support is available from source with:
 python3 -m pip install -e '.[embeddings]'
 ```
 
-The embeddings extra adds vector storage and keyring support. It does not enable vectors, download local model weights, or send memory text to an API provider until you explicitly configure an embedding provider.
+The embeddings extra adds the optional local ONNX/tokenizers runtime. It does not enable vectors, download model weights, or send memory text to an API provider. In v0.0.2 the supported provider enum is `none|local`; local model assets must be imported explicitly with `tt model import --path <pre-staged-dir> --confirm`, and remote/API embedding providers are unsupported.
+
+Intel Mac note: current `onnxruntime` releases do not ship macOS x86_64 wheels. Intel Mac users should either use BM25 recall or manually pin a compatible older `onnxruntime` (for example 1.19) in their local environment.
 
 ## Connect an agent over MCP
 
@@ -122,13 +124,13 @@ See [`docs/AI_AGENT_MCP_GETTING_STARTED.md`](./docs/AI_AGENT_MCP_GETTING_STARTED
 
 ## Use the CLI
 
-The CLI mirrors the MCP catalog. It emits JSON by default; streaming list/read paths use NDJSON envelopes.
+The CLI mirrors the MCP catalog by replacing dots in MCP tool names with spaces (for example, `market.bind` becomes `tt market bind`). It emits JSON by default; streaming list/read paths use NDJSON envelopes. The current default public catalog contains 65 registry-generated tools. `tool.schema` is the source of truth and includes compatibility metadata such as `legacy_name` for renamed tools and hints for removed legacy callers.
 
 ```bash
 tt journal init
 tt tool schema
 tt tool schema --tool forecast.add
-tt venue add --name Polymarket --kind prediction_market --idempotency-key run-001:venue:polymarket
+tt market bind --external-id polymarket:event-123 --title "Example market" --idempotency-key run-001:market:event-123
 ```
 
 Use `tool.schema` as the source of truth for exact fields, enums, examples, dry-run support, and required metadata. For a complete agent loop, read [`docs/AGENT_GUIDE.md`](./docs/AGENT_GUIDE.md).

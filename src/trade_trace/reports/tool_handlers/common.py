@@ -25,7 +25,14 @@ from trade_trace.reports import (
     export_case_bundle,
     report_audit_readiness,
     report_calibration,
+    report_calibration_anchored,
     report_calibration_integrity,
+    report_calibration_terminal,
+    report_calibration_trajectory,
+    report_amm_slippage,
+    report_market_lifecycle,
+    report_resolution_quality,
+    report_time_decay_sharpening,
     report_coach,
     report_compare,
     report_decision_velocity,
@@ -123,22 +130,32 @@ def _snapshot_latest_mark(snapshot: Any) -> dict[str, Any]:
 
 
 def _latest_snapshot_mark_by_instrument(connection: Any, instrument_ids: set[str]) -> dict[str, dict[str, Any]]:
-    marks: dict[str, dict[str, Any]] = {}
-    for instrument_id in instrument_ids:
-        snapshot = connection.execute(
-            """
-            SELECT id, captured_at, source, source_url, price, bid, ask, mid, implied_probability
+    if not instrument_ids:
+        return {}
+    placeholders = ", ".join("?" for _ in instrument_ids)
+    rows = connection.execute(
+        f"""
+        WITH ranked_snapshots AS (
+            SELECT instrument_id, id, captured_at, source, source_url, price, bid, ask, mid, implied_probability,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY instrument_id
+                       ORDER BY captured_at DESC, id DESC
+                   ) AS rn
             FROM snapshots
-            WHERE instrument_id = ?
+            WHERE instrument_id IN ({placeholders})
               AND (price IS NOT NULL OR bid IS NOT NULL OR ask IS NOT NULL
                    OR mid IS NOT NULL OR implied_probability IS NOT NULL)
-            ORDER BY captured_at DESC, id DESC
-            LIMIT 1
-            """,
-            (instrument_id,),
-        ).fetchone()
-        if snapshot is not None:
-            marks[instrument_id] = _snapshot_latest_mark(snapshot)
+        )
+        SELECT instrument_id, id, captured_at, source, source_url, price, bid, ask, mid, implied_probability
+        FROM ranked_snapshots
+        WHERE rn = 1
+        """,
+        tuple(instrument_ids),
+    ).fetchall()
+    marks: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        instrument_id = row[0]
+        marks[instrument_id] = _snapshot_latest_mark(row[1:])
     return marks
 
 

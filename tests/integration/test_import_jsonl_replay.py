@@ -197,6 +197,41 @@ def test_import_commit_idempotent_replay(tmp_path: Path):
     assert _count(home, "venues") == 1
 
 
+def test_import_commit_dry_run_does_not_write(tmp_path: Path):
+    home = tmp_path / "home"
+    _init(home)
+    file = tmp_path / "events.jsonl"
+    _write_jsonl(file, [_venue_line()])
+
+    env = _call("import.commit", {"home": str(home), "path": str(file), "dry_run": True})
+
+    assert env["ok"] is True, env
+    assert env["data"]["validated"] == 1
+    assert env["data"]["would_create"] == 1
+    assert env["data"]["committed_count"] == 0
+    assert env["data"]["errors"] == []
+    assert _count(home, "venues") == 0
+
+
+def test_import_rejects_legacy_001rc3_contract_version_with_actionable_error(tmp_path: Path):
+    home = tmp_path / "home"
+    _init(home)
+    file = tmp_path / "legacy.jsonl"
+    line = _venue_line()
+    line["_contract_version"] = "0.0.1rc3"
+    _write_jsonl(file, [line])
+
+    env = _call("import.commit", {"home": str(home), "path": str(file), "dry_run": True})
+
+    assert env["ok"] is True, env
+    assert env["data"]["committed_count"] == 0
+    assert _count(home, "venues") == 0
+    err = env["data"]["errors"][0]
+    assert err["details"]["reason"] == "legacy_schema_hard_break"
+    assert err["details"]["contract_version"] == "0.0.1rc3"
+    assert "v0.0.2" in err["message"]
+
+
 def test_import_validate_rejects_mixed_id_strategy(tmp_path: Path):
     home = tmp_path / "home"
     _init(home)

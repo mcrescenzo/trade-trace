@@ -1149,14 +1149,43 @@ def _blob_to_float32(blob: bytes, dim: int) -> list[float]:
 
 
 def _query_embedding(query: str, *, dim: int, provider: str, model_id: str) -> list[float]:
-    """Deterministic local embedding stub for opt-in offline operation."""
+    """Embed a query using the opt-in local ONNX/tokenizers path.
 
-    _ = (provider, model_id)
-    buckets = [0.0] * dim
-    for i, byte in enumerate(query.encode("utf-8")):
-        buckets[(byte + i) % dim] += float((byte % 31) + 1)
-    norm = sum(v * v for v in buckets) ** 0.5
-    return [v / norm for v in buckets] if norm else buckets
+    Missing optional dependencies or model assets return an empty vector so the
+    semantic strategy simply drops out of recall. BM25/temporal/graph ranking
+    remain unconditional and journal startup is never blocked by embeddings.
+    """
+
+    if provider != "local":
+        return []
+    try:
+        from trade_trace.models.embeddings import LocalEmbeddingUnavailable, LocalOnnxEmbedder
+    except Exception:
+        return []
+    try:
+        model_dir = _local_model_dir_for_connection(_ACTIVE_SEMANTIC_CONNECTION)
+        vector = LocalOnnxEmbedder(model_dir).embed(query)
+    except (LocalEmbeddingUnavailable, ToolError, OSError, sqlite3.Error):
+        return []
+    if dim and len(vector) != dim:
+        return []
+    _ = model_id
+    return vector
+
+
+_ACTIVE_SEMANTIC_CONNECTION: sqlite3.Connection | None = None
+
+
+def _local_model_dir_for_connection(conn: sqlite3.Connection | None) -> Any:
+    if conn is None:
+        raise ToolError(ErrorCode.STORAGE_ERROR, "semantic connection is unavailable")
+    row = conn.execute("PRAGMA database_list").fetchone()
+    if row is None or not row[2]:
+        raise ToolError(ErrorCode.STORAGE_ERROR, "database path is unavailable")
+    from pathlib import Path
+
+    home = Path(str(row[2])).resolve().parent.parent
+    return home / "models" / "bge-small-en-v1.5"
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -1177,22 +1206,8 @@ def _semantic_rank(
 ) -> list[str]:
     if not in_scope:
         return []
-    if provider.startswith("api:"):
-        from trade_trace.security.keyring import load_api_key
-
-        # Resolve at call time and keep the secret in this stack frame only.
-        # No caching and no return/error payload includes this value. For this
-        # bead, api:openai support stops at keyring/key-presence gating: query
-        # embeddings are still produced by the deterministic local stub below,
-        # and no OpenAI/network embedding call is implemented here.
-        if provider == "api:openai":
-            service = "trade-trace:embeddings:openai"
-        else:
-            return []
-        api_key = load_api_key(service)
-        if not api_key:
-            return []
-        del api_key
+    if provider != "local":
+        return []
     try:
         rows = conn.execute(
             "SELECT node_id, embedding, dim, model_id FROM memory_node_embeddings "
@@ -1203,16 +1218,24 @@ def _semantic_rank(
         return []
     scored: list[tuple[str, float]] = []
     query_cache: dict[tuple[int, str], list[float]] = {}
-    for node_id, blob, dim, model_id in rows:
-        if node_id not in in_scope:
-            continue
-        key = (int(dim), str(model_id))
-        if key not in query_cache:
-            query_cache[key] = _query_embedding(query, dim=key[0], provider=provider, model_id=key[1])
-        vec = _blob_to_float32(bytes(blob), key[0])
-        if not vec:
-            continue
-        scored.append((node_id, _cosine(query_cache[key], vec)))
+    global _ACTIVE_SEMANTIC_CONNECTION
+    previous_conn = _ACTIVE_SEMANTIC_CONNECTION
+    _ACTIVE_SEMANTIC_CONNECTION = conn
+    try:
+        for node_id, blob, dim, model_id in rows:
+            if node_id not in in_scope:
+                continue
+            key = (int(dim), str(model_id))
+            if key not in query_cache:
+                query_cache[key] = _query_embedding(query, dim=key[0], provider=provider, model_id=key[1])
+            if not query_cache[key]:
+                continue
+            vec = _blob_to_float32(bytes(blob), key[0])
+            if not vec:
+                continue
+            scored.append((node_id, _cosine(query_cache[key], vec)))
+    finally:
+        _ACTIVE_SEMANTIC_CONNECTION = previous_conn
     scored.sort(key=lambda r: (-r[1], r[0]))
     return [node_id for node_id, score in scored if score > 0.0]
 

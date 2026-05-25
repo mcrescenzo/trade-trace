@@ -23,9 +23,9 @@ MVP vertical slice:
 9. Token-budgeted recall of prior observations, reflections, and playbook rules in the next decision
 10. Source/evidence capture attached to theses, decisions, and forecasts
 
-The post-MVP pre-release track has since landed stdio MCP, tool-schema introspection, optional `sqlite-vec` embeddings/model import/API-provider/reindex surfaces, JSONL/CSV import implementations, and comparison/review-bundle/risk/opportunity reports. Still deferred: multi-class/scalar scoring, broader trading-native liquidity-bucket/skipped-positive-edge reports, exact ForecastBench submission compatibility, sync, HTTP/SSE transport, and websockets.
+The post-MVP pre-release track has since landed stdio MCP, tool-schema introspection, optional local ONNX embeddings/model import/reindex surfaces, JSONL/CSV import implementations, and comparison/review-bundle/risk/opportunity reports. Still deferred or unsupported in v0.0.2: remote/API embeddings, keyring-backed embedding credentials, multi-class/scalar scoring, exact ForecastBench submission compatibility, sync, HTTP/SSE transport, and websockets.
 
-Trade Trace does not fetch trading data, broker data, market prices, or outcomes from external services. The agent supplies all market data through the structured ingestion APIs. The one outbound-network path is the optional local embedding model download (off by default in MVP — see §2.4 and [`memory-layer.md`](./architecture/memory-layer.md) §8), which never carries trading data and is explicitly opt-in.
+Trade Trace does not fetch trading data, broker data, market prices, or outcomes from external services by default. The agent supplies market data through structured ingestion APIs, except for the explicitly opt-in Polymarket adapter path documented for v0.0.2. Semantic embeddings use pre-staged local model assets and never send journal text outward.
 
 ## 2. Locked product decisions
 
@@ -54,16 +54,12 @@ The `snapshots.source` and `outcomes.source` columns are free-form strings. MVP 
 
 #### 2.4.1 Explicit opt-in outbound-network paths
 
-Trade Trace makes no outbound network calls by default. The documented outbound-network paths are explicit opt-in embeddings features. The optional local embedding model download for the `SEMANTIC` recall strategy is:
+Trade Trace makes no outbound network calls by default. The v0.0.2 outbound surface is intentionally narrow:
 
-- **Off by default in MVP.** A fresh `journal.init` does not download anything. `memory.recall` runs with BM25 + temporal (+ graph if requested) and returns valid results without vectors. The "air-gappable on first run" promise (VISION §safety) holds out of the box.
-- **Opt-in via explicit config.** The agent or operator runs `tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` to authorize the one-time model download. The download targets only the local model's host (no telemetry, no metrics, no API key submission). (An earlier proposal documented `journal.init --enable-embeddings` as a one-shot alternative; the live registry does not expose that flag — `config_set` is the canonical surface, per trade-trace-mehh.)
-- **Disjoint from trading data.** The download fetches model weights; it never transmits trading records, snapshots, theses, or any journal data outward.
-- **Disableable.** `tt journal config_set --key embeddings.provider --value none --idempotency-key <uuid> --confirm` removes the SEMANTIC strategy entirely. Air-gapped installs may pre-stage the model with `tt model import --src <path-to-bge-small> --idempotency-key <uuid> --confirm` instead.
+- **Polymarket adapter** — disabled by default and configured explicitly. Adapter calls are agent-triggered; there is no background fetch daemon, scheduler, default RPC URL, or committed credential. Security policy requires endpoint allowlisting, TLS verification, scrubbed error/log output, and no request/response body logging.
+- **Local semantic embeddings** — no outbound network path. Operators may install `[embeddings]`, pre-stage the pinned BGE-small assets, import them with `tt model import --path <dir> --confirm`, and set `embeddings.provider=local`. `journal.config_set` does not download model files.
 
-Remote embedding *providers* (OpenAI, etc.) are a separate, also-opt-in path covered in [`memory-layer.md`](./architecture/memory-layer.md) §8.3. They DO send memory text outward and carry an explicit warning at configure time. They are never enabled by default.
-
-Together, local model download/import/warm and remote API embedding providers are the complete intended outbound-network surface. There is no telemetry, no usage analytics, no auto-update, no webhook, no broker integration, no market-data fetch.
+Remote/API embedding providers are unsupported in v0.0.2. There is no telemetry, usage analytics, auto-update, webhook, broker integration, or trade execution.
 
 ### 2.5 Forecast model
 
@@ -93,9 +89,9 @@ No background scheduler or daemon exists in MVP. Write-triggered signals may be 
 
 ### 2.8 Credentials and security
 
-The core never accepts, stores, logs, or prompts for trading credentials. Wallet, broker, order-signing, and seed credentials are never supported, never read from any source, and never appear in any API surface. Because there is no trading-data fetching (§2.4), there is no execution path, no broker trust model, and no market-data network surface in MVP.
+The core never accepts, stores, logs, or prompts for trading credentials. Wallet, broker, order-signing, and seed credentials are never supported, never read from any source, and never appear in any API surface. Because the only v0.0.2 network path is the explicitly configured Polymarket adapter (§2.4), there is no execution path, no broker trust model, and no default market-data network surface in MVP.
 
-The local embedding download path (§2.4.1) is off by default, opt-in, scoped to model weights, and carries no trading data. API embedding providers (memory-layer.md §8.3) are similarly opt-in and store any provider key in the OS keyring, never in the database or plaintext config.
+The optional local embeddings path (§2.4.1) is off by default, local-only, and carries no trading data. v0.0.2 does not support remote/API embedding providers or keyring-backed embedding credentials; `embeddings.provider` is limited to `none|local`.
 
 ### 2.9 Tags
 
@@ -114,8 +110,8 @@ Period- or tag-scoped reflections remain valid, but periods and tags are not MVP
 ### 2.11 External claims
 
 - yfinance, Polymarket Gamma, and similar external APIs are explicitly out of scope; see §2.4.
-- `sqlite-vec` is optional/verified at init; MVP recall runs with FTS5 + graph + temporal retrieval. Vector recall is off by default and opt-in (§2.4.1).
-- Local embedding models are downloaded/cache-managed only when explicitly enabled (§2.4.1, [`memory-layer.md`](./architecture/memory-layer.md) §8). The MVP base wheel ships `pydantic` + `mcp` (the latter became a base dep per trade-trace-o8j5) as runtime dependencies; `sqlite-vec` and `keyring` are deferred to the `[embeddings]` install extra (see `pyproject.toml`). Local-model packaging (e.g. `sentence-transformers`) is opt-in via `tt model import` against a pre-downloaded model directory — the package itself does not pull a large ML dependency into the wheel.
+- Local semantic embeddings are optional and use a pre-staged local ONNX/tokenizers path. The base install uses FTS5 + graph + temporal retrieval; vector recall is off by default and fail-soft (§2.4.1).
+- No embedding model is downloaded by configuration. Operators who want local embeddings install the `[embeddings]` extra and use `tt model import` against a verified, pre-staged model directory. Remote/API embedding providers, `sqlite-vec` indexes, and keyring-backed embedding credentials are not supported in v0.0.2.
 - ForecastBench export is ForecastBench-inspired/TBD until the current external schema is verified; see [`forecastbench-compatibility.md`](./architecture/forecastbench-compatibility.md).
 - No claim is made that LLMs have reached forecasting parity with human superforecasters.
 
@@ -323,7 +319,7 @@ Material non-actions are explicit learning cases over existing `decisions`, not 
 - Immutable. Updates create new nodes; older rows stay readable.
 
 #### `memory_node_embeddings`
-- `memory_node_id` (FK to `memory_nodes.id`), `provider` (e.g. `local:bge-small-en-v1.5`, `api:openai:text-embedding-3-small`), `dim` (integer), `embedding` (BLOB; `sqlite-vec`-managed), `created_at`
+- `memory_node_id` (FK to `memory_nodes.id`), `provider` (`none` configuration produces no rows; `local` rows use the pinned BGE-small local ONNX model id), `dim` (integer), `embedding` (BLOB), `model_id`, `created_at`
 - Primary key: `(memory_node_id, provider)`. A node may have at most one embedding per provider; switching providers either re-embeds (eager via `tt memory reindex --confirm`) or leaves old vectors stale until reindex completes. See [`memory-layer.md`](./architecture/memory-layer.md) §8.4.
 - Append-only; replaced rows on reindex use `DELETE` + `INSERT` within a single transaction (the one place a memory-side `DELETE` is allowed; see [`persistence.md`](./architecture/persistence.md) §8).
 
@@ -460,7 +456,7 @@ The current pre-release implementation includes the import-ready write schema pl
 
 - Primary store: SQLite at `$TRADE_TRACE_HOME/trade-trace.sqlite`, WAL mode, single-writer assumption for MVP (see [`operability.md`](./architecture/operability.md) §3 for second-writer behavior).
 - Required recall: SQLite FTS5 + graph + temporal queries.
-- Optional vector recall: `sqlite-vec` if installed and verified at `journal.init`/`journal.status`. Off by default in MVP; opt-in per §2.4.1.
+- Optional local vector recall via pre-staged ONNX assets if `[embeddings]` is installed and `embeddings.provider=local`; missing assets/dependencies degrade to required recall.
 - Event/outbox tables record committed writes for audit/export. JSONL export is generated from the outbox; see [`persistence.md`](./architecture/persistence.md).
 - Migrations are versioned and preserve data. Migration policy (forward-only with documented schema-version field; enum extensions are non-breaking; column removals are major) detailed in [`operability.md`](./architecture/operability.md) §4.
 - File permissions default to user-only where supported. Logging policy, crash-recovery contract, blob-size caps, and outbox JSONL file format detailed in [`operability.md`](./architecture/operability.md).
@@ -486,7 +482,7 @@ The current pre-release implementation includes the import-ready write schema pl
 ### M0 — Repo and package foundation
 - Python 3.11+, MIT license, package skeleton
 - Pydantic schemas and migration framework
-- SQLite + FTS5 baseline; optional `sqlite-vec` detection (vectors off by default)
+- SQLite + FTS5 baseline; optional local ONNX/tokenizers embeddings path with graceful fallback
 - Initial docs including `operability.md`, `reports.md`, `imports.md`
 
 ### M1 — Manual ledger core + CLI/MCP frames

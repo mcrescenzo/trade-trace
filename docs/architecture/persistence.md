@@ -53,9 +53,7 @@ journal to migrate cleanly:
   remediation is to install a SQLite (or Python distribution)
   compiled with `-DSQLITE_ENABLE_FTS5`.
 
-`sqlite-vec` (the vector backend used by the embeddings opt-in path) is
-**optional**: when missing the embeddings strategy is silently
-unavailable, but the rest of the recall pipeline keeps working.
+Local semantic embeddings are optional. When optional dependencies or imported model assets are missing, the semantic strategy is unavailable, but the rest of the recall pipeline keeps working. v0.0.2 stores embedding blobs directly in SQLite and does not depend on `sqlite-vec` indexes.
 
 Three classes of table:
 

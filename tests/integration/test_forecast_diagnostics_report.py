@@ -157,7 +157,27 @@ def test_non_binary_excluded_and_missing_reference_low_n_caveats(tmp_path):
     venue = _envelope(home, "venue.add", {"name": "PM2", "kind": "prediction_market"})
     inst = _envelope(home, "instrument.add", {"venue_id": venue["data"]["id"], "asset_class": "prediction_market", "title": "Y"})
     thesis = _envelope(home, "thesis.add", {"instrument_id": inst["data"]["id"], "side": "yes", "body": "categorical"})
-    cat = _envelope(home, "forecast.add", {"thesis_id": thesis["data"]["id"], "kind": "categorical", "outcomes": [{"outcome_label": "a", "probability": 0.5}, {"outcome_label": "b", "probability": 0.5}]})
+    # forecast.add is binary-only in v0.0.2, but the diagnostic report still needs
+    # to account for legacy categorical/scalar rows in existing journals.
+    categorical_forecast_id = "fc_legacy_categorical"
+    with sqlite3.connect(db_path(home)) as conn:
+        conn.execute(
+            """
+            INSERT INTO forecasts (id, thesis_id, kind, scoring_support, scoring_state, created_at, actor_id)
+            VALUES (?, ?, 'categorical', 'unsupported', 'failed', '2026-05-18T14:00:00.000Z', 'test')
+            """,
+            (categorical_forecast_id, thesis["data"]["id"]),
+        )
+        conn.executemany(
+            """
+            INSERT INTO forecast_outcomes (id, forecast_id, outcome_label, probability)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                ("fo_legacy_categorical_a", categorical_forecast_id, "a", 0.5),
+                ("fo_legacy_categorical_b", categorical_forecast_id, "b", 0.5),
+            ],
+        )
 
     data = _envelope(home, "report.forecast_diagnostics", {})["data"]
 
@@ -165,7 +185,7 @@ def test_non_binary_excluded_and_missing_reference_low_n_caveats(tmp_path):
     assert "low_n" in data["summary"]["caveat_codes"]
     assert "missing_market_reference" in data["summary"]["market_reference"]["caveat_codes"]
     assert data["summary"]["exclusions"]["counts_by_reason"]["unsupported_non_binary"] == 1
-    assert cat["data"]["id"] in data["summary"]["exclusions"]["forecast_ids_by_reason"]["unsupported_non_binary"]
+    assert categorical_forecast_id in data["summary"]["exclusions"]["forecast_ids_by_reason"]["unsupported_non_binary"]
     assert ids["snapshot"] in data["groups"][0]["record_ids"]["snapshots"]
 
 

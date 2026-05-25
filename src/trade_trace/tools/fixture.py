@@ -33,7 +33,7 @@ from trade_trace.tools._helpers import (
 )
 from trade_trace.tools.errors import ToolError
 
-FIXTURE_TARGETS = ("mvp-eval", "mvp-eval-rich", "agent-continuity-loop")
+FIXTURE_TARGETS = ("mvp-eval-pm", "forecast-only-pm", "mvp-eval-rich", "agent-continuity-loop")
 
 
 # Anchor timestamp used as the deterministic clock during seeding.
@@ -93,7 +93,7 @@ def _journal_fixture_seed(
     correspond to the bead's acceptance row-count requirements.
     """
 
-    target = args.get("target", "mvp-eval")
+    target = args.get("target", "mvp-eval-pm")
     if target not in FIXTURE_TARGETS:
         raise ToolError(
             ErrorCode.VALIDATION_ERROR,
@@ -137,6 +137,7 @@ _ID_PREFIX_BY_TOOL: dict[str, str] = {
     "memory.retain": "mem",
     "memory.reflect": "mem",
     "memory.link": "edg",
+    "market.bind": "mkt",
     "strategy.create": "strat",
     "playbook.create": "pbk",
     "playbook.propose_version": "pbv",
@@ -859,10 +860,145 @@ def _build_agent_continuity_loop_overlay(
     return counts
 
 
+def _pm_market_args(i: int, *, loop: str, state: str = "open") -> dict[str, Any]:
+    close_at = (_ANCHOR + timedelta(days=10 + i)).isoformat()
+    return {
+        "source": "polymarket",
+        "external_id": f"fixture-{loop}-{i:02d}",
+        "title": f"PM fixture {loop} market {i:02d}",
+        "question": f"Will fixture event {loop}-{i:02d} resolve YES?",
+        "url": f"https://polymarket.example.invalid/event/{loop}-{i:02d}",
+        "state": state,
+        "mechanism": "clob",
+        "resolution_source": "market_contract",
+        "bound_via": "manual",
+        "opened_at": (_ANCHOR - timedelta(days=3)).isoformat(),
+        "close_at": close_at,
+        "venue_metadata_json": {
+            "outcomes": ["YES", "NO"],
+            "condition_id": f"0xfixture{loop.replace('-', '')}{i:02d}",
+        },
+        "metadata_json": {
+            "fixture": "trade-trace-j8g8",
+            "loop": loop,
+            "refetchable_adapter_cache": False,
+        },
+    }
+
+
+def _build_forecast_only_pm_loop(
+    ctx: _FixtureSeedContext,
+    counts: _FixtureCounts,
+) -> _FixtureCounts:
+    """Seed five PM markets with forecasts only and no decisions.
+
+    This target is used for forecast-only evaluation loops: it binds
+    manual/local Polymarket-shaped markets, attaches instruments/theses,
+    and records binary forecasts without any trading decisions.
+    """
+
+    venue = _call(ctx.home, "venue.add", {
+        "name": "Polymarket", "kind": "prediction_market",
+    }, suffix="pm-forecast-venue").get("id")
+    counts["venues"] = counts.get("venues", 0) + 1
+    for i in range(5):
+        market = _call(ctx.home, "market.bind", _pm_market_args(i, loop="forecast-only"), suffix=f"pm-forecast-market-{i}").get("id")
+        inst = _call(ctx.home, "instrument.add", {
+            "venue_id": venue,
+            "asset_class": "prediction_market",
+            "title": f"Forecast-only PM {i:02d}",
+            "currency_or_collateral": "USDC",
+            "metadata_json": {"market_id": market, "loop": "forecast-only"},
+        }, suffix=f"pm-forecast-inst-{i}").get("id")
+        thesis = _call(ctx.home, "thesis.add", {
+            "instrument_id": inst,
+            "side": "yes" if i % 2 == 0 else "no",
+            "body": f"Forecast-only PM thesis {i:02d}: estimate binary event probability before close.",
+        }, suffix=f"pm-forecast-thesis-{i}").get("id")
+        _call(ctx.home, "forecast.add", {
+            "thesis_id": thesis,
+            "kind": "binary",
+            "yes_label": "yes",
+            "resolution_at": (_ANCHOR + timedelta(days=10 + i)).isoformat(),
+            "outcomes": [
+                {"outcome_label": "yes", "probability": 0.42 + i * 0.05},
+                {"outcome_label": "no", "probability": 0.58 - i * 0.05},
+            ],
+            "rationale_body": f"Forecast-only PM rationale {i:02d} based on local fixture signals.",
+        }, suffix=f"pm-forecast-fc-{i}")
+        counts["markets"] = counts.get("markets", 0) + 1
+        counts["instruments"] = counts.get("instruments", 0) + 1
+        counts["theses"] = counts.get("theses", 0) + 1
+        counts["forecasts"] = counts.get("forecasts", 0) + 1
+    return counts
+
+
+def _build_mvp_eval_pm_loop(
+    ctx: _FixtureSeedContext,
+    counts: _FixtureCounts,
+) -> _FixtureCounts:
+    """Seed an eight-market Polymarket trading loop plus forecast-only overlay."""
+
+    venue = _call(ctx.home, "venue.add", {
+        "name": "Polymarket Trading", "kind": "prediction_market",
+    }, suffix="pm-trading-venue").get("id")
+    strat = _call(ctx.home, "strategy.create", {
+        "name": "PM fixture trading loop",
+        "slug": "pm-fixture-trading-loop",
+        "hypothesis": "Local-only Polymarket binary markets can be evaluated via disciplined forecasts and paper decisions.",
+    }, suffix="pm-trading-strategy").get("id")
+    counts["venues"] = counts.get("venues", 0) + 1
+    counts["strategies"] = counts.get("strategies", 0) + 1
+    decision_types = ["watch", "skip", "paper_enter", "paper_exit", "actual_enter", "actual_exit", "add", "reduce"]
+    for i in range(8):
+        market = _call(ctx.home, "market.bind", _pm_market_args(i, loop="trading"), suffix=f"pm-trading-market-{i}").get("id")
+        inst = _call(ctx.home, "instrument.add", {
+            "venue_id": venue,
+            "asset_class": "prediction_market",
+            "title": f"Trading PM {i:02d}",
+            "currency_or_collateral": "USDC",
+            "metadata_json": {"market_id": market, "loop": "trading"},
+        }, suffix=f"pm-trading-inst-{i}").get("id")
+        thesis = _call(ctx.home, "thesis.add", {
+            "instrument_id": inst,
+            "side": "yes" if i % 2 == 0 else "no",
+            "body": f"Trading PM thesis {i:02d}: local-only edge estimate for binary market.",
+            "strategy_id": strat,
+        }, suffix=f"pm-trading-thesis-{i}").get("id")
+        _call(ctx.home, "forecast.add", {
+            "thesis_id": thesis,
+            "kind": "binary",
+            "yes_label": "yes",
+            "resolution_at": (_ANCHOR + timedelta(days=12 + i)).isoformat(),
+            "outcomes": [
+                {"outcome_label": "yes", "probability": 0.35 + i * 0.04},
+                {"outcome_label": "no", "probability": 0.65 - i * 0.04},
+            ],
+            "rationale_body": f"Trading PM forecast rationale {i:02d}; no live adapter data used.",
+        }, suffix=f"pm-trading-fc-{i}")
+        dtype = decision_types[i]
+        dargs = _build_decision_args(dtype, [inst], [thesis], seq=0, strategy_id=strat)
+        dargs["instrument_id"] = inst
+        dargs["thesis_id"] = thesis if dtype not in {"skip"} else dargs.get("thesis_id", thesis)
+        if dtype == "skip":
+            dargs["reason"] = "PM fixture: spread wider than local edge estimate"
+        _call(ctx.home, "decision.add", dargs, suffix=f"pm-trading-decision-{i}")
+        counts["markets"] = counts.get("markets", 0) + 1
+        counts["instruments"] = counts.get("instruments", 0) + 1
+        counts["theses"] = counts.get("theses", 0) + 1
+        counts["forecasts"] = counts.get("forecasts", 0) + 1
+        counts["decisions"] = counts.get("decisions", 0) + 1
+    return _build_forecast_only_pm_loop(ctx, counts)
+
+
 FIXTURE_PROFILES: dict[str, _FixtureBuilderProfile] = {
-    "mvp-eval": _FixtureBuilderProfile(
-        target="mvp-eval",
-        builders=(_build_mvp_eval_base_journal,),
+    "mvp-eval-pm": _FixtureBuilderProfile(
+        target="mvp-eval-pm",
+        builders=(_build_mvp_eval_pm_loop,),
+    ),
+    "forecast-only-pm": _FixtureBuilderProfile(
+        target="forecast-only-pm",
+        builders=(_build_forecast_only_pm_loop,),
     ),
     "mvp-eval-rich": _FixtureBuilderProfile(
         target="mvp-eval-rich",
@@ -894,7 +1030,7 @@ def register_fixture_tools(registry: ToolRegistry) -> None:
     registry.register(
         "journal.fixture_seed",
         _journal_fixture_seed,
-        is_write=True,
+        is_write=False,
         **_examples_for("journal.fixture_seed"),
         description=(
             "Populate the journal with a deterministic fixture for the "

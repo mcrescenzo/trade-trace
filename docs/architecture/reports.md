@@ -3,19 +3,27 @@
 > Status: **shipped**. `ReportFilter` / `ReportResult` / drill-down / `review.bundle` describe the live report surface.
 
 
-**Implementation status (M0-M4 MVP):** shipped: report.calibration,
-report.calibration_integrity, report.source_quality, report.mistakes,
-report.strengths, report.pnl, report.watchlist,
-report.unscored_forecasts, report.decision_velocity,
-report.playbook_adherence, report.coach, report.filter_schema,
-report.compare, report.strategy_performance, report.audit_readiness,
-report.risk, report.opportunity, review.bundle, report.current_exposure,
-report.exposure_anomalies, report.open_positions, report.lifecycle,
-report.recall_receipts, report.strategy_health, report.memory_usefulness,
-report.forecast_diagnostics, report.work_queue, agent.next_actions,
-report.policy_candidates, and report.bootstrap. Deferred (P1+):
-trading-native calibration-by-liquidity-bucket,
-skipped-positive-edge review, and broader replay/evaluation surfaces.
+**Implementation status (v0.0.2 PM pivot):** shipped: report.calibration,
+report.calibration_anchored, report.calibration_terminal,
+report.calibration_trajectory, report.calibration_integrity,
+report.forecast_diagnostics,
+report.book, report.risk, report.audit, report.lifecycle,
+report.recall, report.work_queue, report.bootstrap, report.coach,
+report.strategy_health, report.compare, report.policy_candidates,
+report.filter_schema, report.market_lifecycle,
+report.resolution_quality, report.amm_slippage, and
+report.time_decay_sharpening. Legacy report names such as
+report.pnl, report.watchlist, report.open_positions,
+report.current_exposure, report.exposure_anomalies,
+report.audit_readiness, report.source_quality,
+report.playbook_adherence, report.recall_receipts,
+report.memory_usefulness, report.strategy_performance,
+report.mistakes, report.strengths, report.opportunity,
+report.unscored_forecasts, and report.decision_velocity are retained
+only as hidden/legacy compatibility metadata or consolidated into the
+reports above. Deferred (post-v0.0.2): trading-native
+calibration-by-liquidity-bucket, skipped-positive-edge review, and
+broader replay/evaluation surfaces.
 
 Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
@@ -588,14 +596,13 @@ Outputs include `summary.metrics`, `groups`, `memory_diagnostics`, `negative_con
 
 Forbidden interpretations: not a durable usefulness table, generic memory framework, reward/scoring signal, model optimization target, task queue, dashboard workflow, trading signal/ranking/advice, profit claim, broker/execution/wallet path, or external/live fetch path.
 
-### 4.15 `report.work_queue` and `agent.next_actions`
+### 4.15 `report.work_queue`
 
 `report.work_queue` projects selected lifecycle states into transient
-process-obligation items. `agent.next_actions` is an agent-facing alias /
-projection over the same local report, with the same read-only semantics.
-Both surfaces are for external agents/orchestrators to inspect and choose
-from; Trade Trace does not claim, assign, schedule, notify, retry, or
-execute the items.
+process-obligation items. This is the current replacement for the removed
+legacy `agent.next_actions` alias. It is for external agents/orchestrators
+to inspect and choose from; Trade Trace does not claim, assign, schedule,
+notify, retry, or execute the items.
 
 Inputs:
 
@@ -606,7 +613,7 @@ Examples:
 
 ```bash
 tt report work_queue --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["resolve_due_forecast","record_reflection"]'
-tt agent next_actions --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["review_due_watch","record_playbook_adherence"]'
+tt report work_queue --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["review_due_watch","record_playbook_adherence"]'
 ```
 
 ```json
@@ -614,7 +621,7 @@ tt agent next_actions --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds
 ```
 
 ```json
-{"tool":"agent.next_actions","args":{"as_of":"2026-05-22T00:00:00Z","kinds":["record_reflection","record_playbook_adherence"]}}
+{"tool":"report.work_queue","args":{"as_of":"2026-05-22T00:00:00Z","kinds":["record_reflection","record_playbook_adherence"]}}
 ```
 
 Item snippet:
@@ -721,8 +728,8 @@ stale/invalidated, contradicted, superseded, and `HARMFUL_DOWNSTREAM`/violation 
 If no decisions are selected, no scoped receipts exist, the caller disables the
 section, or the bounded receipt cap is reached, `status`, `omissions`, and
 `truncated` make that explicit. Fresh-session bootstrap is the composition of
-`agent.next_actions`/`report.work_queue` with `report.recall_receipts`; no
-separate durable bootstrap packet or receipt table is implied.
+`report.work_queue` with `report.recall_receipts`; no separate durable
+bootstrap packet or receipt table is implied.
 
 ### 5.3 Redaction rules
 

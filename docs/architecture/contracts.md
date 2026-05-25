@@ -67,11 +67,13 @@ Examples:
 | `memory.recall` | `trade-trace memory recall` |
 | `report.calibration` | `trade-trace report calibration` |
 | `report.filter_schema` | `trade-trace report filter_schema` |
-| `resolve.record` / `outcome.add` | `trade-trace resolve record` / `trade-trace outcome add` |
+| `resolution.add` | `trade-trace resolution add` |
 | `import.commit` | `trade-trace import commit` |
-| `strategy.create` | `trade-trace strategy create` |
+| `strategy.upsert` | `trade-trace strategy upsert` |
 | `journal.init` | `trade-trace journal init` |
-| `journal.rebuild_projections` | `trade-trace journal rebuild_projections --projection positions` |
+| `market.bind` | `trade-trace market bind` |
+
+The current default public registry exposes 65 tools. Renamed tools expose compatibility metadata such as `legacy_name` (for example `resolution.add` has legacy `outcome.add`; `playbook.record_adherence` has legacy `decision.record_adherence`; `playbook.upsert`/`strategy.upsert` replace `playbook.create`/`strategy.create`). `tool.schema`/MCP metadata is the authoritative way for legacy callers to discover these hints and removed-tool guidance.
 
 The mapping is mechanical and irreversible-with-collisions: two MCP
 tool names cannot map to the same CLI invocation.
@@ -220,8 +222,17 @@ contract change requiring a version bump.
 | `INVARIANT_VIOLATION` | A schema-level invariant was violated post-validation (e.g. binary forecast probabilities don't sum to 1, two outcomes have the same label). |
 | `MARKET_NOT_RESOLVED` | Scoring or resolution was attempted on a forecast whose `resolution_at` hasn't passed and no outcome row exists. |
 | `MARKET_AMBIGUOUS` | The most recent outcome row has `status ∈ ('ambiguous', 'disputed')`. |
+| `ADAPTER_DISABLED` | An opt-in external adapter was called while disabled. The Polymarket adapter is disabled by default. |
+| `ADAPTER_TIMEOUT` | An enabled external adapter exceeded its configured timeout while calling an upstream endpoint. |
+| `ADAPTER_RATE_LIMITED` | An enabled external adapter received a rate-limit response from an upstream endpoint. |
+| `ADAPTER_PROTOCOL_ERROR` | An enabled external adapter received a malformed or semantically invalid upstream response. |
+| `EXTERNAL_API_ERROR` | An enabled external adapter received a non-rate-limit upstream API failure. |
+| `RESOLUTION_NOT_AVAILABLE` | A requested market resolution is not yet available from the configured upstream or chain source. |
+| `CONFIG_REQUIRED` | An opt-in adapter feature was called without required local configuration (for example a missing Polygon RPC URL). |
+| `MARKET_NOT_BOUND` | A Trade Trace forecast or market reference has not been bound to the required upstream market identifier. |
+| `MARKET_STATE_CONFLICT` | Local market state and upstream adapter state conflict and the caller must resolve the mismatch before continuing. |
 
-There is no `RATE_LIMITED` code. The earlier draft reserved it; that was inconsistent with a closed enum. If a future ingestion path needs rate-limit semantics, the code is added via a minor contract version bump per §8 (additive enum extension).
+Rate-limit semantics are adapter-specific. External adapters use `ADAPTER_RATE_LIMITED`; local/non-adapter throttling would require a future additive enum extension per §8.
 
 ### 5.1 Code selection guidance
 
@@ -282,9 +293,8 @@ For each tool:
 
 #### Strategy-specific coverage (lands with M3)
 
-- One success case each for `strategy.create`, `strategy.list`,
-  `strategy.show`, and `strategy.update`.
-- One `VALIDATION_ERROR` case for `strategy.create` covering duplicate
+- One success case for `strategy.upsert` and report/list coverage via `report.strategy_health`.
+- One `VALIDATION_ERROR` case for `strategy.upsert` covering duplicate
   slug rejection (single-field uniqueness — see §5.1; `VALIDATION_ERROR`
   is the correct selection over `INVARIANT_VIOLATION`).
 - One `VALIDATION_ERROR` case for `memory.link` / `memory.reflect`

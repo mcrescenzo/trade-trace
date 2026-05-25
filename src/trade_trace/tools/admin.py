@@ -14,10 +14,10 @@ In MVP, fully functional:
   - journal.config_set (here; persists key=value into the config table)
 
 Embeddings admin paths:
-  - model.import      (opt-in local model staging/download path; 89x)
+  - model.import      (opt-in local ONNX model staging path; 89x)
   - model.warm        (lazy warm of the local embedder; 89x)
   - memory.reindex    (re-embed all nodes when provider changes; 89x)
-  - keyring.revoke    (revoke stored OpenAI embeddings credential)
+  - keyring.revoke    (legacy no-op; remote embeddings are unsupported)
 
 Tools that mutate state respect the `--confirm` (CLI) / `_confirm: true`
 (MCP) flag per the operability contract: without it they return
@@ -31,7 +31,6 @@ import hashlib
 import json
 import shutil
 import sqlite3
-import urllib.request
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
@@ -39,19 +38,22 @@ from trade_trace._permissions import chmod_user_only_dir, chmod_user_only_file
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
+from trade_trace.models.embeddings import (
+    LOCAL_EMBEDDINGS_DIM,
+    LocalEmbeddingUnavailable,
+    LocalOnnxEmbedder,
+)
 from trade_trace.storage import open_database, resolve_home
 from trade_trace.storage.paths import db_path
 from trade_trace.tools._helpers import now_iso, require
 from trade_trace.tools.errors import ToolError
-from trade_trace.tools.memory import _embeddings_provider, _float32_blob, _query_embedding
+from trade_trace.tools.memory import _embeddings_provider, _float32_blob
 
-OPENAI_EMBEDDINGS_KEYRING_SERVICE = "trade-trace:embeddings:openai"
-EMBEDDINGS_API_KEY_ARG = "api_key"
 BGE_SMALL_MODEL_ID = "BAAI/bge-small-en-v1.5"
 BGE_SMALL_REVISION = "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
 BGE_SMALL_MODEL_DIRNAME = "bge-small-en-v1.5"
 BGE_SMALL_TARGET_SUBDIR = Path("models") / BGE_SMALL_MODEL_DIRNAME
-BGE_SMALL_HF_BASE_URL = f"https://huggingface.co/{BGE_SMALL_MODEL_ID}/resolve/{BGE_SMALL_REVISION}"
+
 BGE_SMALL_LOCK: tuple[dict[str, Any], ...] = (
     {"path": "config.json", "size": 743, "sha256": "094f8e891b932f2000c92cfc663bac4c62069f5d8af5b5278c4306aef3084750"},
     {"path": "tokenizer.json", "size": 711396, "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"},
@@ -62,7 +64,7 @@ BGE_SMALL_LOCK: tuple[dict[str, Any], ...] = (
     {"path": "sentence_bert_config.json", "size": 52, "sha256": "84e39fda68ccbff05bfa723ae9c0e70e23e2ec373b76e0f8c6e71af72a693cbf"},
     {"path": "1_Pooling/config.json", "size": 190, "sha256": "d1caf60c96f5fba2157c0c26b76d80818fad6cf0b8eb5e73ec372ff9818eba5c"},
     {"path": "config_sentence_transformers.json", "size": 124, "sha256": "940d5f50db195fa6e5e6a4f122c095f77880de259d74b14a65779ed48bdd7c56"},
-    {"path": "model.safetensors", "size": 133466304, "sha256": "f34dad568ecbc8f2452ae7ea84e72884e1bab4f299cec39fd8f978b5fba8d3c9"},
+    {"path": "model.onnx", "size": 132986896, "sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
 )
 
 
@@ -237,37 +239,6 @@ def _atomic_replace_dir(src: Path, dest: Path) -> None:
     chmod_user_only_dir(dest)
 
 
-def _download_bge_small_model(home: Path) -> dict[str, Any]:
-    """One-shot opt-in download seam for BAAI/bge-small-en-v1.5.
-
-    The production path is intentionally explicit and narrow: it downloads only
-    Trade Trace-pinned allowlisted files at an immutable HuggingFace revision,
-    then verifies SHA-256 and size before activation.
-    """
-
-    target = _model_target_dir(home)
-    if _model_files_present(home):
-        verified = _verify_model_dir(target)
-        return {"downloaded": False, "target": str(target), **verified}
-    tmp = target.parent / f".{target.name}.download"
-    if tmp.exists():
-        shutil.rmtree(tmp)
-    tmp.mkdir(parents=True, exist_ok=True)
-    try:
-        for rel, _size, _sha in _trusted_model_entries():
-            out = _resolve_under(tmp, rel)
-            out.parent.mkdir(parents=True, exist_ok=True)
-            url = f"{BGE_SMALL_HF_BASE_URL}/{urllib.request.pathname2url(rel)}"
-            with urllib.request.urlopen(url, timeout=300) as response:  # nosec B310 - explicit opt-in URL
-                out.write_bytes(response.read())
-        _atomic_replace_dir(tmp, target)
-    finally:
-        if tmp.exists():
-            shutil.rmtree(tmp)
-    verified = _verify_model_dir(target)
-    return {"downloaded": True, "target": str(target), "source_url": BGE_SMALL_HF_BASE_URL, **verified}
-
-
 # -- journal.repair ----------------------------------------------
 
 
@@ -401,6 +372,16 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         "schema_version": "1",
         "created_at": now_iso(),
         "home": str(home),
+        "includes": {
+            "sqlite_tables": ["markets"],
+            "market_lifecycle_anchors": [
+                "opened_at", "close_at", "closed_for_trading_at", "resolving_at",
+                "resolved_at", "voided_at", "ambiguous_at",
+            ],
+        },
+        "excludes": {
+            "refetchable_adapter_cache": ["adapters/polymarket/cache", "adapter_cache"],
+        },
         "files": files_manifest,
     }
     manifest_path = dest_path / "manifest.json"
@@ -558,7 +539,7 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
     operability.md §4.3, config keys are open-namespace strings; the
     server stores them verbatim and lets consumers interpret. The
     embeddings.provider key is validated against the closed enum
-    {none, local, api:openai} per memory-layer.md §8.5."""
+    {none, local}. Remote/API providers are intentionally unsupported."""
 
     key = require(args, "key")
     value = require(args, "value")
@@ -574,7 +555,7 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         value = json.dumps(value, sort_keys=True)
     # Specific key validation: embeddings.provider.
     if key == "embeddings.provider":
-        allowed = {"none", "local", "api:openai"}
+        allowed = {"none", "local"}
         if value not in allowed:
             raise ToolError(
                 ErrorCode.VALIDATION_ERROR,
@@ -583,13 +564,7 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                 details={"field": "value", "value": value,
                          "allowed": sorted(allowed)},
             )
-        if value == "api:openai" and _confirm_requested(args) and not args.get(EMBEDDINGS_API_KEY_ARG):
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                "api:openai requires an API key supplied by an interactive CLI prompt "
-                "or a non-persisted api_key argument; the key is stored only in the OS keyring",
-                details={"field": "api_key", "secret_storage": "os_keyring"},
-            )
+
 
     home = resolve_home(args.get("home"))
     path = db_path(home)
@@ -616,25 +591,15 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
             },
         }
 
-    model_download: dict[str, Any] | None = None
     if key == "embeddings.provider" and value == "local":
-        # Opt-in boundary: the only lazy outbound path fires on an explicit
-        # provider switch to local, and only when the verified model directory
-        # is missing. Air-gap installs can avoid this path with model.import.
-        if not _model_files_present(home):
-            model_download = _download_bge_small_model(home)
-        else:
-            model_download = {"downloaded": False, "target": str(_model_target_dir(home))}
-    elif key == "embeddings.provider" and value == "api:openai":
-        # Consume the secret only to populate the OS keyring. Never persist it
-        # in config, events, outbox, return data, or logs.
-        from trade_trace.security.keyring import store_api_key
-
-        store_api_key(OPENAI_EMBEDDINGS_KEYRING_SERVICE, str(args[EMBEDDINGS_API_KEY_ARG]))
+        # Do not download or fail on missing assets. model.import is the only
+        # path that stages local embeddings; missing installs/assets degrade
+        # semantic recall rather than blocking journal operations.
+        pass
 
     if key == "embeddings.provider":
-        # Avoid loading sqlite-vec while changing the provider row; the extension
-        # is optional and should not be required merely to toggle config.
+        # Avoid the higher-level database opener here so config changes never
+        # try to initialize optional embedding runtimes.
         conn = sqlite3.connect(str(path), isolation_level=None)
         try:
             conn.execute(
@@ -661,10 +626,8 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         finally:
             db.close()
     result = {"preview_only": False, "key": key, "value": value}
-    if model_download is not None:
-        result["model"] = model_download
-    if key == "embeddings.provider" and value == "api:openai":
-        result["api_key_storage"] = "os_keyring"
+    if key == "embeddings.provider" and value == "local":
+        result["model_present"] = _model_files_present(home)
     return result
 
 
@@ -709,40 +672,30 @@ def _model_import(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 
 def _model_warm_stub(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    raise ToolError(
-        ErrorCode.UNSUPPORTED_CAPABILITY,
-        "model.warm requires the embeddings opt-in path — deferred to "
-        "bead trade-trace-a4p.",
-        details={"deferred_to_bead": "trade-trace-a4p",
-                 "phase": "MVP-contract-only"},
-    )
+    home = resolve_home(args.get("home"))
+    target = _model_target_dir(home)
+    try:
+        verified = _verify_model_dir(target)
+        vector = LocalOnnxEmbedder(target).embed("trade trace warmup")
+    except (ToolError, LocalEmbeddingUnavailable) as exc:
+        return {"warmed": False, "available": False, "reason": exc.__class__.__name__, "target": str(target)}
+    return {"warmed": True, "available": True, "dim": len(vector), "target": str(target), **verified}
 
 
 def _memory_reindex_model(provider: str) -> tuple[str, int]:
     if provider == "local":
-        return f"{BGE_SMALL_MODEL_ID}@{BGE_SMALL_REVISION}", 384
-    if provider == "api:openai":
-        return "text-embedding-3-small", 1536
+        return f"{BGE_SMALL_MODEL_ID}@{BGE_SMALL_REVISION}", LOCAL_EMBEDDINGS_DIM
     return "none", 0
 
 
 def _memory_reindex_cost(provider: str, nodes: list[tuple[str, str]]) -> dict[str, Any]:
     token_estimate = sum(max(1, len(body.split())) for _node_id, body in nodes)
-    if provider == "api:openai":
-        # Rough public-list-price estimate for text-embedding-3-small at
-        # $0.02 / 1M tokens. This is preview metadata only; no network call is
-        # made by memory.reindex.
-        return {
-            "currency": "USD",
-            "token_estimate": token_estimate,
-            "estimated_usd": round(token_estimate * 0.02 / 1_000_000, 8),
-            "basis": "rough estimate: text-embedding-3-small at $0.02 / 1M tokens",
-        }
+
     return {
         "currency": "USD",
         "token_estimate": token_estimate,
         "estimated_usd": 0.0,
-        "basis": "local/offline deterministic embedding path",
+        "basis": "local/offline ONNX embedding path",
     }
 
 
@@ -785,21 +738,31 @@ def _memory_reindex(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             return {"preview_only": True, "would_reindex": plan}
         if provider == "none":
             return {"preview_only": False, "provider": provider, "model_id": model_id, "dim": dim, "reindexed_count": 0}
-        if provider == "api:openai":
-            from trade_trace.security.keyring import load_api_key
-
-            api_key = load_api_key(OPENAI_EMBEDDINGS_KEYRING_SERVICE)
-            if not api_key:
-                raise ToolError(
-                    ErrorCode.VALIDATION_ERROR,
-                    "api:openai memory.reindex requires an embeddings API key in the OS keyring",
-                    details={"provider": provider, "secret_storage": "os_keyring"},
-                )
-            del api_key
+        if provider != "local":
+            return {"preview_only": False, "provider": provider, "model_id": model_id, "dim": dim, "reindexed_count": 0}
+        try:
+            verified = _verify_model_dir(_model_target_dir(home))
+            embedder = LocalOnnxEmbedder(_model_target_dir(home))
+        except (ToolError, LocalEmbeddingUnavailable) as exc:
+            return {
+                "preview_only": False,
+                "provider": provider,
+                "model_id": model_id,
+                "dim": dim,
+                "reindexed_count": 0,
+                "degraded": True,
+                "reason": exc.__class__.__name__,
+            }
         created_at = now_iso()
         with UnitOfWork(conn) as uow:
             for node_id, body in nodes:
-                embedding = _query_embedding(body, dim=dim, provider=provider, model_id=model_id)
+                embedding = embedder.embed(body)
+                if len(embedding) != dim:
+                    raise ToolError(
+                        ErrorCode.INVARIANT_VIOLATION,
+                        "local embedding dimension does not match locked model metadata",
+                        details={"expected_dim": dim, "actual_dim": len(embedding)},
+                    )
                 uow.execute(
                     "INSERT INTO memory_node_embeddings(node_id, provider, dim, model_id, embedding, created_at) "
                     "VALUES (?, ?, ?, ?, ?, ?) "
@@ -818,43 +781,34 @@ def _memory_reindex(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "dim": dim,
             "reindexed_count": len(nodes),
             "deleted_prior_provider_rows": True,
+            "model": verified,
         }
     finally:
         conn.close()
 
 
 def _keyring_revoke(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    """Revoke the stored OpenAI embeddings credential from the OS keyring.
-
-    This is intentionally narrow: Trade Trace currently has exactly one
-    shipped keyring-backed credential lifecycle, configured by
-    ``journal.config_set key=embeddings.provider value=api:openai``. Do not
-    accept arbitrary service names here; broad credential management belongs in
-    a separate design.
-    """
+    """Legacy no-op: remote embedding credentials are no longer supported."""
 
     if not _confirm_requested(args):
         _set_preview_meta(ctx)
         return {
             "preview_only": True,
             "would_revoke": {
-                "provider": "api:openai",
-                "credential_storage": "os_keyring",
+                "provider": "none",
+                "credential_storage": "unsupported",
             },
         }
 
     result = {
         "preview_only": False,
-        "provider": "api:openai",
-        "credential_storage": "os_keyring",
-        "revoked": True,
+        "provider": "none",
+        "credential_storage": "unsupported",
+        "revoked": False,
     }
     if args.get("_dry_run") is True:
         return result
 
-    from trade_trace.security.keyring import delete_api_key
-
-    delete_api_key(OPENAI_EMBEDDINGS_KEYRING_SERVICE)
     return result
 
 
@@ -910,14 +864,11 @@ def register_admin_tools(registry: ToolRegistry) -> None:
         description=(
             "Persist a key=value pair into the config table. The "
             "embeddings.provider key is validated against the closed "
-            "enum {none, local, api:openai}. 'none' disables semantic "
-            "embeddings, 'local' enables local/stub semantic ranking, and "
-            "'api:openai' stores a required API key only in a validated secure "
-            "OS keyring. A raw key argument is accepted only for MCP/CLI "
-            "noninteractive setup, is never returned, and is not persisted by "
-            "the app. memory.recall currently resolves that key as a gate but "
-            "uses the local/stub query embedding path; no OpenAI network call "
-            "is implemented here."
+            "enum {none, local}. 'none' disables semantic embeddings; "
+            "'local' enables the opt-in local ONNX wordpiece path when "
+            "verified model assets and optional dependencies are present. "
+            "Remote/API providers and keyring-backed embedding auth material "
+            "are unsupported."
         ),
     )
     registry.register(
@@ -937,9 +888,10 @@ def register_admin_tools(registry: ToolRegistry) -> None:
         "model.warm",
         _model_warm_stub,
         description=(
-            "[Deferred to trade-trace-a4p] Load the local embedder into "
-            "memory and run a dummy embed for latency-sensitive setups. "
-            "Currently surfaces UNSUPPORTED_CAPABILITY."
+            "Load the local embedder into memory and run a dummy embed for "
+            "latency-sensitive setups. Missing local model assets or optional "
+            "dependencies return warmed=false/available=false without blocking "
+            "journal use or touching the network."
         ),
     )
     registry.register(
@@ -951,9 +903,8 @@ def register_admin_tools(registry: ToolRegistry) -> None:
             "Re-embed all memory nodes for the active embeddings provider "
             "inside a single transaction. Requires --confirm to write; "
             "without it returns meta.preview_only=true with node count and "
-            "cost estimate. api:openai requires only keyring presence and "
-            "uses the deterministic local substrate; no OpenAI network call "
-            "is implemented here."
+            "cost estimate. Missing local embeddings dependencies or assets "
+            "degrade semantic recall/reindexing without blocking journal use."
         ),
     )
     registry.register(
@@ -962,9 +913,7 @@ def register_admin_tools(registry: ToolRegistry) -> None:
         is_write=True,
         **_examples_for("keyring.revoke"),
         description=(
-            "Revoke the stored OpenAI embeddings key from the validated OS "
-            "keyring. Requires --confirm; without it returns "
-            "meta.preview_only=true. This narrow admin path is idempotent and "
-            "does not accept or return key material."
+            "Legacy no-op retained for older clients. Remote embedding "
+            "credentials are unsupported; no keyring backend is imported."
         ),
     )

@@ -52,4 +52,4 @@ For new reports, also add tests that prove unsupported filters are rejected and 
 
 ## Follow-on implementation rule
 
-Future agent-continuity tools should be added by extending the registry and schema tests first. The shipped `agent.bootstrap` surface is an explicit MCP/CLI alias for `report.bootstrap`: both use the same handler/schema and return `kind="agent.bootstrap"` under the bootstrap.v0 contract. If a feature cannot be expressed as a deterministic CLI/MCP JSON contract, it is not ready for implementation.
+Future agent-continuity tools should be added by extending the registry and schema tests first. The shipped public surface is `report.bootstrap`; the removed legacy `agent.bootstrap` name is documented through compatibility metadata rather than advertised as a current tool. If a feature cannot be expressed as a deterministic CLI/MCP JSON contract, it is not ready for implementation.

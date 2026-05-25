@@ -104,6 +104,7 @@ OPEN_ENUMS: dict[str, frozenset[str]] = {
             "outcome.recorded",
             "forecast.created",
             "forecast.scored",
+            "forecast.anchored_to_snapshot",
             "forecast.superseded",
             "edge.created",
             "source.attached",

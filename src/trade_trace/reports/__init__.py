@@ -19,6 +19,15 @@ from trade_trace.reports.calibration import (
     DEFAULT_BIN_POLICY,
     DEFAULT_MIN_SAMPLE,
     report_calibration,
+    report_calibration_anchored,
+    report_calibration_terminal,
+)
+from trade_trace.reports.pm_native import (
+    report_amm_slippage,
+    report_calibration_trajectory,
+    report_market_lifecycle,
+    report_resolution_quality,
+    report_time_decay_sharpening,
 )
 from trade_trace.reports.coach import (
     FORBIDDEN_PHRASES,
@@ -87,7 +96,13 @@ __all__ = [
     "evaluate_output",
     "liquidity_bucket",
     "report_calibration",
+    "report_calibration_anchored",
+    "report_calibration_terminal",
     "report_calibration_integrity",
+    "report_calibration_trajectory",
+    "report_market_lifecycle",
+    "report_resolution_quality",
+    "report_amm_slippage",
     "report_lifecycle",
     "report_memory_usefulness",
     "report_coach",
@@ -105,6 +120,7 @@ __all__ = [
     "report_strategy_health",
     "report_strategy_performance",
     "report_strengths",
+    "report_time_decay_sharpening",
     "report_unscored_forecasts",
     "report_watchlist",
     "report_work_queue",

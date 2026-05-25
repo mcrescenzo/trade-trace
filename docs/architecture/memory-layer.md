@@ -203,13 +203,13 @@ So the agent can triangulate (e.g., "BM25 surfaced this node, semantic didn't �
 
 ### 7.2 Opt-in strategy: SEMANTIC
 
-**Implementation status (agent-ready epic):** the SEMANTIC strategy and its enabling config surfaces (`tt journal config_set --key embeddings.provider --value local|api:openai|none --idempotency-key <uuid> --confirm`, `tt model import --src <path-to-bge-small> --idempotency-key <uuid>`, `tt model warm`, `tt memory reindex --confirm`) now ship behind explicit opt-in. Fresh journals still default to BM25 + TEMPORAL + GRAPH only; `memory.recall` runs with zero network unless an embedding provider is configured. `journal.status` reports `embeddings_provider = "none"` on every fresh init. The off-by-default contract is verified end-to-end in `tests/security/test_no_network_default.py`.
+**Implementation status (v0.0.2):** SEMANTIC recall is optional and local-only. The active `embeddings.provider` enum is `none|local`; remote/API embedding providers and keyring-backed embedding credentials are intentionally unsupported. Fresh journals default to BM25 + TEMPORAL + GRAPH-capable local recall only; `memory.recall` runs with zero network by default, and `journal.status` reports `embeddings_provider = "none"` on a fresh init.
 
-- **`SEMANTIC`** — vector similarity via `sqlite-vec`. **Off by default in MVP** (per PRD §2.4.1). The embeddings extra ships `sqlite-vec`; no model weights are downloaded on `journal.init`. To enable:
-  - `tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` — authorizes one-time download of `BAAI/bge-small-en-v1.5` (~130MB) into `$TRADE_TRACE_HOME/models/`. Subsequent recall calls use it transparently.
-  - `tt model import --src <path-to-bge-small> --idempotency-key <uuid>` — air-gapped install path that uses a pre-staged model without any network call.
-  - `tt journal config_set --key embeddings.provider --value api:openai --idempotency-key <uuid> --confirm` — opt-in remote embedding; see §8.3.
-  - Once enabled, `memory.recall` includes SEMANTIC in the default `strategies` value.
+- **`SEMANTIC`** — vector similarity using the local ONNX/tokenizers BGE-small path when the operator has both installed the `[embeddings]` extra and imported verified local model assets. There is no automatic model download.
+  - `tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` enables use of local assets if present. Missing assets/dependencies degrade semantic recall; journal operations continue.
+  - `tt model import --path <path-to-bge-small> --idempotency-key <uuid> --confirm` copies a pre-staged model directory after SHA-256/size verification against Trade Trace-pinned lock data. This is the only model-staging path and performs zero outbound network calls.
+  - `tt model warm` attempts a dummy local embed and returns `available=false` if assets/dependencies are absent.
+  - Once local embeddings are available, `memory.recall` can include SEMANTIC in the enabled strategies.
 
 The "off by default" choice preserves the absolute air-gap promise in VISION §safety on first `journal.init`. MVP recall via BM25 + temporal (+ graph if requested) returns valid results without vectors; SEMANTIC is a ranking-quality improvement, not a correctness gate.
 
@@ -259,57 +259,45 @@ Strategy context composes with `query` (full-text terms still apply within the s
 
 ## 8. Embeddings
 
-**Implementation status (agent-ready epic):** §§8.1-8.5 now ship as opt-in embeddings support. The base wheel remains lightweight; install the embeddings extra for vector storage and keyring support. The off-by-default behavior described in §8.1 is still the binding contract: a fresh `journal.init` makes zero outbound network calls and the recall path returns valid results without vectors.
+**Implementation status (v0.0.2):** embeddings are optional, local-only, and fail-soft. The base wheel remains lightweight. Install the `[embeddings]` extra to make the local ONNX/tokenizers runtime available, then import a pre-staged verified model with `tt model import`. Remote/API embedding providers, OS-keyring credential storage, sqlite-vec-backed indexes, and automatic model downloads are not supported in v0.0.2.
 
-### 8.1 MVP default: vectors off, deps optional
+### 8.1 Default: vectors off, deps optional
 
-The base wheel does not require vector dependencies. Install `trade-trace[embeddings]` (or `pip install -e '.[embeddings]'` from a checkout) to use `sqlite-vec` vector storage, local model import/warm, API-provider keyring storage, and `memory.reindex`. **No model weights are downloaded on `journal.init`.** A fresh install runs fully offline; recall uses BM25 + temporal (+ graph if requested).
-
-This is the load-bearing change from earlier drafts: VISION §safety promises the default first-run path makes no outbound network calls and is air-gappable, which a default-on lazy download would break. Defaulting vectors off keeps that promise; opting in is one config line.
-
-Rationale for an optional extra: the vector path is useful but not required for the manual learning loop, and keeping the base install small preserves the local/offline default. The model weights are large and are never fetched without explicit operator opt-in.
+The base install does not require vector dependencies and never downloads model weights. A fresh install runs fully offline; recall uses BM25 + temporal (+ graph if requested). This is load-bearing: the product promise is a local/offline journal that does not send memory or trading data outward by default.
 
 ### 8.2 Enabling local embeddings
 
-Two paths, both explicit:
+The supported local path is explicit and air-gapped:
 
-- **Online opt-in**: `tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` authorizes a one-time download of `BAAI/bge-small-en-v1.5` (~130MB, 384-dim, English-only, sufficient for trading content). The next recall call (or `tt model warm`) triggers the download into `$TRADE_TRACE_HOME/models/`. The download target is the model's host only; no telemetry, no metrics, no journal data transmitted. After download, the system runs fully air-gapped.
-- **Air-gapped install**: `tt model import --src <path-to-bge-small> --idempotency-key <uuid>` copies a manually-staged model directory into the cache. The model is identified by its config hash; once present, recall uses it without any network call.
+1. Install optional runtime dependencies:
+   ```bash
+   pip install -e '.[embeddings]'
+   ```
+2. Pre-stage the pinned `BAAI/bge-small-en-v1.5` assets outside Trade Trace.
+3. Import those assets:
+   ```bash
+   tt model import --path <path-to-bge-small> --idempotency-key <uuid> --confirm
+   ```
+4. Enable local provider use:
+   ```bash
+   tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm
+   ```
 
-`tt journal config_set --key embeddings.provider --value none --idempotency-key <uuid> --confirm` (the default state) removes the SEMANTIC strategy. `memory.recall` runs with BM25 + temporal (+ graph if requested) and returns valid results.
+`model.import` verifies every imported file against Trade Trace-pinned SHA-256/size lock data and ignores any source-provided manifest as proof. `journal.config_set` does not stage, download, or verify model assets; it only records the provider choice and reports whether local model files are currently present. `model.warm` attempts a local dummy embed and returns a degraded availability response when assets or optional dependencies are missing.
 
-### 8.3 API providers
+`tt journal config_set --key embeddings.provider --value none --idempotency-key <uuid> --confirm` is the default state and removes SEMANTIC from the active strategy set. Recall continues to work via BM25 + temporal (+ graph if requested).
 
-Users can configure a remote embedding provider:
+### 8.3 Unsupported remote/API providers
 
-```
-tt journal config_set --key embeddings.provider --value api:openai --idempotency-key <uuid> --confirm
-```
+Remote embedding providers are not part of the v0.0.2 product surface. `embeddings.provider=api:openai` and other remote/provider-key variants fail validation. No keyring backend is imported for embeddings, and no memory text is sent to embedding APIs. `keyring.revoke` remains only as a legacy no-op for older clients.
 
-The CLI prompts for the API key and stores it in the OS keyring (via the `keyring` library; declared as an optional install extra). The key is **never** stored in the database, **never** stored in plaintext config, and **never** logged. Each call sends `body` (and optionally `title`) to the provider; the response embedding is persisted in `memory_node_embeddings`.
+### 8.4 Re-indexing local embeddings
 
-This path sends memory text outside the machine. The CLI emits an explicit warning on `tt journal config_set --key embeddings.provider --value api:openai` describing what data leaves and where. It is opt-in, requires secure keyring storage, and does not become default in any future MVP path.
-
-Two outbound paths exist in trade-trace; both opt-in:
-- **Local model weight download** (§8.2): one-time, weights only, no journal data.
-- **API embedding provider** (§8.3): per-call, sends memory text outbound.
-
-No other intended path makes outbound network calls. No telemetry, no usage analytics, no auto-update, no webhook.
-
-### 8.4 Re-embed on provider change
-
-Embedding model identity and dimension are recorded per node in `memory_node_embeddings`. When the provider or model changes:
-
-- New writes use the new provider.
-- Old vectors become unusable (dimension mismatch with the new index).
-- The user runs `tt memory reindex --confirm` to re-embed existing nodes. The command reports node count and estimated cost (free for local; explicit dollar estimate for API providers) before running.
-- Until reindex completes, vector recall covers only nodes embedded under the current provider; BM25 + temporal cover the rest. The combiner handles missing-vector cases gracefully.
-
-Lazy re-embed at recall time is rejected because the vector index needs a fixed dimension; mixing dims is more complex than the eager reindex path.
+Embedding model identity and dimension are recorded per node in `memory_node_embeddings`. When `embeddings.provider=local` and verified local assets are available, `tt memory reindex --confirm` embeds existing nodes in one transaction and replaces stale rows for the active provider/model. If assets or optional dependencies are missing, reindex reports degraded availability and leaves existing rows untouched. BM25 + temporal recall remains available either way.
 
 ### 8.5 Disabling vectors
 
-`tt journal config_set --key embeddings.provider --value none --idempotency-key <uuid> --confirm` removes the SEMANTIC strategy from the default-enabled set. Recall continues to work via BM25 + temporal. The setting is persisted in the config table.
+`tt journal config_set --key embeddings.provider --value none --idempotency-key <uuid> --confirm` persists the no-vector state. Recall continues to work via BM25 + temporal, and no outbound path is introduced.
 
 ## 9. Public API surface
 

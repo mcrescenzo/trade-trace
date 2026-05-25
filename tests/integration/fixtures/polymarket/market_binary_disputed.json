@@ -1,0 +1,1 @@
+{"id":"pm-disputed","question":"Disputed market?","closed":true,"resolved":true,"disputed":true,"winningOutcome":"Yes","outcome":{"status":"resolved_final","label":"Yes","resolution_source":"arbitration","tx_hash":"0xdisputed"},"outcomes":[{"name":"Yes"},{"name":"No"}]}

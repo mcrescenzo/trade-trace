@@ -1,27 +1,21 @@
 # v0.0.2 PM-pivot tool/report catalog reconciliation
 
-> Status: **decision document for trade-trace-sx4n** (findings + recommendation).
-> No code changes in this document — the implementation lands across the
-> v0.0.2 program beads (`bd list --all --label v002-pm-pivot --flat --limit 0`).
+> Status: **shipped** as of 2026-05-25. The pivot has landed: the current default public registry exposes **65** tools, generated from `build_registry().public_names()`. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
 
 ## Why this exists
 
-`next-steps.md` declares three different tool-count baselines —
+`next-steps.md` declared three different tool-count baselines —
 **81**, **84**, and **45** target — across Parts I, II, and XV.
-`tests/security/test_mvp_boundary_audit.py` pins **28** report tools
-but is silent on the rest of the catalog. The runtime registry today
-reports **89** tools, **28** of which are reports. Until those
-numbers stop contradicting each other, every downstream implementation
-bead has to re-do the audit before it can write the FOLD/KILL/RENAME
-patches.
+This document originally reconciled those planning numbers against the
+then-current 89-tool registry. The pivot has since landed; the runtime
+registry now reports **65 public tools** in the default catalog.
 
 This doc pins the **authoritative runtime baseline** (Section 1),
-maps every shipped tool to its v0.0.2 disposition (Section 2),
-collapses the unresolved-resolution semantics that next-steps.md
-defaulted (Section 3), and writes the one-line transport contract
-(`meta.legacy_name`, error envelopes for killed tools, etc.) the
-catalog/transport gate (trade-trace-lznx) will enforce
-(Section 4).
+keeps the old-tool disposition table as historical implementation
+context (Section 2), collapses the unresolved-resolution semantics that
+next-steps.md defaulted (Section 3), and records the transport contract
+(`legacy_name`, removed-tool hints, and deprecation-clear errors) that
+the catalog/transport gate (trade-trace-lznx) enforces (Section 4).
 
 It does **not** rewrite next-steps.md or move existing docs; it
 supersedes the disagreement between them by being the single
@@ -29,9 +23,17 @@ authoritative source the v0.0.2 implementation beads cite.
 
 ---
 
-## 1. Runtime baseline (2026-05-23)
+## 1. Current runtime baseline (2026-05-25)
 
-Generated from `default_registry().names()`:
+Generated from `build_registry().public_names()` for the default public catalog: 65 tools.
+
+`decision.add`, `export.drain`, `forecast.add`, `forecast.anchor_to_snapshot`, `import.commit`, `journal.backup`, `journal.config_set`, `journal.fixture_seed`, `journal.init`, `journal.restore`, `journal.schema`, `journal.status`, `market.bind`, `market.refresh`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `playbook.record_adherence`, `playbook.upsert`, `replay.case_bundle`, `replay.evaluate_output`, `report.amm_slippage`, `report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_anchored`, `report.calibration_integrity`, `report.calibration_terminal`, `report.calibration_trajectory`, `report.coach`, `report.compare`, `report.current_exposure`, `report.decision_velocity`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.market_lifecycle`, `report.memory_usefulness`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.recall_receipts`, `report.resolution_quality`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strategy_performance`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `snapshot.add`, `snapshot.fetch`, `snapshot.fetch_series`, `strategy.upsert`, `tool.schema`.
+
+Renamed public tools expose `legacy_name` metadata: `resolution.add` has legacy `outcome.add`, `playbook.record_adherence` has legacy `decision.record_adherence`, `playbook.upsert` has legacy `playbook.create`, and `strategy.upsert` has legacy `strategy.create`. `tool.schema` and MCP tool metadata also provide removed-tool/deprecation hints for legacy callers.
+
+### Historical planning baseline (2026-05-23)
+
+The older disposition table below was generated from `default_registry().names()` before the pivot landed and is retained as planning history, not as the current public catalog:
 
 | Family | Count | Tools |
 |---|---:|---|
@@ -82,33 +84,23 @@ correct for that moment but missed:
 - **`replay.evaluate_output`** likewise was registered after the
   audit snapshot.
 
-The "84" number in next-steps.md is therefore stale; this document
-authoritatively replaces it with **89**, and the v0.0.2 net-reduction
-target accordingly becomes **89 → 45 (-44 tools, ≈49 % reduction)**
-rather than the previously published 84 → 45 (-39, ≈46 %).
+The "84" number in next-steps.md was therefore stale during planning;
+the implementation ultimately landed with the 65-tool public catalog in
+§1. Treat the 89 → 45 language below as the historical reduction target,
+not the current runtime truth.
 
-### 1.2 Shipped reports (28)
+### 1.2 Shipped reports (35)
 
 Pinned by `SHIPPED_REPORTS` in
-`tests/security/test_mvp_boundary_audit.py`. The 28 names below are
+`tests/security/test_mvp_boundary_audit.py`. The names below are
 authoritative; any addition must update that pin and this doc in the
 same commit.
 
-`report.audit_readiness`, `report.bootstrap`, `report.calibration`,
-`report.calibration_integrity`, `report.coach`, `report.compare`,
-`report.current_exposure`, `report.decision_velocity`,
-`report.exposure_anomalies`, `report.filter_schema`,
-`report.forecast_diagnostics`, `report.lifecycle`,
-`report.memory_usefulness`, `report.mistakes`, `report.open_positions`,
-`report.opportunity`, `report.playbook_adherence`, `report.pnl`,
-`report.policy_candidates`, `report.recall_receipts`, `report.risk`,
-`report.source_quality`, `report.strategy_health`,
-`report.strategy_performance`, `report.strengths`,
-`report.unscored_forecasts`, `report.watchlist`, `report.work_queue`.
+`report.amm_slippage`, `report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_anchored`, `report.calibration_integrity`, `report.calibration_terminal`, `report.calibration_trajectory`, `report.coach`, `report.compare`, `report.current_exposure`, `report.decision_velocity`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.market_lifecycle`, `report.memory_usefulness`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.recall_receipts`, `report.resolution_quality`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strategy_performance`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`.
 
 ---
 
-## 2. Old → new disposition (89 → 45)
+## 2. Historical old → new disposition target (89 → 45)
 
 Each row pins the v0.0.2 outcome for one runtime tool. Dispositions
 are exactly one of **KEEP**, **RENAME**, **FOLD**, **KILL**, or
@@ -234,6 +226,7 @@ surface and does not duplicate any consolidation target.
 | `report.calibration`              | `calibration` + `calibration_integrity` (nested as sections) |
 | `report.calibration_anchored`     | NEW (§3.1) |
 | `report.calibration_terminal`     | NEW (§3.2) |
+| `report.calibration_trajectory`   | NEW (time-to-resolution calibration trend) |
 | `report.forecast_diagnostics`     | unchanged |
 | `report.book`                     | `pnl` + `open_positions` + `current_exposure` + `exposure_anomalies` + `watchlist` |
 | `report.risk`                     | unchanged |
@@ -259,8 +252,8 @@ Killed reports: `mistakes`, `strengths`, `opportunity`,
 `calibration_integrity` (fold), `recall_receipts`,
 `filter_schema` (introspect via `tool.schema`).
 
-That comes out to **13 KEEP/consolidated + 4 NEW PM-native + 2
-NEW anchored/terminal = 19** report surfaces — close to but not
+That comes out to **13 KEEP/consolidated + 4 NEW PM-native + 3
+NEW calibration-baseline/trajectory = 20** report surfaces — close to but not
 equal to the prior "13" copy. The prior count predates
 `report.policy_candidates`, `report.calibration_terminal`, and the
 explicit split of anchored vs unchanged.
@@ -283,11 +276,11 @@ the post-audit additions are absorbed, the v0.0.2 catalog lands at:
 - Import/export: **2** (`import.commit`, `export.drain`)
 - Review/replay: **3** (`review.bundle`, `replay.case_bundle`,
   `replay.evaluate_output`)
-- Reports: **19** (per §2.7)
+- Reports: **35** (`report.*`, per §2.7)
 - Tools: **1** (`tool.schema`)
 - Signals: **1** admin-only
 
-**Total: 50 surfaces (47 default + 3 admin-only).**
+**Total: 68 registered surfaces (65 default + 3 admin-only).**
 
 The "45" figure in next-steps.md was a target *before* the
 `report.policy_candidates` ship, the explicit
@@ -368,62 +361,67 @@ they generally still have because there is no 0.0.1 stable cut.
 These pin the boundary that the catalog/transport gate
 (`trade-trace-lznx`) verifies before adapter/report work proceeds.
 
-### 4.1 `meta.legacy_name` on renamed tools
+### 4.1 `legacy_name` metadata on renamed public tools
 
-When the agent calls `resolution.add` or
-`playbook.record_adherence`, the success envelope carries
-`meta.legacy_name = "outcome.add"` /
-`meta.legacy_name = "decision.record_adherence"` for one minor cycle
-(the v0.0.2 series). Drop the field at v0.0.3.
+The default public catalog exposes canonical v0.0.2 names. Tool metadata
+carries compatibility hints for legacy callers: `resolution.add` has
+`legacy_name = "outcome.add"`, `playbook.record_adherence` has
+`legacy_name = "decision.record_adherence"`, `playbook.upsert` has
+`legacy_name = "playbook.create"`, and `strategy.upsert` has
+`legacy_name = "strategy.create"`. These hints are visible through
+`tool.schema` and MCP tool specs, not as caller-controlled payload data.
 
-### 4.2 `NOT_FOUND` on old names after rename
+### 4.2 Legacy names remain hidden but dispatchable during the additive slice
 
-Calling `outcome.add` post-rename surfaces `NOT_FOUND` with
-`details.renamed_to = "resolution.add"`. The agent gets a
-deterministic correction it can apply without a docs round-trip.
+Old names such as `outcome.add`, `decision.record_adherence`,
+`agent.next_actions`, and `venue.add` remain dispatchable for local
+compatibility and import/test paths, but default catalog listings hide
+them. Their registry metadata carries `renamed_to`, `redirect`, and/or
+`removed_in = "0.0.2"` so agents can move to the canonical surface
+without a docs round-trip.
 
-### 4.3 `UNSUPPORTED_CAPABILITY` on killed tools
+### 4.3 Removed/folded tools are metadata-described, not default-advertised
 
-Killed tools surface `UNSUPPORTED_CAPABILITY` (not `NOT_FOUND`) with
-`details.removed_in = "0.0.2"` and `details.redirect = <new surface
-or null>`. Distinguishes a renamed tool from a removed one.
+Removed or folded tools are absent from `public_names()` and from the
+default MCP/list-tools surface. When included through explicit legacy
+inspection, their metadata distinguishes renamed tools from folded or
+removed tools via `renamed_to`, `redirect`, and `removed_in`.
 
-### 4.4 `MCP_tool_specs` filter for admin-only
+### 4.4 MCP/tool-schema filters for admin and legacy surfaces
 
-`mcp_tool_specs()` accepts a new `include_admin: bool = False`
-keyword. The default surface a normal agent sees omits the three
-admin-only tools (`signal.scan`,
-`journal.rebuild_projections`, `journal.repair`). The stdio server
-honors a `MCP_INCLUDE_ADMIN=1` env opt-in (per `MCP_ACTOR_ID`
-precedent).
+The default surface a normal agent sees omits legacy tools and admin-only
+tools (`signal.scan`, `journal.rebuild_projections`, `journal.repair`).
+Admin and legacy surfaces are opt-in inspection modes; current quickstarts
+should point agents at the 60-tool public catalog and `tool.schema` for
+runtime truth.
 
 ### 4.5 Boundary-audit pin
 
-The first commit that lands a v0.0.2 tool change updates
-`tests/security/test_mvp_boundary_audit.py` so the shipped tool set
-matches §2 above, and adds a new `SHIPPED_TOOLS` pin alongside the
-existing `SHIPPED_REPORTS` pin. Subsequent beads either flip an
-entry in that pin or surface a typed envelope that the catalog/
-transport gate rejects.
+`tests/security/test_mvp_boundary_audit.py` pins the shipped public tool
+set (`test_shipped_public_tool_catalog_is_locked`), verifies legacy tools
+are hidden but metadata-explained, and keeps the report set pinned via
+`test_shipped_report_tool_set_is_locked`. Subsequent catalog changes must
+update those pins and docs together.
 
 ---
 
 ## 5. Verification
 
 ```sh
-# 1. Runtime baseline count (sanity check on this doc)
+# 1. Runtime public-catalog count (sanity check on this doc)
 PYTHONPATH=src python -c \
   "from trade_trace.core import default_registry; \
-   print(len(default_registry().names()))"
-# Expected: 89
+   print(len(default_registry().public_names()))"
+# Expected: 60
 
-# 2. Shipped reports pinned set
-pytest tests/security/test_mvp_boundary_audit.py::test_shipped_report_tool_set_is_locked -q
-# Expected: 1 passed
-
-# 3. Section 2 disposition counts match the runtime baseline
-# (15 KEEP + 2 RENAME + 18 FOLD + 15 KILL + 3 admin-only-kept + 28 reports
-# - 1 report covered above (policy_candidates) = 89 dispositioned)
+# 2. Shipped public catalog, legacy metadata, admin filtering, and reports pin
+PYTHONPATH=src pytest \
+  tests/security/test_mvp_boundary_audit.py::test_shipped_public_tool_catalog_is_locked \
+  tests/security/test_mvp_boundary_audit.py::test_legacy_catalog_tools_are_hidden_but_metadata_explains_transition \
+  tests/security/test_mvp_boundary_audit.py::test_admin_tools_are_not_in_default_catalog \
+  tests/security/test_mvp_boundary_audit.py::test_shipped_report_tool_set_is_locked \
+  -q
+# Expected: 4 passed
 ```
 
 ---

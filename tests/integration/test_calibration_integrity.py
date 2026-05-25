@@ -134,26 +134,25 @@ def test_forecast_coverage_clean_with_decisions(home):
 # -- (2) unsupported_rate --------------------------------------------
 
 
-def test_unsupported_rate_stays_zero_for_supported_categorical(home):
-    """categorical forecasts are now scoring-supported, so unsupported_rate
-    should not fire for them."""
+def test_non_binary_forecasts_rejected_before_integrity_denominator(home):
+    """v0.0.2 public forecast tools reject categorical/scalar scoring shapes."""
 
     inst = _seed_instrument(home)
     thesis = _mcp(home, "thesis.add", {
         "instrument_id": inst, "side": "yes", "body": "t",
     }).data["id"]
-    fcst = _mcp(home, "forecast.add", {
+    env = _mcp(home, "forecast.add", {
         "thesis_id": thesis, "kind": "categorical",
         "outcomes": [
             {"outcome_label": "low", "probability": 0.5},
             {"outcome_label": "high", "probability": 0.5},
         ],
-    }).data["id"]
-    env = _mcp(home, "report.calibration_integrity", {})
-    diag = env.data["diagnostics"]["unsupported_rate"]
+    })
+    assert not env.ok
+    clean = _mcp(home, "report.calibration_integrity", {})
+    diag = clean.data["diagnostics"]["unsupported_rate"]
     assert diag["count"] == 0
-    assert fcst not in diag["sample_ids"]["forecasts"]
-    assert diag["rate_pct"] == 0.0
+    assert diag["rate_pct"] in (0.0, None)
 
 
 def test_unsupported_rate_silent_on_clean_data(home):

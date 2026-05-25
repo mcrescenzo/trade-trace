@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sqlite3
 
 import pytest
-
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
+from trade_trace.storage.paths import db_path
 
 
 def _envelope(home: Path, tool: str, args: dict):
@@ -35,12 +36,19 @@ def test_rescan_scoring_preview_counts_pending_categorical_scalar(home):
     venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
     inst = _envelope(home, "instrument.add", {"venue_id": venue["data"]["id"], "asset_class": "prediction_market", "title": "X"})
     thesis = _envelope(home, "thesis.add", {"instrument_id": inst["data"]["id"], "side": "yes", "body": "..."})
-    _envelope(home, "forecast.add", {"thesis_id": thesis["data"]["id"], "kind": "categorical", "outcomes": [
-        {"outcome_label": "a", "probability": 0.5}, {"outcome_label": "b", "probability": 0.5}
-    ]})
-    _envelope(home, "forecast.add", {"thesis_id": thesis["data"]["id"], "kind": "scalar", "outcomes": [
-        {"outcome_label": "value", "probability": 0.4}
-    ]})
+    # forecast.add is intentionally binary-only in v0.0.2. Rescan still needs to
+    # identify legacy pending categorical/scalar rows already present in journals.
+    with sqlite3.connect(db_path(home)) as conn:
+        conn.executemany(
+            """
+            INSERT INTO forecasts (id, thesis_id, kind, scoring_support, scoring_state, created_at, actor_id)
+            VALUES (?, ?, ?, 'supported', 'pending', '2026-05-18T14:00:00.000Z', 'test')
+            """,
+            [
+                ("fc_legacy_categorical", thesis["data"]["id"], "categorical"),
+                ("fc_legacy_scalar", thesis["data"]["id"], "scalar"),
+            ],
+        )
     _envelope(home, "forecast.add", {"thesis_id": thesis["data"]["id"], "kind": "binary", "yes_label": "yes", "outcomes": [
         {"outcome_label": "yes", "probability": 0.6}, {"outcome_label": "no", "probability": 0.4}
     ]})

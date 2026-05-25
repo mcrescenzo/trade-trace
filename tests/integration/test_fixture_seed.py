@@ -22,7 +22,7 @@ def _content_hash(home: Path) -> str:
     db = open_database(db_path(home), create_parent=False)
     try:
         for table in (
-            "venues", "instruments", "theses", "forecasts",
+            "venues", "markets", "instruments", "theses", "forecasts",
             "decisions", "outcomes", "memory_nodes", "edges",
             "sources", "strategies", "playbooks", "playbook_versions",
             "decision_playbook_rules", "events",
@@ -43,7 +43,7 @@ def _row_counts(home: Path) -> dict[str, int]:
     db = open_database(db_path(home), create_parent=False)
     try:
         for table in (
-            "decisions", "forecasts", "outcomes", "memory_nodes",
+            "markets", "decisions", "forecasts", "outcomes", "memory_nodes",
             "sources", "strategies", "playbooks", "playbook_versions",
             "decision_playbook_rules",
         ):
@@ -60,55 +60,39 @@ def _row_counts(home: Path) -> dict[str, int]:
 
 def test_fixture_seed_meets_row_count_floor(home):
     env = mcp_call("journal.fixture_seed", {
-        "home": str(home), "target": "mvp-eval",
+        "home": str(home), "target": "mvp-eval-pm",
     })
     assert env.ok, env
     counts = _row_counts(home)
-    # Per bead acceptance: ≥30 decisions, ≥10 reflections (subset of
-    # memory_nodes node_type='reflection'), ≥5 forecasts, 2 strategies,
-    # 1 playbook with 1 version, ≥1 ambiguous/disputed/void outcomes.
-    assert counts["decisions"] >= 30
-    assert counts["forecasts"] >= 5
-    assert counts["strategies"] == 2
-    assert counts["playbooks"] == 1
-    assert counts["playbook_versions"] == 1
-    assert counts["decision_playbook_rules"] == 2
-    # Reflections: count rows in memory_nodes with node_type='reflection'.
+    # PM hard-break fixture: 8-market trading loop plus 5-market forecast-only loop.
+    assert counts["markets"] == 13
+    assert counts["decisions"] == 8
+    assert counts["forecasts"] == 13
+    assert counts["strategies"] == 1
+def test_fixture_seed_includes_polymarket_lifecycle_anchors(home):
+    mcp_call("journal.fixture_seed", {"home": str(home), "target": "mvp-eval-pm"})
     db = open_database(db_path(home), create_parent=False)
     try:
-        reflection_count = db.connection.execute(
-            "SELECT COUNT(*) FROM memory_nodes WHERE node_type='reflection'"
-        ).fetchone()[0]
+        rows = db.connection.execute(
+            "SELECT source, state, mechanism, resolution_source, close_at FROM markets ORDER BY external_id"
+        ).fetchall()
     finally:
         db.close()
-    assert reflection_count >= 10
+    assert len(rows) == 13
+    assert {r[0] for r in rows} == {"polymarket"}
+    assert {r[1] for r in rows} == {"open"}
+    assert {r[2] for r in rows} == {"clob"}
+    assert {r[3] for r in rows} == {"market_contract"}
+    assert all(r[4] for r in rows)
 
 
-def test_fixture_seed_includes_ambiguous_and_disputed_outcomes(home):
-    mcp_call("journal.fixture_seed", {"home": str(home), "target": "mvp-eval"})
-    db = open_database(db_path(home), create_parent=False)
-    try:
-        statuses = [r[0] for r in db.connection.execute(
-            "SELECT status FROM outcomes"
-        ).fetchall()]
-    finally:
-        db.close()
-    assert "resolved_final" in statuses
-    assert "ambiguous" in statuses
-    assert "disputed" in statuses
-    assert "resolved_provisional" in statuses
-
-
-def test_fixture_seed_includes_diagnostic_source_fixtures(home):
-    mcp_call("journal.fixture_seed", {"home": str(home), "target": "mvp-eval"})
-    db = open_database(db_path(home), create_parent=False)
-    try:
-        sensitive_count = db.connection.execute(
-            "SELECT COUNT(*) FROM sources WHERE redaction_status = 'sensitive'"
-        ).fetchone()[0]
-    finally:
-        db.close()
-    assert sensitive_count == 1
+def test_fixture_seed_forecast_only_target_has_no_decisions(home):
+    env = mcp_call("journal.fixture_seed", {"home": str(home), "target": "forecast-only-pm"})
+    assert env.ok, env
+    counts = _row_counts(home)
+    assert counts["markets"] == 5
+    assert counts["forecasts"] == 5
+    assert counts["decisions"] == 0
 
 
 # -- 2. determinism (3 invocations → identical content hash) -----
@@ -124,7 +108,7 @@ def test_fixture_seed_is_byte_deterministic(tmp_path):
         h = tmp_path / f"home-{i}"
         mcp_call("journal.init", {"home": str(h)})
         env = mcp_call("journal.fixture_seed", {
-            "home": str(h), "target": "mvp-eval",
+            "home": str(h), "target": "mvp-eval-pm",
         })
         assert env.ok, env
         hashes.add(_content_hash(h))
@@ -155,7 +139,7 @@ def test_fixture_seed_completes_in_under_five_seconds(home):
 
     start = time.monotonic()
     env = mcp_call("journal.fixture_seed", {
-        "home": str(home), "target": "mvp-eval",
+        "home": str(home), "target": "mvp-eval-pm",
     })
     elapsed = time.monotonic() - start
     assert env.ok

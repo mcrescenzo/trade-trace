@@ -1,76 +1,50 @@
-# Pre-Publish Release Proof
+# Release proof — v0.0.2 candidate
 
-> Status: **proof artifact** for trade-trace-a468. Recorded
-> 2026-05-19 against the post-piav commit. This is historical proof; the
-> current public-history strategy is a clean public export/branch from
-> approved HEAD, with separate approval required before any public branch,
-> tag, or PyPI publish action.
+This file is a template for the current v0.0.2 release proof packet. It intentionally contains no stale pass counts. Fill it only with fresh current-HEAD evidence for the exact candidate SHA.
 
-## Commands run and their outcomes
+## Candidate
 
-| Gate | Command | Result |
-|------|---------|--------|
-| Lint | `ruff check src tests` | `All checks passed!` |
-| Types | `mypy src` | `Success: no issues found in 86 source files` |
-| Tests | `pytest -q` | `1200 passed, 5 skipped` (skips are the documented opt-ins: perf baselines, dogfood full-suite) |
-| Build | `python -m build` | `Successfully built trade_trace-0.0.1rc3.tar.gz and trade_trace-0.0.1rc3-py3-none-any.whl` |
-| Twine | `twine check --strict dist/*` | Both wheel and sdist `PASSED` |
-| CLI smoke | `tt --help` (fresh venv) | renders usage block |
-| MCP smoke | `trade-trace-mcp --help` (fresh venv) | exits 0 |
-| Pip check | `pip check` (fresh venv) | `No broken requirements found.` |
-| Journal init smoke | `tt journal init --home /tmp/tt-fresh-home` | ok=true, schema_version=10 |
+- Candidate SHA: `<fill after final verification>`
+- Version/tag candidate: `v0.0.2` or the owner-approved pre-release tag
+- Scope: prediction-market-only local-first pivot
+- Live adapter smoke: `completed with sanitized evidence` or `deferred — no disposable RPC/test condition supplied`
 
+## Required command evidence
 
-## Wheel and sdist surface
+Record exact output or an attached sanitized artifact for each gate:
 
-The wheel contains only the intended public files:
+| Gate | Command / evidence | Result |
+|---|---|---|
+| Dev + embeddings install | `python -m pip install -e '.[dev,embeddings]'` and `python -c "import onnxruntime, tokenizers"` | `<fill>` |
+| Lint | `ruff check src tests` | `<fill>` |
+| Types | `mypy src` | `<fill>` |
+| Full tests | `PYTHONPATH=src pytest -q` | `<fill>` |
+| Docs tests | `PYTHONPATH=src pytest tests/docs -q` | `<fill>` |
+| Security suite | `PYTHONPATH=src pytest tests/security -q` | `<fill>` |
+| Boundary audit | `PYTHONPATH=src pytest tests/security/test_mvp_boundary_audit.py -q` | `<fill>` |
+| Offline/no-network adapter gates | no-network default + no-RPC adapter tests | `<fill>` |
+| URL/secret scrubbing | adapter URL scrubbing + endpoint policy tests | `<fill>` |
+| Perf smoke | `TRADE_TRACE_RUN_PERF_TESTS=1 ...` | `<fill>` |
+| Package build | `python -m build` and `python -m twine check dist/*` | `<fill>` |
+| Fresh wheel smoke | install candidate wheel in a new venv and run `tt --help`, `trade-trace-mcp --help`, `pip check` | `<fill>` |
 
-- `trade_trace/` (Python source tree, including
-  `contracts/`, `events/`, `models/`, `reports/`, `security/`,
-  `storage/`, `tools/`).
-- `LICENSE`, `METADATA`, `WHEEL`, `entry_points.txt`,
-  `top_level.txt`, `RECORD`.
+## Release boundary assertion
 
-It does **not** contain:
+The candidate remains:
 
-- `.beads/` (Beads metadata).
-- `audits/` or `docs/audits/` (audit run artifacts).
-- Any local `*.sqlite` or runtime data.
+- local/offline by default,
+- prediction-market-only for v0.0.2,
+- no trade execution,
+- no broker or wallet credentials,
+- no default RPC endpoint,
+- no remote/API embeddings,
+- no human dashboard/frontend,
+- no background scheduler/fetch daemon.
 
-Smoke scan (`zipfile -l dist/...whl | grep -iE 'beads|audits|hermes'`):
-only `trade_trace/storage/edge_audit.py` matches — that's the
-audit-policy source file, not the audit-export tree. Acceptable.
+## Publication approvals
 
-## Public-artifact scan
+Do not fill these unless Michael explicitly approves the exact action and candidate SHA.
 
-Run against tracked files at the intended release commit
-(post-piav, post-ox5c-plan):
-
-| Scan | Result |
-|------|--------|
-| `git ls-files \| grep -E '^\.beads/\|^audits/\|^docs/audits/'` | empty |
-| `git grep -l '<owner-email>'` | empty |
-| `git grep -l '<local-home-path>'` | empty |
-
-The above proves the **HEAD-only** scrub is complete. Old
-private commits may still hold prior blobs. The selected public strategy is
-to publish a clean single-commit export/branch from approved HEAD rather
-than rewriting private history. The PyPI upload itself ships
-the wheel/sdist (which were never derived from the offending
-blobs); the rewrite affects only what someone sees if they
-`git clone` and `git log -p` through history.
-
-## Final operator approval
-
-The following destructive / shared-state actions remain
-operator-gated. The agent will not perform them without explicit
-approval:
-
-1. Approve and publish the clean public export/branch candidate.
-2. Tag the release (`git tag v0.0.1rc3 && git push --tags`).
-3. Upload to PyPI (`twine upload dist/*` or the OIDC-gated GitHub
-   Actions release workflow that lives in
-   `.github/workflows/workflow.yml`).
-
-Each of these is reversible only with substantial effort; the
-operator-approval boundary is intentional.
+- Public branch/export approved: `<yes/no + evidence>`
+- Tag push approved: `<yes/no + evidence>`
+- PyPI publication approved: `<yes/no + evidence>`

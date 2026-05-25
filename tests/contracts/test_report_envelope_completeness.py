@@ -122,7 +122,7 @@ def test_calibration_meta_bin_policy_is_set(home):
     identifier; other reports leave it null."""
 
     body = _envelope_dict(home, "report.calibration", {})
-    assert body["meta"]["bin_policy"] == "equal_width_0.1"
+    assert body["meta"]["bin_policy"] == "equal_mass"
 
     body_other = _envelope_dict(home, "report.mistakes", {})
     assert body_other["meta"]["bin_policy"] is None

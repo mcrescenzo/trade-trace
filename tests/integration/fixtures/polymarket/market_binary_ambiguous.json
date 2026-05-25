@@ -1,0 +1,1 @@
+{"id":"pm-ambiguous","question":"Ambiguous resolution?","closed":true,"resolved":true,"ambiguous":true,"outcome":{"status":"ambiguous","label":"unknown","ambiguity_kind":"market_rules_unclear","resolution_source":"manual_review"},"outcomes":[{"name":"Yes"},{"name":"No"}]}

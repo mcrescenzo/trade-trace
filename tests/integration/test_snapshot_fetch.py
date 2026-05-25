@@ -1,0 +1,99 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from trade_trace.adapters.polymarket.client import PolymarketClient
+from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope
+from trade_trace.mcp_server import mcp_call
+
+
+FIXTURES = Path(__file__).parent / "fixtures" / "polymarket"
+
+
+def _fixture(name: str) -> dict:
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+
+
+def _manual_market(home: str, external_id: str = "pm-snap") -> str:
+    env = mcp_call(
+        "market.bind",
+        {"home": home, "source": "polymarket", "external_id": external_id, "state": "open", "mechanism": "clob", "bound_via": "manual"},
+    )
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    return env.data["id"]
+
+
+def _enable_adapter(home: str) -> None:
+    assert mcp_call(
+        "journal.config_set",
+        {"home": home, "key": "network.polymarket.enabled", "value": "true", "confirm": True},
+    ).ok
+
+
+def test_snapshot_fetch_disabled_fails_closed(tmp_path: Path):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home)
+    env = mcp_call("snapshot.fetch", {"home": home, "market_id": market_id})
+    assert not env.ok
+    assert isinstance(env, ErrorEnvelope)
+    assert env.error.code == "ADAPTER_DISABLED"
+
+
+def test_snapshot_fetch_series_disabled_fails_closed(tmp_path: Path):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home)
+    env = mcp_call(
+        "snapshot.fetch_series",
+        {"home": home, "market_id": market_id, "from": "2026-01-01T00:00:00Z", "to": "2026-01-02T00:00:00Z"},
+    )
+    assert not env.ok
+    assert isinstance(env, ErrorEnvelope)
+    assert env.error.code == "ADAPTER_DISABLED"
+
+
+def test_snapshot_fetch_enabled_captures_fixture_book(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-book")
+    _enable_adapter(home)
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: _fixture("snapshot_thick_book.json"))
+
+    env = mcp_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["instrument_id"] == market_id
+    assert env.data["bid"] == 0.61
+    assert env.data["ask"] == 0.63
+    assert env.data["mid"] == pytest.approx(0.62)
+    assert env.data["implied_probability"] == pytest.approx(0.62)
+
+
+def test_snapshot_fetch_series_enabled_writes_each_fixture_point(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-series")
+    _enable_adapter(home)
+
+    points = [
+        _fixture("snapshot_thin_book.json") | {"captured_at": "2026-01-01T00:00:00Z"},
+        _fixture("snapshot_amm_curve.json") | {"captured_at": "2026-01-01T01:00:00Z"},
+    ]
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: {"points": points})
+
+    env = mcp_call(
+        "snapshot.fetch_series",
+        {"home": home, "market_id": market_id, "from": "2026-01-01T00:00:00Z", "to": "2026-01-01T02:00:00Z"},
+    )
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["count"] == 2
+    assert [item["captured_at"] for item in env.data["items"]] == ["2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z"]

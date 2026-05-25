@@ -28,8 +28,8 @@ The `events` table currently emits these `event_type` values
 - M0/M1 ledger: `venue.created`, `market.bound`, `instrument.created`,
   `snapshot.added`, `thesis.created`, `source.added`, `source.attached`,
   `decision.created`, `outcome.recorded`, `forecast.created`,
-  `forecast.scored`, `forecast.superseded`, `edge.created`,
-  `import.row_committed`.
+  `forecast.scored`, `forecast.superseded`, `forecast.anchored_to_snapshot`,
+  `edge.created`, `import.row_committed`.
 - M3 memory: `memory_node.retained`, `memory_node.invalidated`.
 - M3 strategy: `strategy.created`, `strategy.updated`.
 - M4 playbook: `playbook.created`, `playbook.proposed_version`,
@@ -63,6 +63,7 @@ row.
 - `decision.created` → `decision.add`
 - `forecast.created` → `forecast.add`
 - `forecast.superseded` → `forecast.supersede`
+- `forecast.anchored_to_snapshot` → `forecast.anchor_to_snapshot`
 - `outcome.recorded` → `outcome.add`
 - `memory_node.retained` → `memory.retain` / `memory.reflect`
   (the import path is `memory.retain` for both; `memory.reflect`

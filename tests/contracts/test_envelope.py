@@ -102,5 +102,14 @@ def test_error_codes_match_contract_list():
         "INVARIANT_VIOLATION",
         "MARKET_NOT_RESOLVED",
         "MARKET_AMBIGUOUS",
+        "ADAPTER_DISABLED",
+        "ADAPTER_TIMEOUT",
+        "ADAPTER_RATE_LIMITED",
+        "ADAPTER_PROTOCOL_ERROR",
+        "EXTERNAL_API_ERROR",
+        "RESOLUTION_NOT_AVAILABLE",
+        "CONFIG_REQUIRED",
+        "MARKET_NOT_BOUND",
+        "MARKET_STATE_CONFLICT",
     }
     assert {code.value for code in ErrorCode} == expected

@@ -26,8 +26,7 @@ addendum.
 |---|---|---|
 | Journal SQLite database | `$TRADE_TRACE_HOME/trade-trace.sqlite` | Every decision, thesis, forecast, outcome, source. The primary historical record. |
 | JSONL export outbox | `$TRADE_TRACE_HOME/export/jsonl/<YYYY>/<MM>/<DD>/*.jsonl` | A redundant audit log: one file per committed event, replayable on a fresh DB (persistence.md §4). |
-| Embeddings model weights | `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/` (only after `embeddings.provider = local` or `tt model import --path ...`) | Local model artifacts verified against Trade Trace-pinned SHA-256/size lock data for an immutable HuggingFace revision. Source-provided manifests are not trusted. No agent input is sent over the network when `embeddings.provider = none` (the default). |
-| OS keyring entry | OS keyring | When a hosted embeddings provider is configured, the API key lives in the OS keyring, never in tool args. |
+| Embeddings model weights | `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/` (only after `tt model import --path ...`) | Local model artifacts verified against Trade Trace-pinned SHA-256/size lock data for an immutable HuggingFace revision. Source-provided manifests are not trusted. No agent input is sent over the network when `embeddings.provider = none` (the default). |
 
 Notably *not* held: broker credentials, exchange API keys, wallet seed
 phrases, signing keys. The PRD §2.8 product boundary forbids them; the
@@ -39,8 +38,8 @@ credential ban (§5 below) verifies the field surface in code.
 |---|---|---|
 | Local user (same UID) | Can read every file the journal owns. | Mitigation is file permissions (§4); a same-UID attacker can defeat them. The defense degrades gracefully — file perms are the floor, not the ceiling. |
 | Other-UID user on the same host | Can read files unless `0600` perms are enforced. | Mitigated. |
-| Package supply-chain | Malicious dependency could exfiltrate `$TRADE_TRACE_HOME` contents to a remote endpoint. | Partially mitigated: no outbound network at runtime by default (operability.md §10.1); embeddings download is opt-in. A compromised dependency could still execute code at install time — out of scope for MVP (the user reviewing `pip install` output is the gate). |
-| Model-host phishing | If a hosted embeddings provider is configured, the host can see whatever memory text Trade Trace sends it to embed. Local model download/import sends no journal text. | Mitigated by explicit provider opt-in, warning at configuration time, OS-keyring API-key storage, default `embeddings.provider = none`, and the local-model path for users who do not want memory text sent to an API provider. |
+| Package supply-chain | Malicious dependency could exfiltrate `$TRADE_TRACE_HOME` contents to a remote endpoint. | Partially mitigated: no outbound network at runtime by default (operability.md §10.1); local embeddings are opt-in and use pre-staged assets only. A compromised dependency could still execute code at install time — out of scope for MVP (the user reviewing `pip install` output is the gate). |
+| Model-host phishing | A remote embeddings provider would see memory text if supported. | Avoided in v0.0.2: remote/API embeddings are unsupported; the only semantic path is local model import, which sends no journal text. |
 | Casual log leakage | Logs end up in a bug report, screen share, or chat paste. | Mitigated: log redactor (§5) strips secret-shaped substrings before write. |
 | Casual export leakage | An operator shares a JSONL file or a `review.bundle` output without sanitizing. | Mitigated: bundle redaction rules (reports.md §5.3); export-time secret-shape warnings (operability.md §7); `sensitive` sources unconditionally omitted from bundles. |
 
@@ -103,9 +102,7 @@ seed-phrase fields. The ban is verified mechanically in
   arguments (`api_key=...` on `venue.add` is dropped before the SQL
   binding).
 
-Embeddings API keys (when a hosted provider is enabled) are the
-sole documented exception. Per the operability spec, they live in the
-OS keyring; they never appear in tool args, schemas, or logs.
+There is no embeddings API-key exception in v0.0.2. Remote/API embedding providers and keyring-backed embedding credentials are unsupported.
 
 ### 6.5 Free-text scan policy (bead trade-trace-7j1l)
 
@@ -161,28 +158,10 @@ Adding a new persisted free-text column to a migration requires:
   `tests/security/test_no_telemetry_packages.py` pins the set against
   the deny-list `{analytics, telemetry, sentry, mixpanel, segment,
   datadog, rollbar, posthog}`.
-- The only opt-in outbound paths are embeddings providers. With the
-  default `embeddings.provider = none`, Trade Trace creates no HTTP
-  client, downloads no model files, and generates zero outbound traffic.
-- The local embeddings path is behind an explicit network flag boundary:
-  only `tt journal config_set --key embeddings.provider --value local
-  --confirm` may perform the one-shot model download, and only when
-  `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/` is absent or fails
-  verification against Trade Trace-pinned lock data. Re-running the switch
-  after a verified model is present does not contact the network.
-- The download allowlist is the pinned HuggingFace model repository URL
-  `https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/5c38ec7c405ec4b44b94cc5a9bb96e735b38267a/...`.
-  That is consistent with the threat model because the operator has
-  opted into local embeddings, no journal text or API key is uploaded,
-  and every downloaded artifact is verified against Trade Trace-shipped
-  relative-path, size, and SHA-256 lock entries before activation. The
-  code does not fetch or trust a model repository manifest.
-- Air-gapped installs use `tt model import --path <pre-staged
-  BAAI/bge-small-en-v1.5> --confirm`. That path only reads local files,
-  ignores any source-provided manifest as proof, rejects symlinks/path
-  traversal, verifies the same pinned lock data, and copies only the
-  allowlisted files into `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/`;
-  it performs zero outbound calls.
+- The Polymarket adapter is opt-in and disabled by default. With the default configuration, Trade Trace creates no adapter HTTP client and generates zero outbound traffic.
+- Semantic embeddings are local-only in v0.0.2. `tt journal config_set --key embeddings.provider --value local --confirm` only records the local provider choice and reports whether imported model files are present; it does not download, stage, or verify model assets.
+- Local embedding installs use `tt model import --path <pre-staged BAAI/bge-small-en-v1.5> --confirm`. That path only reads local files, ignores any source-provided manifest as proof, rejects unsafe paths/symlinks through the verified copy pipeline, verifies pinned lock data, and copies only allowlisted files into `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/`; it performs zero outbound calls.
+- Remote/API embedding providers and keyring-backed embedding credentials are unsupported. `keyring.revoke` is a legacy no-op retained for older clients.
 
 ## 8. Redaction of `review.bundle` (Contract; Impl is P1)
 
@@ -203,13 +182,10 @@ bundle implementation lands in P1 per the reports.md §5.5 commitment.
 
 ## 9. Open Questions
 
-1. **Embeddings provider keyring** — the OS keyring API is platform-
-   specific; a P1 design doc will pin the library (`keyring` is the
-   leading candidate) and the fallback behavior on headless hosts.
-2. **Per-tool egress allowlist** — when network paths land, a per-tool
+1. **Per-tool egress allowlist** — when network paths land, a per-tool
    allowlist (rather than process-wide on/off) would let an agent run
    `memory.recall` against a remote embedder without enabling
    arbitrary outbound traffic.
-3. **Audit log of read operations** — `recall` and `report.*` are
+2. **Audit log of read operations** — `recall` and `report.*` are
    currently un-logged. A future audit-trail bead can decide whether to
    log them locally (privacy concern for the journal owner) or not.

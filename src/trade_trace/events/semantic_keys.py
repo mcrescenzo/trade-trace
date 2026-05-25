@@ -195,6 +195,11 @@ SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
             }
         ),
     ),
+    "forecast.anchored_to_snapshot": SemanticKeySpec(
+        structural_fields=frozenset(
+            {"forecast_id", "snapshot_id", "market_implied_probability", "created_at"}
+        ),
+    ),
     "forecast.superseded": SemanticKeySpec(
         structural_fields=frozenset({"prior_forecast_id", "new_forecast_id"}),
     ),

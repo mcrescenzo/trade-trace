@@ -1,0 +1,1 @@
+{"id":"pm-res-no","question":"Resolved NO?","closed":true,"resolved":true,"winningOutcome":"No","resolvedAt":"2026-01-03T00:00:00Z","resolution_tx":"0xresolutionno","outcome":{"status":"resolved_final","label":"No","resolved_at":"2026-01-03T00:00:00Z","tx_hash":"0xresolutionno"},"outcomes":[{"name":"Yes"},{"name":"No"}]}

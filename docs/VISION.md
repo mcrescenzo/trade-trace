@@ -7,23 +7,23 @@
 
 ## What this is
 
-Trade Trace is a **local, open-source, AI-only journal, memory, and calibration substrate for LLM trading agents.** It is a Python package distributed as both a Model Context Protocol (MCP) server and a CLI, with a JSON-only output contract. It records — and helps an LLM agent *reason about* — every decision the agent makes across markets, holds those decisions to their evidence, scores their forecasts when outcomes resolve, and surfaces structured signals the agent can use to identify and refine the shortcomings in its own trading process.
+Trade Trace is a **local, open-source, AI-only journal, memory, and calibration substrate for LLM prediction-market agents.** It is a Python package distributed as both a Model Context Protocol (MCP) server and a CLI, with a JSON-first output contract. It records — and helps an LLM agent reason about — prediction markets, snapshots, binary probability forecasts, optional decisions, resolutions, reflections, and playbook rules. It scores forecasts when outcomes resolve and surfaces structured signals the agent can use to refine its own forecasting process.
 
 The wedge is the intersection of three gaps in the 2026 landscape:
 
-1. **Human trading journals** (Tradervue, TradesViz, Edgewonk, TradeZella) are optimized for discretionary human traders and web UX. None are agent-native.
-2. **LLM trading agents** (TradingAgents, Polymarket Agents, the various open-source bots) execute trades but do not journal them in a way that supports calibration over time or process review.
-3. **AI agent memory systems** (Hindsight, Mem0, Letta, Zep) generalize over arbitrary domains and do not understand the trading-specific concepts of outcome resolution, forecast scoring, position provenance, or playbook adherence.
+1. **Human trading journals** (Tradervue, TradesViz, Edgewonk, TradeZella) are optimized for discretionary human traders, broad asset classes, fills, and web UX. None are agent-native PM calibration ledgers.
+2. **Prediction-market LLM agents** can produce forecasts or trades, but they rarely keep a durable, local, schema-checked record of market baselines, forecast timing, resolution rules, and calibration feedback.
+3. **AI agent memory systems** (Hindsight, Mem0, Letta, Zep) generalize over arbitrary domains and do not understand prediction-market concepts such as condition IDs, resolution status, anchored market probabilities, forecast scoring, or playbook adherence.
 
 Trade Trace lives at that intersection. It is a *grader* and a *memory*, not a *trader*.
 
 ## What this is not
 
 - **Not an executor.** Trade Trace never places, signs, cancels, or routes a trade. It never handles wallet keys, broker credentials, or seed phrases. Execution is a separate concern with separate safety design.
-- **Not a data fetcher.** Trade Trace never queries external venues or market data APIs. The agent calling Trade Trace already has its own data connections — it is the one currently analyzing the market — and supplies all snapshots, outcomes, and metadata through the structured ingestion APIs.
+- **Not a default data fetcher.** Trade Trace makes no outbound calls by default and has no scheduler, daemon, webhook, or default RPC endpoint. The v0.0.2 Polymarket adapter is explicit opt-in, agent-triggered, and requires caller-supplied configuration; the agent can also supply all snapshots, outcomes, and metadata manually through structured APIs.
 - **Not a remote dashboard or trading UI.** Trade Trace has no shipped human-facing dashboard; the former Console UI was hard-removed. Outputs are JSON-by-default for agents through MCP, CLI, and library/reporting surfaces.
-- **Not a generic agent memory framework.** Trade Trace's memory layer is trading-specific: nodes carry outcome links, calibration confidence, and position provenance. If you want a general memory store, use Mem0, Letta, or Hindsight directly.
-- **Not a backtesting or simulation engine.** Trade Trace records and grades real and paper trades. It does not synthesize market data or replay historical fills.
+- **Not a generic agent memory framework.** Trade Trace's memory layer is prediction-market-specific: nodes carry market/resolution links, calibration confidence, and process provenance. If you want a general memory store, use Mem0, Letta, Zep, or Hindsight directly.
+- **Not a backtesting or simulation engine.** Trade Trace records and grades forecasts against supplied or explicitly fetched resolutions. It does not synthesize market data, replay historical fills, or simulate execution.
 - **Not a portfolio accounting system.** It computes P&L and basic exposure metrics, but it is not broker-grade and is not a tax tool.
 - **Not a benchmark.** Trade Trace may export ForecastBench-inspired data once the external schema is verified, but it is the tooling, not a leaderboard.
 
@@ -40,8 +40,8 @@ Three shifts make 2026 the right moment:
 1. **Decision before outcome.** Capture reasoning, forecast, and evidence before the result is known. A thesis written after the fact is a rationalization, not a thesis.
 2. **Every decision is reviewable.** Trades, skips, watches, paper trades, and thesis updates all create reviewable artifacts. A skipped trade is as important as an entered one.
 3. **Separate process from P&L.** Good process can produce bad outcomes and vice versa. The system grades both axes independently.
-4. **Market-agnostic core.** Prediction markets, equities, options, futures, crypto, and event markets share a generic decision/position/outcome spine. Venue-specific details live in `metadata_json`; there are no per-venue plugins or connectors to maintain.
-5. **Local-first by default.** Storage is a single SQLite database. JSONL can be exported from committed DB events/outbox records for audit and portability; it is not a second source of truth. No remote services required. External sync is opt-in and explicit.
+4. **Prediction-market-first core.** v0.0.2 intentionally narrows to binary prediction markets. Core tables model markets, snapshots, forecasts, and resolutions directly; venue-specific addenda live in `metadata_json`. Continuous assets such as equities, options, futures, FX, crypto spot/perps, and Greeks are out of scope.
+5. **Local-first by default.** Storage is a single SQLite database. JSONL can be exported from committed DB events/outbox records for audit and portability; it is not a second source of truth. No remote services are required. Venue clients preserve local-first by staying opt-in, explicit, and disabled by default.
 6. **MCP-first, CLI-equivalent, JSON-first contract.** Every operation is exposed as an MCP tool and as an equivalent CLI command. Schemas and semantics are equivalent after transport normalization. CLI output is JSON to stdout; prose is suppressed by default and only emitted to stderr when `--human` is requested. Errors carry stable codes.
 7. **Structured input, graceful prose.** Prefer explicit fields with schema validation, but allow attached freeform notes for the LLM to reason about.
 8. **Auditability over convenience.** Snapshots, theses, decisions, and memory nodes are append-only and versioned. Corrections create new events; nothing is silently overwritten.
@@ -52,18 +52,18 @@ Three shifts make 2026 the right moment:
 
 **The LLM trading agent.** Trade Trace is built for an agent that:
 
-- Forms theses with structured forecasts and evidence
-- Records what was known at each decision point
-- Decides whether to watch, skip, paper, enter, exit, hold, add, reduce, invalidate, or update
-- Has its forecasts auto-graded when outcomes resolve
-- Reads back its own past observations, reflections, and playbook rules when forming new theses
-- Periodically reviews its own decisions and writes reflections that update its playbooks
+- Binds or records prediction markets and their resolution context
+- Records what market probability and evidence were known at each forecast/decision point
+- Produces binary probability forecasts, with optional watch/skip/paper/enter/exit/hold/add/reduce-style decisions outside Trade Trace's execution boundary
+- Has its forecasts graded when outcomes resolve
+- Reads back past observations, reflections, and playbook rules when forming a new market thesis
+- Periodically reviews calibration and writes reflections that update its playbooks
 
 Trade Trace is **not** built for a human discretionary trader. Humans are welcome as project maintainers, contributors, and dogfooders — but the product's surfaces are designed for token-efficient, schema-driven, machine-readable interaction.
 
 ## The four-layer self-improvement loop
 
-Trade Trace's central feature is a closed loop that turns trading experience into refined process. The system supplies the primitives; the agent supplies the judgment.
+Trade Trace's central feature is a closed loop that turns prediction-market forecasting experience into refined process. The system supplies the primitives; the agent supplies the judgment.
 
 ```
                        ┌──────────────────────────────────────┐
@@ -106,7 +106,7 @@ Layers 1 and 2 are deterministic and live in the system. Layers 3 and 4 are agen
 
 Reflections, reports, and recall can be scoped by **strategy** — a named strategy thesis (e.g., `earnings-momentum`, `pairs-trade-XYZ`) that groups decisions, theses, and reviews into one logical grain. This is retrospective grouping/process context only; it is not an edge detector, opportunity ranking, or recommendation surface. The loop then runs not just per-decision but per-strategy: the agent can ask "is this strategy coherent, sourced, reviewed, and calibrated?" without smearing those diagnostics across unrelated trades. Strategies are orthogonal to playbooks (rules) and tags (free-form sub-classifiers); see PRD §2.12.
 
-This loop is the product. The MVP proves the complete loop with narrow breadth: structured manual ingestion, binary scoring, deterministic reports, reflection, playbook versioning, and recall. Broad asset coverage, richer scoring, sync, and viewers can follow only after that slice works.
+This loop is the product. v0.0.2 proves the complete loop with narrow breadth: PM market binding, snapshot capture, binary scoring, deterministic reports, reflection, playbook versioning, and recall. Broad asset coverage, richer scoring, sync, and viewers are out of scope until this slice works.
 
 ## Differentiation
 
@@ -150,7 +150,7 @@ From **ForecastBench / Manifold / Brier.fyi** (LLM forecasting):
 
 - Trade execution of any kind in any version of the product, unless explicitly re-scoped with separate safety design.
 - Broker / wallet credential handling.
-- External data fetching of any kind — the agent supplies all market data through structured ingestion APIs.
+- Default/background external data fetching. The only v0.0.2 venue client is the opt-in, agent-triggered Polymarket adapter with no default RPC URL.
 - Real-time alerting, paging, or scheduling (deferred to external orchestrators).
 - Generic agent memory framework — Trade Trace's memory is trading-shaped.
 - Backtesting or market simulation engines.
@@ -158,14 +158,14 @@ From **ForecastBench / Manifold / Brier.fyi** (LLM forecasting):
 - Cloud-hosted or local product dashboard for human users. The former local read-only Console UI has been hard-removed; current surfaces remain MCP, CLI, and library/reporting APIs.
 - Social / community / leaderboard features.
 - Any claim of profitability, edge, or financial advice.
-- Venue-specific product semantics — fields like Polymarket condition IDs, options Greeks, or futures contract specs live in `metadata_json`, not in the core schema.
+- Continuous-asset trading journal scope: equities, options, futures, FX, crypto spot/perps, Greeks, and broker/fill accounting are outside v0.0.2. Polymarket condition/market concepts are first-class; venue-specific addenda still live in `metadata_json`.
 
 ## Safety posture
 
 - The MVP cannot execute trades. There is no surface that signs, routes, or transmits an order.
-- **Forbidden network surface:** Trade Trace never fetches trading data, broker data, market prices, order books, or outcomes. There are no broker integrations, no market-data clients, no webhooks, no telemetry, and no auto-update. The product is air-gappable on first run.
-- **One opt-in outbound path:** the optional local embedding model download for the SEMANTIC recall strategy (see PRD §2.4.1). Off by default in MVP; opt-in via explicit config; carries only model weights, never trading data. API embedding providers (memory-layer.md §8.3) are a separate also-opt-in path that DOES send memory text outward and carries an explicit configure-time warning. Neither path activates by default.
-- The core never reads, stores, logs, or asks for private keys, seed phrases, broker credentials, wallet signatures, or trading-API keys. The credential ban is unconditional. Embedding-provider API keys (when an API provider is opt-in) are stored in the OS keyring, never in the database or plaintext config, never logged.
+- **Offline by default:** Trade Trace never fetches broker data, places orders, runs webhooks, sends telemetry, or auto-updates. No network socket opens on first run or ordinary local journal operations. The Polymarket adapter is the explicit exception: disabled by default, caller-configured, agent-triggered, HTTPS-only, and scrubbed in logs/errors.
+- **One opt-in local embeddings path:** the optional SEMANTIC recall strategy uses pre-staged local ONNX/tokenizers model assets (see PRD §2.4.1 and `memory-layer.md` §8). Off by default in MVP; opt-in via explicit config; no model weights are downloaded by configuration; no memory or trading data leaves the machine. Remote/API embedding providers are unsupported in v0.0.2.
+- The core never reads, stores, logs, or asks for private keys, seed phrases, broker credentials, wallet signatures, trading-API keys, or embedding-provider API keys. The credential ban is unconditional for v0.0.2.
 - Local journal data contains sensitive trading information. Default file permissions are user-only (`0600`) where the platform supports it. Exports that include actual trade details emit a stderr warning. Sources flagged `redaction_status = sensitive` are never included in review bundles.
 - All analytics are framed as retrospective decision support, not as recommendations. The system does not generate trade ideas or signals.
 
@@ -173,14 +173,14 @@ From **ForecastBench / Manifold / Brier.fyi** (LLM forecasting):
 
 Trade Trace's vision is satisfied when:
 
-1. An LLM agent can run a complete trading research session — forming theses, recording decisions, taking paper or actual positions, reviewing outcomes, and writing reflections — entirely through MCP tools or the CLI, with zero human-facing UI required.
+1. An LLM agent can run a complete prediction-market research session — binding a market, recording snapshots, writing binary forecasts, optionally recording decisions, reviewing resolutions, and writing reflections — entirely through MCP tools or the CLI, with zero human-facing UI required.
 2. After 30 days of continuous dogfooding, the agent has identified at least one miscalibrated confidence bucket it didn't already know about (via the calibration report), and updated at least one playbook rule with provenance traceable back to a stored reflection.
-3. Memory recall reliably surfaces relevant past observations and reflections when a new thesis is being formed on a similar instrument, market type, or scenario.
-4. The system has graded binary forecasts across at least two forecast patterns where possible: direct binary prediction markets and derived directional binary equity/crypto forecasts at a defined horizon.
+3. Memory recall reliably surfaces relevant past observations and reflections when a new thesis is being formed on a similar market, event type, or scenario.
+4. The system has graded binary forecasts across direct prediction-market patterns, including forecast-only research loops and decision-attached market loops.
 5. No trade has ever been placed by the system.
 
 The success question is not *"does this look like a trading journal?"* but:
 
-> **Does this make the LLM trader auditable, calibratable, and improvable over time?**
+> **Does this make the LLM prediction-market agent auditable, calibratable, and improvable over time?**
 
 If yes, the vision is met.

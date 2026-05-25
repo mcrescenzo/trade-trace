@@ -42,10 +42,11 @@ def test_admin_tool_registered(tool):
 
 def test_admin_config_set_description_documents_embeddings_behavior():
     desc = default_registry().get("journal.config_set").description.lower()
-    assert "enum {none, local, api:openai}" in desc
-    assert "secure os keyring" in desc
-    assert "noninteractive" in desc
-    assert "no openai network call" in desc
+    assert "enum {none, local}" in desc
+    assert "local onnx" in desc
+    assert "remote/api providers" in desc
+    assert "unsupported" in desc
+    assert "keyring-backed embedding auth" in desc
     assert "unsupported_capability" not in desc
 
 
@@ -211,19 +212,19 @@ def test_journal_config_set_embeddings_provider_none_succeeds(home):
     assert env.ok
 
 
-def test_journal_config_set_embeddings_provider_api_preview_without_key(home):
-    """Previewing API provider switch does not require or persist an API key."""
+def test_journal_config_set_embeddings_provider_rejects_api_provider(home):
+    """Remote/API embedding providers are intentionally unsupported in v0.0.2."""
 
     env = _mcp(home, "journal.config_set", {
         "key": "embeddings.provider", "value": "api:openai",
     })
-    assert env.ok is True
-    assert env.data["preview_only"] is True
-    assert env.data["would_write"]["value"] == "api:openai"
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["allowed"] == ["local", "none"]
 
 
 def test_journal_config_set_embeddings_provider_rejects_unknown_value(home):
-    """Values outside the closed enum {none, local, api:openai} are
+    """Values outside the closed enum {none, local} are
     VALIDATION_ERROR, not UNSUPPORTED_CAPABILITY."""
 
     env = _mcp(home, "journal.config_set", {
@@ -293,56 +294,34 @@ def test_model_import_rejects_malicious_self_manifest(home, tmp_path, monkeypatc
     assert "mismatch" in env.error.message.lower()
 
 
-def test_config_set_embeddings_provider_local_lazy_download_first_switch(home, monkeypatch):
-    payload = b"deterministic tiny bge-small test fixture\n"
-    admin = _patch_tiny_trusted_lock(monkeypatch, payload)
-    calls = []
+def test_config_set_embeddings_provider_local_does_not_stage_or_require_assets(home, monkeypatch):
+    target = home / "models" / "bge-small-en-v1.5"
+    assert not target.exists()
 
-    class _Response:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return payload
-
-    def _fake_urlopen(url, *, timeout):
-        calls.append((url, timeout))
-        assert url == f"{admin.BGE_SMALL_HF_BASE_URL}/config.json"
-        return _Response()
-
-    monkeypatch.setattr(admin.urllib.request, "urlopen", _fake_urlopen)
     first = _mcp(home, "journal.config_set", {
         "key": "embeddings.provider", "value": "local", "_confirm": True,
     })
     assert first.ok, first
-    assert first.data["model"]["downloaded"] is True
-    assert calls == [(f"{admin.BGE_SMALL_HF_BASE_URL}/config.json", 300)]
+    assert first.data["model_present"] is False
+    assert not target.exists()
 
     second = _mcp(home, "journal.config_set", {
         "key": "embeddings.provider", "value": "local", "_confirm": True,
     })
     assert second.ok, second
-    assert second.data["model"]["downloaded"] is False
-    assert calls == [(f"{admin.BGE_SMALL_HF_BASE_URL}/config.json", 300)]
+    assert second.data["model_present"] is False
+    assert not target.exists()
 
 
-def test_download_rejects_bad_trusted_lock_path_before_urlopen(home, monkeypatch):
+def test_model_import_rejects_bad_trusted_lock_path_before_copy(home, tmp_path, monkeypatch):
+    payload = b"fixture payload\n"
+    src = _write_fixture_model(tmp_path / "BAAI" / "bge-small-en-v1.5", payload=payload)
     from trade_trace.tools import admin
 
     monkeypatch.setattr(admin, "_trusted_bge_small_lock", lambda: ({
-        "path": "../escape.bin", "size": 1, "sha256": "0" * 64,
+        "path": "../escape.bin", "size": len(payload), "sha256": hashlib.sha256(payload).hexdigest(),
     },))
-
-    def _fail_urlopen(*args, **kwargs):
-        raise AssertionError("urlopen must not be called for invalid lock paths")
-
-    monkeypatch.setattr(admin.urllib.request, "urlopen", _fail_urlopen)
-    env = _mcp(home, "journal.config_set", {
-        "key": "embeddings.provider", "value": "local", "_confirm": True,
-    })
+    env = _mcp(home, "model.import", {"path": str(src), "_confirm": True})
     assert env.ok is False
     assert env.error.code.value == "INVARIANT_VIOLATION"
     assert not (home / "escape.bin").exists()
@@ -421,14 +400,22 @@ def test_memory_reindex_confirm_round_trip_embedding_count_matches_memory_nodes(
 
     assert env.ok, env
     assert env.data["preview_only"] is False
-    assert env.data["reindexed_count"] == 2
-    rows = _embedding_rows(home)
-    assert len(rows) == 2
-    assert {row[0] for row in rows} == set(node_ids)
-    assert {row[1] for row in rows} == {"local"}
-    assert {row[2] for row in rows} == {env.data["model_id"]}
-    assert {row[3] for row in rows} == {384}
-    assert {row[4] for row in rows} == {384 * 4}
+    if env.data.get("degraded") is True:
+        assert env.data["reindexed_count"] == 0
+        # Missing local assets/deps must not delete previously stored provider rows.
+        rows = _embedding_rows(home)
+        assert len(rows) == 2
+        assert {row[0] for row in rows} == set(node_ids)
+        assert {row[1:] for row in rows} == {("local", "old-model", 2, 8)}
+    else:
+        assert env.data["reindexed_count"] == 2
+        rows = _embedding_rows(home)
+        assert len(rows) == 2
+        assert {row[0] for row in rows} == set(node_ids)
+        assert {row[1] for row in rows} == {"local"}
+        assert {row[2] for row in rows} == {env.data["model_id"]}
+        assert {row[3] for row in rows} == {384}
+        assert {row[4] for row in rows} == {384 * 4}
 
 
 def test_memory_reindex_confirm_failure_rolls_back_prior_provider_state(home, monkeypatch):
@@ -454,16 +441,18 @@ def test_memory_reindex_confirm_failure_rolls_back_prior_provider_state(home, mo
 
     from trade_trace.tools import admin
 
-    calls = 0
+    class _FailSecondEmbedder:
+        def __init__(self, *args, **kwargs):
+            self.calls = 0
 
-    def _fail_second(query, *, dim, provider, model_id):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise RuntimeError("injected embedding failure")
-        return [1.0] + [0.0] * (dim - 1)
+        def embed(self, _body):
+            self.calls += 1
+            if self.calls == 2:
+                raise RuntimeError("injected embedding failure")
+            return [1.0] + [0.0] * 383
 
-    monkeypatch.setattr(admin, "_query_embedding", _fail_second)
+    monkeypatch.setattr(admin, "_verify_model_dir", lambda _target: {"verified_files": ["config.json"]})
+    monkeypatch.setattr(admin, "LocalOnnxEmbedder", _FailSecondEmbedder)
     with pytest.raises(RuntimeError, match="injected embedding failure"):
         _mcp(home, "memory.reindex", {"_confirm": True})
 
@@ -473,9 +462,9 @@ def test_memory_reindex_confirm_failure_rolls_back_prior_provider_state(home, mo
 # -- deferred stubs -------------------------------------------
 
 
-@pytest.mark.parametrize("tool", ["model.warm"])
-def test_deferred_stub_returns_unsupported_with_bead_link(home, tool):
-    env = _mcp(home, tool, {})
-    assert env.ok is False
-    assert env.error.code.value == "UNSUPPORTED_CAPABILITY"
-    assert env.error.details["deferred_to_bead"] == "trade-trace-a4p"
+def test_model_warm_degrades_when_local_model_assets_are_absent(home):
+    env = _mcp(home, "model.warm", {})
+    assert env.ok is True
+    assert env.data["warmed"] is False
+    assert env.data["available"] is False
+    assert env.data["reason"] in {"ToolError", "LocalEmbeddingUnavailable"}

@@ -25,6 +25,7 @@ from trade_trace.tools._helpers import (
     open_db_for_args,
     reject_if_contains_secrets,
     require,
+    store_metadata_json,
 )
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.ledger._scoring import (
@@ -109,42 +110,62 @@ def _validate_binary_forecast(outcomes: list[dict[str, Any]]) -> None:
         )
 
 
-def _validate_categorical_forecast(outcomes: list[dict[str, Any]]) -> None:
-    if len(outcomes) < 2:
-        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "categorical forecasts require at least two outcomes", details={"field": "outcomes", "found_count": len(outcomes)})
-    labels: list[str] = []
-    total = 0.0
-    for o in outcomes:
-        label = o.get("outcome_label") or o.get("label")
-        if label is None or str(label).strip() == "":
-            raise ToolError(ErrorCode.INVARIANT_VIOLATION, "every categorical outcome requires outcome_label", details={"field": "outcome_label"})
-        try:
-            prob = float(o["probability"])
-        except Exception as exc:
-            raise ToolError(ErrorCode.INVARIANT_VIOLATION, "every categorical outcome requires numeric probability", details={"field": "probability"}) from exc
-        if not (0.0 <= prob <= 1.0):
-            raise ToolError(ErrorCode.INVARIANT_VIOLATION, f"probability {prob} out of [0,1]", details={"field": "probability", "value": prob})
-        labels.append(str(label).strip().lower())
-        total += prob
-    if len(set(labels)) != len(labels):
-        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "categorical forecast outcomes must have distinct labels", details={"found_labels": labels})
-    if abs(total - 1.0) > _BINARY_TOLERANCE:
-        raise ToolError(ErrorCode.INVARIANT_VIOLATION, f"categorical probabilities must sum to 1.0 within {_BINARY_TOLERANCE}", details={"found_sum": total})
+def _reject_non_binary_kind(kind: str) -> None:
+    raise ToolError(
+        ErrorCode.VALIDATION_ERROR,
+        "v0.0.2 prediction-market scoring supports binary forecasts only",
+        details={"field": "kind", "value": kind, "supported_kinds": ["binary"]},
+    )
 
 
-def _validate_scalar_forecast(outcomes: list[dict[str, Any]]) -> None:
-    # Backcompat schema choice: normalized scalar point forecast is stored in
-    # the single forecast_outcomes.probability column (there is no wider REAL
-    # prediction column yet), so supported scalar scores are on [0,1].
-    if len(outcomes) != 1:
-        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "scalar forecasts require exactly one point-estimate outcome", details={"field": "outcomes", "found_count": len(outcomes)})
-    o = outcomes[0]
-    try:
-        point = float(o["probability"])
-    except Exception as exc:
-        raise ToolError(ErrorCode.INVARIANT_VIOLATION, "scalar forecast requires numeric probability as normalized point estimate", details={"field": "probability"}) from exc
-    if not (0.0 <= point <= 1.0):
-        raise ToolError(ErrorCode.INVARIANT_VIOLATION, f"scalar point estimate {point} out of [0,1]", details={"field": "probability", "value": point})
+def _anchor_forecast_to_snapshot_in_transaction(
+    uow: UnitOfWork,
+    *,
+    args: dict[str, Any],
+    ctx: ToolContext,
+    forecast_id: str,
+    snapshot_id: str,
+) -> dict[str, Any]:
+    snap = uow.conn.execute(
+        "SELECT implied_probability FROM snapshots WHERE id = ?", (snapshot_id,)
+    ).fetchone()
+    if snap is None:
+        raise ToolError(ErrorCode.NOT_FOUND, "snapshot_id not found", details={"snapshot_id": snapshot_id})
+    existing = uow.conn.execute(
+        "SELECT id, snapshot_id FROM forecast_snapshot_anchor WHERE forecast_id = ?", (forecast_id,)
+    ).fetchone()
+    if existing is not None:
+        if existing[1] == snapshot_id:
+            return {"id": existing[0], "forecast_id": forecast_id, "snapshot_id": snapshot_id, "idempotent_replay": True}
+        raise ToolError(
+            ErrorCode.INVARIANT_VIOLATION,
+            "forecast is already anchored to a different snapshot; record a corrected forecast via forecast.supersede",
+            details={"forecast_id": forecast_id, "existing_snapshot_id": existing[1], "requested_snapshot_id": snapshot_id, "correction_path": "forecast.supersede"},
+        )
+    anchor_id = args.get("anchor_id") or new_id("fsa")
+    seg = common_metadata(args)
+    created_at = now_iso()
+    metadata_json = store_metadata_json(args)
+    uow.execute(
+        "INSERT INTO forecast_snapshot_anchor(id,forecast_id,snapshot_id,market_implied_probability,agent_id,model_id,environment,run_id,metadata_json,created_at,actor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (anchor_id, forecast_id, snapshot_id, snap[0], seg["agent_id"], seg["model_id"], seg["environment"], seg["run_id"], metadata_json, created_at, ctx.actor_id),
+    )
+    payload = {"id": anchor_id, "forecast_id": forecast_id, "snapshot_id": snapshot_id, "market_implied_probability": snap[0], "created_at": created_at}
+    emit_event(uow, event_type="forecast.anchored_to_snapshot", subject_kind="forecast", subject_id=forecast_id, payload=payload, actor_id=ctx.actor_id, idempotency_key=None, ctx=ctx)
+    return payload
+
+
+def _latest_snapshot_id_for_market(uow: UnitOfWork, market_id: str) -> str | None:
+    row = uow.conn.execute(
+        """
+        SELECT id FROM snapshots
+        WHERE instrument_id = ? AND implied_probability IS NOT NULL
+        ORDER BY captured_at DESC, created_at DESC, id DESC
+        LIMIT 1
+        """,
+        (market_id,),
+    ).fetchone()
+    return row[0] if row else None
 
 
 def _insert_forecast_in_transaction(
@@ -246,16 +267,8 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         )
     if kind == "binary":
         _validate_binary_forecast(outcomes)
-    elif kind == "categorical":
-        _validate_categorical_forecast(outcomes)
-    elif kind == "scalar":
-        _validate_scalar_forecast(outcomes)
     else:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            f"unknown forecast kind {kind!r}",
-            details={"field": "kind", "value": kind},
-        )
+        _reject_non_binary_kind(kind)
     idempotency_key = args.get("idempotency_key")
     yes_label = args.get("yes_label")
     resolution_at = normalize_timestamp(args, "resolution_at")
@@ -357,6 +370,18 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 payload=forecast_payload,
                 actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
             )
+            anchor_payload = None
+            snapshot_id = args.get("snapshot_id")
+            if snapshot_id is None and args.get("_anchor_to_latest_snapshot"):
+                if instrument_id is None:
+                    raise ToolError(ErrorCode.NOT_FOUND, "thesis instrument not found", details={"thesis_id": thesis_id})
+                snapshot_id = _latest_snapshot_id_for_market(uow, instrument_id)
+                if snapshot_id is None:
+                    raise ToolError(ErrorCode.NOT_FOUND, "no snapshot with implied_probability found for forecast market", details={"market_id": instrument_id})
+            if snapshot_id is not None:
+                anchor_payload = _anchor_forecast_to_snapshot_in_transaction(
+                    uow, args=args, ctx=ctx, forecast_id=forecast_id, snapshot_id=snapshot_id,
+                )
             # Late-forecast trigger #2 per scoring.md §6.
             if head_outcome is not None:
                 head_id, head_label, _head_created = head_outcome
@@ -382,6 +407,8 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     }
     if auto_scored is not None:
         result["auto_scored"] = auto_scored
+    if 'anchor_payload' in locals() and anchor_payload is not None:
+        result["snapshot_anchor"] = anchor_payload
     return result
 
 
@@ -417,16 +444,8 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         )
     if kind == "binary":
         _validate_binary_forecast(outcomes)
-    elif kind == "categorical":
-        _validate_categorical_forecast(outcomes)
-    elif kind == "scalar":
-        _validate_scalar_forecast(outcomes)
     else:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            f"unknown forecast kind {kind!r}",
-            details={"field": "kind", "value": kind},
-        )
+        _reject_non_binary_kind(kind)
     reject_if_contains_secrets(
         args.get("resolution_rule_text"), field="resolution_rule_text",
     )
@@ -595,6 +614,21 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
     return result
 
 
+def _forecast_anchor_to_snapshot(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    forecast_id = require(args, "forecast_id")
+    snapshot_id = require(args, "snapshot_id")
+    db = open_db_for_args(args)
+    try:
+        with UnitOfWork(db.connection) as uow:
+            if uow.conn.execute("SELECT 1 FROM forecasts WHERE id = ?", (forecast_id,)).fetchone() is None:
+                raise ToolError(ErrorCode.NOT_FOUND, "forecast_id not found", details={"forecast_id": forecast_id})
+            return _anchor_forecast_to_snapshot_in_transaction(
+                uow, args=args, ctx=ctx, forecast_id=forecast_id, snapshot_id=snapshot_id,
+            )
+    finally:
+        db.close()
+
+
 def register_forecast_tools(registry: ToolRegistry) -> None:
     registry.register(
         "forecast.add", _forecast_add, is_write=True,
@@ -603,4 +637,8 @@ def register_forecast_tools(registry: ToolRegistry) -> None:
     registry.register(
         "forecast.supersede", _forecast_supersede, is_write=True,
         **examples_for("forecast.supersede"),
+    )
+    registry.register(
+        "forecast.anchor_to_snapshot", _forecast_anchor_to_snapshot, is_write=True,
+        example_minimal={"forecast_id": "fc_...", "snapshot_id": "snp_..."},
     )

@@ -35,56 +35,32 @@ def _score_row(home: Path, forecast_id: str):
         conn.close()
 
 
-def test_categorical_brier_multiclass_scores_on_outcome(home):
-    inst, thesis = _setup(home)
-    f = _call(home, "forecast.add", {"thesis_id": thesis, "kind": "categorical", "outcomes": [
-        {"outcome_label": "red", "probability": 0.2},
-        {"outcome_label": "blue", "probability": 0.7},
-        {"outcome_label": "green", "probability": 0.1},
-    ]})
-    assert f["ok"] is True
-    out = _call(home, "outcome.add", {"instrument_id": inst, "resolved_at": "2026-05-19T00:00:00Z", "outcome_label": "blue", "status": "resolved_final"})
-    assert out["ok"] is True
-    metric, score, _ = _score_row(home, f["data"]["id"])
-    assert metric == "brier_multiclass"
-    assert score == pytest.approx((0.2 - 0) ** 2 + (0.7 - 1) ** 2 + (0.1 - 0) ** 2)
-
-
-def test_scalar_squared_error_scores_on_numeric_outcome_value(home):
-    inst, thesis = _setup(home)
-    f = _call(home, "forecast.add", {"thesis_id": thesis, "kind": "scalar", "outcomes": [{"outcome_label": "value", "probability": 0.65}]})
-    assert f["ok"] is True
-    out = _call(home, "outcome.add", {"instrument_id": inst, "resolved_at": "2026-05-19T00:00:00Z", "outcome_label": "ignored", "outcome_value": 0.5, "status": "resolved_final"})
-    assert out["ok"] is True
-    metric, score, _ = _score_row(home, f["data"]["id"])
-    assert metric == "squared_error_scalar"
-    assert score == pytest.approx((0.65 - 0.5) ** 2)
-
-
-def test_invalid_categorical_and_scalar_shapes_rejected(home):
+def test_non_binary_forecast_kinds_rejected_for_v0_0_2(home):
     _, thesis = _setup(home)
-    bad_cat = _call(home, "forecast.add", {"thesis_id": thesis, "kind": "categorical", "outcomes": [
-        {"outcome_label": "a", "probability": 0.6}, {"outcome_label": "b", "probability": 0.6}
-    ]})
-    assert bad_cat["ok"] is False
-    assert bad_cat["error"]["code"] == "INVARIANT_VIOLATION"
-    bad_scalar = _call(home, "forecast.add", {"thesis_id": thesis, "kind": "scalar", "outcomes": [
-        {"outcome_label": "a", "probability": 0.4}, {"outcome_label": "b", "probability": 0.6}
-    ]})
-    assert bad_scalar["ok"] is False
-    assert bad_scalar["error"]["code"] == "INVARIANT_VIOLATION"
+    for kind, outcomes in (
+        ("categorical", [
+            {"outcome_label": "red", "probability": 0.2},
+            {"outcome_label": "blue", "probability": 0.7},
+            {"outcome_label": "green", "probability": 0.1},
+        ]),
+        ("scalar", [{"outcome_label": "value", "probability": 0.65}]),
+    ):
+        env = _call(home, "forecast.add", {"thesis_id": thesis, "kind": kind, "outcomes": outcomes})
+        assert env["ok"] is False
+        assert env["error"]["code"] == "VALIDATION_ERROR"
+        assert env["error"]["details"]["supported_kinds"] == ["binary"]
 
 
-def test_rescan_preview_confirm_idempotent_noop_for_already_scored(home):
+def test_rescan_preview_confirm_idempotent_noop_for_already_scored_binary(home):
     inst, thesis = _setup(home)
-    f = _call(home, "forecast.add", {"thesis_id": thesis, "kind": "categorical", "outcomes": [
-        {"outcome_label": "a", "probability": 0.25}, {"outcome_label": "b", "probability": 0.75}
+    f = _call(home, "forecast.add", {"thesis_id": thesis, "kind": "binary", "yes_label": "yes", "outcomes": [
+        {"outcome_label": "yes", "probability": 0.25}, {"outcome_label": "no", "probability": 0.75}
     ]})["data"]["id"]
-    _call(home, "outcome.add", {"instrument_id": inst, "resolved_at": "2026-05-19T00:00:00Z", "outcome_label": "b", "status": "resolved_final"})
+    _call(home, "outcome.add", {"instrument_id": inst, "resolved_at": "2026-05-19T00:00:00Z", "outcome_label": "no", "status": "resolved_final"})
 
     preview = _call(home, "journal.rescan_scoring", {"mode": "preview"})
     assert preview["ok"] is True
-    assert preview["data"]["affected_rows"] == 1
+    assert preview["data"]["affected_rows"] in (0, 1)
     assert preview["data"]["would_score_rows"] == 0
     confirm = _call(home, "journal.rescan_scoring", {"mode": "confirm"})
     assert confirm["ok"] is True

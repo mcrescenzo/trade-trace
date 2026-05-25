@@ -207,7 +207,7 @@ def test_low_sample_reports_and_playbook_adherence_expose_caveats_not_skill_clai
     inspectable for an agent dogfood loop.
     """
 
-    seed = mcp_call("journal.fixture_seed", {"home": str(home), "target": "mvp-eval"})
+    seed = mcp_call("journal.fixture_seed", {"home": str(home), "target": "mvp-eval-pm"})
     assert seed.ok, seed
 
     coach = _mcp(home, "report.coach", {})

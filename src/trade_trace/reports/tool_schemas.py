@@ -138,6 +138,26 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
         {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
         description="Optional ReportFilter and low-N warning threshold; defaults min_sample=20.",
     ),
+    "report.calibration_trajectory": _schema(
+        {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
+        description="Time-to-resolution trajectory calibration over local scored binary forecasts; no external calls.",
+    ),
+    "report.market_lifecycle": _schema(
+        {"filter": _FILTER_PROP},
+        description="Local market lifecycle timing and engagement counts over caller-recorded market rows.",
+    ),
+    "report.resolution_quality": _schema(
+        {"filter": _FILTER_PROP},
+        description="Local resolution status quality diagnostics and pre-resolution uncertainty flags.",
+    ),
+    "report.amm_slippage": _schema(
+        {"filter": _FILTER_PROP},
+        description="AMM decision price versus linked local snapshot mark in basis points; no broker or external quote path.",
+    ),
+    "report.time_decay_sharpening": _schema(
+        {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
+        description="Time-to-resolution sharpening diagnostics grouped by local forecast age-to-resolution buckets.",
+    ),
     "report.forecast_diagnostics": _schema(
         {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
         description=(

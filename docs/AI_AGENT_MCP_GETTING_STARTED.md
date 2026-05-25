@@ -2,7 +2,7 @@
 
 This is the short operating guide for AI agents connecting to Trade Trace over MCP.
 
-Trade Trace is a local journal, memory, and calibration substrate for trading agents. It records decisions and outcomes; it does not fetch market data, execute trades, sign orders, hold broker credentials, or give financial advice.
+Trade Trace is a local journal, memory, and calibration substrate for trading agents. It records decisions and outcomes; by default it performs no outbound market fetches. The optional Polymarket adapter is disabled until explicitly configured, and even then only explicit agent calls such as `market.refresh`, `snapshot.fetch`, `snapshot.fetch_series`, and `outcome.fetch` perform network I/O. Trade Trace never executes trades, signs orders, holds broker credentials, or gives financial advice.
 
 ## 1. Install the MCP server
 
@@ -94,7 +94,7 @@ If `MCP_ACTOR_ID` is unset, the server uses `agent:mcp-default`.
 
 After configuring the client, verify this sequence before journaling real decisions:
 
-1. Ask the client to list MCP tools. You should see `trade-trace` tools such as `journal.status`, `tool.schema`, `venue.add`, `instrument.add`, `forecast.add`, `decision.add`, `outcome.add`, `memory.recall`, and report tools.
+1. Ask the client to list MCP tools. You should see `trade-trace` tools such as `journal.status`, `tool.schema`, `market.bind`, `market.refresh`, `snapshot.add`, `snapshot.fetch`, `snapshot.fetch_series`, `forecast.add`, `decision.add`, `resolution.add`, `outcome.fetch`, `memory.recall`, and report tools. The current default public catalog has 65 tools; `tool.schema` is registry-generated and authoritative.
 2. Call `journal.status`.
 3. Call `tool.schema` with no arguments to list the current registry.
 4. Call `tool.schema` for the first write you intend to use, for example:
@@ -188,42 +188,39 @@ run-20260519-001:forecast.add:polymarket-event-123:v1
 A useful agent loop is ordered so later records point back to earlier evidence.
 
 1. `journal.init` — initialize the local journal if not already initialized.
-2. `idea.capture` — optionally park a rough market thought as a local draft when you are not ready to create a full instrument/thesis yet.
-3. `venue.add` — create or identify the source venue.
-4. `instrument.add` — create the market/instrument under the venue.
-5. `source.add` and `source.attach_to_*` — record the evidence you used, when relevant.
-6. `thesis.add` — record the reasoning and falsification criteria.
-7. `forecast.add` — commit probabilities before outcome resolution.
-8. `decision.add` — record the actual trade/skip/hold decision and rationale.
-9. `outcome.add` or `resolve.record` — record final outcome; scoring runs when prerequisites are met.
-10. `journal.bundle.status` — inspect partial arcs and follow returned `next_calls` when an instrument/thesis/forecast/decision/outcome chain is incomplete.
-11. `report.calibration`, `report.coach`, `report.mistakes`, `report.strengths`, or other reports — review deterministic feedback.
-12. `reflection.prompt_for_outcome` and `memory.reflect` — write an outcome-linked lesson.
-13. `playbook.propose_version` — propose a rule update when a reflection should alter future behavior.
-14. `memory.recall` — before the next thesis/decision, retrieve relevant prior lessons.
+2. `market.bind` — create or identify the market metadata row.
+3. Optional adapter loop, only when explicitly enabled/configured: `market.refresh`, `snapshot.fetch`, `snapshot.fetch_series`, and `outcome.fetch`. Otherwise use manual `snapshot.add` / `resolution.add`.
+4. `snapshot.add` — record caller-supplied market state when relevant.
+5. `forecast.add` — commit binary probabilities before outcome resolution.
+6. `decision.add` — record the actual trade/skip/hold decision and rationale.
+7. `resolution.add` — record final outcome; scoring runs when prerequisites are met.
+8. `report.lifecycle`, `report.work_queue`, and review/report tools — inspect incomplete local obligations and deterministic feedback.
+9. `memory.reflect` — write an outcome-linked lesson.
+10. `playbook.upsert` and `playbook.record_adherence` — maintain process rules and adherence rows.
+11. `memory.recall` — before the next forecast/decision, retrieve relevant prior lessons.
 
 For exact fields and examples, call `tool.schema` for each tool immediately before using it.
 
 ## 9. First dry-run example
 
-This example validates a venue write without persisting it:
+This example validates a market binding write without persisting it:
 
 ```json
 {
-  "name": "Paper Venue",
-  "kind": "prediction_market",
-  "idempotency_key": "run-20260519-001:venue.add:paper-venue:v1",
+  "external_id": "paper-venue:event-123",
+  "title": "Paper market event",
+  "idempotency_key": "run-20260519-001:market.bind:paper-event:v1",
   "_dry_run": true
 }
 ```
 
-Call it through MCP as tool `venue.add`. Expected envelope properties:
+Call it through MCP as tool `market.bind`. Expected envelope properties:
 
 - `ok: true`
-- `meta.tool: "venue.add"`
+- `meta.tool: "market.bind"`
 - `meta.actor_id` equals your `MCP_ACTOR_ID`
 - `meta.dry_run: true`
-- `data.id` contains the would-be venue ID
+- `data.id` contains the would-be market ID
 
 Then repeat without `_dry_run` when you want to persist the event.
 
@@ -240,7 +237,7 @@ Agents must not send Trade Trace:
 
 Trade Trace ignores credential-shaped write arguments and rejects credential-looking MCP schema exposure, but agents should still avoid sending secrets at all.
 
-Trade Trace also does not fetch market data or resolve markets by itself. The calling agent supplies all snapshots, sources, outcomes, and decision context.
+Trade Trace performs no outbound market fetches by default. Optional Polymarket adapter calls are fail-closed unless explicitly enabled and configured; when enabled, only explicit calls (`market.refresh`, `snapshot.fetch`, `snapshot.fetch_series`, `outcome.fetch`) perform adapter I/O. There is no background fetch scheduler.
 
 ## 11. Troubleshooting
 

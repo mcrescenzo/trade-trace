@@ -212,27 +212,12 @@ def _score_one_forecast(
         failure_reason = "yes_label_ambiguous"
     elif kind == "binary" and yes_norm not in labels:
         failure_reason = "yes_label_ambiguous"
-    elif kind in ("binary", "categorical") and resolved_label_norm not in labels:
+    elif kind == "binary" and resolved_label_norm not in labels:
         failure_reason = "label_mismatch"
     elif kind == "binary":
         p_yes = labels[yes_norm][1]
         y = 1.0 if resolved_label_norm == yes_norm else 0.0
         score = (p_yes - y) ** 2
-    elif kind == "categorical":
-        metric = "brier_multiclass"
-        score = sum((float(prob) - (1.0 if label == resolved_label_norm else 0.0)) ** 2
-                    for label, (_oid, prob) in labels.items())
-    elif kind == "scalar":
-        metric = "squared_error_scalar"
-        try:
-            outcome_row = conn.execute("SELECT outcome_value FROM outcomes WHERE id = ?", (outcome_id,)).fetchone()
-            raw_truth = outcome_row[0] if outcome_row and outcome_row[0] is not None else outcome_label
-            truth = float(raw_truth)
-            point = float(rows[0][2])
-        except Exception:
-            failure_reason = "scalar_value_invalid"
-        else:
-            score = (point - truth) ** 2
     else:
         failure_reason = "unsupported_kind"
 
