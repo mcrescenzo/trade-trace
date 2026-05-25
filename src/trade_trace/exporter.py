@@ -119,6 +119,7 @@ _STATIC_EVENT_TOOL_MAP: dict[str, str] = {
     "outcome.recorded": "outcome.add",
     "forecast.created": "forecast.add",
     "forecast.superseded": "forecast.supersede",
+    "forecast.anchored_to_snapshot": "forecast.anchor_to_snapshot",
     "market.bound": "market.bind",
     # M3 memory + strategy + M4 playbook writes (trade-trace-ths0). These
     # event-type aliases now resolve to their write tools so the JSONL

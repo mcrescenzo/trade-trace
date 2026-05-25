@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from trade_trace.events.semantic_keys import SEMANTIC_KEYS
 from trade_trace.exporter import _STATIC_EVENT_TOOL_MAP
+from trade_trace.tools.imports import _IMPORT_READY_WRITERS
 
 
 def test_exporter_map_only_references_known_event_types():
@@ -55,4 +56,32 @@ def test_exporter_map_values_are_known_write_tools():
         "exporter._STATIC_EVENT_TOOL_MAP maps to tool(s) that are not "
         f"registered in the default tool registry: {bogus!r}. Update the "
         "exporter mapping or land the tool registration first."
+    )
+
+
+def test_forecast_anchor_to_snapshot_bucket_a_mapping_is_pinned():
+    """Docs classify forecast anchor events as bucket-A replayable.
+
+    Keep the event-type alias aligned with the user-callable writer so
+    exported `forecast.anchored_to_snapshot` records replay through the
+    canonical `forecast.anchor_to_snapshot` tool.
+    """
+
+    assert (
+        _STATIC_EVENT_TOOL_MAP["forecast.anchored_to_snapshot"]
+        == "forecast.anchor_to_snapshot"
+    )
+
+
+def test_static_event_tool_map_values_are_import_ready_writers():
+    """Mapped bucket-A event aliases must resolve to import-ready writers."""
+
+    not_import_ready = {
+        event_type: tool
+        for event_type, tool in _STATIC_EVENT_TOOL_MAP.items()
+        if tool not in _IMPORT_READY_WRITERS
+    }
+    assert not not_import_ready, (
+        "exporter._STATIC_EVENT_TOOL_MAP maps bucket-A event aliases to "
+        f"tool(s) that imports reject as not import-ready: {not_import_ready!r}."
     )

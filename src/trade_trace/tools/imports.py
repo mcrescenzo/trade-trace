@@ -160,6 +160,7 @@ _IMPORT_READY_WRITERS = {
     "thesis.add",
     "forecast.add",
     "forecast.supersede",
+    "forecast.anchor_to_snapshot",
     "decision.add",
     "outcome.add",
     "resolve.record",
