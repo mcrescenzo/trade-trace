@@ -88,6 +88,56 @@ def test_market_bind_enabled_fetches_fixture_backed_market(tmp_path: Path, monke
     assert env.data["mechanism"] == "amm"
 
 
+def test_market_bind_accepts_string_list_outcomes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+    raw = _fixture("market_binary_open.json") | {"outcomes": ["Yes", "No"]}
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: raw)
+
+    env = mcp_call("market.bind", {"home": home, "source": "polymarket", "external_id": "pm-string-outcomes"})
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["external_id"] == "pm-string-outcomes"
+
+
+def test_market_bind_accepts_string_list_tokens_without_outcomes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+    raw = _fixture("market_binary_open.json") | {"tokens": ["Yes", "No"]}
+    raw.pop("outcomes", None)
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: raw)
+
+    env = mcp_call("market.bind", {"home": home, "source": "polymarket", "external_id": "pm-string-tokens"})
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["external_id"] == "pm-string-tokens"
+
+
+@pytest.mark.parametrize("field", ["outcomes", "tokens"])
+def test_market_bind_rejects_invalid_string_list_outcome_elements_without_attribute_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+    raw = _fixture("market_binary_open.json") | {field: ["Yes", 123]}
+    if field == "tokens":
+        raw.pop("outcomes", None)
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: raw)
+
+    env = mcp_call("market.bind", {"home": home, "source": "polymarket", "external_id": f"pm-invalid-{field}"})
+    assert not env.ok
+    assert isinstance(env, ErrorEnvelope)
+    assert env.error.code == "ADAPTER_PROTOCOL_ERROR"
+
+
 @pytest.mark.parametrize("fixture_name", ["market_categorical_rejected.json", "market_scalar_rejected.json"])
 def test_market_bind_rejects_non_binary_polymarket_fixtures(
     tmp_path: Path,

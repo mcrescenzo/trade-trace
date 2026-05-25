@@ -46,6 +46,31 @@ def _parse_ts(value: str | None) -> datetime | None:
         return None
 
 
+def _outcome_label(outcome: Any, external_id: str, index: int) -> str:
+    if isinstance(outcome, str):
+        return outcome.lower()
+    if isinstance(outcome, dict):
+        return str(outcome.get("name") or outcome.get("label") or outcome.get("outcome") or "").lower()
+    raise ToolError(
+        ErrorCode.ADAPTER_PROTOCOL_ERROR,
+        "Polymarket adapter outcome elements must be objects or strings",
+        details={"external_id": external_id, "outcome_index": index, "outcome_type": type(outcome).__name__},
+    )
+
+
+def _optional_float(value: Any, field: str) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ToolError(
+            ErrorCode.ADAPTER_PROTOCOL_ERROR,
+            "Polymarket book field must be numeric",
+            details={"field": field, "value": value},
+        ) from exc
+
+
 def _market_cache_hit(state: str | None, metadata_json: str | None, created_at: str | None, *, now: str) -> bool:
     ttl = MARKET_CACHE_TTL_SECONDS.get(state or "")
     if ttl is None:
@@ -69,7 +94,7 @@ def _market_payload(raw: dict[str, Any], external_id: str) -> dict[str, Any]:
         raise ToolError(ErrorCode.ADAPTER_PROTOCOL_ERROR, "Polymarket scalar markets are not supported in v0.0.2", details={"external_id": external_id, "market_type": "scalar"})
     if len(outcomes) not in (0, 2):
         raise ToolError(ErrorCode.ADAPTER_PROTOCOL_ERROR, "Polymarket adapter accepts only binary markets in v0.0.2", details={"external_id": external_id, "outcome_count": len(outcomes)})
-    labels = [str(o.get("name") or o.get("label") or o.get("outcome") or "").lower() for o in outcomes]
+    labels = [_outcome_label(o, external_id, idx) for idx, o in enumerate(outcomes)]
     if labels and set(labels) != {"yes", "no"}:
         raise ToolError(ErrorCode.ADAPTER_PROTOCOL_ERROR, "Polymarket adapter accepts only YES/NO binary markets", details={"external_id": external_id, "labels": labels})
     state = "open"
@@ -214,10 +239,11 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
     bid = raw.get("bestBid") or raw.get("bid")
     ask = raw.get("bestAsk") or raw.get("ask")
     price = raw.get("price") or raw.get("last") or raw.get("mid")
-    bidf = float(bid) if bid is not None else None
-    askf = float(ask) if ask is not None else None
-    mid = (bidf + askf) / 2 if bidf is not None and askf is not None else (float(price) if price is not None else None)
-    return {"price": float(price) if price is not None else mid, "bid": bidf, "ask": askf, "mid": mid, "spread": (askf-bidf) if bidf is not None and askf is not None else None, "volume": raw.get("volume"), "open_interest": raw.get("openInterest"), "implied_probability": raw.get("impliedProbability") or mid, "liquidity_depth_json": raw.get("book") or raw.get("liquidity") or raw}
+    bidf = _optional_float(bid, "bestBid")
+    askf = _optional_float(ask, "bestAsk")
+    pricef = _optional_float(price, "price")
+    mid = (bidf + askf) / 2 if bidf is not None and askf is not None else pricef
+    return {"price": pricef if pricef is not None else mid, "bid": bidf, "ask": askf, "mid": mid, "spread": (askf-bidf) if bidf is not None and askf is not None else None, "volume": raw.get("volume"), "open_interest": raw.get("openInterest"), "implied_probability": raw.get("impliedProbability") or mid, "liquidity_depth_json": raw.get("book") or raw.get("liquidity") or raw}
 
 
 def _insert_snapshot(args: dict[str, Any], ctx: ToolContext, market_id: str, snap: dict[str, Any], captured_at: str) -> dict[str, Any]:

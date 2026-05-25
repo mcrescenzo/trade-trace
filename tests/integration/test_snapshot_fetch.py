@@ -75,6 +75,67 @@ def test_snapshot_fetch_enabled_captures_fixture_book(tmp_path: Path, monkeypatc
     assert env.data["implied_probability"] == pytest.approx(0.62)
 
 
+@pytest.mark.parametrize("field", ["bestBid", "bestAsk", "price"])
+def test_snapshot_fetch_rejects_invalid_numeric_book_fields_with_typed_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id=f"pm-invalid-{field}")
+    _enable_adapter(home)
+    raw = _fixture("snapshot_thick_book.json") | {field: "abc"}
+    if field == "price":
+        raw.pop("bestBid", None)
+        raw.pop("bestAsk", None)
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: raw)
+
+    env = mcp_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+    assert not env.ok
+    assert isinstance(env, ErrorEnvelope)
+    assert env.error.code == "ADAPTER_PROTOCOL_ERROR"
+
+
+def test_snapshot_fetch_blank_and_missing_numeric_book_fields_stay_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-blank-book")
+    _enable_adapter(home)
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: {"volume": "10"})
+
+    env = mcp_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["bid"] is None
+    assert env.data["ask"] is None
+    assert env.data["price"] is None
+    assert env.data["mid"] is None
+
+
+def test_snapshot_fetch_blank_string_numeric_book_fields_stay_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-blank-string-book")
+    _enable_adapter(home)
+
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"bestBid": "", "bestAsk": "", "price": "", "volume": "10"},
+    )
+
+    env = mcp_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["bid"] is None
+    assert env.data["ask"] is None
+    assert env.data["price"] is None
+    assert env.data["mid"] is None
+
+
 def test_snapshot_fetch_series_enabled_writes_each_fixture_point(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok
