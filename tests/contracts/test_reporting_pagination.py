@@ -201,6 +201,54 @@ def test_created_at_ordered_lists_keep_duplicate_timestamps(conn):
     assert seen == ["pb-3", "pb-2", "pb-1"]
 
 
+def test_created_at_id_helper_accepts_qualified_timestamp_and_id_columns(conn):
+    """The composite helper is shared by read models whose SQL uses
+    table aliases and timestamp names other than ``created_at`` while
+    preserving the same [timestamp, id] cursor payload and DESC walk."""
+
+    import base64
+    import json
+
+    from trade_trace.reporting.pagination import paginate_created_at_id_query
+
+    conn.execute("CREATE TABLE positions(id TEXT PRIMARY KEY, opened_at TEXT)")
+    conn.executemany(
+        "INSERT INTO positions(id, opened_at) VALUES (?, ?)",
+        [
+            ("pos-3", "2026-05-20T03:00:00Z"),
+            ("pos-2", "2026-05-20T03:00:00Z"),
+            ("pos-1", "2026-05-20T01:00:00Z"),
+        ],
+    )
+
+    sql = "SELECT p.id, p.opened_at FROM positions p"
+    page1 = paginate_created_at_id_query(
+        conn,
+        sql=sql,
+        cursor=None,
+        limit=2,
+        id_column="p.id",
+        created_at_column="p.opened_at",
+        id_index=0,
+        created_at_index=1,
+    )
+    decoded = json.loads(base64.urlsafe_b64decode(page1.next_cursor + "=="))
+    page2 = paginate_created_at_id_query(
+        conn,
+        sql=sql,
+        cursor=page1.next_cursor,
+        limit=2,
+        id_column="p.id",
+        created_at_column="p.opened_at",
+        id_index=0,
+        created_at_index=1,
+    )
+
+    assert [row[0] for row in page1.rows] == ["pos-3", "pos-2"]
+    assert decoded["after"] == ["2026-05-20T03:00:00Z", "pos-2"]
+    assert [row[0] for row in page2.rows] == ["pos-1"]
+
+
 def test_empty_table_returns_empty_page_and_null_cursor(conn):
     from trade_trace.reporting.pagination import paginate_query
 

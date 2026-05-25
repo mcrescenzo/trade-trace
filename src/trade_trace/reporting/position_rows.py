@@ -21,10 +21,8 @@ from typing import Any
 from trade_trace.reporting.metric_glossary import CaveatEntry, caveat_copy
 from trade_trace.reporting.pagination import (
     DEFAULT_LIMIT,
-    MAX_LIMIT,
     Page,
-    _decode_cursor,
-    _encode_cursor,
+    paginate_created_at_id_query,
 )
 from trade_trace.reporting.trade_rows import (
     CAVEAT_MISSING_RISK_BUDGET,
@@ -314,11 +312,6 @@ def list_positions(
 ) -> Page:
     """Return paginated `PositionRow`s ordered by opened_at DESC, id DESC."""
 
-    if limit < 1:
-        limit = DEFAULT_LIMIT
-    if limit > MAX_LIMIT:
-        limit = MAX_LIMIT
-
     sql = _POSITION_BASE_SQL
     params: list[Any] = []
     for column, values in (
@@ -348,26 +341,23 @@ def list_positions(
         )
         sql += f" AND {outcome_expr} IN ({','.join('?' * len(outcome_values))})"
         params.extend(outcome_values)
-    if cursor is not None:
-        after = _decode_cursor(cursor)
-        if not isinstance(after, list) or len(after) != 2:
-            after_ts, after_id = after, ""
-        else:
-            after_ts, after_id = after
-        sql += " AND (p.opened_at < ? OR (p.opened_at = ? AND p.id < ?))"
-        params.extend([after_ts, after_ts, after_id])
-    sql += " ORDER BY p.opened_at DESC, p.id DESC LIMIT ?"
-    params.append(limit + 1)
-
-    rows = list(conn.execute(sql, tuple(params)))
-    position_rows = [_row_to_position(r) for r in rows]
-
-    next_cursor: str | None = None
-    if len(position_rows) > limit:
-        position_rows = position_rows[:limit]
-        last = position_rows[-1]
-        next_cursor = _encode_cursor([last.opened_at, last.position_id])
-    return Page(rows=position_rows, next_cursor=next_cursor, limit=limit)
+    page = paginate_created_at_id_query(
+        conn,
+        sql=sql,
+        cursor=cursor,
+        limit=limit,
+        params=tuple(params),
+        id_index=0,
+        created_at_index=9,
+        id_column="p.id",
+        created_at_column="p.opened_at",
+        require_composite_cursor=False,
+    )
+    return Page(
+        rows=[_row_to_position(r) for r in page.rows],
+        next_cursor=page.next_cursor,
+        limit=page.limit,
+    )
 
 
 def _snippet(value: str | None, *, limit: int = 240) -> str | None:

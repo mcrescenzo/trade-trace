@@ -34,8 +34,7 @@ from trade_trace.reporting.pagination import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
     Page,
-    _decode_cursor,
-    _encode_cursor,
+    paginate_created_at_id_query,
 )
 
 TRADING_DECISION_TYPES: tuple[str, ...] = (
@@ -243,14 +242,10 @@ def list_trades(
     the trading subset.
     """
 
-    if limit < 1:
-        limit = DEFAULT_LIMIT
-    if limit > MAX_LIMIT:
-        limit = MAX_LIMIT
-
     decision_types = _multi(decision_type)
     if any(item not in TRADING_DECISION_TYPES for item in decision_types):
-        return Page(rows=[], next_cursor=None, limit=limit, meta={"filter_match": "none"})
+        clamped_limit = max(1, min(int(limit), MAX_LIMIT))
+        return Page(rows=[], next_cursor=None, limit=clamped_limit, meta={"filter_match": "none"})
 
     sql = _TRADE_BASE_SQL
     params: list[Any] = list(TRADING_DECISION_TYPES)
@@ -268,30 +263,23 @@ def list_trades(
     if opened_to is not None:
         sql += " AND d.created_at <= ?"
         params.append(_date_range_bound(opened_to, end=True))
-    if cursor is not None:
-        after = _decode_cursor(cursor)
-        # The fixture seed runs under CLOCK_OVERRIDE so many decisions
-        # share the same `created_at`. A pure `created_at` cursor would
-        # skip siblings; the composite `(created_at, id)` lexicographic
-        # cursor keeps the walk total.
-        if not isinstance(after, list) or len(after) != 2:
-            after_ts, after_id = after, ""
-        else:
-            after_ts, after_id = after
-        sql += " AND (d.created_at < ? OR (d.created_at = ? AND d.id < ?))"
-        params.extend([after_ts, after_ts, after_id])
-    sql += " ORDER BY d.created_at DESC, d.id DESC LIMIT ?"
-    params.append(limit + 1)
-
-    rows = list(conn.execute(sql, tuple(params)))
-    next_cursor: str | None = None
-    if len(rows) > limit:
-        rows = rows[:limit]
-        # Composite cursor: [created_at, id] of the last returned row.
-        last_row = rows[-1]
-        next_cursor = _encode_cursor([last_row[2], last_row[0]])
-    trade_rows = [_row_to_trade(r) for r in rows]
-    return Page(rows=trade_rows, next_cursor=next_cursor, limit=limit)
+    page = paginate_created_at_id_query(
+        conn,
+        sql=sql,
+        cursor=cursor,
+        limit=limit,
+        params=tuple(params),
+        id_index=0,
+        created_at_index=2,
+        id_column="d.id",
+        created_at_column="d.created_at",
+        require_composite_cursor=False,
+    )
+    return Page(
+        rows=[_row_to_trade(r) for r in page.rows],
+        next_cursor=page.next_cursor,
+        limit=page.limit,
+    )
 
 
 def trade_detail(conn: sqlite3.Connection, decision_id: str) -> TradeRow | None:

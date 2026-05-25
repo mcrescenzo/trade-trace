@@ -142,13 +142,18 @@ def paginate_created_at_id_query(
     params: tuple[Any, ...] = (),
     id_index: int = 0,
     created_at_index: int = -1,
+    created_at_column: str = "created_at",
+    id_column: str = "id",
+    require_composite_cursor: bool = True,
 ) -> Page:
-    """Run a newest-first `(created_at, id)` keyset page.
+    """Run a newest-first timestamp/id keyset page.
 
-    Several report tables select `id` first for display but sort by
-    `created_at`. A simple cursor over the first selected column would
+    Several report tables select `id` first for display but sort by a
+    timestamp column. A simple cursor over the first selected column would
     repeat or skip rows. This helper encodes the true order key plus an
-    id tie-breaker so duplicate timestamps walk correctly.
+    id tie-breaker so duplicate timestamps walk correctly. Defaults keep
+    the original `(created_at, id)` behavior for existing callers, while
+    qualified column names let joined read models reuse the same logic.
     """
 
     clamped_limit = max(1, min(int(limit), MAX_LIMIT))
@@ -157,18 +162,25 @@ def paginate_created_at_id_query(
     if cursor is not None:
         after = _decode_cursor(cursor)
         if not isinstance(after, list) or len(after) != 2:
-            raise PaginationError(
-                "created_at cursor payload must contain [created_at, id]",
-            )
-        after_created_at, after_id = after
+            if require_composite_cursor:
+                raise PaginationError(
+                    "created_at cursor payload must contain [created_at, id]",
+                )
+            after_created_at, after_id = after, ""
+        else:
+            after_created_at, after_id = after
         connector = " AND " if " WHERE " in sql.upper() else " WHERE "
         where = (
             connector
-            + "(created_at < ? OR (created_at = ? AND id < ?))"
+            + f"({created_at_column} < ? OR "
+            + f"({created_at_column} = ? AND {id_column} < ?))"
         )
         page_params.extend([after_created_at, after_created_at, after_id])
 
-    paged_sql = f"{sql}{where} ORDER BY created_at DESC, id DESC LIMIT ?"
+    paged_sql = (
+        f"{sql}{where} "
+        f"ORDER BY {created_at_column} DESC, {id_column} DESC LIMIT ?"
+    )
     rows = list(conn.execute(paged_sql, tuple(page_params) + (clamped_limit + 1,)))
 
     next_cursor: str | None = None
