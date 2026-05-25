@@ -233,10 +233,3 @@ def get_logger(name: str) -> logging.Logger:
 
     _CONFIGURED[name] = logger
     return logger
-
-
-def _reset_for_tests() -> None:
-    """Internal hook for the test harness to clear the
-    configured-logger cache without poking module privates."""
-
-    _CONFIGURED.clear()

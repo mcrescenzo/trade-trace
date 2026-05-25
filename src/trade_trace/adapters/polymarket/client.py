@@ -39,10 +39,6 @@ def _host_allowed(host: str, *, gamma: bool) -> bool:
     return host in _ALLOWED_POLYGON_RPC_HOSTS or any(host.endswith(suffix) for suffix in _ALLOWED_POLYGON_RPC_HOST_SUFFIXES)
 
 
-class RetryableProtocolError(Exception):
-    pass
-
-
 class PolymarketClient:
     def __init__(self, config: PolymarketConfig) -> None:
         self.config = config

@@ -37,16 +37,3 @@ def iter_table_columns(
     for table in all_user_table_names(conn):
         for col_row in conn.execute(f"PRAGMA table_info({table})").fetchall():
             yield table, col_row[1]
-
-
-def assert_required_tables_present(
-    conn: sqlite3.Connection, required: set[str]
-) -> None:
-    """Raise AssertionError if any name in `required` is missing from
-    the user-table set; pass cleanly otherwise. Used by injection /
-    boundary tests that need to confirm post-recovery the journal
-    still has the expected M1 schema."""
-
-    present = set(all_user_table_names(conn))
-    missing = sorted(required - present)
-    assert not missing, f"required tables missing from schema: {missing!r}"
