@@ -104,6 +104,23 @@ def is_canonical_utc_iso8601(value: str) -> bool:
     return bool(_CANONICAL_UTC_RE.fullmatch(value))
 
 
+def _parse_iso_datetime(value: str | datetime, *, field: str = "<value>") -> datetime:
+    """Parse the ISO datetime surface shared by timestamp helpers."""
+
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise TimestampValidationError(
+                f"{field}: not a valid ISO 8601 timestamp ({exc})"
+            ) from exc
+    if isinstance(value, datetime):
+        return value
+    raise TimestampValidationError(
+        f"{field}: expected str or datetime, got {type(value).__name__}"
+    )
+
+
 def to_utc_iso8601(value: str | datetime, *, field: str = "<value>") -> str:
     """Normalize an input to canonical UTC ISO 8601 with millisecond precision.
 
@@ -111,19 +128,7 @@ def to_utc_iso8601(value: str | datetime, *, field: str = "<value>") -> str:
     operability.md §2.1). Returns a `Z`-suffixed string.
     """
 
-    if isinstance(value, str):
-        try:
-            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise TimestampValidationError(
-                f"{field}: not a valid ISO 8601 timestamp ({exc})"
-            ) from exc
-    elif isinstance(value, datetime):
-        dt = value
-    else:
-        raise TimestampValidationError(
-            f"{field}: expected str or datetime, got {type(value).__name__}"
-        )
+    dt = _parse_iso_datetime(value, field=field)
 
     if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
         raise TimestampValidationError(
@@ -141,3 +146,77 @@ def to_utc_iso8601(value: str | datetime, *, field: str = "<value>") -> str:
     if iso.endswith("+00:00"):
         iso = iso[:-6] + "Z"
     return iso
+
+
+def parse_report_timestamp_lenient_preserve_naive_offset(
+    value: str | datetime | None,
+) -> datetime | None:
+    """pm_native-compatible report timestamp parsing.
+
+    Missing/falsey and invalid inputs return None. Naive datetimes remain naive;
+    aware datetimes keep their original offset, including non-UTC offsets. This
+    helper deliberately does not normalize via astimezone.
+    """
+
+    if not value:
+        return None
+    try:
+        return _parse_iso_datetime(value)
+    except TimestampValidationError:
+        return None
+
+
+def parse_report_timestamp_lenient_naive_as_utc(
+    value: str | datetime | None,
+) -> datetime | None:
+    """opportunity-compatible report timestamp parsing.
+
+    Missing/falsey and invalid inputs return None. Naive datetimes are treated as
+    UTC by attaching UTC tzinfo. Aware datetimes keep their original offset; this
+    helper deliberately does not normalize non-UTC offsets via astimezone.
+    """
+
+    dt = parse_report_timestamp_lenient_preserve_naive_offset(value)
+    if dt is None:
+        return None
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        return dt.replace(tzinfo=UTC)
+    return dt
+
+
+def parse_report_timestamp_strict_utc_naive_as_utc(
+    value: str | datetime | None,
+) -> datetime:
+    """lifecycle/strategy_health-like strict UTC report timestamp parsing.
+
+    Missing/falsey and invalid inputs raise ValueError. Naive datetimes are
+    treated as UTC by attaching UTC tzinfo. Aware datetimes are normalized to UTC
+    with astimezone(UTC).
+    """
+
+    if not value:
+        raise ValueError("report timestamp is required")
+    try:
+        dt = _parse_iso_datetime(value)
+    except TimestampValidationError as exc:
+        raise ValueError(str(exc)) from exc
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
+def parse_report_timestamp_utc_or_none(value: str | datetime | None) -> datetime | None:
+    """source_quality-compatible canonical UTC report timestamp parsing.
+
+    Missing/falsey, invalid, and naive inputs return None. Valid aware inputs are
+    canonicalized through to_utc_iso8601, preserving its UTC normalization and
+    millisecond truncation behavior, then returned as UTC-aware datetimes.
+    """
+
+    if not value:
+        return None
+    try:
+        canonical = to_utc_iso8601(value)
+    except TimestampValidationError:
+        return None
+    return datetime.fromisoformat(canonical.replace("Z", "+00:00"))
