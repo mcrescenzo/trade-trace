@@ -266,118 +266,36 @@ def _make_source_attacher(target_kind: str):
     the source's `stance` column per PRD §4.5."""
 
     def _handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        source_id = require(args, "source_id")
-        target_id = require(args, "target_id")
-        idempotency_key = args.get("idempotency_key")
-        metadata_json = store_metadata_json(args)
         db = open_db_for_args(args)
         try:
-            stance_row = db.connection.execute(
-                "SELECT stance FROM sources WHERE id = ?", (source_id,)
-            ).fetchone()
-            if stance_row is None:
-                raise ToolError(
-                    ErrorCode.NOT_FOUND,
-                    f"source {source_id!r} not found",
-                    details={
-                        "entity_kind": "source",
-                        "source_id": source_id,
-                    },
-                )
-            # Target validation per bead trade-trace-l9q: refuse to attach
-            # a source to a row that does not exist. Without this guard the
-            # edge would point to a phantom id and the agent would see a
-            # successful write that produced an orphan edge.
-            target_meta = _SOURCE_ATTACH_TARGETS.get(target_kind)
-            if target_meta is None:
-                raise ToolError(
-                    ErrorCode.VALIDATION_ERROR,
-                    f"unsupported target_kind {target_kind!r}",
-                    details={
-                        "field": "target_kind",
-                        "value": target_kind,
-                        "allowed": sorted(_SOURCE_ATTACH_TARGETS),
-                    },
-                )
-            target_table = target_meta["table"]
-            target_row = db.connection.execute(
-                f"SELECT 1 FROM {target_table} WHERE id = ?", (target_id,)
-            ).fetchone()
-            if target_row is None:
-                raise ToolError(
-                    ErrorCode.NOT_FOUND,
-                    f"{target_kind} {target_id!r} not found",
-                    details={
-                        "entity_kind": target_kind,
-                        "target_id": target_id,
-                    },
-                )
-            stance = stance_row[0]
-            edge_type = stance if stance in ("supports", "contradicts") else "about"
             with UnitOfWork(db.connection) as uow:
-                replay = check_idempotency_replay(
-                    uow, event_type="source.attached",
-                    actor_id=ctx.actor_id, idempotency_key=idempotency_key,
-                )
-                if replay is not None:
-                    edge_id = replay["id"]
-                    emit_event(
-                        uow, event_type="source.attached",
-                        subject_kind="edge", subject_id=edge_id,
-                        payload={
-                            "id": edge_id, "source_id": source_id,
-                            "target_kind": target_kind, "target_id": target_id,
-                            "edge_type": edge_type,
-                        },
-                        actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
-                    )
-                    row = uow.conn.execute(
-                        "SELECT created_at FROM edges WHERE id = ?", (edge_id,)
-                    ).fetchone()
-                    return {"id": edge_id, "source_id": source_id,
-                            "target_kind": target_kind, "target_id": target_id,
-                            "edge_type": edge_type, "created_at": row[0]}
-
-                edge_id = args.get("id") or new_id("edg")
-                created_at = now_iso()
-                uow.execute(
-                    "INSERT INTO edges(id, source_kind, source_id, target_kind, target_id, "
-                    "edge_type, metadata_json, created_at, actor_id) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        edge_id, "source", source_id, target_kind, target_id, edge_type,
-                        metadata_json, created_at, ctx.actor_id,
-                    ),
-                )
-                _append_inline_source_to_target(
-                    uow.conn, target_kind, target_id,
-                    _inline_source_object(uow.conn, source_id, edge_type),
-                )
-                emit_event(
-                    uow, event_type="source.attached",
-                    subject_kind="edge", subject_id=edge_id,
-                    payload={
-                        "id": edge_id, "source_id": source_id,
-                        "target_kind": target_kind, "target_id": target_id,
-                        "edge_type": edge_type,
-                    },
-                    actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
-                )
+                return _source_attach_in_uow(args, ctx, uow, target_kind=target_kind)
         finally:
             db.close()
-        return {"id": edge_id, "source_id": source_id, "target_kind": target_kind,
-                "target_id": target_id, "edge_type": edge_type, "created_at": created_at}
 
     return _handler
 
 
-def _source_attach_to_memory_node_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) -> dict[str, Any]:
-    """Attach a source to a memory_node using an existing transaction."""
+def _source_attach_in_uow(
+    args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork, *, target_kind: str,
+) -> dict[str, Any]:
+    """Attach a source to a supported target using an existing transaction."""
 
     source_id = require(args, "source_id")
     target_id = require(args, "target_id")
     idempotency_key = args.get("idempotency_key")
     metadata_json = store_metadata_json(args)
+    target_meta = _SOURCE_ATTACH_TARGETS.get(target_kind)
+    if target_meta is None:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"unsupported target_kind {target_kind!r}",
+            details={
+                "field": "target_kind",
+                "value": target_kind,
+                "allowed": sorted(_SOURCE_ATTACH_TARGETS),
+            },
+        )
     stance_row = uow.conn.execute(
         "SELECT stance FROM sources WHERE id = ?", (source_id,),
     ).fetchone()
@@ -387,14 +305,19 @@ def _source_attach_to_memory_node_in_uow(args: dict[str, Any], ctx: ToolContext,
             f"source {source_id!r} not found",
             details={"entity_kind": "source", "source_id": source_id},
         )
+    # Target validation per bead trade-trace-l9q: refuse to attach a source to
+    # a row that does not exist. Without this guard the edge would point to a
+    # phantom id and the agent would see a successful write that produced an
+    # orphan edge.
+    target_table = target_meta["table"]
     target_row = uow.conn.execute(
-        "SELECT 1 FROM memory_nodes WHERE id = ?", (target_id,),
+        f"SELECT 1 FROM {target_table} WHERE id = ?", (target_id,),
     ).fetchone()
     if target_row is None:
         raise ToolError(
             ErrorCode.NOT_FOUND,
-            f"memory_node {target_id!r} not found",
-            details={"entity_kind": "memory_node", "target_id": target_id},
+            f"{target_kind} {target_id!r} not found",
+            details={"entity_kind": target_kind, "target_id": target_id},
         )
     stance = stance_row[0]
     edge_type = stance if stance in ("supports", "contradicts") else "about"
@@ -409,7 +332,7 @@ def _source_attach_to_memory_node_in_uow(args: dict[str, Any], ctx: ToolContext,
             subject_kind="edge", subject_id=edge_id,
             payload={
                 "id": edge_id, "source_id": source_id,
-                "target_kind": "memory_node", "target_id": target_id,
+                "target_kind": target_kind, "target_id": target_id,
                 "edge_type": edge_type,
             },
             actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
@@ -417,7 +340,7 @@ def _source_attach_to_memory_node_in_uow(args: dict[str, Any], ctx: ToolContext,
         row = uow.conn.execute(
             "SELECT created_at FROM edges WHERE id = ?", (edge_id,),
         ).fetchone()
-        return {"id": edge_id, "source_id": source_id, "target_kind": "memory_node",
+        return {"id": edge_id, "source_id": source_id, "target_kind": target_kind,
                 "target_id": target_id, "edge_type": edge_type, "created_at": row[0]}
 
     edge_id = args.get("id") or new_id("edg")
@@ -426,11 +349,11 @@ def _source_attach_to_memory_node_in_uow(args: dict[str, Any], ctx: ToolContext,
         "INSERT INTO edges(id, source_kind, source_id, target_kind, target_id, "
         "edge_type, metadata_json, created_at, actor_id) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (edge_id, "source", source_id, "memory_node", target_id, edge_type,
+        (edge_id, "source", source_id, target_kind, target_id, edge_type,
          metadata_json, created_at, ctx.actor_id),
     )
     _append_inline_source_to_target(
-        uow.conn, "memory_node", target_id,
+        uow.conn, target_kind, target_id,
         _inline_source_object(uow.conn, source_id, edge_type),
     )
     emit_event(
@@ -438,13 +361,19 @@ def _source_attach_to_memory_node_in_uow(args: dict[str, Any], ctx: ToolContext,
         subject_kind="edge", subject_id=edge_id,
         payload={
             "id": edge_id, "source_id": source_id,
-            "target_kind": "memory_node", "target_id": target_id,
+            "target_kind": target_kind, "target_id": target_id,
             "edge_type": edge_type,
         },
         actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
     )
-    return {"id": edge_id, "source_id": source_id, "target_kind": "memory_node",
+    return {"id": edge_id, "source_id": source_id, "target_kind": target_kind,
             "target_id": target_id, "edge_type": edge_type, "created_at": created_at}
+
+
+def _source_attach_to_memory_node_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) -> dict[str, Any]:
+    """Attach a source to a memory_node using an existing transaction."""
+
+    return _source_attach_in_uow(args, ctx, uow, target_kind="memory_node")
 
 
 # Hand-crafted JSON schema for source.add per bead trade-trace-2ya5.
