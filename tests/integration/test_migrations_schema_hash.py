@@ -31,10 +31,10 @@ from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
 
 EXPECTED_DDL_HASH = (
-    "1f6b940448af7561ff3828cda1eeb61013d763292ae5ef85f3fdd4e2dc67788a"
+    "80cdcf0352d96e6626ced4d86c009abb078d96bece4ad6b5944dd3ea0750a6d4"
 )
 EXPECTED_INFO_HASH = (
-    "118d4b250037bc7ce92b788dd2ef4734276bfd1d38e1ddfbce26b8354324c72a"
+    "ac4c4b68cef598b01a774c5e836fbbc952356b198a047c09d0cefb54a93d93bf"
 )
 
 

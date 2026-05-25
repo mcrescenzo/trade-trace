@@ -46,6 +46,9 @@ from trade_trace.storage.migrations.m012_markets import _migration_012_markets
 from trade_trace.storage.migrations.m013_forecast_snapshot_anchor import (
     _migration_013_forecast_snapshot_anchor,
 )
+from trade_trace.storage.migrations.m014_pm_forecast_memory_transition import (
+    _migration_014_pm_forecast_memory_transition,
+)
 
 MIGRATIONS: list[Migration] = [
     _migration_001_meta_table,
@@ -61,6 +64,7 @@ MIGRATIONS: list[Migration] = [
     _migration_011_agent_continuity_provenance,
     _migration_012_markets,
     _migration_013_forecast_snapshot_anchor,
+    _migration_014_pm_forecast_memory_transition,
 ]
 
 
@@ -92,6 +96,7 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
     (11, []),
     (12, ["markets"]),
     (13, ["forecast_snapshot_anchor"]),
+    (14, []),
 ]
 
 
@@ -135,6 +140,13 @@ _MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
     }),
     (12, {}),
     (13, {}),
+    (14, {
+        "forecasts": [
+            "market_id", "rationale_body", "falsification_criteria",
+            "updated_rationale_at", "updated_rationale_by", "probability",
+        ],
+        "memory_nodes": ["metadata_json"],
+    }),
 ]
 
 
@@ -159,6 +171,7 @@ __all__ = [
     "_migration_011_agent_continuity_provenance",
     "_migration_012_markets",
     "_migration_013_forecast_snapshot_anchor",
+    "_migration_014_pm_forecast_memory_transition",
     "_require_fts5",
     "apply_pending_migrations",
     "current_version",

@@ -42,6 +42,7 @@ TIMESTAMP_API_GOVERNED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
         ("forecasts", "created_at"),
         ("forecasts", "invalidated_at"),
         ("forecasts", "resolution_at"),
+        ("forecasts", "updated_rationale_at"),
         ("forecasts", "valid_from"),
         ("forecasts", "valid_to"),
         ("forecast_snapshot_anchor", "created_at"),

@@ -166,6 +166,89 @@ def test_migration_013_forecast_snapshot_anchor_schema(tmp_path: Path):
         db.close()
 
 
+def test_migration_014_pm_forecast_memory_transition_schema(tmp_path: Path):
+    db = _open(tmp_path)
+    try:
+        apply_pending_migrations(db.connection)
+
+        assert {
+            "market_id", "rationale_body", "falsification_criteria",
+            "invalidated_at", "invalidated_by", "updated_rationale_at",
+            "updated_rationale_by", "probability",
+        }.issubset(_columns(db.connection, "forecasts"))
+        assert "metadata_json" in _columns(db.connection, "memory_nodes")
+        assert "meta_json" in _columns(db.connection, "memory_nodes")
+        assert "idx_forecasts_market" in _index_names(db.connection, "forecasts")
+
+        sql = _table_sql(db.connection, "forecasts")
+        assert "market_id TEXT REFERENCES markets(id)" in sql
+        assert "probability REAL CHECK (probability IS NULL OR (probability >= 0.0 AND probability <= 1.0))" in sql
+
+        db.connection.execute(
+            "INSERT INTO venues(id, name, kind, created_at, actor_id) VALUES ('v_bad_prob', 'manual', 'manual', '2026-05-25T00:00:00Z', 'agent:default')"
+        )
+        db.connection.execute(
+            "INSERT INTO instruments(id, venue_id, title, asset_class, created_at, actor_id) VALUES ('i_bad_prob', 'v_bad_prob', 'Test', 'prediction_market', '2026-05-25T00:00:00Z', 'agent:default')"
+        )
+        db.connection.execute(
+            "INSERT INTO theses(id, instrument_id, side, body, created_at, actor_id) VALUES ('t_bad_prob', 'i_bad_prob', 'yes', 'body', '2026-05-25T00:00:00Z', 'agent:default')"
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            db.connection.execute(
+                "INSERT INTO forecasts(id, thesis_id, kind, probability, created_at, actor_id) VALUES ('f_bad_prob', 't_bad_prob', 'binary', 1.2, '2026-05-25T00:00:00Z', 'agent:default')"
+            )
+    finally:
+        db.close()
+
+
+def test_migration_014_backfills_only_deterministic_forecast_and_memory_fields(tmp_path: Path):
+    db = _open(tmp_path)
+    try:
+        apply_pending_migrations(db.connection, target_version=13)
+        db.connection.executescript(
+            """
+            INSERT INTO venues(id, name, kind, created_at, actor_id)
+                VALUES ('v_1', 'manual', 'manual', '2026-05-25T00:00:00Z', 'agent:default');
+            INSERT INTO instruments(id, venue_id, title, asset_class, created_at, actor_id)
+                VALUES ('m_1', 'v_1', 'Mapped', 'prediction_market', '2026-05-25T00:00:00Z', 'agent:default'),
+                       ('i_unmapped', 'v_1', 'Unmapped', 'prediction_market', '2026-05-25T00:00:00Z', 'agent:default');
+            INSERT INTO markets(id, source, external_id, state, mechanism, bound_via, created_at, actor_id)
+                VALUES ('m_1', 'manual', 'm_1', 'open', 'clob', 'manual', '2026-05-25T00:00:00Z', 'agent:default');
+            INSERT INTO theses(id, instrument_id, side, body, falsification_criteria, created_at, actor_id)
+                VALUES ('t_1', 'm_1', 'yes', 'mapped body', 'mapped falsifier', '2026-05-25T00:00:00Z', 'agent:default'),
+                       ('t_2', 'i_unmapped', 'yes', 'unmapped body', 'unmapped falsifier', '2026-05-25T00:00:00Z', 'agent:default');
+            INSERT INTO forecasts(id, thesis_id, kind, yes_label, created_at, actor_id)
+                VALUES ('f_1', 't_1', 'binary', 'YES', '2026-05-25T00:00:00Z', 'agent:default'),
+                       ('f_2', 't_2', 'binary', 'YES', '2026-05-25T00:00:00Z', 'agent:default');
+            INSERT INTO forecast_outcomes(id, forecast_id, outcome_label, probability)
+                VALUES ('fo_1', 'f_1', 'yes', 0.64),
+                       ('fo_2', 'f_1', 'no', 0.36),
+                       ('fo_3', 'f_2', 'no', 0.70);
+            INSERT INTO memory_nodes(id, node_type, title, body, meta_json, valid_from, created_at, actor_id)
+                VALUES ('mem_1', 'observation', 'Memory', 'Body', '{"legacy": true}', '2026-05-25T00:00:00Z', '2026-05-25T00:00:00Z', 'agent:default');
+            """
+        )
+
+        apply_pending_migrations(db.connection)
+
+        row = db.connection.execute(
+            "SELECT market_id, rationale_body, falsification_criteria, probability FROM forecasts WHERE id = 'f_1'"
+        ).fetchone()
+        assert tuple(row) == ("m_1", "mapped body", "mapped falsifier", 0.64)
+
+        row = db.connection.execute(
+            "SELECT market_id, rationale_body, falsification_criteria, probability FROM forecasts WHERE id = 'f_2'"
+        ).fetchone()
+        assert tuple(row) == (None, "unmapped body", "unmapped falsifier", None)
+
+        row = db.connection.execute(
+            "SELECT meta_json, metadata_json FROM memory_nodes WHERE id = 'mem_1'"
+        ).fetchone()
+        assert tuple(row) == ('{"legacy": true}', '{"legacy": true}')
+    finally:
+        db.close()
+
+
 def test_apply_is_idempotent(tmp_path: Path):
     db = _open(tmp_path)
     try:
