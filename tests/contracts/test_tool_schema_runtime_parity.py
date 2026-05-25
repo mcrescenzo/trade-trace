@@ -12,11 +12,16 @@ an empty payload when the runtime supports defaults.
 
 from __future__ import annotations
 
+import io
+import json
 import subprocess
 import sys
+from contextlib import redirect_stdout
 from pathlib import Path
 
+from trade_trace.cli import main as cli_main
 from trade_trace.core import default_registry
+from trade_trace.mcp_server import mcp_call
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -120,6 +125,56 @@ def test_report_opportunity_schema_treats_defaulted_args_as_optional():
             f"{advertised!r} is a documented knob; advertise it in "
             "properties even though it's optional."
         )
+
+
+def test_report_opportunity_minimum_coverage_schema_matches_runtime_enum():
+    schema = _schema_for("report.opportunity")
+    enum = schema["properties"]["minimum_coverage"].get("enum")
+
+    assert enum == ["sparse", "partial", "complete"], (
+        "report.opportunity runtime accepts sparse/partial/complete; "
+        "the advertised schema must expose exactly those values in order."
+    )
+
+
+def test_report_opportunity_advertised_minimum_coverage_values_cli_mcp_parity(tmp_path):
+    schema = _schema_for("report.opportunity")
+    advertised_values = schema["properties"]["minimum_coverage"]["enum"]
+    home = tmp_path / "home"
+    init = mcp_call("journal.init", {"home": str(home)}, actor_id="agent:default")
+    assert init.ok, init
+
+    for minimum_coverage in advertised_values:
+        mcp_env = mcp_call(
+            "report.opportunity",
+            {"home": str(home), "minimum_coverage": minimum_coverage},
+            actor_id="agent:default",
+            request_id=f"req-mcp-{minimum_coverage}",
+        ).model_dump(mode="json", exclude_none=True)
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = cli_main(
+                [
+                    "--actor-id",
+                    "agent:default",
+                    "--request-id",
+                    f"req-cli-{minimum_coverage}",
+                    "report",
+                    "opportunity",
+                    "--home",
+                    str(home),
+                    "--minimum-coverage",
+                    minimum_coverage,
+                ]
+            )
+        cli_env = json.loads(buf.getvalue().strip().splitlines()[-1])
+
+        assert mcp_env["ok"], mcp_env
+        assert rc == 0, cli_env
+        assert cli_env["ok"], cli_env
+        assert cli_env["meta"]["tool"] == mcp_env["meta"]["tool"] == "report.opportunity"
+        assert cli_env["data"] == mcp_env["data"]
 
 
 def test_instrument_add_schema_advertises_optional_audit_fields():

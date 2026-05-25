@@ -250,7 +250,7 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
     "report.opportunity": _schema(
         {
             "filter": _FILTER_PROP,
-            "minimum_coverage": {"type": "string", "enum": ["sparse", "partial", "full"]},
+            "minimum_coverage": {"type": "string", "enum": ["sparse", "partial", "complete"]},
             "max_records": {"type": "integer", "minimum": 1},
             "include_labels": {"type": "boolean"},
             "min_sample": {"type": "integer", "minimum": 1},
