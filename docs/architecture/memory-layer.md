@@ -207,7 +207,7 @@ So the agent can triangulate (e.g., "BM25 surfaced this node, semantic didn't â€
 
 - **`SEMANTIC`** â€” vector similarity using the local ONNX/tokenizers BGE-small path when the operator has both installed the `[embeddings]` extra and imported verified local model assets. There is no automatic model download.
   - `tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` enables use of local assets if present. Missing assets/dependencies degrade semantic recall; journal operations continue.
-  - `tt model import --path <path-to-bge-small> --idempotency-key <uuid> --confirm` copies a pre-staged model directory after SHA-256/size verification against Trade Trace-pinned lock data. This is the only model-staging path and performs zero outbound network calls.
+  - `tt model import --src <path-to-bge-small> --idempotency-key <uuid> --confirm` copies a pre-staged model directory after SHA-256/size verification against Trade Trace-pinned lock data. This is the only model-staging path and performs zero outbound network calls.
   - `tt model warm` attempts a dummy local embed and returns `available=false` if assets/dependencies are absent.
   - Once local embeddings are available, `memory.recall` can include SEMANTIC in the enabled strategies.
 
@@ -276,7 +276,7 @@ The supported local path is explicit and air-gapped:
 2. Pre-stage the pinned `BAAI/bge-small-en-v1.5` assets outside Trade Trace.
 3. Import those assets:
    ```bash
-   tt model import --path <path-to-bge-small> --idempotency-key <uuid> --confirm
+   tt model import --src <path-to-bge-small> --idempotency-key <uuid> --confirm
    ```
 4. Enable local provider use:
    ```bash

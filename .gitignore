@@ -37,11 +37,3 @@ trade-trace.sqlite
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
-# bd worktree
-g1-policy-lifecycle/
-# bd worktree
-g4-playbook-predicates/
-# bd worktree
-g3-policy-candidates/
-# bd worktree
-g5-predicate-adherence/

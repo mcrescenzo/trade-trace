@@ -17,6 +17,7 @@ DOC_PATHS = [
     ROOT / "docs" / "AGENT_GUIDE.md",
     ROOT / "docs" / "PRD.md",
     ROOT / "docs" / "architecture" / "reports.md",
+    ROOT / "docs" / "architecture" / "security.md",
     ROOT / "docs" / "architecture" / "memory-layer.md",
     ROOT / "docs" / "architecture" / "contracts.md",
     ROOT / "docs" / "architecture" / "operability.md",
@@ -24,6 +25,7 @@ DOC_PATHS = [
 STALE_SNIPPETS = [
     "journal config_set embeddings.provider",
     "journal restore --from",
+    "tt model import --path",
     "model import <path>",
     "memory.reflect(target, body, *, importance?, derived_from?",
 ]

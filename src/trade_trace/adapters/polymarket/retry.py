@@ -24,7 +24,7 @@ def retry_after_delay(retry_after: str | None, computed_backoff: float) -> float
         parsed = float(retry_after.strip())
     except (TypeError, ValueError):
         return computed_backoff
-    return max(parsed, computed_backoff)
+    return min(RETRY_MAX_SECONDS, max(parsed, computed_backoff))
 
 
 def retry_policy_kwargs() -> dict[str, object]:
