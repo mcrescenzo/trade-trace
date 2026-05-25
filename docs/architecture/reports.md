@@ -206,6 +206,161 @@ Every report returns an envelope of this shape:
 }
 ```
 
+### 3.0 Shared backend report-contract conventions
+
+These conventions are the reusable contract for every backend report,
+including period review and process analytics surfaces. They define the
+stable JSON shape that agents can parse before any report-specific metric
+schema is considered.
+
+**Versioning and compatibility.** Every report envelope MUST carry
+`meta.contract_version`. MVP report contracts use `"1.0"`. Additive,
+optional fields are backward-compatible within the same major version;
+renaming/removing fields, changing field types, changing metric meanings,
+or changing unsupported-data semantics requires a major version bump and a
+deprecation window. Report-specific `data.contract_version` MAY be present
+when the payload is embedded elsewhere, but `meta.contract_version` is the
+transport-level authority.
+
+**Requested vs applied scope.** Reports MUST distinguish caller intent from
+the actual computation:
+
+- `data.requested_scope` (or a report-specific equivalent such as
+  `data.filter` for legacy reports) echoes the caller's requested
+  `ReportFilter`, requested sections, features, groupings, limits, and
+  cursors after schema validation.
+- `data.applied_scope` / `data.applied_filter` records the exact filter and
+  report options used for every aggregate. If the report accepts only a
+  subset of the request, the applied scope MUST be narrower-or-equal to the
+  requested scope and the unsupported portions MUST be listed explicitly.
+- A report MUST NOT return a global report while echoing a scoped filter.
+  If a requested filter path cannot be honored, reject it or emit
+  machine-readable unsupported metadata; never silently ignore it.
+
+**Filter, section, and feature support.** Each report MUST expose support
+metadata either in success `data` or validation-error `error.details`:
+
+- `supported_filter_paths`: canonical dot paths the report can actually
+  apply, such as `actors.actor_id` or `time_window.decision_at_gte`.
+- `unsupported_filter_paths`: requested non-empty paths that were not
+  applied. Current strict reports reject these with `VALIDATION_ERROR`;
+  future exploratory reports may return `ok: true` only if every ignored
+  path is present here and no aggregate claims to reflect it.
+- `supported_sections` / `unsupported_sections`: requested report sections
+  that can or cannot be computed.
+- `supported_features` / `unsupported_features`: requested analytic
+  features, grouping dimensions, attribution modes, model panels, or
+  diagnostics that can or cannot be computed.
+
+Unsupported and insufficient-data entries are machine-readable objects, not
+free text only. Minimum shape:
+
+```jsonc
+{
+  "path": "decision.tags_all",          // or section/feature name
+  "reason_code": "unsupported_filter_path",
+  "message": "report.period_review cannot apply decision.tags_all",
+  "requested_value": ["liquidity-ignored"],
+  "applied": false
+}
+```
+
+**Mandatory unsupported-analytics invariant.** If a report cannot
+truthfully compute a requested section, feature, metric, grouping, or
+filter, it MUST emit machine-readable `unsupported_*` or
+`insufficient_data` metadata instead of silently omitting the item,
+zero-filling it, fabricating an empty aggregate, or returning an unscoped
+global result while echoing the requested scope.
+
+**Caveats, low-N, and coverage.** Reports MUST make reliability limits
+parseable:
+
+- `caveat_codes`: stable strings for caveats such as
+  `LOW_SAMPLE_SIZE`, `PARTIAL_COVERAGE`, `REDACTED_SOURCE_CONTENT`,
+  `LATE_RECORDED_EXCLUDED`, `LOCAL_ROWS_ONLY`, or
+  `DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM`.
+- `sample_warning`: human-readable warning mirrored in `meta.sample_warning`
+  when a report-level sample threshold is missed.
+- `coverage`: per-section/per-metric counts such as
+  `{eligible_count, included_count, missing_count, coverage_pct,
+  denominator_kind}`. Low-N and missing-coverage conditions MUST be caveats,
+  not hidden in prose.
+- If metrics are suppressed because N or coverage is too low, emit the
+  metric key with `null` plus `insufficient_data` metadata, or place the
+  metric under `unsupported_features`; do not use `0` as a placeholder for
+  unknown/uncomputed values.
+
+**Contributing IDs.** Every aggregate metric MUST include the contributing
+record IDs needed to reproduce it, following the existing
+`record_ids.{decisions,forecasts,outcomes,sources,...}` convention. If IDs
+cannot be made available, the report MUST emit a machine-readable reason:
+
+```jsonc
+{
+  "metric": "mean_brier",
+  "record_ids_unavailable": {
+    "reason_code": "not_materialized_in_read_model",
+    "record_kind": "forecast_scores",
+    "reproducible_by_filter": true,
+    "filter": { /* exact applied sub-filter */ }
+  }
+}
+```
+
+**Stable JSON shape.** Reports SHOULD prefer stable keys with `null`, empty
+arrays, or explicit status objects over shape-shifting omission. Arrays MUST
+have deterministic ordering. Examples in this document are contract
+examples: new reports should preserve the same envelope, support metadata,
+caveat, coverage, contributing-ID, truncation, and boundary fields even when
+their metrics differ.
+
+**Truncation and cursoring.** Truncation MUST be explicit at the smallest
+affected level (`groups[].truncated`, section `truncated`, and/or
+`meta.truncated`). `next_cursor` is opaque and stable for the same database
+snapshot, request, and ordering. Truncated ID lists MUST still include the
+applied sub-filter that can enumerate the full set. Cursors paginate result
+presentation only; they MUST NOT change the metric denominator unless the
+report explicitly documents page-local metrics.
+
+**Redaction and source handling.** Report source projections follow
+`review.bundle` §5.3: `sensitive` sources are omitted with caveat codes and
+counts; `redacted` sources keep provenance metadata but strip content fields;
+`none` sources may include content after the secret-pattern scan. Metrics
+that depend on source text MUST declare redacted/sensitive coverage and emit
+`insufficient_data` when redaction prevents truthful computation.
+
+**Local read-only boundaries.** Backend reports are deterministic analyses
+over local stored rows. They MUST NOT fetch external market/source/outcome
+data, call brokers, inspect wallets, place/cancel orders, execute trades,
+schedule alerts, generate trading advice, emit buy/sell/hold signals, claim
+alpha/edge, or make profit claims. Reports may describe historical local
+records and process diagnostics only.
+
+Example success skeleton for a future scoped report:
+
+```jsonc
+{
+  "ok": true,
+  "data": {
+    "requested_scope": {"filter": {"actors": {"agent_id": ["agent-a"]}}, "sections": ["coverage", "mistakes"]},
+    "applied_scope": {"filter": {"actors": {"agent_id": ["agent-a"]}}, "sections": ["coverage"]},
+    "supported_filter_paths": ["actors.agent_id", "time_window.decision_at_gte"],
+    "unsupported_filter_paths": [],
+    "supported_sections": ["coverage"],
+    "unsupported_sections": [
+      {"section": "mistakes", "reason_code": "insufficient_scored_forecasts", "minimum": 20, "actual": 3, "applied": false}
+    ],
+    "supported_features": ["group_by_agent"],
+    "unsupported_features": [],
+    "coverage": {"eligible_count": 12, "included_count": 12, "missing_count": 0, "coverage_pct": 100.0, "denominator_kind": "decisions"},
+    "caveat_codes": ["LOCAL_ROWS_ONLY", "LOW_SAMPLE_SIZE"],
+    "summary": {"sample_size": 12, "sample_warning": "only 3 scored forecasts; mistakes panel requires 20"},
+    "groups": [{"key": "agent-a", "metrics": {"decision_count": 12}, "record_ids": {"decisions": ["dec_..."]}, "truncated": false}]
+  },
+  "meta": {"tool": "report.period_review", "contract_version": "1.0", "truncated": false, "next_cursor": null}
+}
+```
+
 ### 3.1 Drill-down rule
 
 A report MUST populate `groups[].record_ids` for every metric it
