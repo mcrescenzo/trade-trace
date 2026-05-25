@@ -15,17 +15,17 @@ from .common import (
     _propagate_report_meta,
     _unsupported_filter_to_tool_error,
     open_db_for_args,
-    report_calibration_integrity,
-    report_decision_velocity,
-    report_filter_validation_to_tool_error,
+    report_amm_slippage,
     report_calibration_anchored,
+    report_calibration_integrity,
     report_calibration_terminal,
     report_calibration_trajectory,
-    report_amm_slippage,
+    report_decision_velocity,
+    report_filter_validation_to_tool_error,
+    report_forecast_diagnostics,
     report_market_lifecycle,
     report_resolution_quality,
     report_time_decay_sharpening,
-    report_forecast_diagnostics,
     report_unscored_forecasts,
 )
 
@@ -68,10 +68,11 @@ def _report_calibration_anchored(args: dict[str, Any], ctx: ToolContext) -> dict
     db = open_db_for_args(args)
     try:
         try:
+            min_sample = args.get("min_sample")
             data = report_calibration_anchored(
                 db.connection,
                 raw_filter=args.get("filter"),
-                min_sample=args.get("min_sample") if args.get("min_sample") is not None else 20,
+                min_sample=int(min_sample) if min_sample is not None else 20,
             )
         except ValidationError as exc:
             raise report_filter_validation_to_tool_error(exc) from exc
@@ -87,10 +88,11 @@ def _report_calibration_terminal(args: dict[str, Any], ctx: ToolContext) -> dict
     db = open_db_for_args(args)
     try:
         try:
+            min_sample = args.get("min_sample")
             data = report_calibration_terminal(
                 db.connection,
                 raw_filter=args.get("filter"),
-                min_sample=args.get("min_sample") if args.get("min_sample") is not None else 20,
+                min_sample=int(min_sample) if min_sample is not None else 20,
             )
         except ValidationError as exc:
             raise report_filter_validation_to_tool_error(exc) from exc

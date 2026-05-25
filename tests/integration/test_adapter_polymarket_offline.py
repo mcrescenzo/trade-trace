@@ -5,11 +5,11 @@ from typing import Any
 
 import httpx
 
-from trade_trace.mcp_server import mcp_call
 from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.adapters.polymarket.config import PolymarketConfig
 from trade_trace.adapters.polymarket.errors import AdapterError
 from trade_trace.adapters.polymarket.retry import retry_policy_kwargs
+from trade_trace.mcp_server import mcp_call
 from trade_trace.tools.adapter_polymarket import _market_cache_hit
 
 
@@ -137,10 +137,10 @@ class _FakeResponse:
 
 
 class _FakeHttpClient:
-    def __init__(self, owner: "_FakePolymarketClient") -> None:
+    def __init__(self, owner: _FakePolymarketClient) -> None:
         self.owner = owner
 
-    def __enter__(self) -> "_FakeHttpClient":
+    def __enter__(self) -> _FakeHttpClient:
         return self
 
     def __exit__(self, *_exc: object) -> None:

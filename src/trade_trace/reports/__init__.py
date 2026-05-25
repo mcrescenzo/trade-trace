@@ -22,13 +22,6 @@ from trade_trace.reports.calibration import (
     report_calibration_anchored,
     report_calibration_terminal,
 )
-from trade_trace.reports.pm_native import (
-    report_amm_slippage,
-    report_calibration_trajectory,
-    report_market_lifecycle,
-    report_resolution_quality,
-    report_time_decay_sharpening,
-)
 from trade_trace.reports.coach import (
     FORBIDDEN_PHRASES,
     TradingAdvicePhraseError,
@@ -50,6 +43,13 @@ from trade_trace.reports.opportunity import (
 from trade_trace.reports.playbook_adherence import (
     DEFAULT_ADHERENCE_MIN_SAMPLE,
     report_playbook_adherence,
+)
+from trade_trace.reports.pm_native import (
+    report_amm_slippage,
+    report_calibration_trajectory,
+    report_market_lifecycle,
+    report_resolution_quality,
+    report_time_decay_sharpening,
 )
 from trade_trace.reports.pnl import report_pnl
 from trade_trace.reports.policy_candidates import report_policy_candidates

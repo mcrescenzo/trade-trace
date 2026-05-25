@@ -11,7 +11,7 @@ Trade Trace v0.0.2 is a prediction-market-only, local-first release candidate. T
 
 ## Required gates before a v0.0.2 tag
 
-Run from a clean checkout and record the candidate SHA plus command output.
+Run from a clean checkout and record the candidate SHA plus command output. Do not paste stale dated pytest counts into release notes; record the fresh current-HEAD result for each gate.
 
 1. Install dev + embeddings extras:
    ```bash
@@ -37,7 +37,7 @@ Run from a clean checkout and record the candidate SHA plus command output.
    ```
 6. Offline/manual market-bind smoke, no adapter/network:
    ```bash
-   tt market bind --external-id polymarket:test-condition --title "Test PM market" --idempotency-key release:test-market
+   tt market bind --external-id polymarket:test-condition --source manual --mechanism order_book --state open
    ```
 7. Manual live-adapter HITL gate (not CI, not default): only if the owner supplies a disposable Polygon RPC URL and real public Polymarket condition. Configure in a throwaway `$TRADE_TRACE_HOME`, run `market.bind`, `snapshot.fetch`, and `outcome.fetch` when applicable, and record sanitized evidence only. If not supplied, explicitly record: live-adapter smoke not exercised; mocked/offline adapter coverage only.
 8. Documentation tests:

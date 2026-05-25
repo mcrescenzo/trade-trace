@@ -83,7 +83,7 @@ Optional vector recall support is available from source with:
 python3 -m pip install -e '.[embeddings]'
 ```
 
-The embeddings extra adds the optional local ONNX/tokenizers runtime. It does not enable vectors, download model weights, or send memory text to an API provider. In v0.0.2 the supported provider enum is `none|local`; local model assets must be imported explicitly with `tt model import --path <pre-staged-dir> --confirm`, and remote/API embedding providers are unsupported.
+The embeddings extra adds the optional local ONNX/tokenizers runtime. It does not enable vectors, download model weights, or send memory text to an API provider. In v0.0.2 the supported provider enum is `none|local`; local model assets must be imported explicitly with `tt --confirm model import --src <pre-staged-dir> --idempotency-key <key>`, and remote/API embedding providers are unsupported.
 
 Intel Mac note: current `onnxruntime` releases do not ship macOS x86_64 wheels. Intel Mac users should either use BM25 recall or manually pin a compatible older `onnxruntime` (for example 1.19) in their local environment.
 
@@ -130,7 +130,7 @@ The CLI mirrors the MCP catalog by replacing dots in MCP tool names with spaces 
 tt journal init
 tt tool schema
 tt tool schema --tool forecast.add
-tt market bind --external-id polymarket:event-123 --title "Example market" --idempotency-key run-001:market:event-123
+tt market bind --external-id polymarket:event-123 --source manual --mechanism order_book --state open
 ```
 
 Use `tool.schema` as the source of truth for exact fields, enums, examples, dry-run support, and required metadata. For a complete agent loop, read [`docs/AGENT_GUIDE.md`](./docs/AGENT_GUIDE.md).

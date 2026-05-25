@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from trade_trace.adapters.polymarket.config import load_config
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
@@ -22,7 +23,6 @@ from trade_trace.tools._helpers import (
     require,
     store_metadata_json,
 )
-from trade_trace.adapters.polymarket.config import load_config
 from trade_trace.tools.adapter_polymarket import _upsert_market
 from trade_trace.tools.errors import ToolError
 

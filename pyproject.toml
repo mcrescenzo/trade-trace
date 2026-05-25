@@ -92,5 +92,9 @@ ignore = ["E501"]
 testpaths = ["tests"]
 addopts = "-ra"
 
+[[tool.mypy.overrides]]
+module = "jsonschema"
+ignore_missing_imports = true
+
 [tool.setuptools.dynamic]
 version = {attr = "trade_trace.version.__version__"}

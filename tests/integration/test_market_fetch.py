@@ -9,7 +9,6 @@ from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope
 from trade_trace.mcp_server import mcp_call
 
-
 FIXTURES = Path(__file__).parent / "fixtures" / "polymarket"
 REQUIRED_FIXTURES = {
     "market_binary_open.json",

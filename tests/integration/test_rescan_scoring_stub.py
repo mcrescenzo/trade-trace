@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
 import sqlite3
+from pathlib import Path
 
 import pytest
+
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage.paths import db_path

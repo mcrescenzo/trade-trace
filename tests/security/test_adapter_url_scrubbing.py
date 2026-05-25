@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from trade_trace.adapters.polymarket.errors import error_details, scrub_endpoint, structured_response_log
+from trade_trace.adapters.polymarket.errors import (
+    error_details,
+    scrub_endpoint,
+    structured_response_log,
+)
 
 
 def test_scrub_endpoint_removes_scheme_credentials_query_fragment_and_key():

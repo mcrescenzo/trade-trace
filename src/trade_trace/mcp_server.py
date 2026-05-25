@@ -63,7 +63,6 @@ def mcp_tool_specs(
         include_admin=include_admin,
         include_legacy=include_legacy,
     ):
-        name = registration.name
         metadata = registration.metadata()
         description = registration.description
         if metadata.get("usage_summary"):

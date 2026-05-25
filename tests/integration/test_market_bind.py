@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from trade_trace.mcp_server import mcp_call, mcp_tool_specs
 from trade_trace.contracts.envelope import SuccessEnvelope
+from trade_trace.mcp_server import mcp_call, mcp_tool_specs
 
 
 def _bind_args(home: str) -> dict[str, object]:

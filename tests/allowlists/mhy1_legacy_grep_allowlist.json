@@ -276,6 +276,15 @@
       "reason": "Report now prefers memory_nodes.metadata_json and falls back to meta_json for legacy rows."
     },
     {
+      "pattern": "src/trade_trace/reports/pm_native.py",
+      "terms": [
+        "instrument_id",
+        "venue_id"
+      ],
+      "category": "pm_native_schema_compatibility",
+      "reason": "PM-native reports expose market IDs publicly while retaining legacy ReportFilter aliases and SQLite compatibility joins to snapshots, decisions, outcomes, and instrument-backed venue filters until destructive schema cleanup."
+    },
+    {
       "pattern": "src/trade_trace/reports/recall_receipts.py",
       "terms": [
         "instrument_id"
@@ -583,6 +592,15 @@
       ],
       "category": "legacy_tool_compatibility",
       "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/adapter_polymarket.py",
+      "terms": [
+        "instrument_id",
+        "venue_id"
+      ],
+      "category": "pm_native_adapter_schema_compatibility",
+      "reason": "Adapter writes PM-native markets but must create compatibility instrument/venue rows and use legacy snapshot/outcome columns and payload aliases while those storage tables retain instrument_id and venue_id."
     },
     {
       "pattern": "src/trade_trace/tools/memory.py",

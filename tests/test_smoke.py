@@ -7,7 +7,7 @@ def test_package_importable():
     import trade_trace
 
     assert isinstance(trade_trace.__version__, str)
-    assert trade_trace.__version__
+    assert trade_trace.__version__ == "0.0.2"
 
 
 def test_models_importable():

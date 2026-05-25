@@ -530,6 +530,7 @@ def test_diagnostic_count_reflects_true_total_when_samples_capped(home):
 
 def test_attach_dual_writes_inline_sources_for_forecast_decision_and_memory_node(home):
     import json
+
     from trade_trace.storage import open_database
     from trade_trace.storage.paths import db_path
 

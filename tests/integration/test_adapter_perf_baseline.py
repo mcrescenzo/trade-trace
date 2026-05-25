@@ -27,7 +27,7 @@ class _FakeResponse:
 
 
 class _FakeHttpClient:
-    def __enter__(self) -> "_FakeHttpClient":
+    def __enter__(self) -> _FakeHttpClient:
         return self
 
     def __exit__(self, *_exc: object) -> None:

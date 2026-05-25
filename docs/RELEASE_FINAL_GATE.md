@@ -27,7 +27,11 @@ Use `docs/RELEASE_CHECKLIST.md` as the canonical command checklist. Before any t
 
 ## Safety publication rule
 
-Do not publish from stale dated proof. If an older proof file lists historical pytest counts, package names, or tag names, treat it as historical context only. The release candidate is proven only by current-head command output and fresh package/wheel smoke.
+Do not publish from stale dated proof. If an older proof file lists historical pytest counts, package names, or tag names, treat it as a historical snapshot, not a live/current proof. The release candidate is proven only by current-head command output and fresh package/wheel smoke.
+
+## Repo-public audit evidence
+
+`docs/audits/` is intentionally tracked for curated audit evidence. Those files are repo-public and may be cited as historical, sanitized support material, but they do not replace the fresh current-head release gates above.
 
 ## Approval rule
 

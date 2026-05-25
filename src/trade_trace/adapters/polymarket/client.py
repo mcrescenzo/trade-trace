@@ -7,14 +7,14 @@ adapter config is disabled or required endpoint config is missing.
 
 from __future__ import annotations
 
-from typing import Any
 import random
 import time
+from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
 
-from trade_trace.adapters.polymarket.config import PolymarketConfig, USER_AGENT
+from trade_trace.adapters.polymarket.config import USER_AGENT, PolymarketConfig
 from trade_trace.adapters.polymarket.errors import AdapterError, classify_http_status, error_details
 from trade_trace.adapters.polymarket.retry import (
     RETRY_MAX_SECONDS,

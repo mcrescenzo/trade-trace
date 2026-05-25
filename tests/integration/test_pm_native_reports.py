@@ -7,8 +7,6 @@ import pytest
 from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
-from trade_trace.storage import open_database
-from trade_trace.storage.paths import db_path
 
 
 @pytest.fixture

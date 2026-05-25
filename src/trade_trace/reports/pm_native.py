@@ -8,9 +8,8 @@ state for agent continuity and calibration review.
 
 from __future__ import annotations
 
-import math
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
@@ -19,7 +18,6 @@ from trade_trace.reports._filter_support import applied_filter_view, enforce_sup
 from trade_trace.reports.calibration import (
     DEFAULT_BIN_POLICY,
     DEFAULT_MIN_SAMPLE,
-    LOG_EPS,
     _compute_metrics,
     _empty_metrics,
     _load_scored_rows,
@@ -206,7 +204,7 @@ def report_market_lifecycle(
             "sample_warning": None,
             "truncated": False,
         })
-    summary = {
+    summary: dict[str, Any] = {
         "sample_size": len(groups),
         "sample_warning": None if groups else "no markets matched filter",
         "filter": applied_filter_view(rf, report=report),
@@ -281,7 +279,7 @@ def report_resolution_quality(
             "truncated": False,
         })
     ambiguous_like = sum(status_counts.get(s, 0) for s in ("ambiguous", "disputed", "void", "cancelled"))
-    summary = {
+    summary: dict[str, Any] = {
         "sample_size": len(groups),
         "sample_warning": None if groups else "no resolved outcomes matched filter",
         "filter": applied_filter_view(rf, report=report),
@@ -478,7 +476,7 @@ def _time_decay_report(
         })
     all_rows = [item["row"] for item in decorated]
     summary_metrics = _compute_metrics(all_rows) if all_rows else _empty_metrics()
-    summary = {
+    summary: dict[str, Any] = {
         "sample_size": len(all_rows),
         "sample_warning": None if len(all_rows) >= min_sample else f"only {len(all_rows)} scored forecasts; calibration is unreliable below {min_sample}",
         "filter": applied_filter_view(rf, report=report),

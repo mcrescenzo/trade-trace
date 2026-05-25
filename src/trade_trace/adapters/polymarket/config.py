@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from sqlite3 import Connection
-from typing import Mapping
 
 ACTOR_ID = "system:polymarket-adapter"
 KEY_ENABLED = "network.polymarket.enabled"
