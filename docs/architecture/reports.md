@@ -938,7 +938,197 @@ recall-receipt composition, stable bundle hashing, and CLI/MCP parity.
 The contract in §§5.1-5.4 describes the live surface; future work should
 be documented as additive changes rather than as an implementation stub.
 
-## 6. Bucketing Policies
+
+## 6. Target contract: `report.period_review`
+
+> Status: **target / not implemented**. This section defines the
+> read-only backend contract a future implementation MUST satisfy before any
+> non-UI consumer claims period-scoped P&L, risk, strategy, calibration, or
+> evidence review. It does not describe shipped runtime behavior and is
+> intentionally separate from `review.bundle`: `review.bundle` remains the bounded
+> case/evidence bundle in §5, while `report.period_review` is a broader,
+> section-oriented period packet.
+
+### 6.1 Inputs
+
+`report.period_review` accepts a single request object. Unknown fields are
+rejected; all timestamps are UTC ISO 8601 with millisecond precision.
+
+```jsonc
+{
+  "filter": { /* ReportFilter-compatible scope */ },
+  "period": {
+    "basis": "decision_at",              // default and recommended basis
+    "start": "2026-01-01T00:00:00.000Z",
+    "end": "2026-02-01T00:00:00.000Z",
+    "label": "2026-01 decision review"
+  },
+  "as_of": "2026-02-02T00:00:00.000Z",   // required when reproducibility depends on mutable local rows
+  "sections": [
+    "scope_summary",
+    "calibration",
+    "pnl",
+    "risk",
+    "strategy",
+    "process_evidence",
+    "sources_evidence",
+    "reflections_playbook_adherence",
+    "recall_receipts",
+    "caveats"
+  ],
+  "budgets": {
+    "max_record_ids_per_section": 1000,
+    "max_examples_per_section": 5,
+    "max_source_chars": 12000,
+    "max_reflections": 50,
+    "max_recall_receipts": 50,
+    "cursor": null
+  }
+}
+```
+
+Input rules:
+
+- `filter` is the caller's ReportFilter-compatible scope. The period window
+  is not a replacement for `filter`; it is compiled into `requested_scope`
+  and `applied_scope` so consumers can distinguish the user scope from the
+  period boundary.
+- `period.basis = "decision_at"` is the default because period review is
+  primarily a decision-process diagnostic. `created_at`, `resolved_at`, or
+  non-row-backed period metadata are allowed only when the implementation
+  explicitly documents support in `supported_features` and records the exact
+  compiled filter paths in `applied_scope.period`.
+- `as_of` pins reproducibility for rows that can be appended or amended after
+  the period, including outcomes, reflections, playbook versions, recall
+  receipts, and source redaction state. If the implementation cannot honor
+  `as_of`, it MUST reject the request or emit unsupported metadata; it MUST
+  NOT pretend the packet is reproducible.
+- `sections` is explicit. Unrequested sections appear with state
+  `omitted_by_request` or in `unsupported_sections`; requested sections that
+  cannot be computed appear with state `unsupported` or `insufficient_data`.
+- `budgets` control truncation only. They MUST NOT change metric denominators
+  unless a metric is explicitly documented as page-local.
+
+### 6.2 Output envelope and section states
+
+The response uses the shared §3.0 report conventions. Each section MUST have
+one of these machine-readable states: `included`, `unsupported`,
+`insufficient_data`, `omitted_by_request`, or `truncated`.
+
+```jsonc
+{
+  "ok": true,
+  "data": {
+    "contract_version": "1.0",
+    "requested_scope": {
+      "filter": {"strategy": {"strategy_id": "earnings-momentum"}},
+      "period": {"basis": "decision_at", "start": "2026-01-01T00:00:00.000Z", "end": "2026-02-01T00:00:00.000Z"},
+      "as_of": "2026-02-02T00:00:00.000Z",
+      "sections": ["scope_summary", "calibration", "pnl", "risk", "strategy", "sources_evidence"],
+      "budgets": {"max_record_ids_per_section": 1000, "max_examples_per_section": 5}
+    },
+    "applied_scope": {
+      "filter": {
+        "strategy": {"strategy_id": "earnings-momentum"},
+        "time_window": {"decision_at_gte": "2026-01-01T00:00:00.000Z", "decision_at_lt": "2026-02-01T00:00:00.000Z"}
+      },
+      "period": {"basis": "decision_at", "source_fields": ["decisions.created_at"]},
+      "as_of": "2026-02-02T00:00:00.000Z"
+    },
+    "supported_filter_paths": ["strategy.strategy_id", "time_window.decision_at_gte", "time_window.decision_at_lt"],
+    "unsupported_filter_paths": [],
+    "supported_sections": ["scope_summary", "calibration", "sources_evidence"],
+    "unsupported_sections": [
+      {"section": "pnl", "state": "unsupported", "reason_code": "pnl_contract_not_implemented", "applied": false},
+      {"section": "risk", "state": "insufficient_data", "reason_code": "missing_declared_risk_units", "minimum": 5, "actual": 2, "applied": false},
+      {"section": "strategy", "state": "unsupported", "reason_code": "strategy_period_analytics_deferred", "applied": false}
+    ],
+    "sections": {
+      "scope_summary": {
+        "state": "included",
+        "metrics": {"decision_count": 42, "forecast_count": 18, "resolved_outcome_count": 11},
+        "metric_definitions": {"decision_count": "count of decisions matching applied_scope"},
+        "coverage": {"eligible_count": 42, "included_count": 42, "missing_count": 0, "coverage_pct": 100.0, "denominator_kind": "decisions"},
+        "record_ids": {"decisions": ["dec_..."]},
+        "examples": [{"kind": "decision", "id": "dec_...", "summary": "local row excerpt"}],
+        "sample_warning": null,
+        "caveat_codes": ["LOCAL_ROWS_ONLY"]
+      },
+      "calibration": {
+        "state": "included",
+        "metrics": {"mean_brier": 0.21, "scored_forecast_count": 11},
+        "metric_definitions": {"mean_brier": "mean binary Brier score over scored forecasts in applied_scope"},
+        "coverage": {"eligible_count": 18, "included_count": 11, "missing_count": 7, "coverage_pct": 61.1, "denominator_kind": "forecasts"},
+        "record_ids": {"forecasts": ["fc_..."], "outcomes": ["out_..."]},
+        "sample_warning": "only 11 scored forecasts; calibration is unreliable below 20",
+        "caveat_codes": ["LOW_SAMPLE_SIZE", "PARTIAL_COVERAGE"]
+      },
+      "pnl": {"state": "unsupported", "reason_code": "pnl_contract_not_implemented", "metrics": {}, "record_ids": {}},
+      "risk": {"state": "insufficient_data", "reason_code": "missing_declared_risk_units", "metrics": {"mean_r_multiple": null}, "record_ids": {"decisions": ["dec_..."]}},
+      "sources_evidence": {"state": "truncated", "caveat_codes": ["REDACTED_SOURCE_CONTENT"], "truncated": true, "next_cursor": "opaque", "record_ids": {"sources": ["src_..."]}}
+    },
+    "coverage": {"eligible_count": 42, "included_count": 42, "missing_count": 0, "coverage_pct": 100.0, "denominator_kind": "decisions"},
+    "caveat_codes": ["LOCAL_ROWS_ONLY", "DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM"],
+    "sample_warning": "some requested sections are unsupported or below sample thresholds"
+  },
+  "meta": {"tool": "report.period_review", "contract_version": "1.0", "truncated": true, "next_cursor": "opaque"}
+}
+```
+
+Mandatory section contract:
+
+- `scope_summary`: always requested by default; reports applied/requested
+  scope metadata, period basis, sample counts, coverage, caveats, and
+  contributing decision IDs.
+- `calibration`: scored-forecast metrics and definitions. If no scored
+  forecasts or too few scored forecasts exist, emit `insufficient_data` with
+  coverage and contributing forecast/outcome IDs where available.
+- `pnl`: historical local P&L metrics only when the local schema/read model
+  can compute them. Missing broker truth, missing closes, or deferred P&L
+  implementation MUST be explicit `unsupported` or `insufficient_data`.
+- `risk`: declared-risk/R-multiple or risk-unit diagnostics only when local
+  declared risk rows support them. It MUST NOT infer live exposure or fetch
+  broker data.
+- `strategy`: strategy-group process/performance diagnostics only when a
+  strategy scope or grouping is supported. Do not duplicate broader deferred
+  strategy-performance implementation work; unsupported analytics remain
+  machine-readable.
+- `process_evidence`: decisions, theses, forecasts, outcomes, review rows,
+  and examples used to support the packet.
+- `sources_evidence`: local source provenance with §5.3 redaction rules,
+  redacted/sensitive coverage, caveat codes, and contributing source IDs.
+- `reflections_playbook_adherence`: reflections, playbook versions, adherence
+  rows, metric definitions, examples, and record IDs where available.
+- `recall_receipts`: included only when relevant to selected consumers; it
+  follows the `review.bundle` recall-receipts conventions and must state
+  omissions/truncation.
+- `caveats`: stable caveat codes plus human-readable messages. Codes are the
+  contract; prose is explanatory.
+
+### 6.3 Compatibility and boundaries
+
+- `report.period_review` is a distinct target report contract, not a
+  `review.bundle` profile. A future implementation may embed bounded
+  `review.bundle`-compatible evidence slices, but the top-level shape remains
+  the period-review section contract above.
+- The contract is read-only and local-only. It MUST NOT fetch external market,
+  source, outcome, broker, wallet, or execution data; call brokers; place or cancel orders;
+  schedule alerts; emit trading advice; provide buy/sell/hold signals; claim
+  alpha/edge; or make profit claims.
+- Unsupported or cannot-compute P&L, risk, opportunity, strategy, calibration,
+  evidence, or recall analytics MUST be represented by section state and
+  `unsupported_sections`/`unsupported_features` metadata. Silent omission,
+  zero-filled metrics, and unscoped global fallbacks are contract violations.
+- Every included metric MUST provide `metric_definitions`, coverage metadata,
+  caveat/sample warnings where applicable, examples where useful, and
+  contributing `record_ids` or a machine-readable `record_ids_unavailable`
+  reason.
+- Current live reports are not period-scoped unless their own shipped section
+  explicitly says so. This target contract does not make Console/UI claims and
+  introduces no `tt console serve`, `trade_trace.console`, browser dashboard,
+  or frontend scope.
+
+## 7. Bucketing Policies
 
 Several filter fields use deterministic buckets to make report filters
 stable across calls:
@@ -955,7 +1145,7 @@ reproduction; configurable via `config.bucketing.<name>` from M2. The
 chosen snapshot per decision is the latest snapshot whose `captured_at`
 falls before or at `decision.created_at`.
 
-## 7. CLI Surface
+## 8. CLI Surface
 
 ```bash
 trade-trace report calibration --filter-json filter.json
@@ -973,9 +1163,9 @@ it returns `data.kind="agent.bootstrap"`, composes only local read models, and
 does not persist packets, fetch external data, schedule follow-up work, prepare
 orders, or generate trading recommendations.
 
-## 8. Open Questions
+## 9. Open Questions
 
-1. **Custom bucketing.** §6 ships fixed thresholds for reproducibility.
+1. **Custom bucketing.** §7 ships fixed thresholds for reproducibility.
    If dogfood shows the defaults are wrong for prediction markets vs.
    equities, expose per-asset-class threshold overrides via config.
 2. **Composable group_by.** `report.compare` accepts one `group_by`;
