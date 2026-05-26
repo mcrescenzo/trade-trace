@@ -83,7 +83,11 @@ async def _sdk_smoke(tmp_path: Path) -> None:
                 "idempotency_key",
             ):
                 assert field in schema["properties"]
-            assert "anyOf" in schema
+            # The advertised MCP schema intentionally omits top-level JSON Schema
+            # combinators for external-client compatibility; canonical runtime
+            # validation still uses the full schema.
+            assert "anyOf" not in schema
+            assert "top-level combinators omitted" in schema["x-trade-trace-mcp-schema-note"]
 
             init_env = _structured(await session.call_tool("journal.init", {"home": str(home)}))
             _assert_trade_trace_envelope(init_env, tool="journal.init")
