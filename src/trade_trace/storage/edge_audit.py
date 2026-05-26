@@ -84,9 +84,3 @@ def find_orphan_edges(conn: sqlite3.Connection, *, limit: int | None = None) -> 
     finally:
         conn.row_factory = old_row_factory
     return [dict(row) for row in rows]
-
-
-def count_orphan_edge_endpoints(conn: sqlite3.Connection) -> int:
-    """Return the number of missing table-backed edge endpoints."""
-
-    return len(find_orphan_edges(conn))

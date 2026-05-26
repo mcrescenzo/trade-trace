@@ -36,9 +36,6 @@ class AdapterError(Exception):
     def __post_init__(self) -> None:
         Exception.__init__(self, self.message)
 
-    def to_envelope(self) -> dict[str, Any]:
-        return {"code": self.code.value, "message": self.message, "details": dict(self.details)}
-
 
 def error_details(*, endpoint: str | None = None, **details: Any) -> dict[str, Any]:
     clean = {k: v for k, v in details.items() if v is not None and k not in {"body", "response_body"}}
