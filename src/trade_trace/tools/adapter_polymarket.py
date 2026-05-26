@@ -59,8 +59,40 @@ def _outcome_label(outcome: Any, external_id: str, index: int) -> str:
     )
 
 
+def _normalize_gamma_json_list_field(raw: dict[str, Any], field: str, external_id: str) -> None:
+    """Normalize Gamma list fields that may arrive as JSON-encoded strings."""
+
+    value = raw.get(field)
+    if value is None or isinstance(value, list):
+        return
+    if not isinstance(value, str):
+        return
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ToolError(
+            ErrorCode.ADAPTER_PROTOCOL_ERROR,
+            "Gamma API returned malformed JSON string field",
+            details={"external_id": external_id, "field": field},
+        ) from exc
+    if not isinstance(parsed, list):
+        raise ToolError(
+            ErrorCode.ADAPTER_PROTOCOL_ERROR,
+            "Gamma API JSON string field must decode to a list",
+            details={"external_id": external_id, "field": field, "decoded_type": type(parsed).__name__},
+        )
+    raw[field] = parsed
+
+
+def _normalize_gamma_market(raw: dict[str, Any], external_id: str) -> dict[str, Any]:
+    normalized = dict(raw)
+    for field in ("outcomes", "tokens", "clobTokenIds", "clobTokenIDs"):
+        _normalize_gamma_json_list_field(normalized, field, external_id)
+    return normalized
+
+
 def _optional_float(value: Any, field: str) -> float | None:
-    if value is None:
+    if value is None or value == "":
         return None
     try:
         return float(value)
@@ -90,6 +122,7 @@ def _market_cache_hit(state: str | None, metadata_json: str | None, created_at: 
 
 
 def _market_payload(raw: dict[str, Any], external_id: str) -> dict[str, Any]:
+    raw = _normalize_gamma_market(raw, external_id)
     outcomes = raw.get("outcomes") or raw.get("tokens") or []
     if raw.get("market_type") == "scalar" or raw.get("type") == "scalar" or raw.get("isScalar"):
         raise ToolError(ErrorCode.ADAPTER_PROTOCOL_ERROR, "Polymarket scalar markets are not supported in v0.0.2", details={"external_id": external_id, "market_type": "scalar"})
@@ -228,7 +261,7 @@ def _ensure_market_instrument(uow: UnitOfWork, market_id: str, *, actor_id: str)
 def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
     bid = raw.get("bestBid") or raw.get("bid")
     ask = raw.get("bestAsk") or raw.get("ask")
-    price = raw.get("price") or raw.get("last") or raw.get("mid")
+    price = raw.get("price") or raw.get("lastTradePrice") or raw.get("last") or raw.get("mid")
     bidf = _optional_float(bid, "bestBid")
     askf = _optional_float(ask, "bestAsk")
     pricef = _optional_float(price, "price")
@@ -262,7 +295,7 @@ def _snapshot_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         if not row:
             raise ToolError(ErrorCode.NOT_FOUND,"market_id not found",details={"market_id":market_id})
         try:
-            raw = client.gamma_get(f"/markets/{row[0]}/book")
+            raw = _fetch_market(client, str(row[0]))
         except AdapterError as exc:
             raise _tool_error(exc) from exc
     finally:

@@ -66,18 +66,59 @@ def test_snapshot_fetch_enabled_captures_fixture_book(tmp_path: Path, monkeypatc
     assert mcp_call("journal.init", {"home": home}).ok
     market_id = _manual_market(home, external_id="pm-book")
     _enable_adapter(home)
+    calls: list[str] = []
 
-    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: _fixture("snapshot_thick_book.json"))
+    def fake_gamma_get(self: PolymarketClient, path: str):
+        calls.append(path)
+        return _fixture("snapshot_thick_book.json")
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", fake_gamma_get)
 
     env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
 
     assert env.ok, env
     assert isinstance(env, SuccessEnvelope)
+    assert calls == ["/markets/pm-book"]
     assert env.data["instrument_id"] == market_id
     assert env.data["bid"] == 0.61
     assert env.data["ask"] == 0.63
     assert env.data["mid"] == pytest.approx(0.62)
     assert env.data["implied_probability"] == pytest.approx(0.62)
+
+
+def test_snapshot_fetch_derives_from_live_gamma_market_payload_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="540844")
+    _enable_adapter(home)
+    calls: list[str] = []
+
+    def fake_gamma_get(self: PolymarketClient, path: str):
+        calls.append(path)
+        return {
+            "id": "540844",
+            "question": "Live Gamma style market?",
+            "outcomes": '["Yes","No"]',
+            "clobTokenIds": '["token-yes","token-no"]',
+            "bestBid": "0.41",
+            "bestAsk": "0.43",
+            "lastTradePrice": "0.42",
+            "volume": "12345.67",
+            "liquidity": "890.12",
+        }
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", fake_gamma_get)
+
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert calls == ["/markets/540844"]
+    assert all(not path.endswith("/book") for path in calls)
+    assert env.data["bid"] == 0.41
+    assert env.data["ask"] == 0.43
+    assert env.data["mid"] == pytest.approx(0.42)
+    assert env.data["volume"] == "12345.67"
 
 
 @pytest.mark.parametrize("field", ["bestBid", "bestAsk", "price"])

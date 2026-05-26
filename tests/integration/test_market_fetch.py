@@ -102,6 +102,41 @@ def test_market_bind_accepts_string_list_outcomes(tmp_path: Path, monkeypatch: p
     assert env.data["external_id"] == "pm-string-outcomes"
 
 
+def test_market_bind_accepts_gamma_json_string_outcomes_and_clob_tokens(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+    raw = _fixture("market_binary_open.json") | {
+        "outcomes": '["Yes","No"]',
+        "clobTokenIds": '["token-yes","token-no"]',
+    }
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: raw)
+
+    env = mcp_call("market.bind", {"home": home, "source": "polymarket", "external_id": "540844"})
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["external_id"] == "540844"
+    venue_meta = json.loads(env.data["venue_metadata_json"])
+    assert venue_meta["outcomes"] == ["Yes", "No"]
+    assert venue_meta["clobTokenIds"] == ["token-yes", "token-no"]
+
+
+def test_market_bind_rejects_malformed_gamma_json_string_outcomes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+    raw = _fixture("market_binary_open.json") | {"outcomes": '["Yes",'}
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: raw)
+
+    env = mcp_call("market.bind", {"home": home, "source": "polymarket", "external_id": "pm-bad-json-outcomes"})
+    assert not env.ok
+    assert isinstance(env, ErrorEnvelope)
+    assert env.error.code == "ADAPTER_PROTOCOL_ERROR"
+    assert env.error.details == {"external_id": "pm-bad-json-outcomes", "field": "outcomes"}
+
+
 def test_market_bind_accepts_string_list_tokens_without_outcomes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok
