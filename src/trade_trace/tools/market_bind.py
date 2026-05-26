@@ -356,7 +356,9 @@ def register_market_bind_tool(registry: ToolRegistry) -> None:
             "external_id": "example-market-1",
             "state": "open",
             "mechanism": "clob",
+            "idempotency_key": "00000000-0000-4000-8000-marketbind01",
         },
+        optional_keys=("idempotency_key",),
         example_rich={
             "source": "polymarket",
             "external_id": "example-market-1",

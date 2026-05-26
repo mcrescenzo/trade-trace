@@ -373,6 +373,6 @@ def _outcome_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 def register_adapter_polymarket_tools(registry: ToolRegistry) -> None:
     registry.register("market.refresh", _market_refresh, is_write=True, example_minimal={"market_id":"mkt_..."})
-    registry.register("snapshot.fetch", _snapshot_fetch, is_write=True, example_minimal={"market_id":"mkt_...","at":"now"})
+    registry.register("snapshot.fetch", _snapshot_fetch, is_write=True, example_minimal={"market_id":"mkt_...","at":"now","idempotency_key":"00000000-0000-4000-8000-snapshotfetch01"}, optional_keys=("at", "idempotency_key"))
     registry.register("snapshot.fetch_series", _snapshot_fetch_series, is_write=True, example_minimal={"market_id":"mkt_...","from":"2026-01-01T00:00:00Z","to":"2026-01-02T00:00:00Z"})
     registry.register("outcome.fetch", _outcome_fetch, is_write=True, example_minimal={"market_id":"mkt_..."})

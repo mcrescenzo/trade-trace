@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
 from trade_trace.contracts.schema_validation import (
@@ -7,7 +9,8 @@ from trade_trace.contracts.schema_validation import (
     reportable_schema_validation_error,
 )
 from trade_trace.core import default_registry
-from trade_trace.mcp_server import TOP_LEVEL_JSON_SCHEMA_COMBINATORS, mcp_tool_specs
+from trade_trace.mcp_server import TOP_LEVEL_JSON_SCHEMA_COMBINATORS, mcp_call, mcp_tool_specs
+from trade_trace.storage.paths import db_path
 
 
 def test_mcp_advertised_schemas_have_no_top_level_combinators() -> None:
@@ -20,6 +23,66 @@ def test_mcp_advertised_schemas_have_no_top_level_combinators() -> None:
         if set(spec["input_schema"]) & set(TOP_LEVEL_JSON_SCHEMA_COMBINATORS)
     }
     assert offenders == {}
+
+
+@pytest.mark.parametrize("tool_name", ["market.bind", "snapshot.fetch"])
+def test_phase5_retryable_public_tools_advertise_idempotency_key(tool_name: str) -> None:
+    registry = default_registry()
+    advertised = next(spec["input_schema"] for spec in mcp_tool_specs(registry) if spec["name"] == tool_name)
+
+    assert advertised["type"] == "object"
+    assert "idempotency_key" in advertised.get("properties", {})
+    assert advertised["properties"]["idempotency_key"]["type"] == "string"
+    assert not (set(advertised) & set(TOP_LEVEL_JSON_SCHEMA_COMBINATORS))
+
+
+def test_market_bind_preserves_distinct_caller_idempotency_keys_for_shared_market(tmp_path) -> None:
+    home = tmp_path / "home"
+    init = mcp_call("journal.init", {"home": str(home)}, actor_id="agent:init")
+    assert init.ok, init
+
+    base_args = {
+        "home": str(home),
+        "source": "polymarket",
+        "external_id": "phase5-shared-market",
+        "title": "Phase 5 shared market",
+        "question": "Will Phase 5 idempotency remain uncollided?",
+        "state": "open",
+        "mechanism": "clob",
+        "bound_via": "manual",
+    }
+    first = mcp_call(
+        "market.bind",
+        {**base_args, "idempotency_key": "phase5-market-bind-actor-a"},
+        actor_id="agent:phase5-a",
+    )
+    second = mcp_call(
+        "market.bind",
+        {**base_args, "idempotency_key": "phase5-market-bind-actor-b"},
+        actor_id="agent:phase5-b",
+    )
+    assert first.ok, first
+    assert second.ok, second
+    first_data = first.model_dump(mode="json", exclude_none=True)["data"]
+    second_data = second.model_dump(mode="json", exclude_none=True)["data"]
+    assert first_data["id"] == second_data["id"]
+    assert second_data["already_bound"] is True
+
+    with sqlite3.connect(db_path(home)) as conn:
+        rows = conn.execute(
+            """
+            SELECT actor_id, idempotency_key
+            FROM events
+            WHERE event_type = 'market.bound'
+            ORDER BY id ASC
+            """
+        ).fetchall()
+
+    assert rows == [
+        ("agent:phase5-a", "phase5-market-bind-actor-a"),
+        ("agent:phase5-b", "phase5-market-bind-actor-b"),
+    ]
+    assert not any(str(key).startswith("auto:") for _actor, key in rows)
 
 
 def test_forecast_add_advertises_claude_compatible_schema_but_keeps_canonical_runtime_schema() -> None:
