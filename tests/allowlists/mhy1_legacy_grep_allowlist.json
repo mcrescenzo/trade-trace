@@ -81,6 +81,15 @@
       "reason": "ReportFilter still accepts legacy instrument/venue filters while PM-native market filters are phased in."
     },
     {
+      "pattern": "src/trade_trace/tools/market_bind.py",
+      "terms": [
+        "instrument_id",
+        "venue_id"
+      ],
+      "category": "public_setup_bridge",
+      "reason": "market.bind intentionally creates/returns legacy relational prerequisites during the additive PM collapse so public clients need no hidden venue/instrument setup tools."
+    },
+    {
       "pattern": "src/trade_trace/events/semantic_keys.py",
       "terms": [
         "instrument_id",

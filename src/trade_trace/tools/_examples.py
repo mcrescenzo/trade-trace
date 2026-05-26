@@ -93,7 +93,8 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
     },
     "forecast.add": {
         "minimal": {
-            "thesis_id": "th_THESIS_ID_HERE",
+            "market_id": "mkt_MARKET_ID_FROM_MARKET_BIND",
+            "rationale_body": "Why this forecast probability is justified.",
             "kind": "binary",
             "yes_label": "yes",
             "outcomes": [
@@ -103,7 +104,9 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "idempotency_key": _IDEM,
         },
         "rich": {
-            "thesis_id": "th_THESIS_ID_HERE",
+            "market_id": "mkt_MARKET_ID_FROM_MARKET_BIND",
+            "instrument_id": "mkt_SAME_ID_RETURNED_AS_INSTRUMENT_ID_BY_MARKET_BIND",
+            "rationale_body": "Why this forecast probability is justified.",
             "kind": "binary",
             "yes_label": "yes",
             "outcomes": [

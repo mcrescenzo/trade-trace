@@ -67,6 +67,23 @@ async def _sdk_smoke(tmp_path: Path) -> None:
             listed = await session.list_tools()
             tool_names = {tool.name for tool in listed.tools}
             assert tool_names == SHIPPED_PUBLIC_TOOLS | SHIPPED_REPORTS
+            assert "venue.add" not in tool_names
+            assert "instrument.add" not in tool_names
+            assert "thesis.add" not in tool_names
+
+            schema_tool = next(tool for tool in listed.tools if tool.name == "forecast.add")
+            schema = schema_tool.inputSchema
+            for field in (
+                "thesis_id",
+                "market_id",
+                "instrument_id",
+                "rationale_body",
+                "snapshot_id",
+                "_anchor_to_latest_snapshot",
+                "idempotency_key",
+            ):
+                assert field in schema["properties"]
+            assert "anyOf" in schema
 
             init_env = _structured(await session.call_tool("journal.init", {"home": str(home)}))
             _assert_trade_trace_envelope(init_env, tool="journal.init")
@@ -102,41 +119,11 @@ async def _sdk_smoke(tmp_path: Path) -> None:
             error = _assert_trade_trace_envelope(error_env, tool="market.bind", ok=False)
             assert error["code"] == "VALIDATION_ERROR"
 
-            # Hidden compatibility setup: the current v0.0.2 public catalog folds
-            # venue.add/instrument.add into market.bind and thesis.add into
-            # forecast.add, but the legacy relational forecast path still requires
-            # venue/instrument/thesis rows. Keep these calls explicit and limited
-            # to setup for the public forecast/decision smoke below.
-            venue_env = _structured(await session.call_tool(
-                "venue.add",
-                {
-                    "home": str(home),
-                    "name": "SDK Smoke Venue",
-                    "kind": "prediction_market",
-                    "idempotency_key": "sdk-smoke-venue",
-                },
-            ))
-            venue = _assert_trade_trace_envelope(venue_env, tool="venue.add")
-            assert venue["id"]
-
-            instrument_env = _structured(await session.call_tool(
-                "instrument.add",
-                {
-                    "home": str(home),
-                    "venue_id": venue["id"],
-                    "asset_class": "prediction_market",
-                    "title": "SDK smoke market resolves YES",
-                    "idempotency_key": "sdk-smoke-instrument",
-                },
-            ))
-            instrument = _assert_trade_trace_envelope(instrument_env, tool="instrument.add")
-            assert instrument["venue_id"] == venue["id"]
-
             snapshot_env = _structured(await session.call_tool(
                 "snapshot.add",
                 {
                     "home": str(home),
-                    "instrument_id": instrument["id"],
+                    "instrument_id": market["instrument_id"],
                     "captured_at": "2026-05-22T14:30:00.000Z",
                     "price": 0.62,
                     "source": "manual",
@@ -145,26 +132,15 @@ async def _sdk_smoke(tmp_path: Path) -> None:
                 },
             ))
             snapshot = _assert_trade_trace_envelope(snapshot_env, tool="snapshot.add")
-            assert snapshot["instrument_id"] == instrument["id"]
-
-            thesis_env = _structured(await session.call_tool(
-                "thesis.add",
-                {
-                    "home": str(home),
-                    "instrument_id": instrument["id"],
-                    "side": "yes",
-                    "body": "SDK smoke setup thesis.",
-                    "idempotency_key": "sdk-smoke-thesis",
-                },
-            ))
-            thesis = _assert_trade_trace_envelope(thesis_env, tool="thesis.add")
-            assert thesis["instrument_id"] == instrument["id"]
+            assert snapshot["instrument_id"] == market["instrument_id"]
 
             forecast_env = _structured(await session.call_tool(
                 "forecast.add",
                 {
                     "home": str(home),
-                    "thesis_id": thesis["id"],
+                    "market_id": market["market_id"],
+                    "instrument_id": market["instrument_id"],
+                    "rationale_body": "SDK smoke setup thesis.",
                     "kind": "binary",
                     "yes_label": "YES",
                     "snapshot_id": snapshot["id"],
@@ -176,14 +152,16 @@ async def _sdk_smoke(tmp_path: Path) -> None:
                 },
             ))
             forecast = _assert_trade_trace_envelope(forecast_env, tool="forecast.add")
-            assert forecast["thesis_id"] == thesis["id"]
+            assert forecast["thesis_id"]
             assert forecast["snapshot_anchor"]["snapshot_id"] == snapshot["id"]
 
             error_env = _structured(await session.call_tool(
                 "forecast.add",
                 {
                     "home": str(home),
-                    "thesis_id": thesis["id"],
+                    "market_id": market["market_id"],
+                    "instrument_id": market["instrument_id"],
+                    "rationale_body": "SDK smoke setup thesis for invalid sum.",
                     "kind": "binary",
                     "yes_label": "YES",
                     "outcomes": [
@@ -201,21 +179,21 @@ async def _sdk_smoke(tmp_path: Path) -> None:
                 {
                     "home": str(home),
                     "type": "skip",
-                    "instrument_id": instrument["id"],
+                    "instrument_id": market["instrument_id"],
                     "forecast_id": forecast["id"],
                     "reason": "SDK smoke non-action record.",
                     "idempotency_key": "sdk-smoke-decision",
                 },
             ))
             decision = _assert_trade_trace_envelope(decision_env, tool="decision.add")
-            assert decision["instrument_id"] == instrument["id"]
+            assert decision["instrument_id"] == market["instrument_id"]
             assert decision["id"]
 
             recall_env = _structured(await session.call_tool(
                 "memory.recall",
                 {
                     "query": "SDK smoke non-action record",
-                    "context": {"instrument_id": instrument["id"]},
+                    "context": {"instrument_id": market["instrument_id"]},
                     "k": 5,
                 },
             ))

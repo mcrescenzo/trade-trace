@@ -100,7 +100,6 @@ def test_build_registry_derives_schema_for_every_tool_with_example_minimal() -> 
 
 def test_agent_facing_id_placeholders_match_runtime_prefixes() -> None:
     registry = build_registry()
-    th_prefix = new_id("th").split("_", 1)[0] + "_"
     fc_prefix = new_id("fc").split("_", 1)[0] + "_"
 
     forecast_example = registry.get("forecast.add").example_minimal
@@ -108,7 +107,7 @@ def test_agent_facing_id_placeholders_match_runtime_prefixes() -> None:
     assert forecast_example is not None
     assert decision_example is not None
 
-    assert forecast_example["thesis_id"].startswith(th_prefix)
+    assert forecast_example["market_id"].startswith("mkt_")
     assert decision_example["forecast_id"].startswith(fc_prefix)
     rendered = str({name: (reg.description, reg.example_minimal, reg.example_rich, reg.json_schema, reg.metadata()) for name, reg in registry.by_name.items()})
     assert "inst_" not in rendered
@@ -129,6 +128,36 @@ def test_tool_schema_envelope_echoes_valid_json_schema() -> None:
     schema = dumped["data"]["json_schema"]
     assert schema == registry.get("forecast.add").json_schema
     _assert_valid_json_schema(schema)
+
+
+def test_forecast_add_schema_advertises_legacy_and_public_folded_paths() -> None:
+    registry = build_registry()
+    schema = registry.get("forecast.add").json_schema
+
+    assert schema is not None
+    _assert_valid_json_schema(schema)
+    props = schema["properties"]
+    for field in (
+        "thesis_id",
+        "market_id",
+        "instrument_id",
+        "rationale_body",
+        "snapshot_id",
+        "_anchor_to_latest_snapshot",
+        "metadata_json",
+        "agent_id",
+        "model_id",
+        "environment",
+        "run_id",
+        "idempotency_key",
+    ):
+        assert field in props
+    assert {tuple(branch["required"]) for branch in schema["anyOf"]} == {
+        ("thesis_id",),
+        ("market_id", "rationale_body"),
+        ("instrument_id", "rationale_body"),
+    }
+    assert schema["required"] == ["kind", "outcomes", "idempotency_key"]
 
 
 def test_instrument_and_decision_schema_advertise_persisted_optional_fields() -> None:

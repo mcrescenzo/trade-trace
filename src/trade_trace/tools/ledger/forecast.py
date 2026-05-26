@@ -40,6 +40,70 @@ from trade_trace.tools.ledger._shared import examples_for
 _BINARY_TOLERANCE = 1e-6
 
 
+FORECAST_ADD_JSON_SCHEMA: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "description": (
+        "Create a forecast either from an existing legacy thesis_id, or via the "
+        "public folded setup path after market.bind by passing market_id (or "
+        "instrument_id) plus rationale_body. If both market_id and instrument_id "
+        "are supplied they must refer to the same market-backed instrument."
+    ),
+    "properties": {
+        "home": {"type": "string"},
+        "id": {"type": "string"},
+        "thesis_id": {"type": "string", "description": "Legacy path: create the forecast under an existing thesis."},
+        "market_id": {"type": "string", "description": "Public path: id returned by market.bind; also backs the instrument row."},
+        "instrument_id": {"type": "string", "description": "Public/legacy instrument id. For market.bind-created markets this equals market_id."},
+        "rationale_body": {"type": "string", "description": "Required for the folded public path; becomes the created thesis body and forecast rationale."},
+        "kind": {"type": "string", "enum": ["binary"]},
+        "yes_label": {"type": "string"},
+        "outcomes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "outcome_label": {"type": "string"},
+                    "label": {"type": "string"},
+                    "probability": {"type": "number", "minimum": 0, "maximum": 1},
+                    "lower_bound": {"type": "number"},
+                    "upper_bound": {"type": "number"},
+                },
+                "required": ["probability"],
+            },
+            "minItems": 2,
+        },
+        "snapshot_id": {"type": "string", "description": "Optionally anchor the created forecast to this snapshot in the same call."},
+        "_anchor_to_latest_snapshot": {"type": "boolean", "description": "When true and snapshot_id is omitted, anchor to the latest snapshot with implied_probability for the market/instrument."},
+        "resolution_at": {"type": "string"},
+        "resolution_rule_text": {"type": "string"},
+        "scoring_support": {"type": "string"},
+        "falsification_criteria": {"type": "string"},
+        "side": {"type": "string"},
+        "time_horizon_at": {"type": "string"},
+        "confidence_label": {"type": "string"},
+        "exit_triggers": {"type": "string"},
+        "risk_notes": {"type": "string"},
+        "strategy_id": {"type": "string"},
+        "parent_thesis_id": {"type": "string"},
+        "valid_from": {"type": "string"},
+        "valid_to": {"type": "string"},
+        "metadata_json": {"type": ["object", "string"]},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "run_id": {"type": "string"},
+        "idempotency_key": {"type": "string"},
+    },
+    "required": ["kind", "outcomes", "idempotency_key"],
+    "anyOf": [
+        {"required": ["thesis_id"]},
+        {"required": ["market_id", "rationale_body"]},
+        {"required": ["instrument_id", "rationale_body"]},
+    ],
+}
+
+
 def _canonical_binary_probability(
     *, kind: str, outcomes: list[dict[str, Any]], yes_label: str | None,
 ) -> float | None:
@@ -256,7 +320,7 @@ def _insert_forecast_in_transaction(
 
 
 def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    thesis_id = require(args, "thesis_id")
+    thesis_id = args.get("thesis_id")
     kind = args.get("kind", "binary")
     outcomes = require(args, "outcomes")
     if not isinstance(outcomes, list):
@@ -310,6 +374,9 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             )
             if replay is not None:
                 forecast_id = replay["id"]
+                replay_thesis_id = replay.get("thesis_id")
+                if replay_thesis_id is not None:
+                    thesis_id = replay_thesis_id
                 emit_event(
                     uow, event_type="forecast.created",
                     subject_kind="forecast", subject_id=forecast_id,
@@ -324,6 +391,76 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
             forecast_id = args.get("id") or new_id("fc")
             created_at = now_iso()
+            if thesis_id is None:
+                market_id_arg = args.get("market_id")
+                instrument_id_arg = args.get("instrument_id")
+                if market_id_arg is not None and instrument_id_arg is not None and market_id_arg != instrument_id_arg:
+                    raise ToolError(
+                        ErrorCode.VALIDATION_ERROR,
+                        "forecast.add market_id and instrument_id must identify the same market-backed instrument",
+                        details={"market_id": market_id_arg, "instrument_id": instrument_id_arg},
+                    )
+                instrument_id = instrument_id_arg or market_id_arg
+                if instrument_id is None:
+                    raise ToolError(
+                        ErrorCode.VALIDATION_ERROR,
+                        "forecast.add requires thesis_id, or market_id/instrument_id plus rationale_body to create the folded thesis prerequisite",
+                        details={
+                            "required_any": ["thesis_id", "market_id", "instrument_id"],
+                            "replacement_path": "Use market.bind, then call forecast.add with market_id (or instrument_id) and rationale_body.",
+                        },
+                    )
+                body = args.get("rationale_body")
+                if not body:
+                    raise ToolError(
+                        ErrorCode.VALIDATION_ERROR,
+                        "forecast.add requires rationale_body when creating the folded thesis prerequisite",
+                        details={"field": "rationale_body", "replacement_for": "thesis.add.body"},
+                    )
+                if market_id_arg is not None and uow.conn.execute(
+                    "SELECT 1 FROM markets WHERE id = ?", (market_id_arg,)
+                ).fetchone() is None:
+                    raise ToolError(ErrorCode.NOT_FOUND, "market_id not found", details={"market_id": market_id_arg})
+                if uow.conn.execute(
+                    "SELECT 1 FROM instruments WHERE id = ?", (instrument_id,)
+                ).fetchone() is None:
+                    raise ToolError(ErrorCode.NOT_FOUND, "instrument_id not found", details={"instrument_id": instrument_id})
+                reject_if_contains_secrets(body, field="rationale_body")
+                thesis_id = args.get("thesis_id") or new_id("th")
+                thesis_valid_from = normalize_timestamp(args, "valid_from") or created_at
+                thesis_metadata = store_metadata_json(args)
+                thesis_payload = {
+                    "id": thesis_id,
+                    "instrument_id": instrument_id,
+                    "version": 1,
+                    "parent_thesis_id": args.get("parent_thesis_id"),
+                    "side": args.get("side") or "yes",
+                    "time_horizon_at": normalize_timestamp(args, "time_horizon_at"),
+                    "confidence_label": args.get("confidence_label"),
+                    "body": body,
+                    "falsification_criteria": args.get("falsification_criteria"),
+                    "exit_triggers": args.get("exit_triggers"),
+                    "risk_notes": args.get("risk_notes"),
+                    "strategy_id": args.get("strategy_id"),
+                    "valid_from": thesis_valid_from,
+                    "valid_to": normalize_timestamp(args, "valid_to"),
+                    "metadata_json": thesis_metadata,
+                }
+                uow.execute(
+                    "INSERT INTO theses(id, instrument_id, version, parent_thesis_id, side, time_horizon_at, confidence_label, body, falsification_criteria, exit_triggers, risk_notes, strategy_id, valid_from, valid_to, agent_id, model_id, environment, run_id, metadata_json, created_at, actor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        thesis_id, instrument_id, 1, thesis_payload["parent_thesis_id"], thesis_payload["side"],
+                        thesis_payload["time_horizon_at"], thesis_payload["confidence_label"], body,
+                        thesis_payload["falsification_criteria"], thesis_payload["exit_triggers"],
+                        thesis_payload["risk_notes"], thesis_payload["strategy_id"], thesis_valid_from,
+                        thesis_payload["valid_to"], seg["agent_id"], seg["model_id"], seg["environment"],
+                        seg["run_id"], thesis_metadata, created_at, ctx.actor_id,
+                    ),
+                )
+                emit_event(
+                    uow, event_type="thesis.created", subject_kind="thesis", subject_id=thesis_id,
+                    payload=thesis_payload, actor_id=ctx.actor_id, idempotency_key=None, ctx=ctx,
+                )
             # Find the head resolved_final outcome up-front; the forecast row
             # itself needs `metadata_json.late_recorded` set inline (scoring.md
             # §6 trigger #2 + dogfood-protocol §2.3 require the flag on the
@@ -632,6 +769,7 @@ def _forecast_anchor_to_snapshot(args: dict[str, Any], ctx: ToolContext) -> dict
 def register_forecast_tools(registry: ToolRegistry) -> None:
     registry.register(
         "forecast.add", _forecast_add, is_write=True,
+        json_schema=FORECAST_ADD_JSON_SCHEMA,
         **examples_for("forecast.add"),
     )
     registry.register(

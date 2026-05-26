@@ -73,7 +73,7 @@ Examples:
 | `journal.init` | `trade-trace journal init` |
 | `market.bind` | `trade-trace market bind` |
 
-The current default public registry exposes 65 tools. Renamed tools expose compatibility metadata such as `legacy_name` (for example `resolution.add` has legacy `outcome.add`; `playbook.record_adherence` has legacy `decision.record_adherence`; `playbook.upsert`/`strategy.upsert` replace `playbook.create`/`strategy.create`). `tool.schema`/MCP metadata is the authoritative way for legacy callers to discover these hints and removed-tool guidance.
+The current default public registry exposes 65 tools. Renamed tools expose compatibility metadata such as `legacy_name` (for example `resolution.add` has legacy `outcome.add`; `playbook.record_adherence` has legacy `decision.record_adherence`; `playbook.upsert`/`strategy.upsert` replace `playbook.create`/`strategy.create`). `tool.schema`/MCP metadata is the authoritative way for legacy callers to discover these hints and removed-tool guidance. For the public forecast/decision setup path, clients should call `market.bind` first and use its returned `instrument_id` for `snapshot.add`/`decision.add`; `forecast.add` can create the folded thesis prerequisite when supplied that `market_id` or `instrument_id` plus `rationale_body`.
 
 The mapping is mechanical and irreversible-with-collisions: two MCP
 tool names cannot map to the same CLI invocation.
