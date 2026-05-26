@@ -125,9 +125,10 @@ holds it:
 - If the lock is not acquired within the timeout, the failing write
   returns `STORAGE_ERROR` with `details.reason = "single_writer_lock"`,
   `details.held_by_pid` (if discoverable from filesystem locks), and
-  `details.retry_after_seconds = <exponential-backoff hint, starting at 2>`.
+  `details.retry_after_seconds = 2` as the initial recommended wait.
 - The agent is expected to back off and retry — the error envelope's
-  `details.retry_after_seconds` is the recommended next-attempt wait.
+  `details.retry_after_seconds` is the recommended next-attempt wait, and
+  callers may use an exponential policy starting from that hint.
 - The contract surface treats `single_writer_lock` as a transient
   failure; the calling agent or CLI can simply retry after the hint.
 

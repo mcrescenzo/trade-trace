@@ -87,7 +87,11 @@ class UnitOfWork:
         self.conn.execute("ROLLBACK")
 
     def __enter__(self) -> UnitOfWork:
-        self.conn.execute("BEGIN")
+        # Acquire the SQLite writer lock up front. This makes the documented
+        # operability.md §3 single-writer contract deterministic: a contending
+        # writer waits for busy_timeout here instead of doing validation/read
+        # work before failing at the first INSERT.
+        self.conn.execute("BEGIN IMMEDIATE")
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:

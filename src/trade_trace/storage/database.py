@@ -238,12 +238,22 @@ def open_database(path: Path, *, create_parent: bool = True) -> Database:
     # if they already exist when we open the DB. New ones get pinned
     # on close() (per Database.close).
     _chmod_wal_shm_siblings(path)
-    # Apply pragmas. WAL must be SET (returns the new mode); the others use
-    # `PRAGMA name = value`.
-    conn.execute("PRAGMA journal_mode = WAL")
+    # Apply pragmas. Set busy_timeout before WAL negotiation so a contended
+    # second writer honors operability.md §3.2 even if the lock is observed
+    # while opening/configuring the connection.
     conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+    try:
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA synchronous = NORMAL")
+    except sqlite3.OperationalError as exc:
+        if "database is locked" not in str(exc).lower():
+            raise
+        # Another writer can hold the WAL write lock while this connection is
+        # being opened. Existing Trade Trace databases are already in WAL mode;
+        # let the actual write statement honor busy_timeout and surface the
+        # documented single_writer_lock envelope instead of failing during
+        # connection setup.
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA synchronous = NORMAL")
     return Database(path=path, connection=conn)
 
 

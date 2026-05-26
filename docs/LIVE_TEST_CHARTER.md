@@ -39,8 +39,8 @@ The MVP single-writer assumption is:
 - If the write lock is not acquired within that timeout, the failing write returns `STORAGE_ERROR` with:
   - `details.reason = "single_writer_lock"`
   - `details.held_by_pid` when discoverable
-  - `details.retry_after_seconds = <exponential-backoff hint, starting at 2>`
-- The calling agent backs off for the documented `retry_after_seconds` hint and retries.
+  - `details.retry_after_seconds = 2` as the initial recommended wait
+- The calling agent backs off for the documented `retry_after_seconds` hint and retries; callers may use an exponential policy starting from that hint.
 - `single_writer_lock` is a transient, recoverable failure envelope, not data loss.
 - Reads are never blocked by writers and never fail with `single_writer_lock`.
 - Multi-writer coordination, write fan-out, connection-pool retry/backoff, or migration to a different engine are deferred P1+ work.

@@ -406,11 +406,20 @@ def dispatch(
             return error_envelope(meta, code, msg, {"sqlite_error": msg})
         except sqlite3.Error as exc:
             _apply_hints()
+            msg = str(exc)
+            details: dict[str, object] = {"sqlite_error": msg}
+            if "database is locked" in msg.lower() or "database table is locked" in msg.lower():
+                # operability.md §3.2: second writer contention is a transient
+                # single-writer failure. The envelope reports the initial
+                # recommended wait; callers may exponentially back off from
+                # that 2-second starting point. SQLite already waited for the
+                # connection's busy_timeout before surfacing this error.
+                details.update({"reason": "single_writer_lock", "retry_after_seconds": 2})
             return error_envelope(
                 meta,
                 ErrorCode.STORAGE_ERROR,
-                str(exc),
-                {"sqlite_error": str(exc)},
+                msg,
+                details,
             )
 
         if not isinstance(data, dict):
