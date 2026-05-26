@@ -37,7 +37,7 @@ Run from a clean checkout and record the candidate SHA plus command output. Do n
    ```
 6. Offline/manual market-bind smoke, no adapter/network:
    ```bash
-   tt market bind --external-id polymarket:test-condition --source manual --mechanism order_book --state open
+   tt market bind --external-id polymarket:test-condition --source manual --mechanism clob --state open
    ```
 7. Manual live-adapter HITL gate (not CI, not default): only if the owner supplies a disposable Polygon RPC URL and real public Polymarket condition. Configure in a throwaway `$TRADE_TRACE_HOME`, run `market.bind`, `snapshot.fetch`, and `outcome.fetch` when applicable, and record sanitized evidence only. If not supplied, explicitly record: live-adapter smoke not exercised; mocked/offline adapter coverage only.
 8. Documentation tests:

@@ -130,7 +130,7 @@ The CLI mirrors the MCP catalog by replacing dots in MCP tool names with spaces 
 tt journal init
 tt tool schema
 tt tool schema --tool forecast.add
-tt market bind --external-id polymarket:event-123 --source manual --mechanism order_book --state open
+tt market bind --external-id polymarket:event-123 --source manual --mechanism clob --state open
 ```
 
 Use `tool.schema` as the source of truth for exact fields, enums, examples, dry-run support, and required metadata. For a complete agent loop, read [`docs/AGENT_GUIDE.md`](./docs/AGENT_GUIDE.md).
