@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from trade_trace.contracts.tool_registry import ToolRegistry
-from trade_trace.reports import report_mistakes, report_pnl, report_risk, report_strengths
+from trade_trace.reports import (
+    report_mistakes, report_pnl, report_process_analytics, report_risk,
+    report_strengths,
+)
 from trade_trace.reports.tool_schemas import _REPORT_SCHEMAS
 
 from .audit_quality import _report_audit_readiness, _report_playbook_adherence, _report_source_quality
@@ -18,7 +21,7 @@ from .calibration_diagnostics import (
     _report_time_decay_sharpening, _report_decision_velocity,
     _report_forecast_diagnostics, _report_unscored_forecasts,
 )
-from .common import _make_filter_only_report
+from .common import _make_filter_only_report, _make_request_report
 from .compare_policy_coach import (
     _report_coach, _report_compare, _report_filter_schema, _report_opportunity,
     _report_strategy_performance,
@@ -350,6 +353,16 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
             "Mirror of report.mistakes."
         ),
         json_schema=_REPORT_SCHEMAS["report.strengths"]
+    ),
+    ReportToolRegistration(
+        "report.process_analytics",
+        _make_request_report(report_process_analytics),
+        description=(
+            "Decision-tags-only process analytics MVP: tag frequency and "
+            "tag-pair co-occurrence over local decision_tags, with explicit "
+            "unsupported metadata for review/review_tags and cost-family analytics."
+        ),
+        json_schema=_REPORT_SCHEMAS["report.process_analytics"]
     ),
     ReportToolRegistration(
         "report.pnl",

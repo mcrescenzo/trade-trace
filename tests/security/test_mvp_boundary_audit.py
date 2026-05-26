@@ -246,6 +246,7 @@ SHIPPED_REPORTS = {
     "report.audit_readiness",
     "report.mistakes",
     "report.strengths",
+    "report.process_analytics",
     "report.pnl",
     "report.risk",
     "report.opportunity",

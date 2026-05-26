@@ -235,6 +235,25 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
     ),
     "report.mistakes": _schema({"filter": _FILTER_PROP}),
     "report.strengths": _schema({"filter": _FILTER_PROP}),
+    "report.process_analytics": _schema(
+        {
+            "filter": _FILTER_PROP,
+            "dimensions": {"type": "array", "items": {"type": "string"}},
+            "group_by": {"type": "array", "items": {"type": "string"}},
+            "metrics": {"type": "array", "items": {"type": "string"}},
+            "features": {"type": "array", "items": {"type": "string"}},
+            "include_costs": {"type": "boolean"},
+            "min_sample": {"type": "integer", "minimum": 1},
+            "max_groups": {"type": "integer", "minimum": 1},
+            "max_record_ids_per_group": {"type": "integer", "minimum": 1},
+            "as_of": {"type": "string"},
+        },
+        description=(
+            "Decision-tags-only process analytics MVP: tag frequency and tag-pair "
+            "co-occurrence over local decision_tags. Review/review_tags and cost-family "
+            "analytics are explicitly unsupported metadata, not computed values."
+        ),
+    ) | {"additionalProperties": False},
     "report.pnl": _schema(
         {"filter": _FILTER_PROP},
         description=(

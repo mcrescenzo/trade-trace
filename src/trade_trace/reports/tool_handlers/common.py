@@ -44,6 +44,7 @@ from trade_trace.reports import (
     report_playbook_adherence,
     report_pnl,
     report_policy_candidates,
+    report_process_analytics,
     report_recall_receipts,
     report_risk,
     report_source_quality,
@@ -333,6 +334,24 @@ def _make_filter_only_report(fn):
                 fn, connection, raw_filter=args.get("filter"),
             ),
         )
+
+    return _handler
+
+
+def _make_request_report(fn):
+    """Wrap a report function that validates its full request object."""
+
+    def _handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        def _build(connection: Any) -> dict[str, Any]:
+            try:
+                request = {k: v for k, v in args.items() if k != "home"}
+                return fn(connection, request=request)
+            except ValidationError as exc:
+                raise report_filter_validation_to_tool_error(exc) from exc
+            except UnsupportedFilterError as exc:
+                raise _unsupported_filter_to_tool_error(exc) from exc
+
+        return _run_report_data(args, ctx, _build)
 
     return _handler
 

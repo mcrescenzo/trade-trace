@@ -136,6 +136,13 @@ SUPPORTED_FILTER_FIELDS: dict[str, frozenset[str]] = {
     # global result.
     "report.mistakes": frozenset(),
     "report.strengths": frozenset(),
+    "report.process_analytics": frozenset({
+        "decision.tags_any",
+        "decision.tags_all",
+        "strategy.strategy_id",
+        "time_window.decision_at_gte",
+        "time_window.decision_at_lt",
+    }),
     "report.pnl": frozenset(),
     "report.watchlist": frozenset(),
     "report.lifecycle": frozenset({
