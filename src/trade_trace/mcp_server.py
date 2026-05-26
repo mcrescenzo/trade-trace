@@ -24,6 +24,7 @@ from trade_trace.contracts.tool_registry import ToolRegistry
 from trade_trace.core import default_registry, dispatch, new_request_id
 
 DEFAULT_MCP_ACTOR_ID = "agent:mcp-default"
+TOP_LEVEL_JSON_SCHEMA_COMBINATORS = ("anyOf", "oneOf", "allOf")
 
 
 from trade_trace.security.credential_keys import (  # noqa: E402
@@ -74,13 +75,47 @@ def mcp_tool_specs(
         spec = {
             "name": registration.name,
             "description": description,
-            "input_schema": registration.json_schema or {},
+            "input_schema": claude_compatible_mcp_input_schema(registration.json_schema or {}),
             "is_write": registration.is_write,
             "metadata": metadata,
         }
         _assert_no_secret_transport_hints(spec)
         specs.append(spec)
     return specs
+
+
+def claude_compatible_mcp_input_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Return an MCP-advertised schema accepted by Claude Code.
+
+    Claude Code 2.1.150 rejects MCP tool catalogs whose ``input_schema`` has a
+    top-level JSON Schema combinator (``anyOf``/``oneOf``/``allOf``). Keep the
+    registry schema canonical for runtime validation, but advertise an object
+    schema without those top-level keys at the transport boundary.
+
+    The normalized schema remains descriptive: object properties, base required
+    fields, and nested constraints are preserved. Only top-level combinators are
+    removed, because that is the compatibility rule currently enforced by the
+    client and runtime validation below still uses ``registration.json_schema``.
+    """
+
+    if not schema:
+        return {"type": "object", "properties": {}}
+    if not any(key in schema for key in TOP_LEVEL_JSON_SCHEMA_COMBINATORS):
+        return dict(schema)
+
+    advertised = {key: value for key, value in schema.items() if key not in TOP_LEVEL_JSON_SCHEMA_COMBINATORS}
+    advertised["type"] = "object"
+    advertised.setdefault("properties", {})
+
+    note = (
+        "MCP compatibility note: top-level JSON Schema combinators from the "
+        "canonical runtime schema are omitted from this advertised schema; the "
+        "dispatcher still validates calls against the full canonical schema."
+    )
+    description = advertised.get("description")
+    advertised["description"] = f"{description} {note}" if description else note
+    advertised["x-trade-trace-mcp-schema-note"] = "top-level combinators omitted for Claude Code compatibility"
+    return advertised
 
 
 def _assert_no_secret_transport_hints(value: Any, path: tuple[str, ...] = ()) -> None:
