@@ -104,3 +104,29 @@ describing what was found, what was changed (if anything), and why
 the push step was skipped. Do not silently skip the push step in a
 mutating session — that's a workflow violation, not an exemption.
 <!-- END BEADS INTEGRATION -->
+
+## Persistent Memory (`bd remember`)
+
+`bd remember "<text>" [--key slug]` stores text in the beads DB that
+`bd prime` injects into every future session — shared via Dolt across
+agents and accounts. Search with `bd memories <keyword>`; remove with
+`bd forget <key>`; pass `--key` so future edits update in place
+(without it, the key is auto-derived from content and the next edit
+lands under a different key).
+
+**Save** durable, non-obvious knowledge that passes the *3-month test*
+(*if I re-read this in 3 months, will it still be true and would I
+have wished I knew it?*): hidden constraints not visible in code,
+"we tried X and it doesn't work because Y" failure modes, conventions
+the codebase doesn't enforce, cross-bead decisions that don't fit in
+any one bead.
+
+**Don't save** bead-state snapshots ("N beads ready", refinement
+narratives — query `bd ready` / `bd list` in the moment), activity
+logs, anything that belongs in a bead's `--design` / `--notes` /
+`--acceptance` field, anything `grep` or `git log` would find, or
+plan-file paths (they rot).
+
+**Hygiene**: `bd memories <keyword>` before saving to avoid
+duplicates; fix or `bd forget` memories that go stale — rotted memory
+in the prime stream is worse than no memory.
