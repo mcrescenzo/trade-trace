@@ -11,8 +11,8 @@ from tests._direct_sql_builders import (
     insert_thesis,
     insert_venue,
 )
-from trade_trace.mcp_server import mcp_call
 from tests._mcp_helpers import with_legacy_idempotency_key
+from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import apply_pending_migrations, find_orphan_edges, open_database
 from trade_trace.storage.paths import db_path
 

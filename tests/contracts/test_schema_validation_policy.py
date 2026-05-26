@@ -10,7 +10,6 @@ from trade_trace.contracts.schema_validation import (
     reportable_schema_validation_error,
 )
 
-
 _SCHEMA = {
     "type": "object",
     "properties": {

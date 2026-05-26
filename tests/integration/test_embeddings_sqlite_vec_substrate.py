@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from trade_trace.mcp_server import mcp_call
 from tests._mcp_helpers import with_legacy_idempotency_key
+from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.migrations import _migration_009_events_append_only
 from trade_trace.storage.paths import db_path

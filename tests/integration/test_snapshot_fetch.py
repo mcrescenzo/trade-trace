@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
+from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope
 from trade_trace.mcp_server import mcp_call
-from tests._mcp_helpers import with_legacy_idempotency_key
 
 FIXTURES = Path(__file__).parent / "fixtures" / "polymarket"
 

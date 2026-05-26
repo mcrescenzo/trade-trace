@@ -15,10 +15,10 @@ import json
 from contextlib import redirect_stdout
 from pathlib import Path
 
+from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.cli import main as cli_main
 from trade_trace.core import default_registry, dispatch
 from trade_trace.mcp_server import mcp_call
-from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.tools.imports import (
     ImportCommitOutput,
     ImportJSONLLine,

@@ -5,12 +5,12 @@ from typing import Any
 
 import httpx
 
+from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.adapters.polymarket.config import PolymarketConfig
 from trade_trace.adapters.polymarket.errors import AdapterError
 from trade_trace.adapters.polymarket.retry import retry_policy_kwargs
 from trade_trace.mcp_server import mcp_call
-from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.tools._market_rows import adapter_cache_hit_row_dict
 from trade_trace.tools.adapter_polymarket import _market_cache_hit
 

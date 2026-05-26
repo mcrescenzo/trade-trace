@@ -34,7 +34,6 @@ from trade_trace.events.semantic_keys import (
 )
 from trade_trace.timestamps import to_utc_iso8601
 
-
 EVENT_RECORD_SELECT_COLUMNS = (
     "id",
     "event_type",
@@ -96,7 +95,7 @@ class EventRecord:
     idempotent_replay: bool = False
 
     @staticmethod
-    def from_row(row: sqlite3.Row | tuple[Any, ...]) -> "EventRecord":
+    def from_row(row: sqlite3.Row | tuple[Any, ...]) -> EventRecord:
         """Hydrate an event row selected with EVENT_RECORD_SELECT_COLUMNS."""
 
         return EventRecord(

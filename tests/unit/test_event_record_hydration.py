@@ -1,8 +1,8 @@
 import sqlite3
 
+from trade_trace import exporter
 from trade_trace.events import log as event_log
 from trade_trace.events.log import EventRecord, EventWriter
-from trade_trace import exporter
 
 
 def _conn_with_event() -> sqlite3.Connection:
