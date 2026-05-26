@@ -1,6 +1,6 @@
 # v0.0.2 release checklist
 
-Trade Trace v0.0.2 is a prediction-market-only, local-first release candidate. This checklist is pre-tag evidence, not permission to publish. Pushing a public branch, pushing a release tag, and PyPI publishing each require explicit owner approval for the exact candidate SHA.
+Trade Trace v0.0.2 is a prediction-market-only, local-first release candidate. This checklist is pre-tag evidence for manual/tagged releases. The repository also has an owner-approved risky automation policy: every push to `main` may publish a stable PyPI post-release after CI computes a unique version and the publish workflow passes.
 
 ## Release boundary
 
@@ -78,7 +78,9 @@ Run from a clean checkout and record the candidate SHA plus command output. Do n
     /tmp/trade-trace-v002-smoke/bin/trade-trace-mcp --help || true
     /tmp/trade-trace-v002-smoke/bin/pip check
     ```
-17. Publication gate: verify PyPI trusted publisher / GitHub environment protection for the exact candidate before any tag or upload. Do not publish from local evidence alone.
+17. Publication gate:
+    - For `main` pushes, `.github/workflows/workflow.yml` computes `<src-version>.post<git-commit-count>`, skips publishing if that exact PyPI version already exists, and publishes through PyPI trusted publishing when CI passes.
+    - For manual `v*` tags, verify PyPI trusted publisher / GitHub environment protection for the exact candidate before any tag or upload. Do not publish manual/tagged releases from local evidence alone.
 
 ## CI expectations
 

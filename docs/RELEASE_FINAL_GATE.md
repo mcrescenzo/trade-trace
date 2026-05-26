@@ -1,6 +1,6 @@
 # Release final gate — v0.0.2
 
-This document records the release decision boundary for the v0.0.2 prediction-market pivot. It is not itself approval to publish. Public branch push, tag push, and PyPI upload each require explicit owner approval for the exact candidate SHA.
+This document records the release decision boundary for the v0.0.2 prediction-market pivot. Manual/tagged releases still require explicit owner approval for the exact candidate SHA. Separately, the repository now has an owner-approved risky automation policy: every push to `main` may publish a stable PyPI post-release after CI computes a unique version and the publish workflow passes.
 
 ## Candidate boundary
 
@@ -23,11 +23,11 @@ Use `docs/RELEASE_CHECKLIST.md` as the canonical command checklist. Before any t
 5. Fresh journal and offline market-bind smoke have been exercised.
 6. Live Polymarket smoke is either completed with sanitized evidence or explicitly deferred because no disposable Polygon RPC URL / real test condition was provided. If deferred, release notes must say live-adapter smoke was not exercised.
 7. Package build and fresh wheel smoke pass.
-8. PyPI trusted-publisher / GitHub environment protection are verified for the exact candidate before publication.
+8. PyPI trusted-publisher / GitHub environment protection are verified for the selected publication path: automatic `main` post-release publishing or manual `v*` tag publishing.
 
 ## Safety publication rule
 
-Do not publish from stale dated proof. If an older proof file lists historical pytest counts, package names, or tag names, treat it as a historical snapshot, not a live/current proof. The release candidate is proven only by current-head command output and fresh package/wheel smoke.
+Do not publish manual/tagged releases from stale dated proof. If an older proof file lists historical pytest counts, package names, or tag names, treat it as a historical snapshot, not a live/current proof. Manual release candidates are proven only by current-head command output and fresh package/wheel smoke. Automatic `main` post-releases are proven by the GitHub Actions run for that exact commit.
 
 ## Repo-public audit evidence
 
@@ -35,10 +35,10 @@ Do not publish from stale dated proof. If an older proof file lists historical p
 
 ## Approval rule
 
-The maintainer must approve:
+For manual/tagged releases, the maintainer must approve:
 
 1. the exact public branch/export candidate,
 2. the exact tag push,
 3. the exact PyPI publication path.
 
-No agent should infer those approvals from green tests or from this document.
+No agent should infer manual/tagged-release approvals from green tests or from this document. The `main` branch auto-publish path is intentionally different: merge/push to `main` is the publication trigger, and the workflow computes the PyPI version as `<src-version>.post<git-commit-count>` without committing a version bump.

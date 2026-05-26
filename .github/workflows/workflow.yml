@@ -2,6 +2,8 @@ name: Publish to PyPI
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
@@ -18,22 +20,68 @@ jobs:
     name: Build sdist and wheel
     needs: test
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      skip_publish: ${{ steps.pypi.outputs.exists }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Verify tag matches package versions
+      - name: Compute package version
+        id: version
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME#v}"
           MODULE_VERSION=$(python -c "import re, pathlib; m = re.search(r'__version__\s*=\s*[\x27\x22]([^\x27\x22]+)[\x27\x22]', pathlib.Path('src/trade_trace/version.py').read_text()); print(m.group(1))")
-          echo "git tag (stripped) : $TAG"
-          echo "version.py         : $MODULE_VERSION"
-          if [ "$TAG" != "$MODULE_VERSION" ]; then
-            echo "::error::Version mismatch — tag and src/trade_trace/version.py must match before publishing"
+
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME#v}"
+            echo "git tag (stripped) : $TAG"
+            echo "version.py         : $MODULE_VERSION"
+            if [ "$TAG" != "$MODULE_VERSION" ]; then
+              echo "::error::Version mismatch — tag and src/trade_trace/version.py must match before publishing"
+              exit 1
+            fi
+            VERSION="$MODULE_VERSION"
+          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            COMMIT_COUNT=$(git rev-list --count HEAD)
+            VERSION="${MODULE_VERSION}.post${COMMIT_COUNT}"
+            python - <<PY
+          from pathlib import Path
+          import re
+
+          path = Path("src/trade_trace/version.py")
+          text = path.read_text()
+          version = "$VERSION"
+          text = re.sub(r'__version__\\s*=\\s*(["\\']).*?\\1', f'__version__ = "{version}"', text, count=1)
+          path.write_text(text)
+          PY
+          else
+            echo "::error::Unsupported ref for publishing workflow: $GITHUB_REF"
+            exit 1
+          fi
+
+          echo "computed version  : $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether version already exists on PyPI
+        id: pypi
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' "https://pypi.org/pypi/trade-trace/${VERSION}/json")
+          if [ "$STATUS" = "200" ]; then
+            echo "PyPI already has trade-trace $VERSION; skipping publish."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif [ "$STATUS" = "404" ]; then
+            echo "PyPI does not have trade-trace $VERSION; continuing."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Unexpected PyPI response for trade-trace $VERSION: HTTP $STATUS"
             exit 1
           fi
 
@@ -50,6 +98,38 @@ jobs:
         # README or other PyPI-rendered metadata is malformed.
         run: python -m twine check --strict dist/*
 
+      - name: Verify built distribution version
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import email.parser
+          import tarfile
+          import zipfile
+          from pathlib import Path
+
+          expected = "${{ steps.version.outputs.version }}"
+          dists = sorted(Path("dist").iterdir())
+          if not dists:
+              raise SystemExit("no distributions found in dist/")
+
+          for dist in dists:
+              if dist.suffix == ".whl":
+                  with zipfile.ZipFile(dist) as zf:
+                      metadata_name = next(n for n in zf.namelist() if n.endswith(".dist-info/METADATA"))
+                      metadata = zf.read(metadata_name).decode()
+              elif dist.name.endswith(".tar.gz"):
+                  with tarfile.open(dist, "r:gz") as tf:
+                      metadata_member = next(m for m in tf.getmembers() if m.name.endswith("/PKG-INFO"))
+                      metadata = tf.extractfile(metadata_member).read().decode()
+              else:
+                  raise SystemExit(f"unexpected distribution file: {dist}")
+
+              version = email.parser.Parser().parsestr(metadata)["Version"]
+              print(f"{dist.name}: Version {version}")
+              if version != expected:
+                  raise SystemExit(f"{dist.name} has version {version}, expected {expected}")
+          PY
+
       - name: Upload distributions
         uses: actions/upload-artifact@v4
         with:
@@ -59,6 +139,7 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: build
+    if: needs.build.outputs.skip_publish != 'true'
     runs-on: ubuntu-latest
     environment:
       name: pypi
