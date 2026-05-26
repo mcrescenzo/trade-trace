@@ -20,6 +20,11 @@ docs/reviews/
 # Local agent state
 .claude/
 
+# Local environment files / live-test secrets. Keep examples trackable.
+.env
+.env.*
+!.env*.example
+
 # Python package artifacts
 __pycache__/
 *.egg-info/
