@@ -3,8 +3,8 @@
 The stdio transport is intentionally narrow: it exposes only the explicit tool
 registry, performs no network listening or dynamic discovery, and dispatches
 all tool calls through the same in-process MCP shim used by parity tests. The
-`mcp` SDK remains an optional install extra; imports are lazy so the base
-package can be installed without MCP server support.
+`mcp` SDK is a base runtime dependency; imports remain localized so any future
+packaging incompatibility surfaces as a clean MCP-boundary error.
 """
 
 from __future__ import annotations

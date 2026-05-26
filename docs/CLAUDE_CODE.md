@@ -20,6 +20,25 @@ claude mcp add -e TRADE_TRACE_HOME="$HOME/.trade-trace" -e MCP_ACTOR_ID="agent:c
 
 This registers a local stdio MCP server named `trade-trace` for the current Claude Code project. The command after `--` is the exact server process Claude Code launches.
 
+Equivalent MCP server entry:
+
+```json
+{
+  "mcpServers": {
+    "trade-trace": {
+      "command": "trade-trace-mcp",
+      "args": [],
+      "env": {
+        "TRADE_TRACE_HOME": "/absolute/path/to/.trade-trace",
+        "MCP_ACTOR_ID": "agent:claude-code"
+      }
+    }
+  }
+}
+```
+
+Use an absolute `command` value (for example, the output of `command -v trade-trace-mcp`) if Claude Code cannot resolve the console script from its launch environment.
+
 If your Claude Code version requires an explicit scope flag, use the project/local scope offered by `claude mcp add --help` and keep the same server command:
 
 ```bash
