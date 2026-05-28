@@ -115,7 +115,40 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             details={"field": "bound_via", "value": bound_via, "allowed": ["manual"]},
         )
     idempotency_key = args.get("idempotency_key")
-    metadata_json = store_metadata_json(args)
+    metadata = store_metadata_json(args)
+    extra_pm_keys = (
+        "gamma_event_id", "gamma_market_id", "event_slug", "market_slug", "condition_id",
+        "outcome_ids_by_label", "outcome_token_ids_by_label", "negative_risk", "event_grouping", "resolution_rule", "resolution_rule_text",
+        "tick_size", "fee_rate_bps", "rewards", "rebates", "tradable", "accepting_orders",
+    )
+    extra_pm = {key: args[key] for key in extra_pm_keys if key in args}
+    if source == "polymarket" and extra_pm:
+        parsed_metadata = json.loads(metadata or "{}")
+        identity = {
+            "gamma_event_id": extra_pm.get("gamma_event_id"),
+            "gamma_market_id": extra_pm.get("gamma_market_id") or external_id,
+            "market_slug": extra_pm.get("market_slug"),
+            "event_slug": extra_pm.get("event_slug"),
+            "condition_id": extra_pm.get("condition_id"),
+            "outcome_token_ids_by_label": extra_pm.get("outcome_ids_by_label") or extra_pm.get("outcome_token_ids_by_label") or {},
+        }
+        parsed_metadata |= {
+            "polymarket_identity": identity,
+            "event_grouping": extra_pm.get("event_grouping") or {"event_id": extra_pm.get("gamma_event_id"), "event_slug": extra_pm.get("event_slug")},
+            "resolution_rule": extra_pm.get("resolution_rule") or {"text": extra_pm.get("resolution_rule_text"), "source": args.get("resolution_source"), "provenance": "caller_supplied"},
+            "negative_risk": extra_pm.get("negative_risk") or {},
+            "market_microstructure": {
+                "tick_size": extra_pm.get("tick_size"),
+                "fee_rate_bps": extra_pm.get("fee_rate_bps"),
+                "rewards": extra_pm.get("rewards"),
+                "rebates": extra_pm.get("rebates"),
+                "tradable": extra_pm.get("tradable"),
+                "accepting_orders": extra_pm.get("accepting_orders"),
+            },
+        }
+        metadata_json = json.dumps(parsed_metadata, sort_keys=True, separators=(",", ":"))
+    else:
+        metadata_json = metadata
     venue_metadata_json = _json_text(args.get("venue_metadata_json"), field="venue_metadata_json")
     market_id = args.get("id") or new_id("mkt")
     created_at = now_iso()
@@ -356,9 +389,48 @@ def register_market_bind_tool(registry: ToolRegistry) -> None:
             "external_id": "example-market-1",
             "state": "open",
             "mechanism": "clob",
+            "bound_via": "manual",
+            "title": "Will example happen?",
+            "question": "Will example happen by 2026-12-31?",
+            "url": "https://example.invalid/market/example-market-1",
+            "resolution_source": "market_contract",
+            "ambiguity_kind": "market_rules_unclear",
+            "opened_at": "2026-01-01T00:00:00Z",
+            "close_at": "2026-12-31T00:00:00Z",
+            "closed_for_trading_at": "2026-12-31T00:00:00Z",
+            "resolving_at": "2027-01-01T00:00:00Z",
+            "resolved_at": "2027-01-02T00:00:00Z",
+            "voided_at": "2027-01-02T00:00:00Z",
+            "ambiguous_at": "2027-01-02T00:00:00Z",
+            "venue_metadata_json": {},
+            "metadata_json": {},
+            "gamma_event_id": "evt-example-1",
+            "gamma_market_id": "example-market-1",
+            "event_slug": "example-event",
+            "market_slug": "example-market-1",
+            "condition_id": "condition-example-1",
+            "outcome_ids_by_label": {"yes": "outcome-yes", "no": "outcome-no"},
+            "negative_risk": {"enabled": False},
+            "event_grouping": {"event_id": "evt-example-1", "event_slug": "example-event"},
+            "resolution_rule": {"text": "Resolve per public market rules.", "source": "market_contract", "provenance": "caller_supplied"},
+            "resolution_rule_text": "Resolve per public market rules.",
+            "tick_size": 0.01,
+            "fee_rate_bps": 0,
+            "rewards": {},
+            "rebates": {},
+            "tradable": True,
+            "accepting_orders": True,
             "idempotency_key": "00000000-0000-4000-8000-marketbind01",
         },
-        optional_keys=("idempotency_key",),
+        optional_keys=(
+            "idempotency_key", "title", "question", "url", "resolution_source", "ambiguity_kind",
+            "bound_via", "opened_at", "close_at", "closed_for_trading_at", "resolving_at",
+            "resolved_at", "voided_at", "ambiguous_at", "venue_metadata_json", "metadata_json",
+            "gamma_event_id", "gamma_market_id", "event_slug", "market_slug", "condition_id",
+            "outcome_ids_by_label", "negative_risk", "event_grouping", "resolution_rule",
+            "resolution_rule_text", "tick_size", "fee_rate_bps", "rewards", "rebates",
+            "tradable", "accepting_orders",
+        ),
         example_rich={
             "source": "polymarket",
             "external_id": "example-market-1",
@@ -369,6 +441,15 @@ def register_market_bind_tool(registry: ToolRegistry) -> None:
             "mechanism": "clob",
             "resolution_source": "market_contract",
             "bound_via": "manual",
+            "gamma_event_id": "evt-example-1",
+            "gamma_market_id": "example-market-1",
+            "outcome_ids_by_label": {"yes": "outcome-yes", "no": "outcome-no"},
+            "event_grouping": {"event_id": "evt-example-1", "event_slug": "example-event"},
+            "resolution_rule": {"text": "Resolve per public market rules.", "source": "market_contract", "provenance": "caller_supplied"},
+            "tick_size": 0.01,
+            "fee_rate_bps": 0,
+            "tradable": True,
+            "accepting_orders": True,
             "metadata_json": {"sources": []},
             "idempotency_key": "00000000-0000-4000-8000-marketbind01",
         },

@@ -8,6 +8,7 @@ state for agent continuity and calibration review.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime
 from typing import Any
@@ -147,7 +148,7 @@ def report_market_lifecycle(
         SELECT m.id, m.source, m.external_id, m.title, m.state, m.mechanism,
                m.opened_at, m.close_at, m.closed_for_trading_at,
                m.resolving_at, m.resolved_at, m.voided_at, m.ambiguous_at,
-               m.created_at,
+               m.created_at, m.metadata_json,
                (SELECT COUNT(*) FROM snapshots s WHERE s.instrument_id = m.id) AS snapshot_count,
                (SELECT COUNT(*) FROM decisions d WHERE d.instrument_id = m.id) AS decision_count,
                (SELECT COUNT(*) FROM forecasts f WHERE f.market_id = m.id) AS forecast_count
@@ -158,14 +159,48 @@ def report_market_lifecycle(
     sql += " ORDER BY COALESCE(m.opened_at, m.created_at), m.id"
     groups: list[dict[str, Any]] = []
     state_counts: dict[str, int] = {}
+    event_grouping_rollups: dict[str, dict[str, Any]] = {}
+    outcome_token_mappings: list[dict[str, Any]] = []
     for row in conn.execute(sql, params).fetchall():
         (
             market_id, source, external_id, title, state, mechanism,
             opened_at, close_at, closed_for_trading_at, resolving_at,
-            resolved_at, voided_at, ambiguous_at, created_at,
+            resolved_at, voided_at, ambiguous_at, created_at, metadata_json,
             snapshot_count, decision_count, forecast_count,
         ) = row
+        try:
+            market_metadata = json.loads(metadata_json or "{}")
+        except json.JSONDecodeError:
+            market_metadata = {}
         state_counts[state] = state_counts.get(state, 0) + 1
+        event_grouping = market_metadata.get("event_grouping") or {}
+        identity = market_metadata.get("polymarket_identity") or {}
+        resolution_rule = market_metadata.get("resolution_rule") or {}
+        event_key = str(event_grouping.get("event_id") or event_grouping.get("event_slug") or "ungrouped")
+        rollup = event_grouping_rollups.setdefault(
+            event_key,
+            {
+                "event_id": event_grouping.get("event_id"),
+                "event_slug": event_grouping.get("event_slug"),
+                "event_title": event_grouping.get("event_title"),
+                "market_count": 0,
+                "markets": [],
+                "resolution_rule_provenance": {},
+            },
+        )
+        rollup["market_count"] += 1
+        rollup["markets"].append(market_id)
+        provenance = resolution_rule.get("provenance")
+        if provenance:
+            rollup["resolution_rule_provenance"][provenance] = rollup["resolution_rule_provenance"].get(provenance, 0) + 1
+        tokens_by_label = identity.get("outcome_token_ids_by_label") or {}
+        if tokens_by_label:
+            outcome_token_mappings.append({
+                "market_id": market_id,
+                "event_id": event_grouping.get("event_id"),
+                "outcome_token_ids_by_label": tokens_by_label,
+                "resolution_rule": resolution_rule,
+            })
         terminal_at = resolved_at or voided_at or ambiguous_at
         durations = {
             "open_to_close_hours": _hours_between(opened_at or created_at, closed_for_trading_at or close_at),
@@ -196,6 +231,11 @@ def report_market_lifecycle(
                 "voided_at": voided_at,
                 "ambiguous_at": ambiguous_at,
                 "created_at": created_at,
+                "polymarket_identity": identity or None,
+                "event_grouping": event_grouping or None,
+                "resolution_rule": resolution_rule or None,
+                "negative_risk": market_metadata.get("negative_risk"),
+                "market_microstructure": market_metadata.get("market_microstructure"),
             },
             "filter": applied_filter_view(rf, report=report),
             "record_ids": {"markets": [market_id]},
@@ -211,6 +251,8 @@ def report_market_lifecycle(
         "metrics": {
             "market_count": len(groups),
             "state_counts": state_counts,
+            "event_groupings": list(event_grouping_rollups.values()),
+            "outcome_token_mappings": outcome_token_mappings,
         },
         "caveats": [],
     }

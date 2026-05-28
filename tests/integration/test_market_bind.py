@@ -27,6 +27,9 @@ def test_market_bind_is_public_mcp_catalog_tool_and_local_only(tmp_path):
     assert "manual/local" in rendered
     assert "no network" in rendered
     assert "broker" in rendered and "wallet" in rendered and "scheduler" in rendered
+    schema_props = specs["market.bind"]["input_schema"]["properties"]
+    for key in ("gamma_event_id", "outcome_ids_by_label", "resolution_rule", "tick_size", "fee_rate_bps", "tradable", "accepting_orders"):
+        assert key in schema_props
 
 
 def test_market_bind_idempotency_replay_sets_envelope_meta(tmp_path):

@@ -603,6 +603,14 @@
       "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
     },
     {
+      "pattern": "src/trade_trace/tools/risk.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "legacy_tool_compatibility",
+      "reason": "Reviewed risk receipt compatibility surface uses instrument_id while legacy risk inputs and receipts remain supported."
+    },
+    {
       "pattern": "src/trade_trace/tools/adapter_polymarket.py",
       "terms": [
         "instrument_id",

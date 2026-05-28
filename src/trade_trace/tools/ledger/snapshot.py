@@ -8,6 +8,7 @@ adapter-driven primitives (bead trade-trace-sx4n catalog).
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
@@ -25,6 +26,24 @@ from trade_trace.tools._helpers import (
 )
 from trade_trace.tools.ledger._shared import examples_for
 
+_SNAPSHOT_METADATA_FIELDS = (
+    "tick_size",
+    "fee_rate_bps",
+    "rewards",
+    "rebates",
+    "tradable",
+    "freshness",
+    "depth_provenance",
+)
+
+
+def _snapshot_metadata_json(args: dict[str, Any]) -> str:
+    metadata = dict(json.loads(store_metadata_json(args) or "{}"))
+    caller_fields = {key: args[key] for key in _SNAPSHOT_METADATA_FIELDS if key in args}
+    if caller_fields:
+        metadata["snapshot_metadata"] = {**metadata.get("snapshot_metadata", {}), **caller_fields}
+    return json.dumps(metadata, sort_keys=True, separators=(",", ":"))
+
 
 def _snapshot_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     instrument_id = require(args, "instrument_id")
@@ -32,7 +51,7 @@ def _snapshot_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     idempotency_key = args.get("idempotency_key")
     source = args.get("source", "manual")
     liquidity_depth_json = store_metadata_json(args, "liquidity_depth_json")
-    metadata_json = store_metadata_json(args)
+    metadata_json = _snapshot_metadata_json(args)
     seg = common_metadata(args)
     payload_common = {
         "instrument_id": instrument_id,
@@ -121,6 +140,13 @@ _SNAPSHOT_ADD_SCHEMA: dict[str, Any] = {
         "open_interest": {"type": "number"},
         "implied_probability": {"type": "number"},
         "liquidity_depth_json": {"type": "object"},
+        "tick_size": {"type": "number"},
+        "fee_rate_bps": {"type": "number"},
+        "rewards": {"type": "object"},
+        "rebates": {"type": "object"},
+        "tradable": {"type": "boolean"},
+        "freshness": {"type": "object"},
+        "depth_provenance": {"type": "string"},
         "agent_id": {"type": "string"},
         "model_id": {"type": "string"},
         "environment": {"type": "string"},
@@ -151,6 +177,13 @@ def register_snapshot_tools(registry: ToolRegistry) -> None:
             "volume",
             "open_interest",
             "implied_probability",
+            "tick_size",
+            "fee_rate_bps",
+            "rewards",
+            "rebates",
+            "tradable",
+            "freshness",
+            "depth_provenance",
             "liquidity_depth_json",
             "agent_id",
             "model_id",

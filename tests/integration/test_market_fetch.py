@@ -86,6 +86,13 @@ def test_market_bind_enabled_fetches_fixture_backed_market(tmp_path: Path, monke
     assert env.data["external_id"] == "pm-open-amm"
     assert env.data["bound_via"] == "adapter"
     assert env.data["mechanism"] == "amm"
+    meta = json.loads(env.data["metadata_json"])
+    assert meta["polymarket_identity"]["gamma_market_id"]
+    assert "condition_id" in meta["polymarket_identity"]
+    assert "outcome_token_ids_by_label" in meta["polymarket_identity"]
+    assert meta["resolution_rule"]["provenance"] == "polymarket_gamma_payload"
+    assert "event_grouping" in meta
+
 
 
 def test_market_bind_accepts_string_list_outcomes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -98,6 +100,42 @@ def test_market_lifecycle_reports_state_durations(home: Path):
     group = data["groups"][0]
     assert group["key"] == market_id
     assert group["metrics"]["open_to_terminal_hours"] == pytest.approx(264.0)
+
+
+def test_market_lifecycle_reports_event_market_outcome_grouping_and_rule_provenance(home: Path):
+    market_id = _seed_market(home)
+    metadata = {
+        "polymarket_identity": {"outcome_token_ids_by_label": {"yes": "yes-token", "no": "no-token"}},
+        "event_grouping": {"event_id": "evt-1", "event_slug": "event-one", "event_title": "Event One"},
+        "resolution_rule": {"text": "Public rule", "source": "market_contract", "provenance": "caller_supplied"},
+    }
+    _envelope(home, "market.bind", {"source": "polymarket", "external_id": f"ext-{market_id}", "state": "resolved", "mechanism": "clob"})
+    db = home / "trade-trace.sqlite"
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE markets SET metadata_json=? WHERE id=?", (json.dumps(metadata), market_id))
+
+    env = _envelope(home, "report.market_lifecycle", {})
+
+    metrics = env["data"]["summary"]["metrics"]
+    assert metrics["event_groupings"] == [
+        {
+            "event_id": "evt-1",
+            "event_slug": "event-one",
+            "event_title": "Event One",
+            "market_count": 1,
+            "markets": [market_id],
+            "resolution_rule_provenance": {"caller_supplied": 1},
+        }
+    ]
+    assert metrics["outcome_token_mappings"] == [
+        {
+            "market_id": market_id,
+            "event_id": "evt-1",
+            "outcome_token_ids_by_label": {"yes": "yes-token", "no": "no-token"},
+            "resolution_rule": {"text": "Public rule", "source": "market_contract", "provenance": "caller_supplied"},
+        }
+    ]
+    assert env["data"]["groups"][0]["market"]["event_grouping"]["event_id"] == "evt-1"
 
 
 def test_resolution_quality_counts_ambiguous_like_statuses(home: Path):

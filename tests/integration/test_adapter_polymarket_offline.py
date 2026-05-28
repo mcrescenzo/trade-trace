@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,12 @@ from trade_trace.adapters.polymarket.errors import AdapterError
 from trade_trace.adapters.polymarket.retry import retry_policy_kwargs
 from trade_trace.mcp_server import mcp_call
 from trade_trace.tools._market_rows import adapter_cache_hit_row_dict
-from trade_trace.tools.adapter_polymarket import _market_cache_hit
+from trade_trace.tools.adapter_polymarket import (
+    _market_cache_hit,
+    _market_payload,
+    _normalize_gamma_market,
+    _snapshot_from_raw,
+)
 
 
 def test_journal_status_adapter_state_default_offline(tmp_path: Path):
@@ -163,6 +169,31 @@ def test_market_cache_hit_row_surface_stays_narrow_and_ordered():
         "cache_hit",
         "state_changed",
     ]
+
+
+def test_adapter_normalizes_false_like_booleans_and_token_id_string_variants():
+    market = _market_payload(
+        {
+            "id": "m1",
+            "question": "Question?",
+            "outcomes": '["Yes","No"]',
+            "tokenIds": '["yes-token","no-token"]',
+            "negRisk": "false",
+            "active": "false",
+            "acceptingOrders": "0",
+        },
+        "m1",
+    )
+    metadata = json.loads(market["metadata_json"])
+
+    assert metadata["negative_risk"]["enabled"] is False
+    assert metadata["market_microstructure"]["tradable"] is False
+    assert metadata["market_microstructure"]["accepting_orders"] is False
+    assert metadata["polymarket_identity"]["outcome_token_ids_by_label"] == {"yes": "yes-token", "no": "no-token"}
+    assert _normalize_gamma_market({"token_ids": '["a","b"]'}, "m2")["token_ids"] == ["a", "b"]
+    snap = _snapshot_from_raw({"bestBid": "0.1", "bestAsk": "0.2", "active": "false", "accepting_orders": "false"})
+    assert snap["metadata_json"]["tradable"] is False
+    assert snap["metadata_json"]["accepting_orders"] is False
 
 
 class _FakeResponse:

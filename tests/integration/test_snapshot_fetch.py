@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope
 from trade_trace.mcp_server import mcp_call
+from trade_trace.storage.paths import db_path
 
 FIXTURES = Path(__file__).parent / "fixtures" / "polymarket"
 
@@ -84,6 +86,44 @@ def test_snapshot_fetch_enabled_captures_fixture_book(tmp_path: Path, monkeypatc
     assert env.data["ask"] == 0.63
     assert env.data["mid"] == pytest.approx(0.62)
     assert env.data["implied_probability"] == pytest.approx(0.62)
+    assert "liquidity_depth_json" in env.data
+    assert env.data["metadata_json"]["tick_size"] is None or "tick_size" in env.data["metadata_json"]
+
+
+def test_snapshot_add_persists_top_level_snapshot_metadata_fields(tmp_path: Path):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-manual-snapshot-meta")
+
+    env = _legacy_call(
+        "snapshot.add",
+        {
+            "home": home,
+            "instrument_id": market_id,
+            "captured_at": "2026-01-01T00:00:00Z",
+            "source": "manual",
+            "implied_probability": 0.55,
+            "tick_size": 0.01,
+            "fee_rate_bps": 12,
+            "rewards": {"daily_rate": "1"},
+            "rebates": {"maker": "0"},
+            "tradable": False,
+            "freshness": {"as_of": "2026-01-01T00:00:00Z", "provenance": "caller_supplied"},
+            "depth_provenance": "caller_supplied",
+            "metadata_json": {"note": "kept"},
+        },
+    )
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    with sqlite3.connect(db_path(Path(home))) as conn:
+        (metadata_text,) = conn.execute("SELECT metadata_json FROM snapshots WHERE id=?", (env.data["id"],)).fetchone()
+    metadata = json.loads(metadata_text)
+    assert metadata["note"] == "kept"
+    assert metadata["snapshot_metadata"]["tick_size"] == 0.01
+    assert metadata["snapshot_metadata"]["fee_rate_bps"] == 12
+    assert metadata["snapshot_metadata"]["tradable"] is False
+    assert metadata["snapshot_metadata"]["depth_provenance"] == "caller_supplied"
 
 
 def test_snapshot_fetch_derives_from_live_gamma_market_payload_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -119,6 +159,31 @@ def test_snapshot_fetch_derives_from_live_gamma_market_payload_path(tmp_path: Pa
     assert env.data["ask"] == 0.43
     assert env.data["mid"] == pytest.approx(0.42)
     assert env.data["volume"] == "12345.67"
+
+
+def test_snapshot_fetch_normalizes_false_like_booleans_and_persists_wrapped_shape(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-false-snapshot")
+    _enable_adapter(home)
+
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"bestBid": "0.10", "bestAsk": "0.20", "active": "false", "acceptingOrders": "0"},
+    )
+
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["metadata_json"]["tradable"] is False
+    assert env.data["metadata_json"]["accepting_orders"] is False
+    with sqlite3.connect(db_path(Path(home))) as conn:
+        (metadata_text,) = conn.execute("SELECT metadata_json FROM snapshots WHERE id=?", (env.data["id"],)).fetchone()
+    metadata = json.loads(metadata_text)
+    assert metadata["polymarket_snapshot"]["tradable"] is False
+    assert metadata["polymarket_snapshot"]["accepting_orders"] is False
 
 
 @pytest.mark.parametrize("field", ["bestBid", "bestAsk", "price"])

@@ -38,6 +38,76 @@ def _json(value: Any) -> str:
     return json.dumps(value if value is not None else {}, sort_keys=True, separators=(",", ":"))
 
 
+def _first_present(raw: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in raw and raw[key] not in (None, ""):
+            return raw[key]
+    return None
+
+
+def _normalize_bool_like(value: Any) -> bool | None:
+    """Normalize common API bool encodings without treating 'false' as truthy."""
+
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "t", "yes", "y", "1", "on"}:
+            return True
+        if lowered in {"false", "f", "no", "n", "0", "off"}:
+            return False
+    return None
+
+
+def _polymarket_identity_metadata(raw: dict[str, Any], external_id: str) -> dict[str, Any]:
+    """Extract public Polymarket IDs/reporting metadata; never credentials."""
+
+    token_ids = _first_present(raw, "clobTokenIds", "clobTokenIDs", "tokenIds", "token_ids") or []
+    labels = [_outcome_label(o, external_id, idx) for idx, o in enumerate(raw.get("outcomes") or raw.get("tokens") or [])]
+    token_ids_by_label = {
+        label: str(token_ids[idx])
+        for idx, label in enumerate(labels)
+        if isinstance(token_ids, list) and idx < len(token_ids)
+    }
+    event_id = _first_present(raw, "eventId", "event_id", "gammaEventId")
+    return {
+        "polymarket_identity": {
+            "gamma_market_id": str(_first_present(raw, "id", "marketId", "gammaMarketId") or external_id),
+            "gamma_event_id": event_id,
+            "market_slug": _first_present(raw, "slug", "marketSlug"),
+            "event_slug": _first_present(raw, "eventSlug", "event_slug"),
+            "condition_id": _first_present(raw, "conditionId", "condition_id"),
+            "outcome_token_ids_by_label": token_ids_by_label,
+        },
+        "event_grouping": {
+            "event_id": event_id,
+            "event_slug": _first_present(raw, "eventSlug", "event_slug"),
+            "event_title": _first_present(raw, "eventTitle", "event_title", "eventName"),
+        },
+        "resolution_rule": {
+            "text": _first_present(raw, "resolutionCriteria", "resolution_rule_text", "rules"),
+            "source": _first_present(raw, "resolutionSource", "resolutionSourceUrl", "resolution_source_url", "rulesSource"),
+            "provenance": "polymarket_gamma_payload",
+        },
+        "negative_risk": {
+            "enabled": bool(_normalize_bool_like(_first_present(raw, "negRisk", "negativeRisk", "negative_risk"))),
+            "caveat": _first_present(raw, "negRiskMarketID", "negativeRiskMarketId", "negative_risk_caveat"),
+        },
+        "market_microstructure": {
+            "tick_size": _first_present(raw, "tickSize", "minimumTickSize", "tick_size"),
+            "fee_rate_bps": _first_present(raw, "feeRateBps", "fee_rate_bps"),
+            "rewards": _first_present(raw, "rewards", "reward", "rewardsDailyRate"),
+            "rebates": _first_present(raw, "rebates", "rebate"),
+            "tradable": _normalize_bool_like(_first_present(raw, "active", "tradable", "enableOrderBook")),
+            "accepting_orders": _normalize_bool_like(_first_present(raw, "acceptingOrders", "accepting_orders")),
+        },
+    }
+
+
 def _parse_ts(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -86,7 +156,7 @@ def _normalize_gamma_json_list_field(raw: dict[str, Any], field: str, external_i
 
 def _normalize_gamma_market(raw: dict[str, Any], external_id: str) -> dict[str, Any]:
     normalized = dict(raw)
-    for field in ("outcomes", "tokens", "clobTokenIds", "clobTokenIDs"):
+    for field in ("outcomes", "tokens", "clobTokenIds", "clobTokenIDs", "tokenIds", "token_ids"):
         _normalize_gamma_json_list_field(normalized, field, external_id)
     return normalized
 
@@ -151,7 +221,8 @@ def _market_payload(raw: dict[str, Any], external_id: str) -> dict[str, Any]:
         "opened_at": raw.get("startDate") or raw.get("opened_at"), "close_at": raw.get("endDate") or raw.get("close_at"),
         "closed_for_trading_at": raw.get("closed_for_trading_at"), "resolving_at": raw.get("resolving_at"),
         "resolved_at": raw.get("resolved_at") or raw.get("resolvedAt"), "voided_at": raw.get("voided_at"),
-        "ambiguous_at": raw.get("ambiguous_at"), "venue_metadata_json": _json(raw), "metadata_json": _json({"adapter": "polymarket"}),
+        "ambiguous_at": raw.get("ambiguous_at"), "venue_metadata_json": _json(raw),
+        "metadata_json": _json({"adapter": "polymarket", **_polymarket_identity_metadata(raw, external_id)}),
     }
 
 
@@ -196,7 +267,8 @@ def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id:
             existing = uow.conn.execute("SELECT id,state,mechanism,resolution_source,ambiguity_kind FROM markets WHERE source=? AND external_id=?", ("polymarket", str(external_id))).fetchone()
             market_id = refresh_market_id or (existing[0] if existing else args.get("id") or new_id("mkt"))
             created_at = now_iso()
-            payload["metadata_json"] = _json({"adapter": "polymarket", "adapter_cached_at": created_at, "cache_ttl_seconds": MARKET_CACHE_TTL_SECONDS.get(str(payload.get("state") or ""))})
+            payload_meta = json.loads(str(payload.get("metadata_json") or "{}"))
+            payload["metadata_json"] = _json(payload_meta | {"adapter": "polymarket", "adapter_cached_at": created_at, "cache_ttl_seconds": MARKET_CACHE_TTL_SECONDS.get(str(payload.get("state") or ""))})
             if existing:
                 changed = any(existing[i] != payload[k] for i, k in enumerate(("id","state","mechanism","resolution_source","ambiguity_kind")) if k != "id")
                 uow.execute("UPDATE markets SET title=?,question=?,url=?,state=?,mechanism=?,resolution_source=?,ambiguity_kind=?,bound_via='adapter',opened_at=?,close_at=?,closed_for_trading_at=?,resolving_at=?,resolved_at=?,voided_at=?,ambiguous_at=?,venue_metadata_json=?,metadata_json=? WHERE id=?", (payload["title"],payload["question"],payload["url"],payload["state"],payload["mechanism"],payload["resolution_source"],payload["ambiguity_kind"],payload["opened_at"],payload["close_at"],payload["closed_for_trading_at"],payload["resolving_at"],payload["resolved_at"],payload["voided_at"],payload["ambiguous_at"],payload["venue_metadata_json"],payload["metadata_json"],market_id))
@@ -266,7 +338,18 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
     askf = _optional_float(ask, "bestAsk")
     pricef = _optional_float(price, "price")
     mid = (bidf + askf) / 2 if bidf is not None and askf is not None else pricef
-    return {"price": pricef if pricef is not None else mid, "bid": bidf, "ask": askf, "mid": mid, "spread": (askf-bidf) if bidf is not None and askf is not None else None, "volume": raw.get("volume"), "open_interest": raw.get("openInterest"), "implied_probability": raw.get("impliedProbability") or mid, "liquidity_depth_json": raw.get("book") or raw.get("liquidity") or raw}
+    depth = raw.get("book") or raw.get("liquidity") or raw.get("orderBook") or raw.get("depth") or raw
+    metadata = {
+        "tick_size": _first_present(raw, "tickSize", "minimumTickSize", "tick_size"),
+        "fee_rate_bps": _first_present(raw, "feeRateBps", "fee_rate_bps"),
+        "rewards": _first_present(raw, "rewards", "reward", "rewardsDailyRate"),
+        "rebates": _first_present(raw, "rebates", "rebate"),
+        "tradable": _normalize_bool_like(_first_present(raw, "active", "tradable", "enableOrderBook")),
+        "accepting_orders": _normalize_bool_like(_first_present(raw, "acceptingOrders", "accepting_orders")),
+        "freshness": {"as_of": _first_present(raw, "asOf", "updatedAt", "timestamp"), "provenance": "polymarket_gamma_payload"},
+        "depth_provenance": "caller_or_polymarket_gamma_payload",
+    }
+    return {"price": pricef if pricef is not None else mid, "bid": bidf, "ask": askf, "mid": mid, "spread": (askf-bidf) if bidf is not None and askf is not None else None, "volume": raw.get("volume"), "open_interest": raw.get("openInterest"), "implied_probability": raw.get("impliedProbability") or mid, "liquidity_depth_json": depth, "metadata_json": metadata}
 
 
 def _insert_snapshot(args: dict[str, Any], ctx: ToolContext, market_id: str, snap: dict[str, Any], captured_at: str) -> dict[str, Any]:
@@ -277,7 +360,9 @@ def _insert_snapshot(args: dict[str, Any], ctx: ToolContext, market_id: str, sna
             _ensure_market_instrument(uow, market_id, actor_id=ctx.actor_id)
             sid = args.get("id") or new_id("snp")
             created_at = now_iso()
-            uow.execute("INSERT INTO snapshots(id,instrument_id,captured_at,source,source_url,price,bid,ask,mid,spread,volume,open_interest,implied_probability,liquidity_depth_json,agent_id,model_id,environment,run_id,metadata_json,created_at,actor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (sid,market_id,captured_at,"polymarket",args.get("source_url"),snap.get("price"),snap.get("bid"),snap.get("ask"),snap.get("mid"),snap.get("spread"),snap.get("volume"),snap.get("open_interest"),snap.get("implied_probability"),_json(snap.get("liquidity_depth_json")),seg["agent_id"],seg["model_id"],seg["environment"],seg["run_id"],store_metadata_json(args),created_at,ctx.actor_id))
+            caller_meta = json.loads(store_metadata_json(args) or "{}")
+            metadata = caller_meta | {"polymarket_snapshot": snap.get("metadata_json") or {}}
+            uow.execute("INSERT INTO snapshots(id,instrument_id,captured_at,source,source_url,price,bid,ask,mid,spread,volume,open_interest,implied_probability,liquidity_depth_json,agent_id,model_id,environment,run_id,metadata_json,created_at,actor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (sid,market_id,captured_at,"polymarket",args.get("source_url"),snap.get("price"),snap.get("bid"),snap.get("ask"),snap.get("mid"),snap.get("spread"),snap.get("volume"),snap.get("open_interest"),snap.get("implied_probability"),_json(snap.get("liquidity_depth_json")),seg["agent_id"],seg["model_id"],seg["environment"],seg["run_id"],_json(metadata),created_at,ctx.actor_id))
             emit_event(uow,event_type="snapshot.added",subject_kind="snapshot",subject_id=sid,payload={"id":sid,"instrument_id":market_id,"captured_at":captured_at,"source":"polymarket"},actor_id=ctx.actor_id,idempotency_key=args.get("idempotency_key"),ctx=ctx)
             return {"id": sid, "instrument_id": market_id, "captured_at": captured_at, **snap}
     finally:
