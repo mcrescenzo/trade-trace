@@ -33,6 +33,7 @@ from trade_trace.tools.approval import register_approval_tools
 from trade_trace.tools.csv_import import register_csv_import
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.export import register_export_tools
+from trade_trace.tools.external_receipts import register_external_receipt_tools
 from trade_trace.tools.fixture import register_fixture_tools
 from trade_trace.tools.ideas import register_idea_tools
 from trade_trace.tools.imports import register_import_stubs
@@ -175,6 +176,7 @@ def build_registry() -> ToolRegistry:
     registry = ToolRegistry()
     register_admin_tools(registry)
     register_approval_tools(registry)
+    register_external_receipt_tools(registry)
     register_export_tools(registry)
     register_fixture_tools(registry)
     register_idea_tools(registry)

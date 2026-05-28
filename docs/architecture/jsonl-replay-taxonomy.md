@@ -39,6 +39,9 @@ The `events` table currently emits these `event_type` values
 - Pre-trade intent: `pretrade_intent.recorded`.
 - Approval/waiver ledger: `approval_waiver.recorded` (local audit evidence
   only; not a live permission, order, signing, custody, or execution gate).
+- External execution receipt: `external_execution_receipt.imported` (sanitized
+  caller-supplied evidence only; not a fetch, signing, order, custody, or
+  remediation surface).
 - Signal: `signal.emitted` (lazy-emitted by `signal.scan` /
   `report.coach`).
 
@@ -77,6 +80,10 @@ row.
 - `approval_waiver.recorded` → `approval.record` (local append-only approval,
   waiver, hard-block attempt, and scoped autonomy evidence only; no execution
   or live permissioning behavior is replayed).
+- `external_execution_receipt.imported` → `external_receipt.import` (local
+  append-only sanitized receipt evidence only; semantic idempotency is keyed by
+  the caller-supplied semantic key and material hash, and replay performs no
+  network or execution action).
 - `memory_node.retained` → `memory.retain` / `memory.reflect`
   (the import path is `memory.retain` for both; `memory.reflect`
   also writes the about-edge but the canonical replay surface for

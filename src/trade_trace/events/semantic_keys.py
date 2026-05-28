@@ -41,6 +41,9 @@ SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
     "approval_waiver.recorded": SemanticKeySpec(
         structural_fields=frozenset({"semantic_key", "material_hash"}),
     ),
+    "external_execution_receipt.imported": SemanticKeySpec(
+        structural_fields=frozenset({"semantic_key", "material_hash"}),
+    ),
     # M1 ledger entity-creation events. Structural fields are the smallest
     # set that defines logical identity; ids are deliberately excluded so
     # that an idempotency-key replay with a fresh server-generated id still

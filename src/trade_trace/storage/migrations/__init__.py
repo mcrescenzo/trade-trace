@@ -64,6 +64,9 @@ from trade_trace.storage.migrations.m018_pretrade_intents import (
 from trade_trace.storage.migrations.m019_approval_waiver_ledger import (
     _migration_019_approval_waiver_ledger,
 )
+from trade_trace.storage.migrations.m020_external_execution_receipts import (
+    _migration_020_external_execution_receipts,
+)
 
 MIGRATIONS: list[Migration] = [
     _migration_001_meta_table,
@@ -85,6 +88,7 @@ MIGRATIONS: list[Migration] = [
     _migration_017_expanded_source_stances,
     _migration_018_pretrade_intents,
     _migration_019_approval_waiver_ledger,
+    _migration_020_external_execution_receipts,
 ]
 
 
@@ -122,6 +126,7 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
     (17, []),
     (18, ["pretrade_intents"]),
     (19, ["approval_waiver_records"]),
+    (20, ["external_execution_receipts"]),
 ]
 
 
@@ -177,6 +182,7 @@ _MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
     (17, {}),
     (18, {}),
     (19, {}),
+    (20, {}),
 ]
 
 
@@ -207,6 +213,7 @@ __all__ = [
     "_migration_017_expanded_source_stances",
     "_migration_018_pretrade_intents",
     "_migration_019_approval_waiver_ledger",
+    "_migration_020_external_execution_receipts",
     "_require_fts5",
     "apply_pending_migrations",
     "current_version",
