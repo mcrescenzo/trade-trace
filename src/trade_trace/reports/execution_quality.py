@@ -228,6 +228,8 @@ def report_execution_quality(args: dict[str, Any]) -> dict[str, Any]:
                 "snapshot_reference_type": ref_type, "snapshot_reference_value": ref_value, "slippage": slippage, "slippage_bps": slippage_bps,
                 "receipt_caveats": receipt_caveats, "caveat_codes": codes,
             })
+        if not rows:
+            all_codes.add("MISSING_RECEIPT_INPUTS")
         retrieved_at_range = _range(retrieved_at_values)
         imported_at_range = _range(imported_at_values)
         summary = {

@@ -264,6 +264,14 @@
       "reason": "execution_quality compares local receipt/intent/snapshot evidence through existing instrument links while the legacy schema remains present; it remains read-only and non-executing."
     },
     {
+      "pattern": "src/trade_trace/reports/operational_health.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "local_operational_health_filter_compatibility",
+      "reason": "operational_health reads existing local evidence tables and honors ReportFilter instrument_id where those legacy columns remain; report is read-only and non-executing."
+    },
+    {
       "pattern": "src/trade_trace/reports/forecast_diagnostics.py",
       "terms": [
         "forecast_outcomes",

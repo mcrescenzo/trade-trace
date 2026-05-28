@@ -95,6 +95,23 @@ def test_report_execution_quality_missing_snapshot_partial_rejected_and_sparse(t
     assert row_by_id[reject_id]["receipt_provenance"]["source_system"] == "external-reconciler"
 
 
+def test_report_execution_quality_empty_receipts_has_stable_caveat(tmp_path):
+    home = tmp_path / "home"
+    init = _call("journal.init", {"home": str(home)}, actor_id="agent:init")
+    assert init.ok, init
+
+    report = _call("report.execution_quality", {"home": str(home), "min_sample": 5})
+    assert report.ok, report
+    data = report.data
+
+    assert data["local_evidence_only"] is True
+    assert data["non_executing"] is True
+    assert data["summary"]["receipt_count"] == 0
+    assert data["summary"]["sparse_sample"] is True
+    assert data["rows"] == []
+    assert data["summary"]["caveat_codes"] == ["MISSING_RECEIPT_INPUTS"]
+
+
 def test_report_execution_quality_stale_snapshot_cancel_stale_open_and_fill_direction(tmp_path):
     home = tmp_path / "home"
     intent_id = _seed_refs(home, with_snapshot=True, intent_as_of="2026-05-28T00:30:00.000Z")
