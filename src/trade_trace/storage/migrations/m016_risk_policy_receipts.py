@@ -89,6 +89,24 @@ def _migration_016_risk_policy_receipts(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX idx_risk_check_receipts_status_created ON risk_check_receipts(status, created_at)")
     conn.execute("CREATE INDEX idx_risk_check_receipts_decision ON risk_check_receipts(decision_id)")
     conn.execute("CREATE INDEX idx_risk_check_receipts_instrument ON risk_check_receipts(instrument_id)")
+    conn.execute(
+        """
+        CREATE TRIGGER trg_risk_check_receipts_no_update
+        BEFORE UPDATE ON risk_check_receipts
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only invariant: UPDATE on risk_check_receipts is forbidden; record a new receipt');
+        END
+        """,
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER trg_risk_check_receipts_no_delete
+        BEFORE DELETE ON risk_check_receipts
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only invariant: DELETE on risk_check_receipts is forbidden');
+        END
+        """,
+    )
 
     conn.execute(
         """
@@ -110,3 +128,21 @@ def _migration_016_risk_policy_receipts(conn: sqlite3.Connection) -> None:
         """,
     )
     conn.execute("CREATE INDEX idx_risk_check_rule_results_receipt ON risk_check_rule_results(receipt_id)")
+    conn.execute(
+        """
+        CREATE TRIGGER trg_risk_check_rule_results_no_update
+        BEFORE UPDATE ON risk_check_rule_results
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only invariant: UPDATE on risk_check_rule_results is forbidden; record a new receipt');
+        END
+        """,
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER trg_risk_check_rule_results_no_delete
+        BEFORE DELETE ON risk_check_rule_results
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only invariant: DELETE on risk_check_rule_results is forbidden');
+        END
+        """,
+    )

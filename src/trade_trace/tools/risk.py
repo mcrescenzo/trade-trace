@@ -16,6 +16,8 @@ from trade_trace.tools._helpers import (
     normalize_timestamp,
     now_iso,
     open_db_for_args,
+    reject_credential_metadata,
+    reject_if_contains_secrets,
     require,
     store_metadata_json,
 )
@@ -64,6 +66,14 @@ def _dict_arg(args: dict[str, Any], field: str) -> dict[str, Any]:
     return value
 
 
+def _guard_json(value: Any, *, field: str) -> None:
+    reject_credential_metadata(value, field=field)
+
+
+def _guard_text(value: Any, *, field: str) -> None:
+    reject_if_contains_secrets(value, field=field)
+
+
 def _policy_response(conn: Any, policy_id: str) -> dict[str, Any]:
     row = conn.execute(
         "SELECT id, policy_key, version, policy_hash, effective_from, effective_to, created_at FROM risk_policy_versions WHERE id = ?",
@@ -81,6 +91,9 @@ def _risk_policy_version_add(args: dict[str, Any], ctx: ToolContext) -> dict[str
     limits = _dict_arg(args, "limits_json")
     rules = _list_arg(args, "rules_json")
     source = require(args, "source")
+    _guard_json(limits, field="limits_json")
+    _guard_json(rules, field="rules_json")
+    _guard_text(source, field="source")
     effective_from = normalize_timestamp(args, "effective_from", required=True)
     effective_to = normalize_timestamp(args, "effective_to")
     provenance_json = store_metadata_json(args, "provenance_json")
@@ -154,12 +167,21 @@ def _risk_check_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]
     if status == "pass" and outcome != "pass":
         raise ToolError(ErrorCode.VALIDATION_ERROR, "pass status requires pass outcome", details={"field": "outcome"})
     rule_results = _list_arg(args, "rule_results")
+    _guard_json(rule_results, field="rule_results")
     if status == "missing_data" and not any(r.get("missing_data") for r in rule_results if isinstance(r, dict)):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "missing_data status requires a missing-data rule caveat", details={"field": "rule_results"})
     as_of = normalize_timestamp(args, "as_of", required=True)
     exposure_ids = _list_arg(args, "exposure_input_ids_json")
     evidence_ids = _list_arg(args, "evidence_input_ids_json")
     provenance = _dict_arg(args, "input_provenance_json")
+    _guard_json(exposure_ids, field="exposure_input_ids_json")
+    _guard_json(evidence_ids, field="evidence_input_ids_json")
+    _guard_json(provenance, field="input_provenance_json")
+    for field in (
+        "intended_action", "proposed_intent_hash", "decision_id", "market_id",
+        "instrument_id", "strategy_id", "snapshot_id", "waived_by", "waiver_reason",
+    ):
+        _guard_text(args.get(field), field=field)
     if not any(args.get(field) for field in RECEIPT_ANCHOR_FIELDS) and not exposure_ids and not evidence_ids:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "risk receipt must include at least one audit anchor", details={"field": "receipt_anchor"})
     validated_rule_results: list[dict[str, Any]] = []

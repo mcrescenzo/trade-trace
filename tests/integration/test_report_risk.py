@@ -447,3 +447,100 @@ def test_risk_hash_mismatch_is_rejected(home):
     })
     assert receipt["ok"] is False
     assert receipt["error"]["details"]["field"] == "receipt_hash"
+
+
+def _risk_receipt(home: Path, version: str = "append-only") -> str:
+    policy_id = _risk_policy(home, version)
+    receipt = _env(home, "risk.check_record", {
+        "policy_version_id": policy_id,
+        "status": "pass",
+        "outcome": "pass",
+        "exposure_input_ids_json": ["pos_anchor"],
+        "as_of": "2026-05-28T12:00:00Z",
+        "rule_results": [_valid_rule()],
+        "idempotency_key": f"receipt-{version}",
+    })
+    assert receipt["ok"], receipt
+    replay = _env(home, "risk.check_record", {
+        "policy_version_id": policy_id,
+        "status": "pass",
+        "outcome": "pass",
+        "exposure_input_ids_json": ["pos_anchor"],
+        "as_of": "2026-05-28T12:00:00Z",
+        "rule_results": [_valid_rule()],
+        "idempotency_key": f"receipt-{version}",
+    })
+    assert replay["ok"], replay
+    assert replay["data"]["id"] == receipt["data"]["id"]
+    return receipt["data"]["id"]
+
+
+@pytest.mark.parametrize("table,statement", [
+    ("risk_check_receipts", "UPDATE risk_check_receipts SET status = 'warn' WHERE id = ?"),
+    ("risk_check_receipts", "DELETE FROM risk_check_receipts WHERE id = ?"),
+    ("risk_check_rule_results", "UPDATE risk_check_rule_results SET severity = 'warning' WHERE receipt_id = ?"),
+    ("risk_check_rule_results", "DELETE FROM risk_check_rule_results WHERE receipt_id = ?"),
+])
+def test_risk_receipt_tables_are_db_append_only(home, table, statement):
+    receipt_id = _risk_receipt(home, f"append-only-{table}-{statement.split()[0].lower()}")
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        with pytest.raises(Exception, match="append-only invariant"):
+            db.connection.execute(statement, (receipt_id,))
+    finally:
+        db.close()
+
+
+_BAD_SECRET = "s" + "k" + "-" + ("FAKEKEY" * 4)[:24]
+
+
+@pytest.mark.parametrize("field,bad_value", [
+    ("limits_json", {"api_key": "not persisted"}),
+    ("rules_json", [{"rule_id": "limit", "private_key": "not persisted"}]),
+    ("source", "contains " + _BAD_SECRET),
+])
+def test_risk_policy_version_add_rejects_credentials_and_secrets(home, field, bad_value):
+    args = {
+        "policy_key": "profile/default",
+        "version": "secret-guard-" + field,
+        "limits_json": {},
+        "rules_json": [{"rule_id": "limit", "severity": "info"}],
+        "source": "profile_fixture",
+        "effective_from": "2026-05-28T00:00:00Z",
+        field: bad_value,
+    }
+    env = _env(home, "risk.policy_version_add", args)
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == field
+
+
+@pytest.mark.parametrize("field,bad_value", [
+    ("exposure_input_ids_json", [{"session_token": "not persisted"}]),
+    ("evidence_input_ids_json", ["contains " + _BAD_SECRET]),
+    ("input_provenance_json", {"broker_token": "not persisted"}),
+    ("intended_action", "contains " + _BAD_SECRET),
+    ("waived_by", "contains " + _BAD_SECRET),
+    ("waiver_reason", "contains " + _BAD_SECRET),
+    ("rule_results", [_valid_rule(observed_value={"signing_key": "not persisted"})]),
+    ("rule_results", [_valid_rule(caveat="contains " + _BAD_SECRET)]),
+])
+def test_risk_check_record_rejects_credentials_and_secrets(home, field, bad_value):
+    policy_id = _risk_policy(home, "secret-guard-receipt-" + field)
+    args = {
+        "policy_version_id": policy_id,
+        "status": "warn" if field in {"waived_by", "waiver_reason"} else "pass",
+        "outcome": "waived_warning" if field in {"waived_by", "waiver_reason"} else "pass",
+        "instrument_id": "ins_anchor",
+        "as_of": "2026-05-28T12:00:00Z",
+        "rule_results": [_valid_rule()],
+        field: bad_value,
+    }
+    if field == "rule_results":
+        args["rule_results"] = bad_value
+    if field == "waiver_reason":
+        args["waived_by"] = "risk-officer"
+    env = _env(home, "risk.check_record", args)
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == field
