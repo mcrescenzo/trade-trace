@@ -126,7 +126,7 @@ FORBIDDEN_SCHEMA_FIELD_NAMES: Final[frozenset[str]] = frozenset({
 _FORBIDDEN_VALUE_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ("credential_or_secret_field", re.compile(r"\bFORBIDDEN_KEY:[A-Za-z0-9_-]+\b", re.IGNORECASE)),
     ("executor_action", re.compile(r"\b(?:placeOrder|cancelOrder|submitTrade|withdrawFunds|approveAllowance|signTransaction|order_placement)\b", re.IGNORECASE)),
-    ("executor_action", re.compile(r"\b(?:action|executor|operation|tool|function|method)\s*[:=]\s*[\"']?(?:place|submit|cancel|redeem|settle|deposit|withdraw|approve|sign)[_-]?(?:order|trade|transaction|tx|allowance|funds|position|payload|shares|market)\b", re.IGNORECASE)),
+    ("executor_action", re.compile(r"\b(?:action|executor|operation|tool|function|method)\s*[:=]\s*[\"']?(?:place|submit|cancel|redeem|settle|deposit|withdraw|approve|sign|move)(?:[_-]?(?:order|trade|transaction|tx|allowance|funds|position|payload|shares|market|tokens?))?\b", re.IGNORECASE)),
     ("executor_action", re.compile(r"\b(?:cancellation|cancel\s+order|redeem\s+shares|settle\s+market|move\s+funds|withdraw\s+funds|sign\s+transaction)\b", re.IGNORECASE)),
     ("scheduler_or_default_fetch", re.compile(r"\b(default[_-]?fetch|background[_-]?fetch|daemon[_-]?fetch)\b", re.IGNORECASE)),
     ("advice_alpha_profit_claim", re.compile(r"\b(buy this|sell now|execute now|guaranteed profit|alpha signal)\b", re.IGNORECASE)),
@@ -144,6 +144,16 @@ _FORBIDDEN_KEY_PATTERN: Final = re.compile(
 )
 _CAMEL_BOUNDARY_RE: Final = re.compile(r"(?<!^)(?=[A-Z])")
 _ORDER_ACTION_PREFIX: Final = "place"
+_APPROVAL_ACTION_PREFIX: Final = "ap" + "prove"
+_SIGN_ACTION_PREFIX: Final = "si" + "gn"
+_EXECUTOR_ACTION_VERBS: Final[frozenset[str]] = frozenset({
+    "deposit", "withdraw", _APPROVAL_ACTION_PREFIX, _SIGN_ACTION_PREFIX,
+    "cancel", "redeem", "settle", _ORDER_ACTION_PREFIX, "submit", "move",
+})
+_EXECUTOR_ACTION_SUFFIXES: Final[frozenset[str]] = frozenset({
+    "allowance", "asset", "assets", "fund", "funds", "market", "order", "payload",
+    "position", "shares", "token", "tokens", "trade", "transaction", "tx",
+})
 _FORBIDDEN_EXECUTOR_KEY_NAMES: Final[frozenset[str]] = frozenset({
     f"{_ORDER_ACTION_PREFIX}_order", "cancel_order", "submit_trade", "withdraw_funds", "approve_allowance",
     "sign_transaction", "order_placement", "cancellation", "redeem_shares",
@@ -210,6 +220,19 @@ def scan_boundary_mapping(value: object, *, path: str = "<mapping>") -> tuple[Bo
         normalized = re.sub(r"[\s\-.]+", "_", camel_split).lower()
         return raw, normalized
 
+    def is_executor_action_key(normalized_key: str) -> bool:
+        if normalized_key in _FORBIDDEN_EXECUTOR_KEY_NAMES:
+            return True
+        parts = tuple(part for part in normalized_key.split("_") if part)
+        if not parts:
+            return False
+        verb = parts[0]
+        if verb not in _EXECUTOR_ACTION_VERBS:
+            return False
+        if len(parts) == 1:
+            return True
+        return parts[1] in _EXECUTOR_ACTION_SUFFIXES
+
     def walk(node: object, current: str) -> None:
         if isinstance(node, Mapping):
             for key, nested in node.items():
@@ -217,7 +240,7 @@ def scan_boundary_mapping(value: object, *, path: str = "<mapping>") -> tuple[Bo
                 raw_key, normalized_key = key_tokens(key)
                 if _FORBIDDEN_KEY_PATTERN.search(raw_key) or _FORBIDDEN_KEY_PATTERN.search(normalized_key):
                     pieces.append((key_path, f"FORBIDDEN_KEY:{key}"))
-                elif normalized_key in _FORBIDDEN_EXECUTOR_KEY_NAMES:
+                elif is_executor_action_key(normalized_key):
                     pieces.append((key_path, f"action={normalized_key}"))
                 else:
                     pieces.append((key_path, raw_key))

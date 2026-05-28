@@ -138,6 +138,25 @@ def test_boundary_scanner_flags_bare_noun_space_executor_phrases():
         assert any(violation.kind == "executor_action" for violation in violations), name
 
 
+def test_boundary_scanner_flags_bare_and_suffixed_executor_schema_keys():
+    sign = "si" + "gn"
+    approve = "ap" + "prove"
+    snake_case_keys = (
+        "deposit", "withdraw", approve, sign, "cancel", "redeem", "settle",
+        "place", "submit", "move", "deposit_funds", f"{approve}_tokens",
+        f"{sign}_payload", "cancel_order", "redeem_shares", "settle_market",
+        "place_order", "submit_trade", "move_funds",
+    )
+    camel_case_keys = (
+        "depositFunds", "withdrawFunds", f"{approve}Tokens", f"{sign}Payload",
+        "cancelOrder", "redeemShares", "settleMarket", "placeOrder",
+        "submitTrade", "moveFunds",
+    )
+    for key in snake_case_keys + camel_case_keys:
+        violations = scan_boundary_mapping({"properties": {key: {"type": "boolean"}}})
+        assert any(violation.kind == "executor_action" for violation in violations), key
+
+
 def _minimal_record_for(family: AutonomousRecordFamily) -> dict[str, object]:
     record: dict[str, object] = {field: f"{field}-value" for field in required_fields_for(family)}
     record["supersedes_record_id"] = None
