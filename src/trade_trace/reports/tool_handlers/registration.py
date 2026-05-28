@@ -27,6 +27,7 @@ from .compare_policy_coach import (
     _report_strategy_performance,
 )
 from trade_trace.reports.execution_quality import report_execution_quality
+from trade_trace.reports.operational_health import report_operational_health
 from .lifecycle_agent import (
     _agent_next_actions, _report_bootstrap, _report_lifecycle,
     _report_policy_candidates, _report_strategy_health, _report_work_queue,
@@ -193,6 +194,20 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         optional_keys=("pretrade_intent_id", "market_id", "instrument_id", "lifecycle_state", "as_of", "limit", "min_sample", "stale_snapshot_minutes", "stale_open_minutes"),
         json_schema=_REPORT_SCHEMAS["report.execution_quality"],
         usage_summary="Diagnose imported execution evidence quality from local records only; no writes, fetches, execution, remediation, or advice.",
+    ),
+    ReportToolRegistration(
+        "report.operational_health",
+        lambda args, ctx: report_operational_health(args),
+        description=(
+            "Read-only local operational health report over trader-intelligence inputs: imported snapshots, "
+            "reconciliations, external receipts, approvals, risk-check receipts, autonomous run/incident records, "
+            "source evidence, and work-queue obligations. Surfaces stale/missing/sparse/unresolved inputs with stable "
+            "codes and contributing local record ids. No fetch, scheduling, alerting, supervision, execution, "
+            "remediation, advice, alpha, or profit claims."
+        ),
+        optional_keys=("filter", "as_of", "limit", "stale_snapshot_minutes", "stale_receipt_minutes", "stale_reconciliation_minutes", "stale_evidence_minutes"),
+        json_schema=_REPORT_SCHEMAS["report.operational_health"],
+        usage_summary="Summarize local trader-intelligence input health; read-only and local-evidence-only.",
     ),
     ReportToolRegistration(
         "report.calibration",

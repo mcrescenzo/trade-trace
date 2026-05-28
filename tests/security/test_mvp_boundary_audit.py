@@ -291,6 +291,7 @@ SHIPPED_REPORTS = {
     "report.lifecycle",
     "report.work_queue",
     "report.open_positions",
+    "report.operational_health",
     "report.paper_exposure",
     "report.recall_receipts",
     "report.reconciliation_mismatches",

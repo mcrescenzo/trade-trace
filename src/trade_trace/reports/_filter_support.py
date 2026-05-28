@@ -171,6 +171,13 @@ SUPPORTED_FILTER_FIELDS: dict[str, frozenset[str]] = {
         "time_window.created_at_gte",
         "time_window.created_at_lt",
     }),
+    "report.operational_health": frozenset({
+        "actors.run_id",
+        "strategy.strategy_id",
+        "instrument.instrument_id",
+        "time_window.created_at_gte",
+        "time_window.created_at_lt",
+    }),
     "report.forecast_diagnostics": frozenset({
         "actors.actor_id",
         "actors.agent_id",

@@ -185,6 +185,22 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "no fetching, broker access, execution, cancellation, remediation, advice, alpha, or profit claims."
         ),
     ),
+    "report.operational_health": _schema(
+        {
+            "filter": _FILTER_PROP,
+            "as_of": {"type": "string", "format": "date-time"},
+            "limit": {"type": "integer", "minimum": 1},
+            "stale_snapshot_minutes": {"type": "number", "minimum": 0},
+            "stale_receipt_minutes": {"type": "number", "minimum": 0},
+            "stale_reconciliation_minutes": {"type": "number", "minimum": 0},
+            "stale_evidence_minutes": {"type": "number", "minimum": 0},
+        },
+        description=(
+            "Read-only local operational health diagnostics over trader-intelligence inputs. Reports stale, missing, "
+            "blocked, failed, unreviewed, and unresolved local evidence with stable codes and contributing ids; no "
+            "fetching, scheduling, alerting, supervision, execution, remediation, advice, alpha, or profit claims."
+        ),
+    ),
     "report.playbook_adherence": _schema(
         {
             "filter": _FILTER_PROP,
