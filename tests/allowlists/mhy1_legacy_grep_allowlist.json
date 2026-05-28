@@ -256,6 +256,14 @@
       "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
     },
     {
+      "pattern": "src/trade_trace/reports/execution_quality.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "local_execution_quality_projection_compatibility",
+      "reason": "execution_quality compares local receipt/intent/snapshot evidence through existing instrument links while the legacy schema remains present; it remains read-only and non-executing."
+    },
+    {
       "pattern": "src/trade_trace/reports/forecast_diagnostics.py",
       "terms": [
         "forecast_outcomes",
