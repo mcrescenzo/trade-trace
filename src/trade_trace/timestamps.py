@@ -74,6 +74,8 @@ TIMESTAMP_API_GOVERNED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
         ("positions", "opened_at"),
         ("positions", "resolved_at"),
         ("positions", "updated_at"),
+        ("pretrade_intents", "as_of"),
+        ("pretrade_intents", "created_at"),
         ("risk_check_receipts", "as_of"),
         ("risk_check_receipts", "created_at"),
         ("risk_policy_versions", "created_at"),

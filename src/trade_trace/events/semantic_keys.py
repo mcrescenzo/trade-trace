@@ -35,6 +35,9 @@ class SemanticKeySpec:
 # Server-filled fields (actor_id, created_at, request_id, event_id) are
 # always excluded from comparison and are not listed here.
 SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
+    "pretrade_intent.recorded": SemanticKeySpec(
+        structural_fields=frozenset({"semantic_key", "material_hash"}),
+    ),
     # M1 ledger entity-creation events. Structural fields are the smallest
     # set that defines logical identity; ids are deliberately excluded so
     # that an idempotency-key replay with a fresh server-generated id still

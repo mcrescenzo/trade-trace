@@ -36,6 +36,7 @@ The `events` table currently emits these `event_type` values
   `playbook_rule.followed`, `playbook_rule.overridden`.
 - H05 risk audit: `risk_policy_version.created`,
   `risk_check_receipt.recorded`.
+- Pre-trade intent: `pretrade_intent.recorded`.
 - Signal: `signal.emitted` (lazy-emitted by `signal.scan` /
   `report.coach`).
 
@@ -69,6 +70,8 @@ row.
 - `outcome.recorded` → `outcome.add`
 - `risk_policy_version.created` → `risk.policy_version_add`
 - `risk_check_receipt.recorded` → `risk.check_record`
+- `pretrade_intent.recorded` → `pretrade_intent.record` (local,
+  non-executing proposed intent audit packet only).
 - `memory_node.retained` → `memory.retain` / `memory.reflect`
   (the import path is `memory.retain` for both; `memory.reflect`
   also writes the about-edge but the canonical replay surface for

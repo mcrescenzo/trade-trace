@@ -442,6 +442,29 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "idempotency_key": _IDEM,
         },
     },
+    "pretrade_intent.record": {
+        "minimal": {
+            "semantic_key": "pti_example_market_review_2026_05_22T143000Z",
+            "market_id": "mkt_MARKET_ID_HERE",
+            "proposed_shape": {
+                "side": "yes",
+                "quantity": 10,
+                "limit_price": 0.62,
+                "intent_type": "limit_review",
+            },
+            "risk_budget": {
+                "max_notional": 100,
+                "max_loss": 100,
+                "currency": "USD",
+            },
+            "evidence_refs": [
+                {"kind": "note", "ref": "internal-research-summary-2026-05-22"}
+            ],
+            "source_ids": ["src_SOURCE_ID_HERE"],
+            "as_of": "2026-05-22T14:30:00Z",
+            "idempotency_key": _IDEM,
+        },
+    },
     "import.validate": {
         "minimal": {
             "path": "/tmp/trade-trace-import/bundle.jsonl",
