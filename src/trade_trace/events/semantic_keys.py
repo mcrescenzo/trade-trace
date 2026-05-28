@@ -318,6 +318,16 @@ SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
         free_text_fields=frozenset({"waiver_reason"}),
         sort_keys={"rule_results": "rule_id", "exposure_input_ids_json": None, "evidence_input_ids_json": None},
     ),
+    "reconciliation.recorded": SemanticKeySpec(
+        structural_fields=frozenset(
+            {
+                "semantic_key", "as_of", "source", "source_precedence", "expected_state",
+                "observed_imported_state", "diff", "diff_severity", "mismatch_codes",
+                "resolution_status", "contributing_ids", "imported_at",
+            }
+        ),
+        sort_keys={"source_precedence": None, "mismatch_codes": None},
+    ),
     # Importer writes are identity-only: see persistence.md §5.2 row 3.
     "import.row_committed": SemanticKeySpec(
         structural_fields=frozenset({"import_run_id", "source_row_number"}),
@@ -404,6 +414,7 @@ TOOL_PRIMARY_EVENT_TYPE: dict[str, str] = {
     "risk.policy_version_add": "risk_policy_version.created",
     "risk.check_record":      "risk_check_receipt.recorded",
     "approval.record":        "approval_waiver.recorded",
+    "reconciliation.record":  "reconciliation.recorded",
 }
 
 

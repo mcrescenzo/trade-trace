@@ -713,6 +713,7 @@ def _current_exposure_hints(open_count: int, watch_count: int, recent_count: int
     if open_count == 0 and watch_count == 0 and recent_count == 0 and anomaly_count == 0:
         hints.append("No watch ideas, recent trade activity, or projection anomalies found in the local journal.")
     hints.append("Trade Trace reports local journal/projection state only; it does not assert broker or external portfolio truth.")
+    hints.append("When imported account snapshots exist, compare projected positions against imported-observed positions via reconciliation reports before treating them as externally observed holdings.")
     return hints
 
 
@@ -764,6 +765,9 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
             kind=args.get("kind"),
         )
         event_exposure_sets = _event_exposure_sets(db.connection, open_data.get("open_positions", []))
+        latest_account_snapshot = db.connection.execute(
+            "SELECT id, as_of, imported_at, staleness_status FROM account_snapshots ORDER BY source_precedence ASC, as_of DESC, imported_at DESC, id DESC LIMIT 1",
+        ).fetchone()
     finally:
         db.close()
 
@@ -778,6 +782,8 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
             "watch_count": len(watchlist),
             "recent_trade_decision_count": len(recent_activity),
             "anomaly_count": len(anomalies),
+            "position_truth_caveat": "projected_local_positions_not_imported_account_truth",
+            "latest_imported_account_snapshot": None if latest_account_snapshot is None else {"id": latest_account_snapshot[0], "as_of": latest_account_snapshot[1], "imported_at": latest_account_snapshot[2], "staleness_status": latest_account_snapshot[3]},
             "filter": {
                 "kind": args.get("kind"),
                 "instrument_id": args.get("instrument_id"),

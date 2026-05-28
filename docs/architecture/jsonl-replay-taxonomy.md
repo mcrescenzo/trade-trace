@@ -47,6 +47,9 @@ The `events` table currently emits these `event_type` values
   or remediation surface).
 - Paper fill: `paper_fill.recorded` (local paper-only conservative fill evidence;
   not imported/live account truth and not an order, execution, or custody surface).
+- Reconciliation: `reconciliation.recorded` (local derived comparison of Trade
+  Trace projection with imported external facts; evidence only for external
+  operators, not remediation or execution).
 - Signal: `signal.emitted` (lazy-emitted by `signal.scan` /
   `report.coach`).
 
@@ -97,6 +100,10 @@ row.
   conservative fill evidence; semantic idempotency is keyed by the caller-supplied
   semantic key and material hash, and replay performs no network, account sync,
   live order, cancellation, custody, settlement, or execution action).
+- `reconciliation.recorded` → `reconciliation.record` (local append-only
+  reconciliation result over imported/account/paper/projection evidence; replay
+  performs no private fetch, order action, cancellation, settlement, fund
+  movement, or remediation).
 - `memory_node.retained` → `memory.retain` / `memory.reflect`
   (the import path is `memory.retain` for both; `memory.reflect`
   also writes the about-edge but the canonical replay surface for

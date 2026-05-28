@@ -47,6 +47,7 @@ from trade_trace.tools.memory import register_memory_tools
 from trade_trace.tools.paper_fills import register_paper_fill_tools
 from trade_trace.tools.playbook import register_playbook_tools
 from trade_trace.tools.pretrade_intent import register_pretrade_intent_tools
+from trade_trace.tools.reconciliation import register_reconciliation_tools
 from trade_trace.tools.reflection import register_reflection_tools
 from trade_trace.tools.reports import register_report_tools
 from trade_trace.tools.review_bundle import register_review_bundle
@@ -192,6 +193,7 @@ def build_registry() -> ToolRegistry:
     register_playbook_tools(registry)
     register_pretrade_intent_tools(registry)
     register_reflection_tools(registry)
+    register_reconciliation_tools(registry)
     register_strategy_tools(registry)
     register_review_bundle(registry)
     register_risk_tools(registry)
