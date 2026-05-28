@@ -22,6 +22,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from trade_trace.contracts.autonomous_substrate import RedactionProfile
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
@@ -46,6 +47,7 @@ from trade_trace.tools.errors import ToolError
 REVIEW_BUNDLE_REPORT = "review.bundle"
 CONTRACT_VERSION = "1.0"
 RECALL_RECEIPTS_MAX_BLOCKS = 50
+DEFAULT_REDACTION_PROFILE = RedactionProfile.AUDIT_EXPORT.value
 
 _SOURCE_REDACTED_DROPPED_FIELDS = ("body", "extracted_text", "excerpt",
                                    "summary", "note")
@@ -68,6 +70,8 @@ class ReviewBundleInput(BaseModel):
     include_reflections: bool = True
     include_playbook: bool = True
     include_recall_receipts: bool = True
+    include_autonomous_lifecycle: bool = True
+    redaction_profile: RedactionProfile = RedactionProfile.AUDIT_EXPORT
     max_examples_per_record: int = Field(default=3, ge=0, le=20)
     home: str | None = None  # forwarded to open_db_for_args
 
@@ -84,6 +88,9 @@ class ReviewBundleOutput(BaseModel):
     playbook_versions: list[dict[str, Any]] = Field(default_factory=list)
     report_summaries: dict[str, Any] = Field(default_factory=dict)
     recall_receipts: dict[str, Any] = Field(default_factory=dict)
+    autonomous_lifecycle: dict[str, Any] = Field(default_factory=dict)
+    redaction_profile: str = DEFAULT_REDACTION_PROFILE
+    redaction_summary: dict[str, Any] = Field(default_factory=dict)
     caveats: list[str] = Field(default_factory=list)
     suggested_prompts: list[str] = Field(default_factory=list)
     bundle_hash: str
@@ -184,6 +191,21 @@ def _fetch_by_ids(
     return [dict(zip(cols, row, strict=True)) for row in rows]
 
 
+def _forecast_score_rows(
+    conn: sqlite3.Connection, forecast_ids: list[str],
+) -> list[dict[str, Any]]:
+    if not forecast_ids:
+        return []
+    placeholders = _placeholders(len(forecast_ids))
+    rows = conn.execute(
+        f"SELECT {', '.join(_FORECAST_SCORE_COLS)} FROM forecast_scores "
+        f"WHERE forecast_id IN ({placeholders}) "
+        "ORDER BY scored_at ASC, id ASC",
+        forecast_ids,
+    ).fetchall()
+    return [dict(zip(_FORECAST_SCORE_COLS, row, strict=True)) for row in rows]
+
+
 _THESIS_COLS = ["id", "instrument_id", "side", "body", "confidence_label",
                 "strategy_id", "risk_unit_label", "max_loss_budget",
                 "invalidation_condition", "valid_from", "valid_to",
@@ -197,6 +219,8 @@ _OUTCOME_COLS = ["id", "instrument_id", "resolved_at", "outcome_label",
 _POSITION_COLS = ["id", "instrument_id", "kind", "side", "status",
                   "opened_at", "closed_at", "resolved_at", "realized_pnl",
                   "unrealized_pnl", "avg_entry_price", "updated_at"]
+_FORECAST_SCORE_COLS = ["id", "forecast_id", "outcome_id", "metric", "score",
+                        "scored_at", "actor_id", "metadata_json"]
 
 
 def _related_record_rows(
@@ -216,6 +240,7 @@ def _related_record_rows(
 
     theses = _fetch_by_ids(conn, "theses", thesis_ids, _THESIS_COLS)
     forecasts = _fetch_by_ids(conn, "forecasts", forecast_ids, _FORECAST_COLS)
+    forecast_scores = _forecast_score_rows(conn, forecast_ids)
 
     outcomes: list[dict[str, Any]] = []
     positions: list[dict[str, Any]] = []
@@ -247,7 +272,192 @@ def _related_record_rows(
         "forecasts": forecasts,
         "outcomes": outcomes,
         "positions": positions,
+        "forecast_scores": forecast_scores,
     }
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,),
+    ).fetchone()
+    return row is not None
+
+
+def _fetch_table(
+    conn: sqlite3.Connection, table: str, cols: list[str], where: str,
+    params: list[Any], *, order_by: str,
+) -> list[dict[str, Any]]:
+    if not _table_exists(conn, table):
+        return []
+    rows = conn.execute(
+        f"SELECT {', '.join(cols)} FROM {table} WHERE {where} ORDER BY {order_by}",
+        params,
+    ).fetchall()
+    return [dict(zip(cols, row, strict=True)) for row in rows]
+
+
+def _or_in(field: str, values: list[str], params: list[Any]) -> str | None:
+    if not values:
+        return None
+    params.extend(values)
+    return f"{field} IN ({_placeholders(len(values))})"
+
+
+_JSON_SCOPE_CANDIDATE_LIMIT = 1000
+
+
+def _json_value_has_exact_token(value: Any, tokens: set[str]) -> bool:
+    """Return true only when a parsed JSON scalar exactly equals a token.
+
+    This intentionally does not perform substring matching. It also avoids
+    SQL LIKE semantics entirely, so token values containing '%', '_' or other
+    LIKE metacharacters cannot broaden lifecycle scoping.
+    """
+
+    if isinstance(value, str):
+        return value in tokens
+    if isinstance(value, int | float | bool) or value is None:
+        return str(value) in tokens
+    if isinstance(value, list):
+        return any(_json_value_has_exact_token(item, tokens) for item in value)
+    if isinstance(value, dict):
+        return any(
+            _json_value_has_exact_token(nested, tokens)
+            for nested in value.values()
+        )
+    return False
+
+
+def _json_field_has_exact_token(raw: Any, tokens: set[str]) -> bool:
+    if not tokens or raw in (None, "") or not isinstance(raw, str):
+        return False
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError:
+        return False
+    return _json_value_has_exact_token(decoded, tokens)
+
+
+def _fetch_json_scoped_table(
+    conn: sqlite3.Connection,
+    table: str,
+    cols: list[str],
+    direct_clauses: list[str],
+    direct_params: list[Any],
+    json_fields: list[str],
+    json_tokens: list[str],
+    *,
+    order_by: str,
+    omissions: list[str],
+    omission: str,
+) -> list[dict[str, Any]]:
+    if not _table_exists(conn, table):
+        return []
+    direct_scopes = [clause for clause in direct_clauses if clause]
+    token_set = set(json_tokens)
+    if not direct_scopes and not token_set:
+        omissions.append(omission)
+        return []
+
+    selected_by_id: dict[Any, dict[str, Any]] = {}
+    select = ", ".join(cols)
+    if direct_scopes:
+        direct_rows = conn.execute(
+            f"SELECT {select} FROM {table} WHERE {' OR '.join(direct_scopes)} "
+            f"ORDER BY {order_by}",
+            direct_params,
+        ).fetchall()
+        for row in direct_rows:
+            record = dict(zip(cols, row, strict=True))
+            selected_by_id[record["id"]] = record
+
+    if token_set:
+        candidate_rows = conn.execute(
+            f"SELECT {select} FROM {table} ORDER BY {order_by} LIMIT ?",
+            (_JSON_SCOPE_CANDIDATE_LIMIT,),
+        ).fetchall()
+        for row in candidate_rows:
+            record = dict(zip(cols, row, strict=True))
+            if record["id"] in selected_by_id:
+                continue
+            if any(
+                _json_field_has_exact_token(record.get(field), token_set)
+                for field in json_fields
+            ):
+                selected_by_id[record["id"]] = record
+
+    return sorted(selected_by_id.values(), key=lambda record: tuple(record.get(part.strip().split()[0]) for part in order_by.split(",")))
+
+
+def _fetch_scoped_table(
+    conn: sqlite3.Connection, table: str, cols: list[str], clauses: list[str],
+    params: list[Any], *, order_by: str, omissions: list[str], omission: str,
+) -> list[dict[str, Any]]:
+    scoped_clauses = [clause for clause in clauses if clause]
+    if not scoped_clauses:
+        if _table_exists(conn, table):
+            omissions.append(omission)
+        return []
+    return _fetch_table(
+        conn, table, cols, " OR ".join(scoped_clauses), params,
+        order_by=order_by,
+    )
+
+
+def _gather_autonomous_lifecycle(
+    conn: sqlite3.Connection, selected: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any]:
+    decisions = selected.get("decisions", [])
+    decision_ids = sorted({d["id"] for d in decisions if d.get("id")})
+    instrument_ids = sorted({d["instrument_id"] for d in decisions if d.get("instrument_id")})
+    forecast_ids = sorted({d["forecast_id"] for d in decisions if d.get("forecast_id")})
+    thesis_ids = sorted({d["thesis_id"] for d in decisions if d.get("thesis_id")})
+    strategy_ids = sorted({d["strategy_id"] for d in decisions if d.get("strategy_id")})
+    run_ids = sorted({d["run_id"] for d in decisions if d.get("run_id")})
+    out: dict[str, Any] = {
+        "scope": {"decision_ids": decision_ids, "instrument_ids": instrument_ids,
+                  "forecast_ids": forecast_ids, "thesis_ids": thesis_ids,
+                  "strategy_ids": strategy_ids, "run_ids": run_ids},
+        "records": {}, "record_counts": {}, "omissions": [],
+        "notice": "Audit/replay evidence only; not trading advice or an execution instruction.",
+    }
+    rec = out["records"]
+    p: list[Any] = []
+    clauses = [c for c in (_or_in("decision_id", decision_ids, p), _or_in("instrument_id", instrument_ids, p), _or_in("forecast_id", forecast_ids, p), _or_in("thesis_id", thesis_ids, p), _or_in("strategy_id", strategy_ids, p), _or_in("run_id", run_ids, p)) if c]
+    rec["pretrade_intents"] = _fetch_table(conn, "pretrade_intents", ["id", "semantic_key", "material_hash", "market_id", "instrument_id", "snapshot_id", "thesis_id", "forecast_id", "decision_id", "risk_check_receipt_id", "strategy_id", "playbook_version_id", "proposed_shape_json", "risk_budget_json", "evidence_refs_json", "source_ids_json", "caveats_json", "approval_state", "approval_ref_id", "as_of", "run_id", "idempotency_key", "provenance_json", "created_at", "actor_id"], " OR ".join(clauses) or "0", p, order_by="created_at ASC, id ASC")
+    intent_ids = sorted({r["id"] for r in rec["pretrade_intents"]})
+    risk_link_ids = sorted({r.get("risk_check_receipt_id") for r in rec["pretrade_intents"] if r.get("risk_check_receipt_id")})
+    p = []
+    clauses = [c for c in (_or_in("decision_id", decision_ids, p), _or_in("instrument_id", instrument_ids, p), _or_in("strategy_id", strategy_ids, p), _or_in("id", risk_link_ids, p)) if c]
+    rec["risk_check_receipts"] = _fetch_table(conn, "risk_check_receipts", ["id", "receipt_hash", "policy_version_id", "status", "outcome", "intended_action", "proposed_intent_hash", "decision_id", "market_id", "instrument_id", "strategy_id", "snapshot_id", "exposure_input_ids_json", "evidence_input_ids_json", "input_provenance_json", "as_of", "waived_by", "waiver_reason", "created_at", "actor_id"], " OR ".join(clauses) or "0", p, order_by="created_at ASC, id ASC")
+    risk_ids = sorted({r["id"] for r in rec["risk_check_receipts"]})
+    rec["risk_check_rule_results"] = _fetch_table(conn, "risk_check_rule_results", ["id", "receipt_id", "rule_id", "reason_code", "severity", "observed_value_json", "threshold_json", "contributing_record_ids_json", "waiver_required", "caveat", "missing_data", "stale_data"], f"receipt_id IN ({_placeholders(len(risk_ids))})" if risk_ids else "0", risk_ids, order_by="receipt_id ASC, rule_id ASC")
+    p = []
+    clauses = [c for c in (_or_in("pretrade_intent_id", intent_ids, p), _or_in("risk_check_receipt_id", risk_ids, p), _or_in("instrument_id", instrument_ids, p), _or_in("strategy_id", strategy_ids, p), _or_in("run_id", run_ids, p)) if c]
+    rec["approval_waiver_records"] = _fetch_table(conn, "approval_waiver_records", ["id", "semantic_key", "material_hash", "record_type", "decision", "pretrade_intent_id", "risk_check_receipt_id", "strategy_id", "instrument_id", "market_id", "actor_mode", "decision_actor_id", "decision_at", "reason", "modifications_json", "scope_json", "limits_json", "expires_at", "revoked_at", "revocation_reason", "waiver_class", "policy_version_id", "policy_version", "policy_evidence_json", "environment_label", "account_label", "external_receipt_refs_json", "caveats_json", "run_id", "idempotency_key", "provenance_json", "created_at", "actor_id"], " OR ".join(clauses) or "0", p, order_by="created_at ASC, id ASC")
+    p = []
+    clauses = [c for c in (_or_in("pretrade_intent_id", intent_ids, p), _or_in("instrument_id", instrument_ids, p), _or_in("source_run_id", run_ids, p)) if c]
+    rec["external_execution_receipts"] = _fetch_table(conn, "external_execution_receipts", ["id", "schema_version", "semantic_key", "material_hash", "lifecycle_state", "external_event_type", "pretrade_intent_id", "approval_ref_id", "market_id", "instrument_id", "external_order_ref", "external_fill_ref", "external_event_ref", "source_system", "source_run_id", "retrieved_at", "as_of", "imported_at", "artifact_hash", "redacted_artifact_ref", "sanitized_facts_json", "caveats_json", "provenance_json", "quarantine_reason", "idempotency_key", "actor_id"], " OR ".join(clauses) or "0", p, order_by="imported_at ASC, id ASC")
+    account_cols = ["id", "schema_version", "semantic_key", "material_hash", "source_system", "source_run_id", "source_precedence", "confidence_label", "staleness_status", "environment_label", "account_label", "venue_label", "captured_at", "effective_at", "as_of", "retrieved_at", "imported_at", "artifact_hash", "redacted_artifact_ref", "balances_json", "collateral_json", "open_orders_json", "positions_json", "fills_trades_json", "unsettled_claims_json", "public_allowance_facts_json", "caveats_json", "provenance_json", "quarantine_reason", "idempotency_key", "actor_id"]
+    scoped_ids = sorted(set(decision_ids) | set(instrument_ids) | set(forecast_ids) | set(thesis_ids) | set(intent_ids) | set(risk_ids))
+    p = []
+    account_json_fields = ["balances_json", "collateral_json", "open_orders_json", "positions_json", "fills_trades_json", "unsettled_claims_json", "public_allowance_facts_json", "caveats_json", "provenance_json"]
+    account_clauses = [c for c in (_or_in("source_run_id", run_ids, p),) if c]
+    rec["account_snapshots"] = _fetch_json_scoped_table(conn, "account_snapshots", account_cols, account_clauses, p, account_json_fields, scoped_ids, order_by="as_of ASC, id ASC", omissions=out["omissions"], omission="account_snapshots omitted when no safe scoped account snapshot relation matched selected run IDs or exact lifecycle identifier JSON tokens")
+    p = []
+    clauses = [c for c in (_or_in("pretrade_intent_id", intent_ids, p), _or_in("instrument_id", instrument_ids, p)) if c]
+    rec["paper_fill_records"] = _fetch_table(conn, "paper_fill_records", ["id", "schema_version", "semantic_key", "material_hash", "environment_label", "account_label", "market_id", "instrument_id", "pretrade_intent_id", "side", "outcome_side", "requested_quantity", "filled_quantity", "remaining_quantity", "limit_price", "average_fill_price", "fee_amount", "slippage_cap_bps", "quote_id", "book_id", "snapshot_id", "snapshot_as_of", "order_as_of", "freshness_status", "fill_status", "conservative_fill_model", "mark_source", "mark_as_of", "confidence_label", "staleness_status", "source_precedence", "caveats_json", "evidence_json", "provenance_json", "recorded_at", "idempotency_key", "actor_id"], " OR ".join(clauses) or "0", p, order_by="recorded_at ASC, id ASC")
+    fill_ids = sorted({r["id"] for r in rec["paper_fill_records"]})
+    snapshot_ids = sorted({d["snapshot_id"] for d in decisions if d.get("snapshot_id")})
+    reconciliation_cols = ["id", "schema_version", "semantic_key", "material_hash", "as_of", "source", "source_precedence_json", "expected_state_json", "observed_imported_state_json", "diff_json", "diff_severity", "mismatch_codes_json", "resolution_status", "contributing_ids_json", "caveats_json", "provenance_json", "imported_at", "recorded_at", "idempotency_key", "actor_id"]
+    reconciliation_ids = sorted(set(scoped_ids) | set(fill_ids) | set(snapshot_ids))
+    p = []
+    reconciliation_json_fields = ["source_precedence_json", "expected_state_json", "observed_imported_state_json", "diff_json", "contributing_ids_json", "caveats_json", "provenance_json"]
+    rec["reconciliation_records"] = _fetch_json_scoped_table(conn, "reconciliation_records", reconciliation_cols, [], p, reconciliation_json_fields, reconciliation_ids, order_by="as_of ASC, id ASC", omissions=out["omissions"], omission="reconciliation_records omitted when no safe scoped reconciliation relation matched selected exact lifecycle identifier JSON tokens")
+    rec["autonomous_run_records"] = _fetch_table(conn, "autonomous_run_records", ["id", "schema_version", "semantic_key", "material_hash", "mode", "run_status", "run_id", "session_id", "actor_id_recorded", "model_id", "provider_id", "environment_label", "policy_version", "started_at", "ended_at", "as_of", "config_json", "provenance_json", "caveats_json", "recorded_at", "idempotency_key", "recorder_actor_id"], f"run_id IN ({_placeholders(len(run_ids))})" if run_ids else "0", run_ids, order_by="started_at ASC, id ASC")
+    rec["autonomous_incident_records"] = _fetch_table(conn, "autonomous_incident_records", ["id", "schema_version", "semantic_key", "material_hash", "incident_type", "severity", "resolution_status", "run_record_id", "run_id", "session_id", "occurred_at", "as_of", "summary", "imported_fact_only", "evidence_state", "link_ids_json", "evidence_refs_json", "caveats_json", "provenance_json", "recorded_at", "idempotency_key", "recorder_actor_id"], f"run_id IN ({_placeholders(len(run_ids))})" if run_ids else "0", run_ids, order_by="occurred_at ASC, id ASC")
+    out["record_counts"] = {k: len(v) for k, v in rec.items()}
+    return out
 
 
 # -- sources, reflections, playbooks ------------------------------------
@@ -393,6 +603,44 @@ def _gather_playbook_versions(
 
 # -- redaction sweep ---------------------------------------------------
 
+_REDACTED = "[REDACTED]"
+_SENSITIVE_KEY_FRAGMENTS = (
+    "account_label", "address", "wallet", "strategy_id", "source_text",
+    "note", "notes", "summary", "excerpt", "extracted_text", "body",
+    "external_order_ref", "external_order_id", "external_fill_ref",
+    "external_event_ref", "raw_payload_ref", "redacted_artifact_ref",
+    "actor_id_recorded", "decision_actor_id", "recorder_actor_id",
+)
+_PUBLIC_PM_KEYS = {"condition_id", "outcome_token_ids", "gamma_market_id", "gamma_event_id"}
+
+
+def _apply_profile_redaction(value: Any, *, counter: dict[str, int]) -> Any:
+    if isinstance(value, list):
+        return [_apply_profile_redaction(item, counter=counter) for item in value]
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, nested in value.items():
+            key_lower = str(key).lower()
+            if key_lower in _PUBLIC_PM_KEYS:
+                redacted[key] = nested
+            elif any(fragment in key_lower for fragment in _SENSITIVE_KEY_FRAGMENTS):
+                if nested not in (None, "", [], {}):
+                    counter["profile_replacements"] += 1
+                redacted[key] = _REDACTED if nested is not None else None
+            else:
+                redacted[key] = _apply_profile_redaction(nested, counter=counter)
+        return redacted
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith(('{', '[')):
+            try:
+                decoded = json.loads(value)
+            except json.JSONDecodeError:
+                return value
+            redacted = _apply_profile_redaction(decoded, counter=counter)
+            return json.dumps(redacted, sort_keys=True, separators=(",", ":"))
+        return value
+    return value
 
 def _redact_strings_in_place(value: Any, *, counter: dict[str, int]) -> Any:
     """Recursively walk `value`, replacing any secret-shaped substring in
@@ -649,26 +897,45 @@ def _apply_redaction_sweep(
     reflections: list[dict[str, Any]],
     playbook_versions: list[dict[str, Any]],
     recall_receipts: dict[str, Any],
+    autonomous_lifecycle: dict[str, Any],
     caveats: list[str],
 ) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]],
-           list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+           list[dict[str, Any]], list[dict[str, Any]], dict[str, Any],
+           dict[str, Any], dict[str, Any]]:
+    profile_counter = {"profile_replacements": 0}
+    selected = _apply_profile_redaction(selected, counter=profile_counter)
+    sources = _apply_profile_redaction(sources, counter=profile_counter)
+    reflections = _apply_profile_redaction(reflections, counter=profile_counter)
+    playbook_versions = _apply_profile_redaction(playbook_versions, counter=profile_counter)
+    recall_receipts = _apply_profile_redaction(recall_receipts, counter=profile_counter)
+    autonomous_lifecycle = _apply_profile_redaction(
+        autonomous_lifecycle, counter=profile_counter,
+    )
+
     secret_counter = {"replacements": 0}
     selected = _redact_strings_in_place(selected, counter=secret_counter)
     sources = _redact_strings_in_place(sources, counter=secret_counter)
     reflections = _redact_strings_in_place(reflections, counter=secret_counter)
     playbook_versions = _redact_strings_in_place(
-        playbook_versions, counter=secret_counter
+        playbook_versions, counter=secret_counter,
     )
-    recall_receipts = _redact_strings_in_place(
-        recall_receipts, counter=secret_counter
+    recall_receipts = _redact_strings_in_place(recall_receipts, counter=secret_counter)
+    autonomous_lifecycle = _redact_strings_in_place(
+        autonomous_lifecycle, counter=secret_counter,
     )
     if secret_counter["replacements"]:
         caveats.append(
             f"{secret_counter['replacements']} secret-shaped value(s) "
             f"replaced with REDACTED-* tokens (security.md §8)"
         )
-
-    return selected, sources, reflections, playbook_versions, recall_receipts
+    redaction_summary = {
+        "profile_replacements": profile_counter["profile_replacements"],
+        "secret_pattern_replacements": secret_counter["replacements"],
+        "profile_scope": "profile labels currently share the conservative audit-export minimum redaction: labels, addresses, strategy IDs, source text/notes, external order refs, raw artifact refs, and sensitive actor metadata are redacted while public PM IDs are preserved.",
+        "profile_semantics": "redaction_profile values are accepted as compatibility labels; evaluator_only and audit_export currently apply identical conservative audit-export minimum redaction.",
+    }
+    return (selected, sources, reflections, playbook_versions, recall_receipts,
+            autonomous_lifecycle, redaction_summary)
 
 
 def _assemble_bundle(
@@ -680,6 +947,9 @@ def _assemble_bundle(
     playbook_versions: list[dict[str, Any]],
     report_summaries: dict[str, Any],
     recall_receipts: dict[str, Any],
+    autonomous_lifecycle: dict[str, Any],
+    redaction_profile: str,
+    redaction_summary: dict[str, Any],
     caveats: list[str],
 ) -> dict[str, Any]:
     data: dict[str, Any] = {
@@ -690,6 +960,9 @@ def _assemble_bundle(
         "playbook_versions": playbook_versions,
         "report_summaries": report_summaries,
         "recall_receipts": recall_receipts,
+        "autonomous_lifecycle": autonomous_lifecycle,
+        "redaction_profile": redaction_profile,
+        "redaction_summary": redaction_summary,
         "caveats": caveats,
         "suggested_prompts": _suggested_prompts(selected),
         "contract_version": CONTRACT_VERSION,
@@ -719,6 +992,10 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             decision_ids=decision_ids,
             include_recall_receipts=parsed.include_recall_receipts,
         )
+        autonomous_lifecycle = (
+            _gather_autonomous_lifecycle(conn, selected)
+            if parsed.include_autonomous_lifecycle else {}
+        )
     finally:
         db.close()
 
@@ -727,12 +1004,14 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
         omitted_sensitive=omitted_sensitive,
         redacted_sources=redacted_sources,
     )
-    selected, sources, reflections, playbook_versions, recall_receipts = _apply_redaction_sweep(
+    (selected, sources, reflections, playbook_versions, recall_receipts,
+     autonomous_lifecycle, redaction_summary) = _apply_redaction_sweep(
         selected=selected,
         sources=sources,
         reflections=reflections,
         playbook_versions=playbook_versions,
         recall_receipts=recall_receipts,
+        autonomous_lifecycle=autonomous_lifecycle,
         caveats=caveats,
     )
     data = _assemble_bundle(
@@ -743,6 +1022,9 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
         playbook_versions=playbook_versions,
         report_summaries=report_summaries,
         recall_receipts=recall_receipts,
+        autonomous_lifecycle=autonomous_lifecycle,
+        redaction_profile=parsed.redaction_profile.value,
+        redaction_summary=redaction_summary,
         caveats=caveats,
     )
 

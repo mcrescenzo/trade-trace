@@ -37,10 +37,13 @@ from trade_trace.tools.review_bundle import (
     ReviewBundleInput,
     ReviewBundleOutput,
     _bundle_hash,
+    _json_value_has_exact_token,
 )
 
 
-def _seed_decision(home: Path, *, actor_id: str = "agent:default") -> dict:
+def _seed_decision(
+    home: Path, *, actor_id: str = "agent:default", extra_args: dict | None = None,
+) -> dict:
     db = open_database(db_path(home), create_parent=False)
     try:
         suffix = db.connection.execute("SELECT COUNT(*) FROM decisions").fetchone()[0] + 1
@@ -53,10 +56,13 @@ def _seed_decision(home: Path, *, actor_id: str = "agent:default") -> dict:
         "venue_id": venue.data["id"], "title": f"T {suffix}",
         "asset_class": "prediction_market",
     })
-    decision = mcp_call("decision.add", {
+    decision_args = {
         "home": str(home), "instrument_id": instrument.data["id"],
         "type": "skip", "reason": f"no edge today {suffix}",
-    }, actor_id=actor_id)
+    }
+    if extra_args:
+        decision_args.update(extra_args)
+    decision = mcp_call("decision.add", decision_args, actor_id=actor_id)
     assert decision.ok
     return {
         "venue_id": venue.data["id"],
@@ -152,6 +158,9 @@ def test_bundle_hash_uses_canonical_key_order_not_insertion_order(home):
         "playbook_versions",
         "report_summaries",
         "recall_receipts",
+        "autonomous_lifecycle",
+        "redaction_profile",
+        "redaction_summary",
         "caveats",
         "suggested_prompts",
         "contract_version",
@@ -242,8 +251,8 @@ def test_none_redaction_source_passes_through(home):
                                 decision_id=seeded["decision_id"])
     env = _mcp(home, "review.bundle", {})
     sources = {s["id"]: s for s in env.data["sources"]}
-    assert sources["src_none"]["note"] == "note-none"
-    assert sources["src_none"]["excerpt"] == "excerpt-none"
+    assert sources["src_none"]["note"] == "[REDACTED]"
+    assert sources["src_none"]["excerpt"] == "[REDACTED]"
 
 
 # -- supported-filter contract (d4k/ke1) -------------------------------
@@ -353,6 +362,200 @@ def test_review_bundle_can_omit_recall_receipts_by_flag(home):
     assert env.ok, env
     assert env.data["recall_receipts"]["status"] == "omitted"
     assert env.data["recall_receipts"]["omissions"] == ["omitted_by_input_flag"]
+
+
+# -- autonomous lifecycle ---------------------------------------------
+
+
+def test_review_bundle_includes_autonomous_lifecycle_and_default_redacts(home):
+    seeded = _seed_decision(home, extra_args={"run_id": "run-1"})
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        db.connection.execute(
+            "INSERT INTO pretrade_intents(id, semantic_key, material_hash, instrument_id, "
+            "decision_id, proposed_shape_json, as_of, created_at, actor_id) "
+            "VALUES ('intent-1','sk-intent','hash-intent',?,?,?,?,?,?)",
+            (
+                seeded["instrument_id"], seeded["decision_id"],
+                '{"condition_id":"condition_public_123","strategy_id":"strat-secret"}',
+                "2026-05-20T00:00:00Z", "2026-05-20T00:00:01Z", "actor",
+            ),
+        )
+        db.connection.execute(
+            "INSERT INTO external_execution_receipts(id, schema_version, semantic_key, "
+            "material_hash, lifecycle_state, external_event_type, pretrade_intent_id, "
+            "instrument_id, external_order_ref, source_system, as_of, imported_at, "
+            "artifact_hash, redacted_artifact_ref, actor_id) VALUES "
+            "('ext-1','v1','sk-ext','hash-ext','filled','fill','intent-1',?,"
+            "'order-private','importer','2026-05-20T00:00:02Z',"
+            "'2026-05-20T00:00:03Z','artifact-hash','raw/ref/private','actor')",
+            (seeded["instrument_id"],),
+        )
+        db.connection.execute(
+            "INSERT INTO account_snapshots(id, schema_version, semantic_key, material_hash, "
+            "source_system, source_run_id, confidence_label, staleness_status, account_label, captured_at, "
+            "as_of, imported_at, artifact_hash, redacted_artifact_ref, actor_id) VALUES "
+            "('acct-1','v1','sk-acct','hash-acct','importer','run-1','high','fresh',"
+            "'acct-private','2026-05-20T00:00:00Z','2026-05-20T00:00:00Z',"
+            "'2026-05-20T00:00:01Z','artifact','raw/acct','actor')",
+        )
+        db.connection.commit()
+    finally:
+        db.close()
+
+    env = _mcp(home, "review.bundle", {})
+    assert env.ok, env
+    lifecycle = env.data["autonomous_lifecycle"]
+    assert lifecycle["scope"]["decision_ids"] == [seeded["decision_id"]]
+    assert lifecycle["record_counts"]["pretrade_intents"] == 1
+    assert lifecycle["record_counts"]["external_execution_receipts"] == 1
+    assert lifecycle["record_counts"]["account_snapshots"] == 1
+    assert "not trading advice" in lifecycle["notice"]
+    assert '"strategy_id":"[REDACTED]"' in lifecycle["records"]["pretrade_intents"][0]["proposed_shape_json"]
+    assert lifecycle["records"]["external_execution_receipts"][0]["external_order_ref"] == "[REDACTED]"
+    assert lifecycle["records"]["external_execution_receipts"][0]["redacted_artifact_ref"] == "[REDACTED]"
+    assert lifecycle["records"]["account_snapshots"][0]["account_label"] == "[REDACTED]"
+    assert "condition_public_123" in lifecycle["records"]["pretrade_intents"][0]["proposed_shape_json"]
+    assert env.data["redaction_profile"] == "audit_export"
+    assert env.data["redaction_summary"]["profile_replacements"] >= 4
+    assert "profile labels" in env.data["redaction_summary"]["profile_scope"]
+
+
+def test_review_bundle_fetches_forecast_scores_by_forecast_id(home):
+    seeded = _seed_decision(home)
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        db.connection.execute(
+            "INSERT INTO theses(id, instrument_id, side, body, created_at, actor_id) "
+            "VALUES ('th-score', ?, 'yes', 'body', '2026-05-20T00:00:00Z', 'actor')",
+            (seeded["instrument_id"],),
+        )
+        db.connection.execute(
+            "INSERT INTO forecasts(id, thesis_id, kind, yes_label, scoring_state, "
+            "created_at, actor_id) VALUES "
+            "('fc-score', 'th-score', 'binary', 'yes', 'scored', "
+            "'2026-05-20T00:00:01Z', 'actor')",
+        )
+        db.connection.execute(
+            "INSERT INTO forecast_scores(id, forecast_id, metric, score, scored_at, actor_id) "
+            "VALUES ('score-row-not-forecast-id', 'fc-score', 'brier', 0.25, "
+            "'2026-05-20T00:00:02Z', 'actor')",
+        )
+        db.connection.execute(
+            "INSERT INTO decisions(id, instrument_id, thesis_id, forecast_id, type, reason, "
+            "metadata_json, created_at, actor_id) VALUES "
+            "('dec-score', ?, 'th-score', 'fc-score', 'skip', 'score decision', '{}', "
+            "'2026-05-20T00:00:03Z', 'agent:score')",
+            (seeded["instrument_id"],),
+        )
+        db.connection.commit()
+    finally:
+        db.close()
+
+    env = _mcp(home, "review.bundle", {
+        "filter": {"actors": {"actor_id": ["agent:score"]}},
+    })
+    assert env.ok, env
+    assert [r["id"] for r in env.data["selected"]["forecast_scores"]] == [
+        "score-row-not-forecast-id"
+    ]
+
+
+def test_review_bundle_scopes_account_snapshots_and_reconciliation_records(home):
+    selected = _seed_decision(
+        home, actor_id="agent:selected", extra_args={"run_id": "run-selected"},
+    )
+    unrelated = _seed_decision(
+        home, actor_id="agent:unrelated", extra_args={"run_id": "run-unrelated"},
+    )
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        db.connection.execute(
+            "INSERT INTO account_snapshots(id, schema_version, semantic_key, material_hash, "
+            "source_system, source_run_id, confidence_label, staleness_status, account_label, "
+            "captured_at, as_of, imported_at, artifact_hash, actor_id) VALUES "
+            "('acct-related','v1','sk-ar','hash-ar','importer','run-selected','high','fresh',"
+            "'acct-related','2026-05-20T00:00:00Z','2026-05-20T00:00:00Z',"
+            "'2026-05-20T00:00:01Z','artifact-related','actor'),"
+            "('acct-unrelated','v1','sk-au','hash-au','importer','run-unrelated','high','fresh',"
+            "'acct-unrelated','2026-05-20T00:00:00Z','2026-05-20T00:00:00Z',"
+            "'2026-05-20T00:00:01Z','artifact-unrelated','actor')",
+        )
+        db.connection.execute(
+            "INSERT INTO reconciliation_records(id, schema_version, semantic_key, material_hash, "
+            "as_of, source, diff_severity, resolution_status, contributing_ids_json, "
+            "recorded_at, actor_id) VALUES "
+            "('recon-related','v1','sk-rr','hash-rr','2026-05-20T00:00:00Z',"
+            "'importer','info','unresolved',?, '2026-05-20T00:00:01Z','actor'),"
+            "('recon-unrelated','v1','sk-ru','hash-ru','2026-05-20T00:00:00Z',"
+            "'importer','info','unresolved',?, '2026-05-20T00:00:01Z','actor')",
+            (
+                json.dumps([selected["decision_id"]]),
+                json.dumps([unrelated["decision_id"]]),
+            ),
+        )
+        db.connection.commit()
+    finally:
+        db.close()
+
+    env = _mcp(home, "review.bundle", {
+        "filter": {"actors": {"actor_id": ["agent:selected"]}},
+    })
+    assert env.ok, env
+    records = env.data["autonomous_lifecycle"]["records"]
+    assert [r["id"] for r in records["account_snapshots"]] == ["acct-related"]
+    assert [r["id"] for r in records["reconciliation_records"]] == ["recon-related"]
+
+
+def test_review_bundle_json_scope_uses_exact_tokens_not_substrings(home):
+    seeded = _seed_decision(home, actor_id="agent:selected")
+    selected_id = seeded["decision_id"]
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        db.connection.execute(
+            "INSERT INTO account_snapshots(id, schema_version, semantic_key, material_hash, "
+            "source_system, confidence_label, staleness_status, captured_at, as_of, "
+            "imported_at, artifact_hash, balances_json, actor_id) VALUES "
+            "('acct-exact','v1','sk-ae','hash-ae','importer','high','fresh',"
+            "'2026-05-20T00:00:00Z','2026-05-20T00:00:00Z',"
+            "'2026-05-20T00:00:01Z','artifact-exact',?, 'actor'),"
+            "('acct-substring','v1','sk-as','hash-as','importer','high','fresh',"
+            "'2026-05-20T00:00:00Z','2026-05-20T00:00:00Z',"
+            "'2026-05-20T00:00:01Z','artifact-substring',?, 'actor')",
+            (
+                json.dumps({"decision_id": selected_id}),
+                json.dumps({"decision_id": f"{selected_id}0"}),
+            ),
+        )
+        db.connection.execute(
+            "INSERT INTO reconciliation_records(id, schema_version, semantic_key, material_hash, "
+            "as_of, source, diff_severity, resolution_status, contributing_ids_json, "
+            "recorded_at, actor_id) VALUES "
+            "('recon-exact','v1','sk-re','hash-re','2026-05-20T00:00:00Z',"
+            "'importer','info','unresolved',?, '2026-05-20T00:00:01Z','actor'),"
+            "('recon-substring','v1','sk-rs','hash-rs','2026-05-20T00:00:00Z',"
+            "'importer','info','unresolved',?, '2026-05-20T00:00:01Z','actor')",
+            (json.dumps([selected_id]), json.dumps([f"{selected_id}0"])),
+        )
+        db.connection.commit()
+    finally:
+        db.close()
+
+    env = _mcp(home, "review.bundle", {
+        "filter": {"actors": {"actor_id": ["agent:selected"]}},
+    })
+    assert env.ok, env
+    records = env.data["autonomous_lifecycle"]["records"]
+    assert [r["id"] for r in records["account_snapshots"]] == ["acct-exact"]
+    assert [r["id"] for r in records["reconciliation_records"]] == ["recon-exact"]
+
+
+def test_review_bundle_json_token_predicate_treats_like_wildcards_literally():
+    tokens = {"dec_1", "dec%2"}
+
+    assert _json_value_has_exact_token({"ids": ["dec_1", {"id": "dec%2"}]}, tokens)
+    assert not _json_value_has_exact_token({"ids": ["decA1", "decX2"]}, tokens)
+    assert not _json_value_has_exact_token({"id": "prefix-dec_1-suffix"}, tokens)
 
 
 # -- CLI/MCP parity ---------------------------------------------------
