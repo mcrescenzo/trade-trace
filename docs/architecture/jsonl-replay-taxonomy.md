@@ -42,6 +42,9 @@ The `events` table currently emits these `event_type` values
 - External execution receipt: `external_execution_receipt.imported` (sanitized
   caller-supplied evidence only; not a fetch, signing, order, custody, or
   remediation surface).
+- Account snapshot: `account_snapshot.imported` (sanitized caller-supplied
+  account-state evidence only; not a fetch, private-auth, broker truth, custody,
+  or remediation surface).
 - Signal: `signal.emitted` (lazy-emitted by `signal.scan` /
   `report.coach`).
 
@@ -84,6 +87,10 @@ row.
   append-only sanitized receipt evidence only; semantic idempotency is keyed by
   the caller-supplied semantic key and material hash, and replay performs no
   network or execution action).
+- `account_snapshot.imported` → `account_snapshot.import` (local append-only
+  sanitized account snapshot evidence only; semantic idempotency is keyed by the
+  caller-supplied semantic key and material hash, and replay performs no network,
+  account sync, custody, or execution action).
 - `memory_node.retained` → `memory.retain` / `memory.reflect`
   (the import path is `memory.retain` for both; `memory.reflect`
   also writes the about-edge but the canonical replay surface for

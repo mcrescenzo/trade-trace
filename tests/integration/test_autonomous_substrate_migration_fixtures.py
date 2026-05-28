@@ -24,12 +24,12 @@ def test_autonomous_substrate_fixture_scaffold_adds_no_concrete_migration_tables
         for table in tables
     }
 
+    assert "account_snapshots" in created_tables
     assert not {
         "execution_intents",
         "risk_checks",
         "approval_waivers",
         "execution_imports",
-        "account_snapshots",
         "reconciliation_reports",
         "incident_run_sessions",
         "audit_bundles",

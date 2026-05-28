@@ -198,6 +198,10 @@ def test_no_credential_columns_in_schema(tmp_path):
 # -- 6. shipped v0.0.2 catalog pins -------------------
 
 SHIPPED_PUBLIC_TOOLS = {
+    "account_snapshot.get",
+    "account_snapshot.import",
+    "account_snapshot.list",
+    "account_snapshot.report",
     "approval.get",
     "approval.list",
     "approval.record",

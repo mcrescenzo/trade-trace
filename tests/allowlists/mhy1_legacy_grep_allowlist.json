@@ -90,6 +90,14 @@
       "reason": "market.bind intentionally creates/returns legacy relational prerequisites during the additive PM collapse so public clients need no hidden venue/instrument setup tools."
     },
     {
+      "pattern": "src/trade_trace/tools/external_receipts.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "local_external_receipt_link_compatibility",
+      "reason": "external_receipts retains a legitimate non-executing public/local link to instruments while the legacy schema remains present."
+    },
+    {
       "pattern": "src/trade_trace/tools/pretrade_intent.py",
       "terms": [
         "instrument_id",
