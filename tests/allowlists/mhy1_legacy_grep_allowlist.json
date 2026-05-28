@@ -99,6 +99,14 @@
       "reason": "pretrade_intent.record/list retain optional legacy local audit links for compatibility while publicly centering market-scoped non-executing intent packets."
     },
     {
+      "pattern": "src/trade_trace/tools/approval.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "local_approval_audit_record_compatibility",
+      "reason": "approval.record/list/report retain optional legacy local instrument links for compatibility while storing non-executing approval/waiver audit evidence."
+    },
+    {
       "pattern": "src/trade_trace/events/semantic_keys.py",
       "terms": [
         "instrument_id",
