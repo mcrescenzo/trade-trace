@@ -105,6 +105,41 @@ def _source_ref(kind: str, id_: str) -> dict[str, str]:
     return {"kind": kind, "id": id_}
 
 
+def _replay_artifact_refs(conn: sqlite3.Connection, strategy_id: str | None, as_of: str) -> list[dict[str, Any]]:
+    """Return evaluator-only replay/evaluation artifact refs available by as_of."""
+
+    if not strategy_id:
+        return []
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='replay_evaluation_artifacts'").fetchone() is None:
+        return []
+    rows = conn.execute(
+        """
+        SELECT id, artifact_type, evidence_mode, dataset_hash, strategy_version, sample_size, as_of, imported_at
+        FROM replay_evaluation_artifacts
+        WHERE strategy_id = ? AND as_of <= ? AND imported_at <= ?
+        ORDER BY as_of DESC, imported_at DESC, id
+        LIMIT 10
+        """,
+        (strategy_id, as_of, as_of),
+    ).fetchall()
+    return [
+        {
+            "kind": "replay_evaluation_artifact",
+            "id": row[0],
+            "artifact_type": row[1],
+            "evidence_mode": row[2],
+            "dataset_hash": row[3],
+            "strategy_version": row[4],
+            "sample_size": row[5],
+            "as_of": row[6],
+            "imported_at": row[7],
+            "candidate_visible": False,
+            "caveat_codes": ["evaluator_only_artifact_ref", "externally_supplied_no_trade_trace_backtest"],
+        }
+        for row in rows
+    ]
+
+
 def _add_value_filter(clauses: list[str], params: list[Any], column: str, value: Any) -> None:
     if isinstance(value, list) and value:
         clauses.append(f"{column} IN ({','.join('?' for _ in value)})")
@@ -248,7 +283,7 @@ def _case(conn: sqlite3.Connection, item: dict[str, Any], as_of: str, task: dict
     cid = _case_id(kind, sid, as_of, task["mode"])
     refs = [_source_ref(kind, sid)]
     caveats: list[str] = []
-    labels: dict[str, Any] = {"case_id": cid, "outcomes": [], "forecast_scores": [], "post_as_of_reflections": [], "post_as_of_source_updates": [], "post_as_of_playbook_changes": [], "original_artifact_for_blind_tasks": None, "source_refs": refs, "caveat_codes": ["evaluator_only_not_candidate_context"]}
+    labels: dict[str, Any] = {"case_id": cid, "outcomes": [], "forecast_scores": [], "replay_evaluation_artifact_refs": [], "post_as_of_reflections": [], "post_as_of_source_updates": [], "post_as_of_playbook_changes": [], "original_artifact_for_blind_tasks": None, "source_refs": refs, "caveat_codes": ["evaluator_only_not_candidate_context"]}
     excluded: list[dict[str, Any]] = []
     ctx: dict[str, Any]
     if row is None:
@@ -259,10 +294,13 @@ def _case(conn: sqlite3.Connection, item: dict[str, Any], as_of: str, task: dict
         instrument_id = r.get("instrument_id")
         thesis_id = r.get("thesis_id")
         forecast_id = r.get("forecast_id") if kind == "decision" else r.get("id")
-        if kind == "forecast" and thesis_id:
+        strategy_id = r.get("strategy_id")
+        if thesis_id:
             t = conn.execute("SELECT instrument_id, strategy_id FROM theses WHERE id = ?", (thesis_id,)).fetchone()
-            if t:
+            if t and kind == "forecast":
                 instrument_id = t[0]
+            if t and not strategy_id:
+                strategy_id = t[1]
         snapshots = []
         if kind == "decision" and r.get("snapshot_id"):
             s = conn.execute("SELECT id,instrument_id,captured_at,price,bid,ask,mid,spread,volume,open_interest,implied_probability,created_at FROM snapshots WHERE id = ? AND created_at <= ?", (r["snapshot_id"], as_of)).fetchone()
@@ -310,6 +348,12 @@ def _case(conn: sqlite3.Connection, item: dict[str, Any], as_of: str, task: dict
         if task["mode"] != "review_original":
             labels["original_artifact_for_blind_tasks"] = {"kind": kind, "id": sid}
             excluded.append({"kind": kind, "id": sid, "reason": "original_artifact_answer_withheld_for_blind_task"})
+        if task["include_evaluation_labels"]:
+            labels["replay_evaluation_artifact_refs"] = _replay_artifact_refs(conn, strategy_id, as_of)
+            for artifact_ref in labels["replay_evaluation_artifact_refs"]:
+                excluded.append({"kind": "replay_evaluation_artifact", "id": artifact_ref["id"], "reason": "evaluator_only_artifact_ref_not_candidate_context"})
+        else:
+            labels["replay_evaluation_artifact_refs"] = []
     original = {"status": "included" if task["mode"] == "review_original" else "withheld", "source_refs": refs}
     return {"case_id": cid, "case_key": {"source_kind": kind, "source_id": sid, "as_of": as_of, "task_mode": task["mode"]}, "case_type": kind, "eligibility_status": "needs_caveat" if caveats else "runnable", "original_artifact": original, "point_in_time_context": ctx, "candidate_instructions": {"mode": task["mode"], "produce_candidate_output_contract_version": task.get("candidate_output_contract_version", "replay.candidate_output.v0")}, "source_refs": refs, "evidence_refs": refs, "caveat_codes": caveats, "omitted_counts": {}, "truncation": {"is_partial": False}}, labels, excluded
 

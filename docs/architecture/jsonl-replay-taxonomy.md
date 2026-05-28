@@ -45,6 +45,9 @@ The `events` table currently emits these `event_type` values
 - Account snapshot: `account_snapshot.imported` (sanitized caller-supplied
   account-state evidence only; not a fetch, private-auth, broker truth, custody,
   or remediation surface).
+- Replay/evaluation artifact: `replay_evaluation_artifact.recorded` (externally
+  supplied dataset/result evidence for strategy review only; not a simulator,
+  backtest engine, optimizer, data fetch, advice, or recommendation surface).
 - Paper fill: `paper_fill.recorded` (local paper-only conservative fill evidence;
   not imported/live account truth and not an order, execution, or custody surface).
 - Reconciliation: `reconciliation.recorded` (local derived comparison of Trade
@@ -103,6 +106,12 @@ row.
   sanitized account snapshot evidence only; semantic idempotency is keyed by the
   caller-supplied semantic key and material hash, and replay performs no network,
   account sync, custody, or execution action).
+- `replay_evaluation_artifact.recorded` → `replay_artifact.record` (local
+  append-only externally supplied replay/evaluation artifact evidence only;
+  semantic idempotency is keyed by the caller-supplied semantic key and material
+  hash, and replay performs no data fetch, simulation/backtest execution,
+  strategy optimization, advice, recommendation, account sync, or execution
+  action).
 - `paper_fill.recorded` → `paper_fill.record` (local append-only paper-only
   conservative fill evidence; semantic idempotency is keyed by the caller-supplied
   semantic key and material hash, and replay performs no network, account sync,

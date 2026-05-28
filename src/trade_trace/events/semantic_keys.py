@@ -47,6 +47,9 @@ SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
     "account_snapshot.imported": SemanticKeySpec(
         structural_fields=frozenset({"semantic_key", "material_hash"}),
     ),
+    "replay_evaluation_artifact.recorded": SemanticKeySpec(
+        structural_fields=frozenset({"semantic_key", "material_hash"}),
+    ),
     "paper_fill.recorded": SemanticKeySpec(
         structural_fields=frozenset({"semantic_key", "material_hash"}),
     ),

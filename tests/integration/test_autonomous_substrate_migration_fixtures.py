@@ -25,6 +25,7 @@ def test_autonomous_substrate_fixture_scaffold_adds_no_concrete_migration_tables
     }
 
     assert "account_snapshots" in created_tables
+    assert "replay_evaluation_artifacts" in created_tables
     assert not {
         "execution_intents",
         "risk_checks",
@@ -33,6 +34,5 @@ def test_autonomous_substrate_fixture_scaffold_adds_no_concrete_migration_tables
         "reconciliation_reports",
         "incident_run_sessions",
         "audit_bundles",
-        "replay_evaluation_artifacts",
         "paper_fills",
     } & created_tables
