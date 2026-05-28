@@ -20,6 +20,39 @@ _IDEM = "00000000-0000-4000-8000-000000000000"
 
 
 WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
+    "paper_fill.record": {
+        "minimal": {
+            "semantic_key": "paper_fill:local-paper:market-123:run-001",
+            "account_label": "local-paper",
+            "side": "buy",
+            "outcome_side": "yes",
+            "requested_quantity": 10,
+            "limit_price": 0.55,
+            "order_as_of": "2026-05-28T00:00:10Z",
+            "book_levels": [{"price": 0.52, "quantity": 10}],
+            "idempotency_key": _IDEM,
+        },
+        "rich": {
+            "semantic_key": "paper_fill:local-paper:market-123:run-001",
+            "account_label": "local-paper",
+            "market_id": "mkt_MARKET_ID_HERE",
+            "side": "buy",
+            "outcome_side": "yes",
+            "requested_quantity": 10,
+            "limit_price": 0.55,
+            "reference_mid_price": 0.50,
+            "slippage_cap_bps": 500,
+            "fee_amount": 0.02,
+            "quote_id": "quote-001",
+            "book_id": "book-001",
+            "snapshot_id": "snap-001",
+            "snapshot_as_of": "2026-05-28T00:00:00Z",
+            "order_as_of": "2026-05-28T00:00:10Z",
+            "book_levels": [{"price": 0.52, "quantity": 6}, {"price": 0.53, "quantity": 4}],
+            "provenance_json": {"source": "caller_supplied_paper_depth"},
+            "idempotency_key": _IDEM,
+        },
+    },
     "idea.capture": {
         "minimal": {
             "thought": "Rough market idea to investigate later; needs venue, instrument, snapshot, thesis, and forecast enrichment.",

@@ -44,6 +44,7 @@ from trade_trace.tools.ledger import register_ledger_tools
 from trade_trace.tools.market_bind import register_market_bind_tool
 from trade_trace.tools.market_scan import register_market_scan_tools
 from trade_trace.tools.memory import register_memory_tools
+from trade_trace.tools.paper_fills import register_paper_fill_tools
 from trade_trace.tools.playbook import register_playbook_tools
 from trade_trace.tools.pretrade_intent import register_pretrade_intent_tools
 from trade_trace.tools.reflection import register_reflection_tools
@@ -187,6 +188,7 @@ def build_registry() -> ToolRegistry:
     register_ledger_tools(registry)
     register_market_scan_tools(registry)
     register_memory_tools(registry)
+    register_paper_fill_tools(registry)
     register_playbook_tools(registry)
     register_pretrade_intent_tools(registry)
     register_reflection_tools(registry)

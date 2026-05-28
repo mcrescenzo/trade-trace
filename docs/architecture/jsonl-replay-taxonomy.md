@@ -45,6 +45,8 @@ The `events` table currently emits these `event_type` values
 - Account snapshot: `account_snapshot.imported` (sanitized caller-supplied
   account-state evidence only; not a fetch, private-auth, broker truth, custody,
   or remediation surface).
+- Paper fill: `paper_fill.recorded` (local paper-only conservative fill evidence;
+  not imported/live account truth and not an order, execution, or custody surface).
 - Signal: `signal.emitted` (lazy-emitted by `signal.scan` /
   `report.coach`).
 
@@ -91,6 +93,10 @@ row.
   sanitized account snapshot evidence only; semantic idempotency is keyed by the
   caller-supplied semantic key and material hash, and replay performs no network,
   account sync, custody, or execution action).
+- `paper_fill.recorded` → `paper_fill.record` (local append-only paper-only
+  conservative fill evidence; semantic idempotency is keyed by the caller-supplied
+  semantic key and material hash, and replay performs no network, account sync,
+  live order, cancellation, custody, settlement, or execution action).
 - `memory_node.retained` → `memory.retain` / `memory.reflect`
   (the import path is `memory.retain` for both; `memory.reflect`
   also writes the about-edge but the canonical replay surface for

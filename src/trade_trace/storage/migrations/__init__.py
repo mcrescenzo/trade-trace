@@ -70,6 +70,7 @@ from trade_trace.storage.migrations.m020_external_execution_receipts import (
 from trade_trace.storage.migrations.m021_account_snapshots import (
     _migration_021_account_snapshots,
 )
+from trade_trace.storage.migrations.m022_paper_fills import _migration_022_paper_fills
 
 MIGRATIONS: list[Migration] = [
     _migration_001_meta_table,
@@ -93,6 +94,7 @@ MIGRATIONS: list[Migration] = [
     _migration_019_approval_waiver_ledger,
     _migration_020_external_execution_receipts,
     _migration_021_account_snapshots,
+    _migration_022_paper_fills,
 ]
 
 
@@ -132,6 +134,7 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
     (19, ["approval_waiver_records"]),
     (20, ["external_execution_receipts"]),
     (21, ["account_snapshots"]),
+    (22, ["paper_fill_records"]),
 ]
 
 
@@ -189,6 +192,7 @@ _MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
     (19, {}),
     (20, {}),
     (21, {}),
+    (22, {}),
 ]
 
 
@@ -221,6 +225,7 @@ __all__ = [
     "_migration_019_approval_waiver_ledger",
     "_migration_020_external_execution_receipts",
     "_migration_021_account_snapshots",
+    "_migration_022_paper_fills",
     "_require_fts5",
     "apply_pending_migrations",
     "current_version",

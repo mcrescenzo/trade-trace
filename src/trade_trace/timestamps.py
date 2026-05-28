@@ -77,6 +77,7 @@ TIMESTAMP_API_GOVERNED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
         ("memory_recall_events", "as_of"),
         ("memory_recall_events", "created_at"),
         ("outbox", "exported_at"),
+        ("paper_fill_records", "recorded_at"),
         ("outcomes", "created_at"),
         ("outcomes", "resolved_at"),
         ("playbooks", "created_at"),
