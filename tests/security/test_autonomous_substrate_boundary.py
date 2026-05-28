@@ -73,10 +73,17 @@ def test_autonomous_substrate_boundary_negative_fixtures_fail_without_policy_pro
     )
     assert scan_boundary_text(policy_prose) == ()
 
-    secret_schema = {"properties": {"apiSecret": {"type": "string"}, "privateKey": {"type": "string"}}}
-    executor_example = "example tool: placeOrder then cancelOrder; action=withdraw_funds"
+    negative_fixtures = (
+        ("schema.credential_fields", {"properties": {"apiSecret": {"type": "string"}, "privateKey": {"type": "string"}}}),
+        ("example.raw_private_payload", {"record": {"private_payload": {"redacted": False}}}),
+        ("log.executor_action", "example tool: placeOrder then cancelOrder; action=withdraw_funds"),
+        ("export.advice_claim", {"summary": "alpha signal with guaranteed profit"}),
+        ("review_bundle.executor_key", {"review": {"signTransaction": False}}),
+        ("replay_bundle.private_payload_ref", {"candidate": {"raw_private_payload": "artifact://not-allowed"}}),
+        ("mcp.tool_description", {"description": "submitTrade method for testing"}),
+    )
 
-    for name, item in (("secret_schema", secret_schema), ("executor_example", executor_example)):
+    for name, item in negative_fixtures:
         try:
             assert_no_boundary_violations([(name, item)])
         except AssertionError:
