@@ -224,3 +224,35 @@ def test_every_tool_in_registry_resolves_to_a_known_event_type():
             f"TOOL_PRIMARY_EVENT_TYPE[{tool!r}]={event_type!r} is not a "
             "registered semantic-key event type"
         )
+
+
+def test_risk_check_auto_idempotency_includes_public_input_linkage_fields(tmp_path):
+    base = {
+        "policy_version_id": "rpv_1",
+        "status": "pass",
+        "outcome": "pass",
+        "instrument_id": "ins_1",
+        "as_of": "2026-05-28T12:00:00Z",
+        "rule_results": [{
+            "rule_id": "limit",
+            "reason_code": "WITHIN_LIMIT",
+            "severity": "info",
+            "observed_value": {"usd": 10},
+            "threshold": {"max_usd": 100},
+            "contributing_record_ids": ["pos_1"],
+            "waiver_required": False,
+        }],
+    }
+    with_inputs = {
+        **base,
+        "exposure_input_ids_json": ["pos_1"],
+        "evidence_input_ids_json": ["src_1"],
+        "input_provenance_json": {"snapshot": "a"},
+    }
+    changed_inputs = {
+        **base,
+        "exposure_input_ids_json": ["pos_2"],
+        "evidence_input_ids_json": ["src_2"],
+        "input_provenance_json": {"snapshot": "b"},
+    }
+    assert derive_idempotency_key("risk.check_record", with_inputs) != derive_idempotency_key("risk.check_record", changed_inputs)

@@ -52,6 +52,9 @@ from trade_trace.storage.migrations.m014_pm_forecast_memory_transition import (
 from trade_trace.storage.migrations.m015_pm_inline_sources_transition import (
     _migration_015_pm_inline_sources_transition,
 )
+from trade_trace.storage.migrations.m016_risk_policy_receipts import (
+    _migration_016_risk_policy_receipts,
+)
 
 MIGRATIONS: list[Migration] = [
     _migration_001_meta_table,
@@ -69,6 +72,7 @@ MIGRATIONS: list[Migration] = [
     _migration_013_forecast_snapshot_anchor,
     _migration_014_pm_forecast_memory_transition,
     _migration_015_pm_inline_sources_transition,
+    _migration_016_risk_policy_receipts,
 ]
 
 
@@ -102,6 +106,7 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
     (13, ["forecast_snapshot_anchor"]),
     (14, []),
     (15, []),
+    (16, ["risk_policy_versions", "risk_check_receipts", "risk_check_rule_results"]),
 ]
 
 
@@ -153,6 +158,7 @@ _MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
         "memory_nodes": ["metadata_json"],
     }),
     (15, {}),
+    (16, {}),
 ]
 
 
@@ -179,6 +185,7 @@ __all__ = [
     "_migration_013_forecast_snapshot_anchor",
     "_migration_014_pm_forecast_memory_transition",
     "_migration_015_pm_inline_sources_transition",
+    "_migration_016_risk_policy_receipts",
     "_require_fts5",
     "apply_pending_migrations",
     "current_version",

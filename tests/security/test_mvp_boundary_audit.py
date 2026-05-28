@@ -223,6 +223,8 @@ SHIPPED_PUBLIC_TOOLS = {
     "replay.evaluate_output",
     "resolution.add",
     "review.bundle",
+    "risk.check_record",
+    "risk.policy_version_add",
     "snapshot.add",
     "snapshot.fetch",
     "snapshot.fetch_series",

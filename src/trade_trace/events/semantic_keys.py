@@ -282,6 +282,27 @@ SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
         free_text_fields=frozenset({"body", "meta_json.note"}),
         sort_keys={"related_refs_json": "kind"},
     ),
+    "risk_policy_version.created": SemanticKeySpec(
+        structural_fields=frozenset(
+            {
+                "policy_key", "version", "policy_hash", "limits_json", "rules_json",
+                "source", "provenance_json", "effective_from", "effective_to",
+            }
+        ),
+    ),
+    "risk_check_receipt.recorded": SemanticKeySpec(
+        structural_fields=frozenset(
+            {
+                "receipt_hash", "policy_version_id", "status", "outcome",
+                "intended_action", "proposed_intent_hash", "decision_id", "market_id",
+                "instrument_id", "strategy_id", "snapshot_id", "exposure_input_ids_json",
+                "evidence_input_ids_json", "input_provenance_json", "as_of", "waived_by",
+                "rule_results",
+            }
+        ),
+        free_text_fields=frozenset({"waiver_reason"}),
+        sort_keys={"rule_results": "rule_id", "exposure_input_ids_json": None, "evidence_input_ids_json": None},
+    ),
     # Importer writes are identity-only: see persistence.md §5.2 row 3.
     "import.row_committed": SemanticKeySpec(
         structural_fields=frozenset({"import_run_id", "source_row_number"}),
@@ -364,6 +385,9 @@ TOOL_PRIMARY_EVENT_TYPE: dict[str, str] = {
     # idea.capture is a thin wrapper on memory.retain (planned KILL
     # under the v0.0.2 catalog), so it shares the canonical-hash space.
     "idea.capture":           "memory_node.retained",
+    # Risk audit surfaces
+    "risk.policy_version_add": "risk_policy_version.created",
+    "risk.check_record":      "risk_check_receipt.recorded",
 }
 
 

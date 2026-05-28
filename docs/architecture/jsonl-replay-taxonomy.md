@@ -34,6 +34,8 @@ The `events` table currently emits these `event_type` values
 - M3 strategy: `strategy.created`, `strategy.updated`.
 - M4 playbook: `playbook.created`, `playbook.proposed_version`,
   `playbook_rule.followed`, `playbook_rule.overridden`.
+- H05 risk audit: `risk_policy_version.created`,
+  `risk_check_receipt.recorded`.
 - Signal: `signal.emitted` (lazy-emitted by `signal.scan` /
   `report.coach`).
 
@@ -65,6 +67,8 @@ row.
 - `forecast.superseded` → `forecast.supersede`
 - `forecast.anchored_to_snapshot` → `forecast.anchor_to_snapshot`
 - `outcome.recorded` → `outcome.add`
+- `risk_policy_version.created` → `risk.policy_version_add`
+- `risk_check_receipt.recorded` → `risk.check_record`
 - `memory_node.retained` → `memory.retain` / `memory.reflect`
   (the import path is `memory.retain` for both; `memory.reflect`
   also writes the about-edge but the canonical replay surface for

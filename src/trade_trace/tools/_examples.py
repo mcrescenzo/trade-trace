@@ -386,6 +386,41 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "idempotency_key": _IDEM,
         },
     },
+    "risk.policy_version_add": {
+        "minimal": {
+            "policy_key": "default-pretrade-risk",
+            "version": "2026-05-22.1",
+            "limits_json": {"max_position_notional": 1000},
+            "rules_json": [{"id": "max_position_notional", "severity": "hard_block"}],
+            "source": "external-profile-risk-layer",
+            "effective_from": "2026-05-22T00:00:00Z",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "risk.check_record": {
+        "minimal": {
+            "policy_version_id": "rpv_POLICY_VERSION_ID_HERE",
+            "status": "pass",
+            "outcome": "pass",
+            "as_of": "2026-05-22T14:30:00Z",
+            "instrument_id": "ins_INSTRUMENT_ID_HERE",
+            "exposure_input_ids_json": ["pos_POSITION_ID_HERE"],
+            "evidence_input_ids_json": ["src_SOURCE_ID_HERE"],
+            "input_provenance_json": {"risk_layer": "external-profile-risk-layer", "version": "2026-05-22.1"},
+            "rule_results": [
+                {
+                    "rule_id": "max_position_notional",
+                    "reason_code": "within_limit",
+                    "severity": "info",
+                    "observed_value": {"notional": 100},
+                    "threshold": {"max_notional": 1000},
+                    "contributing_record_ids": ["pos_POSITION_ID_HERE"],
+                    "waiver_required": False,
+                }
+            ],
+            "idempotency_key": _IDEM,
+        },
+    },
     "import.validate": {
         "minimal": {
             "path": "/tmp/trade-trace-import/bundle.jsonl",

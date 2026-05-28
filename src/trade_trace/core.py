@@ -45,6 +45,7 @@ from trade_trace.tools.playbook import register_playbook_tools
 from trade_trace.tools.reflection import register_reflection_tools
 from trade_trace.tools.reports import register_report_tools
 from trade_trace.tools.review_bundle import register_review_bundle
+from trade_trace.tools.risk import register_risk_tools
 from trade_trace.tools.signals import register_signal_tools
 from trade_trace.tools.strategy import register_strategy_tools
 
@@ -180,6 +181,7 @@ def build_registry() -> ToolRegistry:
     register_reflection_tools(registry)
     register_strategy_tools(registry)
     register_review_bundle(registry)
+    register_risk_tools(registry)
     register_import_stubs(registry)
     register_csv_import(registry)
     register_report_tools(registry)

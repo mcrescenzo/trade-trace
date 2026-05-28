@@ -24,7 +24,7 @@ def test_computed_recall_receipts_classify_use_and_caveats_without_persistence(h
         after = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 
     assert before == after
-    assert not any("receipt" in table and table != "memory_recall_events" for table in after)
+    assert "recall_receipts" not in after
     receipt = report["recall_receipts"][0]
     assert receipt["query"] == "prior lessons"
     assert receipt["context"] == {"instrument_id": "inst", "strategy_id": "strat"}

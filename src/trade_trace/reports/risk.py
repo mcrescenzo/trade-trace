@@ -163,6 +163,54 @@ def report_risk(
     if total_closed and metrics["coverage"] < 0.5:
         caveats.append("R coverage is below 0.5; metrics are low-coverage and should not be over-interpreted.")
 
+    policy_summary: dict[str, Any] = {"available": False}
+    receipt_summary: dict[str, Any] = {"available": False}
+    has_policy_tables = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'risk_check_receipts'"
+    ).fetchone() is not None
+    if has_policy_tables:
+        policies = conn.execute(
+            "SELECT id, policy_key, version, policy_hash, effective_from, effective_to "
+            "FROM risk_policy_versions ORDER BY effective_from DESC, created_at DESC LIMIT 5"
+        ).fetchall()
+        recent_receipts = conn.execute(
+            "SELECT id, status, outcome, intended_action, policy_version_id, instrument_id, "
+            "strategy_id, as_of, created_at FROM risk_check_receipts "
+            "WHERE status IN ('fail', 'warn', 'missing_data') OR outcome = 'waived_warning' "
+            "ORDER BY created_at DESC, id DESC LIMIT 10"
+        ).fetchall()
+        rule_rows = conn.execute(
+            "SELECT r.receipt_id, r.rule_id, r.reason_code, r.severity, "
+            "r.observed_value_json, r.threshold_json, r.waiver_required, r.caveat, "
+            "r.missing_data, r.stale_data FROM risk_check_rule_results r "
+            "JOIN risk_check_receipts c ON c.id = r.receipt_id "
+            "ORDER BY c.created_at DESC, r.rule_id ASC LIMIT 50"
+        ).fetchall()
+        policy_summary = {
+            "available": True,
+            "recent_policy_versions": [
+                {"id": p[0], "policy_key": p[1], "version": p[2], "policy_hash": p[3],
+                 "effective_from": p[4], "effective_to": p[5]}
+                for p in policies
+            ],
+        }
+        receipt_summary = {
+            "available": True,
+            "recent_blocked_or_waived_checks": [
+                {"id": r[0], "status": r[1], "outcome": r[2], "intended_action": r[3],
+                 "policy_version_id": r[4], "instrument_id": r[5], "strategy_id": r[6],
+                 "as_of": r[7], "created_at": r[8]}
+                for r in recent_receipts
+            ],
+            "exposure_vs_limits": [
+                {"receipt_id": rr[0], "rule_id": rr[1], "reason_code": rr[2],
+                 "severity": rr[3], "observed_value": rr[4], "threshold": rr[5],
+                 "waiver_required": bool(rr[6]), "caveat": rr[7],
+                 "missing_data": bool(rr[8]), "stale_data": bool(rr[9])}
+                for rr in rule_rows
+            ],
+        }
+
     summary: dict[str, Any] = {
         "sample_size": sample_size,
         "sample_warning": sample_warning,
@@ -172,6 +220,9 @@ def report_risk(
         "missing_risk_count": len(missing_risk_ids),
         "pending_risk_count": len(pending_ids),
         "decisions_missing_risk_sample": missing_risk_ids[:10],
+        "risk_policy_versions": policy_summary,
+        "risk_check_receipts": receipt_summary,
+        "audit_only_note": "Risk receipts are recorded audit evidence only; this report gives no trading advice and performs no execution action.",
     }
     groups = [{
             "key": "all",
