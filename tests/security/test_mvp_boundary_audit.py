@@ -275,6 +275,7 @@ SHIPPED_REPORTS = {
     "report.watchlist",
     "report.unscored_forecasts",
     "report.decision_velocity",
+    "report.execution_quality",
     "report.playbook_adherence",
     "report.policy_candidates",
     "report.coach",
@@ -414,9 +415,11 @@ def test_agent_continuity_roadmap_does_not_add_forbidden_tool_families():
     dashboard, broker/wallet, or backtester semantics under the roadmap.
     """
 
+    allowed_diagnostic_names = {"report.execution_quality"}
     offending = [
         name for name in _registered_tool_names()
-        if any(token in name.replace(".", "_") for token in FORBIDDEN_AGENT_CONTINUITY_TOOL_TOKENS)
+        if name not in allowed_diagnostic_names
+        and any(token in name.replace(".", "_") for token in FORBIDDEN_AGENT_CONTINUITY_TOOL_TOKENS)
     ]
     assert offending == []
 

@@ -26,6 +26,7 @@ from .compare_policy_coach import (
     _report_coach, _report_compare, _report_filter_schema, _report_opportunity,
     _report_strategy_performance,
 )
+from trade_trace.reports.execution_quality import report_execution_quality
 from .lifecycle_agent import (
     _agent_next_actions, _report_bootstrap, _report_lifecycle,
     _report_policy_candidates, _report_strategy_health, _report_work_queue,
@@ -178,6 +179,20 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
             "agents can build filter UIs without reading the docs."
         ),
         json_schema=_REPORT_SCHEMAS["report.filter_schema"],
+    ),
+    ReportToolRegistration(
+        "report.execution_quality",
+        lambda args, ctx: report_execution_quality(args),
+        description=(
+            "Read-only local execution-quality/slippage diagnostics over imported external receipts, "
+            "pre-trade intents, and local snapshots. Surfaces missing/stale snapshots, partial fills, "
+            "rejections, cancel failures, stale open imported receipt evidence, adverse/improved fills, "
+            "and sparse-sample caveats. No fetch, broker access, execution, cancellation, remediation, "
+            "trade advice, alpha, or profit claims."
+        ),
+        optional_keys=("pretrade_intent_id", "market_id", "instrument_id", "lifecycle_state", "as_of", "limit", "min_sample", "stale_snapshot_minutes", "stale_open_minutes"),
+        json_schema=_REPORT_SCHEMAS["report.execution_quality"],
+        usage_summary="Diagnose imported execution evidence quality from local records only; no writes, fetches, execution, remediation, or advice.",
     ),
     ReportToolRegistration(
         "report.calibration",

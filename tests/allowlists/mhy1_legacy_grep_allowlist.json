@@ -106,6 +106,14 @@
       "reason": "paper_fills retains a legitimate local non-executing paper-fill linkage to instruments while the legacy schema remains present."
     },
     {
+      "pattern": "src/trade_trace/tools/reconciliation.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "local_reconciliation_projection_compatibility",
+      "reason": "reconciliation reports compare local legacy position projections against imported evidence while the legacy schema remains present; this is read-only, non-executing diagnostic linkage."
+    },
+    {
       "pattern": "src/trade_trace/tools/pretrade_intent.py",
       "terms": [
         "instrument_id",

@@ -167,6 +167,24 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "trading advice, alpha/profit claim, or performance ranking."
         ),
     ),
+    "report.execution_quality": _schema(
+        {
+            "pretrade_intent_id": {"type": "string"},
+            "market_id": {"type": "string"},
+            "instrument_id": {"type": "string"},
+            "lifecycle_state": {"type": "string"},
+            "as_of": {"type": "string", "format": "date-time"},
+            "limit": {"type": "integer", "minimum": 1},
+            "min_sample": {"type": "integer", "minimum": 1},
+            "stale_snapshot_minutes": {"type": "number", "minimum": 0},
+            "stale_open_minutes": {"type": "number", "minimum": 0},
+        },
+        description=(
+            "Read-only local execution-quality diagnostics over caller-supplied/imported pre-trade intents, "
+            "snapshots, and external execution receipts. Computes slippage only where local numeric evidence exists; "
+            "no fetching, broker access, execution, cancellation, remediation, advice, alpha, or profit claims."
+        ),
+    ),
     "report.playbook_adherence": _schema(
         {
             "filter": _FILTER_PROP,
