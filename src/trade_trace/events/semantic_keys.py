@@ -38,6 +38,9 @@ SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
     "pretrade_intent.recorded": SemanticKeySpec(
         structural_fields=frozenset({"semantic_key", "material_hash"}),
     ),
+    "approval_waiver.recorded": SemanticKeySpec(
+        structural_fields=frozenset({"semantic_key", "material_hash"}),
+    ),
     # M1 ledger entity-creation events. Structural fields are the smallest
     # set that defines logical identity; ids are deliberately excluded so
     # that an idempotency-key replay with a fresh server-generated id still
@@ -391,6 +394,7 @@ TOOL_PRIMARY_EVENT_TYPE: dict[str, str] = {
     # Risk audit surfaces
     "risk.policy_version_add": "risk_policy_version.created",
     "risk.check_record":      "risk_check_receipt.recorded",
+    "approval.record":        "approval_waiver.recorded",
 }
 
 

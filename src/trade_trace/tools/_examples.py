@@ -465,6 +465,18 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "idempotency_key": _IDEM,
         },
     },
+    "approval.record": {
+        "minimal": {
+            "semantic_key": "awr_example_local_approval_2026_05_22T143000Z",
+            "record_type": "approval",
+            "decision": "approved",
+            "actor_mode": "human_review",
+            "decision_actor_id": "local-reviewer",
+            "decision_at": "2026-05-22T14:30:00Z",
+            "reason": "Local audit note that an external review approved this proposed activity; Trade Trace records evidence only and does not grant live permission or execute activity.",
+            "idempotency_key": _IDEM,
+        },
+    },
     "import.validate": {
         "minimal": {
             "path": "/tmp/trade-trace-import/bundle.jsonl",

@@ -29,6 +29,7 @@ from trade_trace.events.unit_of_work import DRY_RUN_FLAG
 from trade_trace.storage.paths import HomePathValidationError
 from trade_trace.tools.adapter_polymarket import register_adapter_polymarket_tools
 from trade_trace.tools.admin import register_admin_tools
+from trade_trace.tools.approval import register_approval_tools
 from trade_trace.tools.csv_import import register_csv_import
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.export import register_export_tools
@@ -173,6 +174,7 @@ def build_registry() -> ToolRegistry:
 
     registry = ToolRegistry()
     register_admin_tools(registry)
+    register_approval_tools(registry)
     register_export_tools(registry)
     register_fixture_tools(registry)
     register_idea_tools(registry)

@@ -90,6 +90,15 @@
       "reason": "market.bind intentionally creates/returns legacy relational prerequisites during the additive PM collapse so public clients need no hidden venue/instrument setup tools."
     },
     {
+      "pattern": "src/trade_trace/tools/pretrade_intent.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "local_pretrade_audit_record_compatibility",
+      "reason": "pretrade_intent.record/list retain optional legacy local audit links for compatibility while publicly centering market-scoped non-executing intent packets."
+    },
+    {
       "pattern": "src/trade_trace/events/semantic_keys.py",
       "terms": [
         "instrument_id",

@@ -37,6 +37,8 @@ The `events` table currently emits these `event_type` values
 - H05 risk audit: `risk_policy_version.created`,
   `risk_check_receipt.recorded`.
 - Pre-trade intent: `pretrade_intent.recorded`.
+- Approval/waiver ledger: `approval_waiver.recorded` (local audit evidence
+  only; not a live permission, order, signing, custody, or execution gate).
 - Signal: `signal.emitted` (lazy-emitted by `signal.scan` /
   `report.coach`).
 
@@ -72,6 +74,9 @@ row.
 - `risk_check_receipt.recorded` → `risk.check_record`
 - `pretrade_intent.recorded` → `pretrade_intent.record` (local,
   non-executing proposed intent audit packet only).
+- `approval_waiver.recorded` → `approval.record` (local append-only approval,
+  waiver, hard-block attempt, and scoped autonomy evidence only; no execution
+  or live permissioning behavior is replayed).
 - `memory_node.retained` → `memory.retain` / `memory.reflect`
   (the import path is `memory.retain` for both; `memory.reflect`
   also writes the about-edge but the canonical replay surface for

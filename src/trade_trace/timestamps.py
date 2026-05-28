@@ -32,6 +32,10 @@ _CANONICAL_UTC_RE = re.compile(
 # explicitly added to this governed set.
 TIMESTAMP_API_GOVERNED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
     {
+        ("approval_waiver_records", "created_at"),
+        ("approval_waiver_records", "decision_at"),
+        ("approval_waiver_records", "expires_at"),
+        ("approval_waiver_records", "revoked_at"),
         ("config", "updated_at"),
         ("decisions", "created_at"),
         ("decisions", "review_by"),
