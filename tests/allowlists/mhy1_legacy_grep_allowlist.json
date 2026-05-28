@@ -98,6 +98,14 @@
       "reason": "external_receipts retains a legitimate non-executing public/local link to instruments while the legacy schema remains present."
     },
     {
+      "pattern": "src/trade_trace/tools/paper_fills.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "local_paper_fill_link_compatibility",
+      "reason": "paper_fills retains a legitimate local non-executing paper-fill linkage to instruments while the legacy schema remains present."
+    },
+    {
       "pattern": "src/trade_trace/tools/pretrade_intent.py",
       "terms": [
         "instrument_id",

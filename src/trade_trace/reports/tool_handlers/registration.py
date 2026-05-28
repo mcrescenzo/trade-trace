@@ -612,9 +612,9 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         _report_current_exposure,
         description=(
             "Recommended trader-agent entry point for open trades/current exposure/recent trading activity. "
-            "Composes canonical open_positions, WATCH_ONLY_IDEA watchlist rows, recent_trade_activity journal rows, "
+            "Composes canonical open_positions, local event_exposure_sets grouping/netting diagnostics, WATCH_ONLY_IDEA watchlist rows, recent_trade_activity journal rows, "
             "and projection_anomalies in one read-only packet. Decisions are activity/audit trail, not canonical exposure; "
-            "actual-recorded rows are record-only without linked position_events/projection. Does not assert broker truth."
+            "negative-risk metadata is caveated only and never converted/redeemed/settled; actual-recorded rows are record-only without linked position_events/projection. Does not assert broker truth."
         ),
         example_minimal={"recent_limit": 10, "include_watchlist": True, "include_anomalies": True},
         optional_keys=("recent_limit", "include_watchlist", "include_anomalies", "kind", "instrument_id", "strategy_id", "stale_mark_threshold_days", "as_of"),

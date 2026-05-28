@@ -454,8 +454,8 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         description=(
             "Recommended trader-agent entry point for open trades/current exposure/recent trading activity. "
-            "Returns open_positions, watchlist, recent_trade_activity, and projection_anomalies in one packet. "
-            "Current exposure comes from positions/position_events; watchlist rows are WATCH_ONLY_IDEA; recent_trade_activity "
+            "Returns open_positions, event_exposure_sets, watchlist, recent_trade_activity, and projection_anomalies in one packet. "
+            "Current exposure comes from positions/position_events; event_exposure_sets are local derived grouping/netting diagnostics with negative-risk caveats only; watchlist rows are WATCH_ONLY_IDEA; recent_trade_activity "
             "is journal activity and not canonical exposure by itself."
         ),
     ),

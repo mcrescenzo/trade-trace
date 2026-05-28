@@ -4,6 +4,9 @@ Mechanical extraction from trade_trace.tools.reports; keep behavior stable.
 """
 from __future__ import annotations
 
+import json
+from decimal import Decimal, InvalidOperation
+
 from .common import (
     UTC,
     Any,
@@ -81,6 +84,166 @@ def _exposure_temporal_bounds(args: dict[str, Any]) -> tuple[datetime, int, date
     return as_of, stale_mark_threshold_days, stale_cutoff
 
 
+def _safe_json(text: Any) -> dict[str, Any]:
+    if not text:
+        return {}
+    if isinstance(text, dict):
+        return text
+    try:
+        parsed = json.loads(str(text))
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _dec(value: Any) -> Decimal:
+    try:
+        return Decimal(str(value if value is not None else 0))
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0")
+
+
+def _market_metadata_by_instrument(connection: Any, instrument_ids: set[str]) -> dict[str, dict[str, Any]]:
+    if not instrument_ids:
+        return {}
+    placeholders = ", ".join("?" for _ in instrument_ids)
+    rows = connection.execute(
+        f"""
+        SELECT id, source, external_id, title, metadata_json
+        FROM markets
+        WHERE id IN ({placeholders})
+        """,
+        tuple(instrument_ids),
+    ).fetchall()
+    return {
+        row[0]: {"market_id": row[0], "source": row[1], "external_id": row[2], "title": row[3], "metadata": _safe_json(row[4])}
+        for row in rows
+    }
+
+
+def _event_key_from_metadata(instrument_id: str, metadata: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    grouping = metadata.get("event_grouping") or {}
+    identity = metadata.get("polymarket_identity") or {}
+    negative_risk = metadata.get("negative_risk") or {}
+    event_id = grouping.get("event_id") or identity.get("gamma_event_id")
+    event_slug = grouping.get("event_slug") or identity.get("event_slug")
+    return str(event_id or event_slug or f"ungrouped:{instrument_id}"), grouping, identity, negative_risk
+
+
+def _outcome_label(position: dict[str, Any], identity: dict[str, Any], info: dict[str, Any] | None) -> str:
+    labels = identity.get("outcome_token_ids_by_label")
+    if isinstance(labels, dict) and len(labels) == 1:
+        return str(next(iter(labels.keys())))
+    title = (info or {}).get("title")
+    if title:
+        return str(title)
+    return str(position.get("instrument_id"))
+
+
+def _side_sign(side: Any) -> Decimal:
+    normalized = str(side or "").strip().lower()
+    return Decimal("-1") if normalized in {"no", "short", "sell"} else Decimal("1")
+
+
+def _event_exposure_sets(connection: Any, open_positions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    market_info = _market_metadata_by_instrument(connection, {p["instrument_id"] for p in open_positions})
+    grouped: dict[str, dict[str, Any]] = {}
+    outcome_buckets: dict[str, dict[tuple[str, str], dict[str, Any]]] = {}
+    for position in open_positions:
+        info = market_info.get(position["instrument_id"])
+        metadata = (info or {}).get("metadata") or {}
+        event_key, grouping, identity, negative_risk = _event_key_from_metadata(position["instrument_id"], metadata)
+        event = grouped.setdefault(
+            event_key,
+            {
+                "event_key": event_key,
+                "event_id": grouping.get("event_id") or identity.get("gamma_event_id"),
+                "event_slug": grouping.get("event_slug") or identity.get("event_slug"),
+                "event_title": grouping.get("event_title"),
+                "mutually_exclusive": bool(grouping.get("mutually_exclusive") or grouping.get("mutually_exclusive_outcomes")),
+                "source_precedence": ["local_projected_positions", "imported_account_snapshots_reference_only", "paper_fill_records_reference_only", "market_metadata"],
+                "truth_label": "local_projection_only_not_imported_account_truth",
+                "market_count": 0,
+                "markets": [],
+                "contributing_record_ids": {"positions": [], "decisions": [], "snapshots": [], "account_snapshots": [], "paper_fills": []},
+                "market_level_net_exposure": [],
+                "outcome_side_buckets": [],
+                "event_level_directional_summary": {
+                    "raw_market_gross_quantity": 0.0,
+                    "directional_net_quantity": 0.0,
+                    "total_initial_risk_amount": 0.0,
+                    "conservative_event_risk_amount": 0.0,
+                    "unrealized_pnl": 0.0,
+                    "metric_caveat": "Local projection from position rows; no broker/account reconciliation, redemption, settlement, or negative-risk equivalence conversion is performed.",
+                    "unconverted_negative_risk_caveated": False,
+                    "mutually_exclusive_netting_caveated": bool(grouping.get("mutually_exclusive") or grouping.get("mutually_exclusive_outcomes")),
+                },
+                "negative_risk": {"flagged": bool(negative_risk), "metadata": negative_risk, "caveats": []},
+                "caveat_codes": [],
+            },
+        )
+        if negative_risk and "NEGATIVE_RISK_EQUIVALENCE_UNCONVERTED" not in event["caveat_codes"]:
+            event["caveat_codes"].append("NEGATIVE_RISK_EQUIVALENCE_UNCONVERTED")
+            event["negative_risk"]["caveats"].append("Negative-risk metadata is provenance/caveat context only; no conversion, equivalence transform, redemption, settlement, or fund movement is performed.")
+            event["event_level_directional_summary"]["unconverted_negative_risk_caveated"] = True
+        if info is None and "MISSING_EVENT_METADATA" not in event["caveat_codes"]:
+            event["caveat_codes"].append("MISSING_EVENT_METADATA")
+        if position.get("mark_state") in {"missing", "stale"}:
+            code = "MISSING_MARK" if position.get("mark_state") == "missing" else "STALE_MARK"
+            if code not in event["caveat_codes"]:
+                event["caveat_codes"].append(code)
+        if event["mutually_exclusive"] and "MUTUALLY_EXCLUSIVE_EVENT_CONCENTRATION_UNCONVERTED" not in event["caveat_codes"]:
+            event["caveat_codes"].append("MUTUALLY_EXCLUSIVE_EVENT_CONCENTRATION_UNCONVERTED")
+        qty = _dec(position.get("net_quantity"))
+        signed_qty = qty * _side_sign(position.get("side"))
+        initial_risk = _dec(position.get("initial_risk_amount"))
+        unrealized_pnl = _dec(position.get("unrealized_pnl"))
+        rollup = event["event_level_directional_summary"]
+        rollup["raw_market_gross_quantity"] = float(_dec(rollup["raw_market_gross_quantity"]) + abs(qty))
+        rollup["directional_net_quantity"] = float(_dec(rollup["directional_net_quantity"]) + signed_qty)
+        rollup["total_initial_risk_amount"] = float(_dec(rollup["total_initial_risk_amount"]) + initial_risk)
+        rollup["conservative_event_risk_amount"] = float(_dec(rollup["conservative_event_risk_amount"]) + initial_risk)
+        rollup["unrealized_pnl"] = float(_dec(rollup["unrealized_pnl"]) + unrealized_pnl)
+        event["market_count"] += 1
+        event["markets"].append(position["instrument_id"])
+        event["contributing_record_ids"]["positions"].append(position["position_id"])
+        if position.get("opening_decision_id"):
+            event["contributing_record_ids"]["decisions"].append(position["opening_decision_id"])
+        latest_mark = position.get("latest_mark") or {}
+        if latest_mark.get("snapshot_id"):
+            event["contributing_record_ids"]["snapshots"].append(latest_mark["snapshot_id"])
+        outcome = _outcome_label(position, identity, info)
+        side = str(position.get("side") or "unknown")
+        bucket = outcome_buckets.setdefault(event_key, {}).setdefault(
+            (outcome, side),
+            {"outcome_label": outcome, "side": side, "signed_projected_quantity": 0.0, "raw_market_gross_quantity": 0.0, "initial_risk_amount": 0.0, "unrealized_pnl": 0.0, "contributing_record_ids": {"positions": [], "decisions": [], "markets": []}},
+        )
+        bucket["signed_projected_quantity"] = float(_dec(bucket["signed_projected_quantity"]) + signed_qty)
+        bucket["raw_market_gross_quantity"] = float(_dec(bucket["raw_market_gross_quantity"]) + abs(qty))
+        bucket["initial_risk_amount"] = float(_dec(bucket["initial_risk_amount"]) + initial_risk)
+        bucket["unrealized_pnl"] = float(_dec(bucket["unrealized_pnl"]) + unrealized_pnl)
+        bucket["contributing_record_ids"]["positions"].append(position["position_id"])
+        bucket["contributing_record_ids"]["markets"].append(position["instrument_id"])
+        if position.get("opening_decision_id"):
+            bucket["contributing_record_ids"]["decisions"].append(position["opening_decision_id"])
+        event["market_level_net_exposure"].append({
+            "instrument_id": position["instrument_id"],
+            "position_id": position["position_id"],
+            "public_market_identity": {"source": (info or {}).get("source"), "external_id": (info or {}).get("external_id"), "title": (info or {}).get("title"), "polymarket_identity": identity},
+            "outcome_label": outcome,
+            "side": side,
+            "net_quantity": float(qty),
+            "signed_projected_quantity": float(signed_qty),
+            "unrealized_pnl": position.get("unrealized_pnl"),
+            "initial_risk_amount": position.get("initial_risk_amount"),
+            "mark_state": position.get("mark_state"),
+            "source_label": "local_projected_position",
+        })
+    for event_key, event in grouped.items():
+        event["outcome_side_buckets"] = list(outcome_buckets.get(event_key, {}).values())
+    return list(grouped.values())
+
+
 def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`report.open_positions` — row-level current open exposure."""
 
@@ -116,17 +279,19 @@ def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             db.connection,
             {row.instrument_id for row in page.rows},
         )
+        connection = db.connection
+        rows = [
+            _position_row_payload(
+                row,
+                latest_marks.get(row.instrument_id),
+                stale_cutoff=stale_cutoff,
+            )
+            for row in page.rows
+        ]
+        event_exposure_sets = _event_exposure_sets(connection, rows)
     finally:
         db.close()
 
-    rows = [
-        _position_row_payload(
-            row,
-            latest_marks.get(row.instrument_id),
-            stale_cutoff=stale_cutoff,
-        )
-        for row in page.rows
-    ]
     caveat_codes = sorted({code for row in rows for code in row["caveat_codes"]})
     if not rows:
         caveat_codes = ["NO_OPEN_POSITIONS"]
@@ -149,7 +314,8 @@ def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             "caveat_codes": caveat_codes,
             "agent_answer_hints": hints,
         },
-        "groups": [],
+        "groups": event_exposure_sets,
+        "event_exposure_sets": event_exposure_sets,
         "open_positions": rows,
         "agent_answer_hints": hints,
         "truncated": page.next_cursor is not None,
@@ -597,6 +763,7 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
             strategy_id=args.get("strategy_id"),
             kind=args.get("kind"),
         )
+        event_exposure_sets = _event_exposure_sets(db.connection, open_data.get("open_positions", []))
     finally:
         db.close()
 
@@ -605,8 +772,9 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
     data = {
         "summary": {
             "bucket": "current_exposure",
-            "buckets": ["open_positions", "watchlist", "recent_trade_activity", "projection_anomalies"],
+            "buckets": ["open_positions", "event_exposure_sets", "watchlist", "recent_trade_activity", "projection_anomalies"],
             "open_position_count": open_data.get("summary", {}).get("open_position_count", len(open_positions)),
+            "event_exposure_set_count": len(event_exposure_sets),
             "watch_count": len(watchlist),
             "recent_trade_decision_count": len(recent_activity),
             "anomaly_count": len(anomalies),
@@ -622,7 +790,8 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
             },
             "agent_answer_hints": hints,
         },
-        "groups": [],
+        "groups": event_exposure_sets,
+        "event_exposure_sets": event_exposure_sets,
         "open_positions": open_positions,
         "watchlist": watchlist,
         "recent_trade_activity": recent_activity,

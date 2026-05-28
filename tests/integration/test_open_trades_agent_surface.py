@@ -152,7 +152,13 @@ def test_cli_empty_journal_has_canonical_zero_open_positions_and_valid_json_enve
     assert current["meta"]["tool"] == "report.current_exposure"
     data = current["data"]
     assert data["summary"]["bucket"] == "current_exposure"
-    assert data["summary"]["buckets"] == ["open_positions", "watchlist", "recent_trade_activity", "projection_anomalies"]
+    assert data["summary"]["buckets"] == [
+        "open_positions",
+        "event_exposure_sets",
+        "watchlist",
+        "recent_trade_activity",
+        "projection_anomalies",
+    ]
     assert data["summary"]["open_position_count"] == 0
     assert data["summary"]["watch_count"] == 0
     assert data["summary"]["recent_trade_decision_count"] == 0
@@ -161,6 +167,7 @@ def test_cli_empty_journal_has_canonical_zero_open_positions_and_valid_json_enve
     assert data["watchlist"] == []
     assert data["recent_trade_activity"] == []
     assert data["projection_anomalies"] == []
+    assert data["event_exposure_sets"] == []
     assert any(
         hint in data["agent_answer_hints"]
         for hint in ("Canonical open positions: zero.", "Canonical open positions: 0.")
