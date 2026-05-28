@@ -50,6 +50,13 @@ The `events` table currently emits these `event_type` values
 - Reconciliation: `reconciliation.recorded` (local derived comparison of Trade
   Trace projection with imported external facts; evidence only for external
   operators, not remediation or execution).
+- Autonomous run/session audit: `autonomous_run.recorded` (local profile-owned
+  run/session lifecycle evidence only; not runtime supervision, scheduling,
+  agent hosting, alerting, or execution).
+- Autonomous incident audit: `autonomous_incident.recorded` (local or imported
+  incident/blocked-action fact evidence only; kill-switch, cancel-only, and
+  blocked-action entries are facts about external systems, not Trade Trace
+  control-plane behavior or remediation).
 - Signal: `signal.emitted` (lazy-emitted by `signal.scan` /
   `report.coach`).
 
@@ -104,6 +111,14 @@ row.
   reconciliation result over imported/account/paper/projection evidence; replay
   performs no private fetch, order action, cancellation, settlement, fund
   movement, or remediation).
+- `autonomous_run.recorded` → `autonomous_run.record` (local append-only
+  run/session lifecycle evidence; replay records durable status only and performs
+  no runtime supervision, scheduling, hosting, fetching, alerts, execution, or
+  remediation).
+- `autonomous_incident.recorded` → `autonomous_incident.record` (local
+  append-only incident evidence with links/caveats; blocked-action, kill-switch,
+  and cancel-only entries replay as imported facts only, never as Trade Trace
+  control actions).
 - `memory_node.retained` → `memory.retain` / `memory.reflect`
   (the import path is `memory.retain` for both; `memory.reflect`
   also writes the about-edge but the canonical replay surface for

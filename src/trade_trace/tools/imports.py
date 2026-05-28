@@ -177,6 +177,8 @@ _IMPORT_READY_WRITERS = {
     "memory.reflect",
     "memory.link",
     "market.bind",
+    "autonomous_run.record",
+    "autonomous_incident.record",
 }
 
 

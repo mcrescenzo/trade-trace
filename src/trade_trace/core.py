@@ -31,6 +31,7 @@ from trade_trace.tools.account_snapshots import register_account_snapshot_tools
 from trade_trace.tools.adapter_polymarket import register_adapter_polymarket_tools
 from trade_trace.tools.admin import register_admin_tools
 from trade_trace.tools.approval import register_approval_tools
+from trade_trace.tools.autonomous_records import register_autonomous_record_tools
 from trade_trace.tools.csv_import import register_csv_import
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.export import register_export_tools
@@ -180,6 +181,7 @@ def build_registry() -> ToolRegistry:
     register_account_snapshot_tools(registry)
     register_admin_tools(registry)
     register_approval_tools(registry)
+    register_autonomous_record_tools(registry)
     register_external_receipt_tools(registry)
     register_export_tools(registry)
     register_fixture_tools(registry)

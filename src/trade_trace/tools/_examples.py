@@ -20,6 +20,57 @@ _IDEM = "00000000-0000-4000-8000-000000000000"
 
 
 WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
+    "autonomous_run.record": {
+        "minimal": {
+            "semantic_key": "autonomous-run:profile-a:2026-05-28T00:00Z",
+            "mode": "autonomous",
+            "run_status": "started",
+            "run_id": "run-redacted-001",
+            "started_at": "2026-05-28T00:00:00Z",
+            "idempotency_key": _IDEM,
+        },
+        "rich": {
+            "semantic_key": "autonomous-run:profile-a:2026-05-28T00:00Z",
+            "mode": "autonomous",
+            "run_status": "completed",
+            "run_id": "run-redacted-001",
+            "session_id": "session-redacted-001",
+            "actor_id_recorded": "agent:local-profile",
+            "model_id": "model-redacted",
+            "provider_id": "provider-redacted",
+            "environment_label": "local-profile",
+            "policy_version": "policy-v1",
+            "started_at": "2026-05-28T00:00:00Z",
+            "ended_at": "2026-05-28T00:10:00Z",
+            "config_json": {"cycle_mode": "review_only"},
+            "provenance_json": {"source": "caller_supplied_local_run_log"},
+            "idempotency_key": _IDEM,
+        },
+    },
+    "autonomous_incident.record": {
+        "minimal": {
+            "semantic_key": "autonomous-incident:blocked-action:2026-05-28T00:05Z",
+            "incident_type": "blocked_action",
+            "occurred_at": "2026-05-28T00:05:00Z",
+            "summary": "External system reported a policy-blocked action; Trade Trace records the fact only.",
+            "idempotency_key": _IDEM,
+        },
+        "rich": {
+            "semantic_key": "autonomous-incident:blocked-action:2026-05-28T00:05Z",
+            "incident_type": "blocked_action",
+            "severity": "critical",
+            "resolution_status": "unresolved",
+            "run_id": "run-redacted-001",
+            "session_id": "session-redacted-001",
+            "occurred_at": "2026-05-28T00:05:00Z",
+            "summary": "External system reported a policy-blocked action; Trade Trace records the fact only.",
+            "evidence_state": "sparse",
+            "link_ids": {"pretrade_intent_ids": ["pti_..."], "policy_ids": ["policy-v1"]},
+            "evidence_refs": [{"kind": "local_artifact", "ref": "sha256://redacted"}],
+            "provenance_json": {"source": "caller_supplied_operator_note"},
+            "idempotency_key": _IDEM,
+        },
+    },
     "paper_fill.record": {
         "minimal": {
             "semantic_key": "paper_fill:local-paper:market-123:run-001",

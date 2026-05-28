@@ -130,6 +130,8 @@ _STATIC_EVENT_TOOL_MAP: dict[str, str] = {
     "strategy.updated": "strategy.update",
     "playbook.created": "playbook.create",
     "playbook.proposed_version": "playbook.propose_version",
+    "autonomous_run.recorded": "autonomous_run.record",
+    "autonomous_incident.recorded": "autonomous_incident.record",
     # `forecast.scored` and `signal.emitted` are system-emitted; the
     # importer treats them as audit-only records and does not redispatch.
     # `import.row_committed` is internal bookkeeping for the importer.
