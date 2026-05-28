@@ -14,7 +14,7 @@ Hard invariants:
 
 - Trade Trace never stores private keys, seed phrases, API secrets, passphrases, signing material, relayer credentials, or execution credentials.
 - Trade Trace never signs, places, replaces, cancels, redeems, settles, deposits, withdraws, approves token allowances, moves funds, or operates as custodian.
-- Trade Trace never emits directional trading advice such as "buy this", "sell now", or "execute now". It may report policy status, recorded evidence, exposure projections, due work, and reconciliation caveats.
+- Trade Trace never emits directional trading advice such as explicit buy/sell/execute-now recommendations. It may report policy status, recorded evidence, exposure projections, due work, and reconciliation caveats.
 - Trade Trace exposes reports and append-only records; any scheduler, market scanner, credentialed adapter, live executor, halt/cancel mechanism, operator UI, or compliance/legal decision stays outside this product.
 
 Mechanical enforcement criteria for future implementation:
@@ -23,6 +23,7 @@ Mechanical enforcement criteria for future implementation:
 - Tests must scan tool descriptions, examples, logs, exports, replay bundles, and adapter request/response fixtures for forbidden credential fields and execution claims.
 - Imported payloads must be redacted or content-addressed before storage; raw private venue responses may only be referenced by a sanitized local artifact hash/path if explicitly supported.
 - Reports must label external account truth as imported evidence with provenance, never as a fact Trade Trace fetched with credentials.
+- The code-backed contract registry in `src/trade_trace/contracts/autonomous_substrate.py` is the canonical gate for shared autonomous record families, common provenance fields, redaction field classes, event-type/idempotency expectations, and migration-registry expectations. Downstream feature beads must extend concrete schemas against that registry rather than inventing per-feature field semantics.
 
 Short rule:
 
