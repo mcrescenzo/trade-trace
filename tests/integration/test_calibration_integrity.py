@@ -60,12 +60,14 @@ def _seed_resolved_binary_forecast(
             "instrument_id": inst,
             "resolved_at": resolved_at,
             "outcome_label": resolved_label, "status": status,
+            **({"confidence": 0.99} if status == "resolved_final" else {}),
         })
     else:
         _mcp(home, "outcome.add", {
             "instrument_id": inst,
             "resolved_at": resolved_at,
             "outcome_label": resolved_label, "status": status,
+            **({"confidence": 0.99} if status == "resolved_final" else {}),
         })
         f = _mcp(home, "forecast.add", {
             "thesis_id": thesis, "kind": "binary",

@@ -120,6 +120,7 @@ def test_outcome_recorded_event_emitted(home):
         "instrument_id": inst,
         "resolved_at": "2026-05-18T16:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
+        "confidence": 0.99,
         "idempotency_key": "00000000-0000-4000-8000-event-outc01",
     })
     assert _count_events(home, "outcome.recorded") == 1
@@ -144,6 +145,7 @@ def test_forecast_scored_event_emitted_on_resolution(home):
         "instrument_id": inst,
         "resolved_at": "2026-05-18T16:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
+        "confidence": 0.99,
         "idempotency_key": "00000000-0000-4000-8000-event-scor01",
     })
     assert _count_events(home, "forecast.scored") == 1

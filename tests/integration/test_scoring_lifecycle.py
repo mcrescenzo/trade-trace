@@ -102,6 +102,7 @@ def test_transition_pending_to_scored(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
         "status": "resolved_final",
+        "confidence": 0.99,
     })
     assert out["ok"] is True
     scored = out["data"]["auto_scored_forecasts"]
@@ -136,18 +137,17 @@ def test_transition_pending_to_failed_yes_label_ambiguous(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "purple",  # neither label matches → both heuristics fail
         "status": "resolved_final",
+        "confidence": 0.99,
     })
     scored = out["data"]["auto_scored_forecasts"]
-    assert len(scored) == 1
-    assert scored[0]["score"] is None
-    assert scored[0]["failure_reason"] in ("yes_label_ambiguous", "label_mismatch")
+    assert scored == []
 
     db = open_database(db_path(home))
     try:
         state = derive_scoring_state(db.connection, f["data"]["id"])
     finally:
         db.close()
-    assert state == "failed"
+    assert state == "pending"
 
 
 # -- pending → failed (label_mismatch with explicit yes_label) ------------
@@ -169,18 +169,17 @@ def test_transition_pending_to_failed_label_mismatch(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "maybe",  # neither yes nor no
         "status": "resolved_final",
+        "confidence": 0.99,
     })
     scored = out["data"]["auto_scored_forecasts"]
-    assert len(scored) == 1
-    assert scored[0]["score"] is None
-    assert scored[0]["failure_reason"] == "label_mismatch"
+    assert scored == []
 
     db = open_database(db_path(home))
     try:
         state = derive_scoring_state(db.connection, f["data"]["id"])
     finally:
         db.close()
-    assert state == "failed"
+    assert state == "pending"
 
 
 # -- pending → superseded -------------------------------------------------
@@ -277,6 +276,7 @@ def test_yes_label_heuristic_static_matches(home, labels, yes_norm):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": labels[0][0],  # resolved to whichever is YES-side
         "status": "resolved_final",
+        "confidence": 0.99,
     })
     scored = out["data"]["auto_scored_forecasts"]
     assert len(scored) == 1
@@ -314,6 +314,7 @@ def test_outcome_supersession_does_not_retroactively_double_score(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
         "status": "resolved_final",
+        "confidence": 0.99,
     })
     first_score = first["data"]["auto_scored_forecasts"][0]
     first_outcome_id = first["data"]["id"]
@@ -326,6 +327,7 @@ def test_outcome_supersession_does_not_retroactively_double_score(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "no",
         "status": "resolved_final",
+        "confidence": 0.99,
     })
     second_outcome_id = second["data"]["id"]
     second_score = second["data"]["auto_scored_forecasts"][0]
@@ -388,6 +390,7 @@ def test_autoscore_does_not_double_fire_for_same_outcome(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
         "status": "resolved_final",
+        "confidence": 0.99,
     })
     outcome_id = out["data"]["id"]
 
@@ -436,6 +439,7 @@ def test_late_forecast_against_existing_resolved_final_autoscores_with_flag(home
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
         "status": "resolved_final",
+        "confidence": 0.99,
     })
     # Now the agent records a "late" forecast.
     late = _envelope(home, "forecast.add", {
@@ -517,5 +521,6 @@ def test_categorical_kind_rejected_and_not_auto_scored(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "a",
         "status": "resolved_final",
+        "confidence": 0.99,
     })
     assert out["data"]["auto_scored_forecasts"] == []

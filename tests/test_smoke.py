@@ -50,14 +50,18 @@ def test_models_importable():
         "playbook_rule",
     }
 
-    # all 6 outcome statuses from scoring.md §5 must be present
+    # all outcome statuses from scoring.md/finality flows must be present
     assert {member.value for member in OutcomeStatus} == {
+        "proposed",
+        "provisional",
         "resolved_final",
         "resolved_provisional",
-        "ambiguous",
         "disputed",
+        "ambiguous",
         "void",
         "cancelled",
+        "imported_redeemed",
+        "imported_settled",
     }
 
     # smoke check that round-trips work

@@ -31,7 +31,7 @@ from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
 
 EXPECTED_DDL_HASH = (
-    "6e9db35535f59d2db9804b09972c68bfc081336dce8eaf606ee53a0836e6243f"
+    "18ee06f92d135fa4acd1d968bb8e50ca61b922a63219bed5b6a984de69cdce15"
 )
 EXPECTED_INFO_HASH = (
     "2657fd6eb6b2cceec077312cac80c32c4aed7e9e695adf104a1fbca4df9f6a6c"
@@ -100,3 +100,63 @@ def test_migration_table_info_hash_is_stable(fresh_db):
         "update EXPECTED_INFO_HASH in this file. "
         f"got={actual!r} expected={EXPECTED_INFO_HASH!r}"
     )
+
+
+def test_m025_migrates_existing_forecast_score_outcome_fk(tmp_path: Path):
+    db = open_database(db_path(tmp_path / "home_m025_fk"))
+    try:
+        apply_pending_migrations(db.connection, target_version=24)
+        conn = db.connection
+        now = "2020-01-01T00:00:00Z"
+        conn.execute(
+            "INSERT INTO venues(id, name, kind, metadata_json, created_at, actor_id) VALUES (?, ?, ?, ?, ?, ?)",
+            ("polymarket", "Polymarket", "prediction_market", "{}", now, "agent:test"),
+        )
+        conn.execute(
+            """
+            INSERT INTO instruments(
+                id, venue_id, external_id, title, asset_class,
+                metadata_json, created_at, actor_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("ins_m025", "polymarket", "pm-m025", "M025 market", "prediction_market", "{}", now, "agent:test"),
+        )
+        conn.execute(
+            """
+            INSERT INTO theses(id, instrument_id, side, body, metadata_json, created_at, actor_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("th_m025", "ins_m025", "yes", "body", "{}", now, "agent:test"),
+        )
+        conn.execute(
+            """
+            INSERT INTO forecasts(id, thesis_id, kind, resolution_at, yes_label, metadata_json, created_at, actor_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("fc_m025", "th_m025", "binary", now, "yes", "{}", now, "agent:test"),
+        )
+        conn.execute(
+            """
+            INSERT INTO outcomes(
+                id, instrument_id, resolved_at, outcome_label, status,
+                metadata_json, created_at, actor_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("out_m025", "ins_m025", now, "yes", "resolved_final", "{}", now, "agent:test"),
+        )
+        conn.execute(
+            """
+            INSERT INTO forecast_scores(
+                id, forecast_id, outcome_id, metric, score, scored_at, actor_id, metadata_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("fs_m025", "fc_m025", "out_m025", "brier", 0.0, now, "agent:test", "{}"),
+        )
+        conn.commit()
+
+        apply_pending_migrations(conn)
+
+        assert conn.execute("SELECT outcome_id FROM forecast_scores WHERE id = 'fs_m025'").fetchone()[0] == "out_m025"
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    finally:
+        db.close()

@@ -160,6 +160,7 @@ def test_outcome_add_emits_event(home):
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
+        "confidence": 0.99,
     })
     assert _event_count(home, "outcome.recorded") == 1
     assert _event_payload(home, "outcome.recorded")["id"] == out["data"]["id"]
@@ -186,6 +187,7 @@ def test_outcome_add_auto_scores_emits_forecast_scored(home):
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
+        "confidence": 0.99,
     })
     assert _event_count(home, "forecast.scored") == 1
     payload = _event_payload(home, "forecast.scored")

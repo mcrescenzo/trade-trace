@@ -48,6 +48,7 @@ def _seed_tagged_decision_with_scored_forecast(
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
+        "confidence": 0.99,
     })
 
 

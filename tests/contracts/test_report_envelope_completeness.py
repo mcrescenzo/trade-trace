@@ -76,6 +76,7 @@ def _seed_scored_forecasts(
             "instrument_id": inst["data"]["id"],
             "resolved_at": f"2026-06-{i + 1:02d}T00:00:00Z",
             "outcome_label": "yes", "status": "resolved_final",
+            "confidence": 0.99,
         })
         fids.append(f["data"]["id"])
     return fids

@@ -56,7 +56,7 @@ def _seed_binary_case(
     if decision_type not in {"skip", "review"}:
         decision_args["side"] = "yes"
     decision = _envelope(home, "decision.add", decision_args)
-    outcome = _envelope(home, "outcome.add", {"instrument_id": inst["data"]["id"], "resolved_at": "2026-06-30T00:00:00Z", "outcome_label": "yes", "status": "resolved_final"})
+    outcome = _envelope(home, "outcome.add", {"instrument_id": inst["data"]["id"], "resolved_at": "2026-06-30T00:00:00Z", "outcome_label": "yes", "status": "resolved_final", "confidence": 0.99})
     return {"instrument": inst["data"]["id"], "forecast": forecast["data"]["id"], "thesis": thesis["data"]["id"], "decision": decision["data"]["id"], "snapshot": snap["data"]["id"], "outcome": outcome["data"]["id"]}
 
 

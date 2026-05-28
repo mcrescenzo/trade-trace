@@ -72,6 +72,7 @@ def _seed_scored_forecast(home: Path, market_id: str, *, probability: float = 0.
             "resolved_at": "2027-01-12T00:00:00Z",
             "outcome_label": "yes",
             "status": "resolved_final",
+            "confidence": 0.99,
         },
     )
     return forecast

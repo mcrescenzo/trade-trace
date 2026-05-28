@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
@@ -22,6 +22,10 @@ from trade_trace.reports.calibration import (
     _compute_metrics,
     _empty_metrics,
     _load_scored_rows,
+)
+from trade_trace.tools.ledger._finality import (
+    finality_uncertain_for_outcome,
+    is_auto_scoreable_final,
 )
 
 
@@ -44,6 +48,10 @@ def _hours_between(start: str | None, end: str | None) -> float | None:
     if start_dt is None or end_dt is None:
         return None
     return (end_dt - start_dt).total_seconds() / 3600.0
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _market_where(rf: ReportFilter, *, alias: str = "m") -> tuple[list[str], list[Any]]:
@@ -161,6 +169,9 @@ def report_market_lifecycle(
     state_counts: dict[str, int] = {}
     event_grouping_rollups: dict[str, dict[str, Any]] = {}
     outcome_token_mappings: list[dict[str, Any]] = []
+    now_dt = _parse_ts(_now_iso())
+    resolution_due_markets: list[str] = []
+    finality_uncertain_markets: list[str] = []
     for row in conn.execute(sql, params).fetchall():
         (
             market_id, source, external_id, title, state, mechanism,
@@ -208,6 +219,47 @@ def report_market_lifecycle(
             "resolving_to_terminal_hours": _hours_between(resolving_at, terminal_at),
             "open_to_terminal_hours": _hours_between(opened_at or created_at, terminal_at),
         }
+        latest_status_row = conn.execute(
+            """
+            SELECT status, confidence, outcome_label FROM outcomes
+            WHERE instrument_id = ?
+            ORDER BY resolved_at DESC, created_at DESC, id DESC
+            LIMIT 1
+            """,
+            (market_id,),
+        ).fetchone()
+        latest_resolution_status = latest_status_row[0] if latest_status_row else None
+        latest_is_safe_final = bool(
+            latest_status_row
+            and is_auto_scoreable_final(
+                status=latest_status_row[0],
+                confidence=latest_status_row[1],
+                outcome_label=latest_status_row[2],
+            )
+        )
+        close_dt = _parse_ts(close_at)
+        resolution_due = bool(
+            close_dt is not None
+            and now_dt is not None
+            and close_dt <= now_dt
+            and state not in {"resolved", "voided", "ambiguous"}
+            and not latest_is_safe_final
+        )
+        finality_uncertain = (
+            state in {"closed_for_trading", "resolving", "voided", "ambiguous"}
+            or bool(latest_status_row and not latest_is_safe_final)
+            or resolution_due
+        )
+        if resolution_due:
+            resolution_due_markets.append(market_id)
+        if finality_uncertain:
+            finality_uncertain_markets.append(market_id)
+        caveat_codes = [
+            code for code, enabled in (
+                ("resolution_due", resolution_due),
+                ("finality_uncertain", finality_uncertain),
+            ) if enabled
+        ]
         groups.append({
             "key": market_id,
             "label": title or external_id,
@@ -234,11 +286,15 @@ def report_market_lifecycle(
                 "polymarket_identity": identity or None,
                 "event_grouping": event_grouping or None,
                 "resolution_rule": resolution_rule or None,
+                "latest_resolution_status": latest_resolution_status,
+                "resolution_due": resolution_due,
+                "finality_uncertain": finality_uncertain,
                 "negative_risk": market_metadata.get("negative_risk"),
                 "market_microstructure": market_metadata.get("market_microstructure"),
             },
             "filter": applied_filter_view(rf, report=report),
             "record_ids": {"markets": [market_id]},
+            "caveat_codes": caveat_codes,
             "examples": [],
             "sample_size": 1,
             "sample_warning": None,
@@ -253,8 +309,15 @@ def report_market_lifecycle(
             "state_counts": state_counts,
             "event_groupings": list(event_grouping_rollups.values()),
             "outcome_token_mappings": outcome_token_mappings,
+            "resolution_due_market_ids": resolution_due_markets,
+            "finality_uncertain_market_ids": finality_uncertain_markets,
         },
-        "caveats": [],
+        "caveats": [
+            code for code, enabled in (
+                ("resolution_due", bool(resolution_due_markets)),
+                ("finality_uncertain", bool(finality_uncertain_markets)),
+            ) if enabled
+        ],
     }
     return standard_report_result(summary=summary, groups=groups)
 
@@ -278,9 +341,11 @@ def report_resolution_quality(
         where.append("o.resolved_at < ?")
         params.append(rf.time_window.resolved_at_lt)
     sql = """
-        SELECT m.id, m.title, m.state, m.ambiguity_kind, o.id, o.status,
-               o.outcome_label, o.resolved_at,
+        SELECT m.id, m.title, m.state, m.ambiguity_kind, m.metadata_json,
+               o.id, o.status, o.outcome_label, o.resolved_at, o.source,
+               o.confidence, o.created_at, o.metadata_json,
                COUNT(DISTINCT d.id) AS touched_decisions,
+               COUNT(DISTINCT f.id) AS touched_forecasts,
                SUM(CASE WHEN lower(COALESCE(d.reason, '')) LIKE '%uncertain%'
                          OR lower(COALESCE(d.reason, '')) LIKE '%ambiguous%'
                          OR lower(COALESCE(d.reason, '')) LIKE '%dispute%'
@@ -289,6 +354,7 @@ def report_resolution_quality(
         JOIN markets m ON m.id = o.instrument_id
         LEFT JOIN decisions d ON d.instrument_id = m.id
              AND (m.resolving_at IS NULL OR d.created_at <= m.resolving_at)
+        LEFT JOIN forecasts f ON f.market_id = m.id
     """
     if where:
         sql += " WHERE " + " AND ".join(where)
@@ -296,31 +362,65 @@ def report_resolution_quality(
     status_counts: dict[str, int] = {}
     groups: list[dict[str, Any]] = []
     for row in conn.execute(sql, params).fetchall():
-        market_id, title, market_state, ambiguity_kind, outcome_id, status, label, resolved_at, touched, uncertainty = row
+        (
+            market_id, title, market_state, ambiguity_kind, market_metadata_json,
+            outcome_id, status, label, resolved_at, source, confidence,
+            created_at, outcome_metadata_json, touched, touched_forecasts, uncertainty,
+        ) = row
+        try:
+            market_metadata = json.loads(market_metadata_json or "{}")
+        except json.JSONDecodeError:
+            market_metadata = {}
+        try:
+            outcome_metadata = json.loads(outcome_metadata_json or "{}")
+        except json.JSONDecodeError:
+            outcome_metadata = {}
+        resolution_rule = market_metadata.get("resolution_rule") or outcome_metadata.get("resolution_rule") or {}
+        finality_uncertain = finality_uncertain_for_outcome(
+            status=status,
+            confidence=confidence,
+            outcome_label=label,
+        )
+        caveat_codes = ["finality_uncertain"] if finality_uncertain else []
         status_counts[status] = status_counts.get(status, 0) + 1
         groups.append({
             "key": market_id,
             "label": title or market_id,
             "metrics": {
                 "touched_decision_count": touched,
+                "touched_forecast_count": touched_forecasts,
                 "pre_resolution_uncertainty_flag_count": uncertainty or 0,
                 "resolution_status": status,
+                "finality_uncertain": finality_uncertain,
             },
             "resolution": {
                 "outcome_id": outcome_id,
                 "outcome_label": label,
                 "resolved_at": resolved_at,
+                "created_at": created_at,
+                "source": source,
+                "confidence": confidence,
                 "market_state": market_state,
                 "ambiguity_kind": ambiguity_kind,
+                "resolution_rule": resolution_rule or None,
+                "provenance": outcome_metadata.get("provenance") or outcome_metadata.get("source_provenance"),
+                "timestamps": {
+                    "as_of": outcome_metadata.get("as_of"),
+                    "retrieved_at": outcome_metadata.get("retrieved_at"),
+                    "imported_at": outcome_metadata.get("imported_at"),
+                },
+                "caveat_codes": caveat_codes,
             },
             "filter": applied_filter_view(rf, report=report),
             "record_ids": {"markets": [market_id], "outcomes": [outcome_id]},
+            "caveat_codes": caveat_codes,
             "examples": [],
             "sample_size": 1,
             "sample_warning": None,
             "truncated": False,
         })
     ambiguous_like = sum(status_counts.get(s, 0) for s in ("ambiguous", "disputed", "void", "cancelled"))
+    finality_uncertain_count = sum(1 for group in groups if group.get("caveat_codes"))
     summary: dict[str, Any] = {
         "sample_size": len(groups),
         "sample_warning": None if groups else "no resolved outcomes matched filter",
@@ -329,8 +429,9 @@ def report_resolution_quality(
             "resolved_market_count": len(groups),
             "status_counts": status_counts,
             "ambiguous_void_disputed_cancelled_count": ambiguous_like,
+            "finality_uncertain_count": finality_uncertain_count,
         },
-        "caveats": [],
+        "caveats": ["finality_uncertain"] if finality_uncertain_count else [],
     }
     return standard_report_result(summary=summary, groups=groups)
 

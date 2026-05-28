@@ -33,12 +33,16 @@ class DecisionType(StrEnum):
 
 
 class OutcomeStatus(StrEnum):
+    PROPOSED = "proposed"
+    PROVISIONAL = "provisional"
     RESOLVED_FINAL = "resolved_final"
     RESOLVED_PROVISIONAL = "resolved_provisional"
-    AMBIGUOUS = "ambiguous"
     DISPUTED = "disputed"
+    AMBIGUOUS = "ambiguous"
     VOID = "void"
     CANCELLED = "cancelled"
+    IMPORTED_REDEEMED = "imported_redeemed"
+    IMPORTED_SETTLED = "imported_settled"
 
 
 class _Row(BaseModel):

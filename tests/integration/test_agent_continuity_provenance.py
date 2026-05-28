@@ -91,6 +91,7 @@ def _scored_forecast(home: Path, suffix: str, *, agent_id: str, run_id: str) -> 
             "resolved_at": "2026-05-22T20:00:00.000Z",
             "outcome_label": "yes",
             "status": "resolved_final",
+            "confidence": 0.99,
             "idempotency_key": f"00000000-0000-4000-8000-outcome-{suffix}",
         },
     )

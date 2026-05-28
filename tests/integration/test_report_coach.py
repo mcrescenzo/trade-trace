@@ -102,6 +102,7 @@ def test_coach_packet_with_data_remains_clean(home):
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
+        "confidence": 0.99,
     })
 
     env = _envelope(home, "report.coach", {})
@@ -222,6 +223,7 @@ def test_coach_low_sample_separates_caveat_from_process_actions(home):
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
+        "confidence": 0.99,
     })
 
     env = _envelope(home, "report.coach", {})

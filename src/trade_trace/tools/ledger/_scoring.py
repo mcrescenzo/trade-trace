@@ -20,6 +20,7 @@ from typing import Any
 from trade_trace.contracts.tool_registry import ToolContext
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import emit_event, new_id
+from trade_trace.tools.ledger._finality import is_auto_scoreable_final
 
 # Probability sums must be within this tolerance of 1.0 to satisfy the
 # binary / categorical validators (PRD §4.3).
@@ -302,7 +303,7 @@ def _current_resolved_final_outcome(
 
     cur = conn.execute(
         """
-        SELECT o.id, o.outcome_label, o.created_at
+        SELECT o.id, o.outcome_label, o.created_at, o.status, o.confidence
         FROM outcomes o
         WHERE o.instrument_id = ?
           AND o.status = 'resolved_final'
@@ -314,14 +315,13 @@ def _current_resolved_final_outcome(
               AND e.target_id = o.id
           )
         ORDER BY o.resolved_at DESC, o.created_at DESC
-        LIMIT 1
         """,
         (instrument_id,),
     )
-    row = cur.fetchone()
-    if row is None:
-        return None
-    return (row[0], row[1], row[2])
+    for row in cur.fetchall():
+        if is_auto_scoreable_final(status=row[3], confidence=row[4], outcome_label=row[1]):
+            return (row[0], row[1], row[2])
+    return None
 
 
 def derive_scoring_state(conn, forecast_id: str) -> str:

@@ -709,6 +709,7 @@ def test_manual_end_to_end_auto_scores(home):
         "outcome_label": "YES",
         "outcome_value": 1.0,
         "status": "resolved_final",
+        "confidence": 0.99,
     })
     assert outcome["ok"] is True
     # Auto-scoring should have fired.
@@ -888,6 +889,7 @@ def test_forecast_supersede_auto_scores_against_existing_resolved_final(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "YES",
         "status": "resolved_final",
+        "confidence": 0.99,
     })
 
     # Now supersede the (already-scored) forecast. The new forecast
@@ -934,6 +936,7 @@ def test_forecast_supersede_event_order_with_late_auto_score(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "YES",
         "status": "resolved_final",
+        "confidence": 0.99,
     })
 
     sup = _envelope(home, "forecast.supersede", {

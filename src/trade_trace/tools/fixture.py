@@ -290,6 +290,7 @@ def _seed_mvp_eval(*, home: str | None, registry: Any) -> dict[str, int]:
                 "resolved_at": (_ANCHOR + timedelta(days=14 + i)).isoformat(),
                 "outcome_label": "yes" if i % 2 == 0 else "no",
                 "status": "resolved_final",
+                "confidence": 0.99,
             }, suffix=f"outcome-final-{i}")
         finally:
             CLOCK_OVERRIDE.reset(token2)

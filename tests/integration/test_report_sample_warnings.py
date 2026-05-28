@@ -43,6 +43,7 @@ def _seed_decision_with_tag(home: Path, tag: str, n: int) -> None:
             "instrument_id": inst,
             "resolved_at": f"2026-06-{i + 1:02d}T00:00:00Z",
             "outcome_label": "yes", "status": "resolved_final",
+            "confidence": 0.99,
         })
         _mcp(home, "decision.add", {
             "type": "actual_enter", "instrument_id": inst,

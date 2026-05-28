@@ -65,6 +65,7 @@ def _seed_one_scored_forecast(
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": resolved_label, "status": "resolved_final",
+        "confidence": 0.99,
         "idempotency_key": f"test:calibration-outcome-{seed}",
     })
     return f["data"]["id"]
@@ -165,6 +166,7 @@ def test_late_recorded_excluded_by_default(home):
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
+        "confidence": 0.99,
     })
     _envelope(home, "forecast.add", {
         "thesis_id": thesis["data"]["id"], "kind": "binary", "yes_label": "yes",
@@ -195,6 +197,7 @@ def test_late_recorded_included_on_opt_in(home):
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
+        "confidence": 0.99,
     })
     _envelope(home, "forecast.add", {
         "thesis_id": thesis["data"]["id"], "kind": "binary", "yes_label": "yes",
@@ -304,6 +307,7 @@ def _seed_scored_forecast_for_actor(
         "home": str(home), "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
+        "confidence": 0.99,
     }, actor_id=actor_id).model_dump(mode="json", exclude_none=True)
     return f["data"]["id"]
 
