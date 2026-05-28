@@ -622,3 +622,95 @@ def test_source_quality_tolerates_malformed_inline_metadata_in_summary(home):
     env = _mcp(home, "report.source_quality", {})
     assert env.ok, env
     assert env.data["summary"]["total_sources"] >= 0
+
+
+def test_expanded_stance_sources_attach_to_resolution_market_records(home):
+    seeds = _seed_thesis_and_decision(home)
+    snap = _mcp(home, "snapshot.add", {
+        "instrument_id": seeds["instrument"],
+        "captured_at": "2026-05-20T12:00:00Z",
+        "idempotency_key": "00000000-0000-4000-8000-xku0snap001",
+    }).data["id"]
+    out = _mcp(home, "outcome.add", {
+        "instrument_id": seeds["instrument"],
+        "resolved_at": "2026-05-22T20:30:00Z",
+        "outcome_label": "yes",
+        "status": "resolved_final",
+        "idempotency_key": "00000000-0000-4000-8000-xku0out0001",
+    }).data["id"]
+    official = _mcp(home, "source.add", {
+        "kind": "url", "stance": "official_source",
+        "uri": "https://example.invalid/official",
+        "publisher": "Official resolver",
+        "content_hash": "sha256:official",
+        "idempotency_key": "00000000-0000-4000-8000-xku0src0001",
+    }).data["id"]
+    rule = _mcp(home, "source.add", {
+        "kind": "research_doc", "stance": "resolution_rule",
+        "uri": "https://example.invalid/rules",
+        "content_hash": "sha256:rule",
+        "idempotency_key": "00000000-0000-4000-8000-xku0src0002",
+    }).data["id"]
+
+    for idem, tool, source_id, target_id in (
+        ("00000000-0000-4000-8000-xku0att0001", "source.attach_to_instrument", rule, seeds["instrument"]),
+        ("00000000-0000-4000-8000-xku0att0002", "source.attach_to_snapshot", official, snap),
+        ("00000000-0000-4000-8000-xku0att0003", "source.attach_to_outcome", official, out),
+    ):
+        env = _mcp(home, tool, {
+            "source_id": source_id,
+            "target_id": target_id,
+            "idempotency_key": idem,
+        })
+        assert env.ok, env
+        assert env.data["edge_type"] == "about"
+        assert env.data["evidence_stance"] in {"official_source", "resolution_rule"}
+
+    env = _mcp(home, "report.source_quality", {})
+    assert env.ok, env
+    official_diag = env.data["diagnostics"]["official_sources"]
+    assert official_diag["count"] >= 2
+    assert official in official_diag["sample_ids"]["sources"]
+    rule_diag = env.data["diagnostics"]["resolution_rule_sources"]
+    assert rule_diag["count"] == 1
+    assert rule_diag["samples"][0]["contributing_ids"]["source_id"] == rule
+
+
+def test_redacted_sensitive_source_text_is_not_persisted_or_reported(home):
+    seeds = _seed_thesis_and_decision(home)
+    src = _mcp(home, "source.add", {
+        "kind": "note", "stance": "sensitive",
+        "title": "protected provenance",
+        "summary": "do not leak this protected summary",
+        "excerpt": "do not leak this protected excerpt",
+        "extracted_text": "do not leak this protected body",
+        "content_hash": "sha256:protected",
+        "redaction_status": "sensitive",
+        "idempotency_key": "00000000-0000-4000-8000-xku0sens001",
+    }).data["id"]
+    _mcp(home, "source.attach_to_decision", {
+        "source_id": src,
+        "target_id": seeds["decision"],
+        "idempotency_key": "00000000-0000-4000-8000-xku0sens002",
+    })
+
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            "SELECT excerpt, extracted_text, summary, content_hash FROM sources WHERE id = ?",
+            (src,),
+        ).fetchone()
+    finally:
+        db.close()
+    assert row == (None, None, None, "sha256:protected")
+
+    env = _mcp(home, "report.source_quality", {})
+    samples = env.data["diagnostics"]["redacted_sources"]["samples"]
+    sample = next(s for s in samples if s["id"] == src)
+    assert sample["content_hash"] == "sha256:protected"
+    assert "summary" not in sample
+    assert "excerpt" not in sample
+    assert "extracted_text" not in sample

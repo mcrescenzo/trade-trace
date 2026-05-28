@@ -56,7 +56,9 @@ def report_source_quality(
     stale = _stale_sources(conn, stale_threshold_days=stale_threshold_days)
     contradictory = _contradictory_sources(conn)
     duplicated = _duplicated_sources(conn)
-    sensitive = _sensitive_sources(conn)
+    official = _stance_sources(conn, "official_source", "official_sources")
+    resolution_rule = _stance_sources(conn, "resolution_rule", "resolution_rule_sources")
+    redacted = _redacted_sources(conn)
 
     inline_attachments = _inline_source_attachments(conn)
     inline_source_ids = {att["id"] for att in inline_attachments if att.get("id")}
@@ -94,7 +96,10 @@ def report_source_quality(
             "stale_sources": stale,
             "contradictory_sources": contradictory,
             "duplicated_sources": duplicated,
-            "sensitive_sources": sensitive,
+            "sensitive_sources": redacted,
+            "official_sources": official,
+            "resolution_rule_sources": resolution_rule,
+            "redacted_sources": redacted,
         },
     }
 
@@ -117,7 +122,14 @@ def _safe_metadata(raw: str | None) -> dict[str, Any]:
 
 def _inline_source_attachments(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     attachments: list[dict[str, Any]] = []
-    for table, kind in (("forecasts", "forecast"), ("decisions", "decision"), ("memory_nodes", "memory_node")):
+    for table, kind in (
+        ("forecasts", "forecast"),
+        ("decisions", "decision"),
+        ("memory_nodes", "memory_node"),
+        ("outcomes", "outcome"),
+        ("snapshots", "snapshot"),
+        ("instruments", "instrument"),
+    ):
         for target_id, metadata_json in conn.execute(f"SELECT id, metadata_json FROM {table}").fetchall():
             sources = _safe_metadata(metadata_json).get("sources")
             if not isinstance(sources, list):
@@ -132,7 +144,7 @@ def _inline_source_attachments(conn: sqlite3.Connection) -> list[dict[str, Any]]
                     "id": str(source_id),
                     "target_kind": kind,
                     "target_id": target_id,
-                    "stance": stance if stance in ("supports", "contradicts", "about") else "about",
+                    "stance": stance if stance in ("supports", "contradicts", "about", "neutral", "context", "resolution_rule", "official_source", "stale", "missing", "redacted", "sensitive") else "about",
                     "freshness_at": source.get("freshness_at") or source.get("captured_at"),
                     "content_hash": source.get("content_hash") or source.get("hash"),
                     "redaction_status": source.get("redaction_status"),
@@ -157,6 +169,7 @@ def _bundle(
         items = items[:MAX_SAMPLE_IDS]
     return {
         "diagnostic": diagnostic,
+        "source_quality_code": diagnostic,
         "count": total_count,
         "sample_ids": {sample_kind: [it["id"] for it in items]},
         "samples": items,
@@ -230,7 +243,11 @@ def _missing_sources_on_actual_enter(conn: sqlite3.Connection) -> dict[str, Any]
             _has_inline_sources(forecast_meta),
         )):
             continue
-        items.append({"id": d_id, "thesis_id": thesis_id, "forecast_id": forecast_id})
+        items.append({
+            "id": d_id, "thesis_id": thesis_id, "forecast_id": forecast_id,
+            "source_quality_code": "missing_sources_on_actual_enter",
+            "contributing_ids": {"decision_id": d_id, "thesis_id": thesis_id, "forecast_id": forecast_id},
+        })
     return _bundle(
         diagnostic="missing_sources_on_actual_enter",
         items=items, sample_kind="decisions",
@@ -288,6 +305,8 @@ def _stale_sources(
                 "id": s_id, "decision_id": d_id,
                 "freshness_at": fresh_iso, "decision_at": d_ts_iso,
                 "staleness_days": (d_dt - fresh_dt).days,
+                "source_quality_code": "stale_sources",
+                "contributing_ids": {"source_id": s_id, "decision_id": d_id},
             })
     for att in _inline_source_attachments(conn):
         if att.get("target_kind") != "decision" or not att.get("freshness_at"):
@@ -312,6 +331,8 @@ def _stale_sources(
                 "id": s_id, "decision_id": d_id,
                 "freshness_at": fresh_iso, "decision_at": d_ts_iso,
                 "staleness_days": (d_dt - fresh_dt).days,
+                "source_quality_code": "stale_sources",
+                "contributing_ids": {"source_id": s_id, "decision_id": d_id},
             })
     return _bundle(
         diagnostic="stale_sources",
@@ -355,12 +376,19 @@ def _contradictory_sources(conn: sqlite3.Connection) -> dict[str, Any]:
         item = by_thesis.setdefault(key, {
             "id": thesis_id, "thesis_id": thesis_id,
             "kind": kind, "supports": [], "contradicts": [],
+            "source_quality_code": "contradictory_sources",
         })
         if sup_id not in item["supports"]:
             item["supports"].append(sup_id)
         if con_id not in item["contradicts"]:
             item["contradicts"].append(con_id)
     items = sorted(by_thesis.values(), key=lambda r: r["thesis_id"])
+    for item in items:
+        item["contributing_ids"] = {
+            "thesis_id": item["thesis_id"],
+            "supports": item["supports"],
+            "contradicts": item["contradicts"],
+        }
     return _bundle(
         diagnostic="contradictory_sources",
         items=items, sample_kind="theses",
@@ -448,6 +476,91 @@ def _sensitive_sources(conn: sqlite3.Connection) -> dict[str, Any]:
         diagnostic="sensitive_sources",
         items=items, sample_kind="sources",
     )
+
+
+def _redacted_sources(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Redacted/sensitive attached evidence without protected text fields."""
+
+    cur = conn.execute(
+        """
+        SELECT DISTINCT s.id, s.stance, s.redaction_status, s.content_hash,
+               e.target_kind, e.target_id
+        FROM edges e
+        JOIN sources s ON s.id = e.source_id
+        WHERE e.source_kind = 'source'
+          AND (s.redaction_status IN ('redacted', 'sensitive')
+               OR s.stance IN ('redacted', 'sensitive'))
+        ORDER BY s.id
+        """
+    )
+    items = [
+        {
+            "id": s_id, "stance": stance, "redaction_status": status,
+            "content_hash": content_hash, "target_kind": target_kind,
+            "target_id": target_id,
+            "source_quality_code": "redacted_sources" if status == "redacted" or stance == "redacted" else "sensitive_sources",
+            "contributing_ids": {"source_id": s_id, "target_id": target_id},
+        }
+        for s_id, stance, status, content_hash, target_kind, target_id in cur.fetchall()
+    ]
+    seen = {(it["id"], it["target_kind"], it["target_id"]) for it in items}
+    for att in _inline_source_attachments(conn):
+        if att.get("redaction_status") not in ("redacted", "sensitive") and att.get("stance") not in ("redacted", "sensitive"):
+            continue
+        key = (att["id"], att["target_kind"], att["target_id"])
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append({
+            "id": att["id"], "stance": att.get("stance"),
+            "redaction_status": att.get("redaction_status"),
+            "content_hash": att.get("content_hash"),
+            "target_kind": att["target_kind"], "target_id": att["target_id"],
+            "source_quality_code": "redacted_sources" if att.get("redaction_status") == "redacted" or att.get("stance") == "redacted" else "sensitive_sources",
+            "contributing_ids": {"source_id": att["id"], "target_id": att["target_id"]},
+        })
+    return _bundle(diagnostic="redacted_sources", items=items, sample_kind="sources")
+
+
+def _stance_sources(conn: sqlite3.Connection, stance: str, diagnostic: str) -> dict[str, Any]:
+    cur = conn.execute(
+        """
+        SELECT DISTINCT s.id, s.stance, s.publisher, s.content_hash,
+               e.target_kind, e.target_id
+        FROM edges e
+        JOIN sources s ON s.id = e.source_id
+        WHERE e.source_kind = 'source'
+          AND s.stance = ?
+        ORDER BY s.id
+        """,
+        (stance,),
+    )
+    items = [
+        {
+            "id": s_id, "stance": row_stance, "publisher": publisher,
+            "content_hash": content_hash, "target_kind": target_kind,
+            "target_id": target_id, "source_quality_code": diagnostic,
+            "contributing_ids": {"source_id": s_id, "target_id": target_id},
+        }
+        for s_id, row_stance, publisher, content_hash, target_kind, target_id in cur.fetchall()
+    ]
+    seen = {(it["id"], it["target_kind"], it["target_id"]) for it in items}
+    for att in _inline_source_attachments(conn):
+        if att.get("stance") != stance:
+            continue
+        key = (att["id"], att["target_kind"], att["target_id"])
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append({
+            "id": att["id"], "stance": stance,
+            "publisher": att.get("publisher"),
+            "content_hash": att.get("content_hash"),
+            "target_kind": att["target_kind"], "target_id": att["target_id"],
+            "source_quality_code": diagnostic,
+            "contributing_ids": {"source_id": att["id"], "target_id": att["target_id"]},
+        })
+    return _bundle(diagnostic=diagnostic, items=items, sample_kind="sources")
 
 
 __all__ = [

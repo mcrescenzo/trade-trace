@@ -1002,4 +1002,7 @@ def test_source_add_tool_schema_example_succeeds(home):
         "news_article", "research_doc", "url", "note", "other",
     }
     stance_enum = json_schema["properties"]["stance"].get("enum")
-    assert set(stance_enum) == {"supports", "contradicts", "neutral"}
+    assert set(stance_enum) == {
+        "supports", "contradicts", "neutral", "context", "resolution_rule",
+        "official_source", "stale", "missing", "redacted", "sensitive",
+    }

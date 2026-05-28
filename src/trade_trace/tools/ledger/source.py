@@ -32,6 +32,26 @@ from trade_trace.tools._helpers import (
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.ledger._shared import examples_for
 
+SOURCE_STANCES = (
+    "supports", "contradicts", "neutral", "context", "resolution_rule",
+    "official_source", "stale", "missing", "redacted", "sensitive",
+)
+EDGE_STANCE_TYPES = {"supports", "contradicts"}
+REDACTING_STATUSES = {"redacted", "sensitive"}
+REDACTING_STANCES = {"redacted", "sensitive"}
+
+
+def _metadata_with_evidence_stance(raw: str | None, stance: str) -> str:
+    try:
+        parsed = json.loads(raw or "{}")
+    except Exception:
+        parsed = {}
+    if not isinstance(parsed, dict):
+        parsed = {}
+    parsed.setdefault("source_quality_code", f"evidence_stance.{stance}")
+    parsed["evidence_stance"] = stance
+    return json.dumps(parsed, sort_keys=True)
+
 
 def _source_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     db = open_db_for_args(args)
@@ -58,6 +78,10 @@ def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) 
     freshness_at = normalize_timestamp(args, "freshness_at")
     captured_at = normalize_timestamp(args, "captured_at")
     retrieved_at = normalize_timestamp(args, "retrieved_at")
+    text_is_redacted = redaction_status in REDACTING_STATUSES or stance in REDACTING_STANCES
+    excerpt = None if text_is_redacted else args.get("excerpt")
+    extracted_text = None if text_is_redacted else args.get("extracted_text")
+    summary = None if text_is_redacted else args.get("summary")
     metadata_json = store_metadata_json(args)
     seg = common_metadata(args)
 
@@ -73,9 +97,9 @@ def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) 
             "retrieved_at": retrieved_at,
             "source_author": args.get("source_author"),
             "publisher": args.get("publisher"),
-            "excerpt": args.get("excerpt"),
-            "extracted_text": args.get("extracted_text"),
-            "summary": args.get("summary"),
+            "excerpt": excerpt,
+            "extracted_text": extracted_text,
+            "summary": summary,
             "hash_algorithm": args.get("hash_algorithm"),
             "redaction_status": redaction_status,
             "license_or_terms_note": args.get("license_or_terms_note"),
@@ -119,8 +143,8 @@ def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) 
             args.get("content_hash"), captured_at, args.get("uri"),
             args.get("media_type"), storage_kind, retrieved_at,
             args.get("source_author"), args.get("publisher"),
-            args.get("excerpt"), args.get("extracted_text"),
-            args.get("summary"), args.get("hash_algorithm"),
+            excerpt, extracted_text,
+            summary, args.get("hash_algorithm"),
             redaction_status, args.get("license_or_terms_note"),
             seg["agent_id"], seg["model_id"], seg["environment"], seg["run_id"],
             metadata_json, created_at, ctx.actor_id,
@@ -140,7 +164,7 @@ def _inline_source_object(conn, source_id: str, edge_type: str) -> dict[str, Any
     row = conn.execute(
         """
         SELECT id, kind, title, uri, ref, stance, captured_at, freshness_at,
-               content_hash, redaction_status, metadata_json
+               content_hash, redaction_status, metadata_json, publisher
         FROM sources
         WHERE id = ?
         """,
@@ -150,7 +174,7 @@ def _inline_source_object(conn, source_id: str, edge_type: str) -> dict[str, Any
         raise ToolError(ErrorCode.NOT_FOUND, f"source {source_id!r} not found")
     (
         s_id, kind, title, uri, ref, stance, captured_at, freshness_at,
-        content_hash, redaction_status, metadata_json,
+        content_hash, redaction_status, metadata_json, publisher,
     ) = row
     try:
         meta = json.loads(metadata_json or "{}")
@@ -165,14 +189,17 @@ def _inline_source_object(conn, source_id: str, edge_type: str) -> dict[str, Any
         "url": uri or ref,
         "uri": uri,
         "ref": ref,
-        "stance": edge_type if edge_type in ("supports", "contradicts") else "about",
+        "stance": stance,
+        "edge_type": edge_type,
         "captured_at": captured_at,
         "freshness_at": freshness_at,
         "hash": content_hash,
         "content_hash": content_hash,
         "redaction_status": redaction_status,
     }
-    for key in ("source_author", "publisher", "summary"):
+    if publisher is not None:
+        inline["publisher"] = publisher
+    for key in ("source_author",):
         if key in meta and key not in inline:
             inline[key] = meta[key]
     return {k: v for k, v in inline.items() if v is not None}
@@ -197,7 +224,7 @@ def _metadata_with_appended_source(raw: str | None, source: dict[str, Any]) -> s
 
 
 def _append_inline_source_to_target(conn, target_kind: str, target_id: str, source: dict[str, Any]) -> None:
-    if target_kind not in {"forecast", "decision", "memory_node"}:
+    if target_kind not in _SOURCE_ATTACH_TARGETS:
         return
     table = _SOURCE_ATTACH_TARGETS[target_kind]["table"]
     trigger = f"trg_{table}_no_update"
@@ -209,13 +236,13 @@ def _append_inline_source_to_target(conn, target_kind: str, target_id: str, sour
     if row is None:
         return
     new_metadata = _metadata_with_appended_source(row[0], source)
-    conn.execute(f"DROP TRIGGER {trigger}")
+    conn.execute(f"DROP TRIGGER IF EXISTS {trigger}")
     try:
         conn.execute(f"UPDATE {table} SET metadata_json = ? WHERE id = ?", (new_metadata, target_id))
     finally:
         conn.execute(
             f"""
-            CREATE TRIGGER {trigger}
+            CREATE TRIGGER IF NOT EXISTS {trigger}
             BEFORE UPDATE ON {table}
             BEGIN
                 SELECT RAISE(ABORT, '{message}');
@@ -248,6 +275,24 @@ _SOURCE_ATTACH_TARGETS: dict[str, dict[str, Any]] = {
         "tool": "source.attach_to_memory_node",
         "json_schema": None,
         "example_key": "source.attach_to_memory_node",
+    },
+    "outcome": {
+        "table": "outcomes",
+        "tool": "source.attach_to_outcome",
+        "json_schema": None,
+        "example_key": "source.attach_to_outcome",
+    },
+    "snapshot": {
+        "table": "snapshots",
+        "tool": "source.attach_to_snapshot",
+        "json_schema": None,
+        "example_key": "source.attach_to_snapshot",
+    },
+    "instrument": {
+        "table": "instruments",
+        "tool": "source.attach_to_instrument",
+        "json_schema": None,
+        "example_key": "source.attach_to_instrument",
     },
 }
 """Single source of truth for public source.attach_to_* target metadata.
@@ -320,7 +365,8 @@ def _source_attach_in_uow(
             details={"entity_kind": target_kind, "target_id": target_id},
         )
     stance = stance_row[0]
-    edge_type = stance if stance in ("supports", "contradicts") else "about"
+    edge_type = stance if stance in EDGE_STANCE_TYPES else "about"
+    edge_metadata = _metadata_with_evidence_stance(metadata_json, stance)
     replay = check_idempotency_replay(
         uow, event_type="source.attached",
         actor_id=ctx.actor_id, idempotency_key=idempotency_key,
@@ -333,7 +379,7 @@ def _source_attach_in_uow(
             payload={
                 "id": edge_id, "source_id": source_id,
                 "target_kind": target_kind, "target_id": target_id,
-                "edge_type": edge_type,
+                "edge_type": edge_type, "evidence_stance": stance,
             },
             actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
         )
@@ -341,7 +387,8 @@ def _source_attach_in_uow(
             "SELECT created_at FROM edges WHERE id = ?", (edge_id,),
         ).fetchone()
         return {"id": edge_id, "source_id": source_id, "target_kind": target_kind,
-                "target_id": target_id, "edge_type": edge_type, "created_at": row[0]}
+                "target_id": target_id, "edge_type": edge_type,
+                "evidence_stance": stance, "created_at": row[0]}
 
     edge_id = args.get("id") or new_id("edg")
     created_at = now_iso()
@@ -350,7 +397,7 @@ def _source_attach_in_uow(
         "edge_type, metadata_json, created_at, actor_id) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (edge_id, "source", source_id, target_kind, target_id, edge_type,
-         metadata_json, created_at, ctx.actor_id),
+         edge_metadata, created_at, ctx.actor_id),
     )
     _append_inline_source_to_target(
         uow.conn, target_kind, target_id,
@@ -362,12 +409,13 @@ def _source_attach_in_uow(
         payload={
             "id": edge_id, "source_id": source_id,
             "target_kind": target_kind, "target_id": target_id,
-            "edge_type": edge_type,
+            "edge_type": edge_type, "evidence_stance": stance,
         },
         actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
     )
     return {"id": edge_id, "source_id": source_id, "target_kind": target_kind,
-            "target_id": target_id, "edge_type": edge_type, "created_at": created_at}
+            "target_id": target_id, "edge_type": edge_type,
+            "evidence_stance": stance, "created_at": created_at}
 
 
 def _source_attach_to_memory_node_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) -> dict[str, Any]:
@@ -395,7 +443,7 @@ _SOURCE_ADD_SCHEMA: dict[str, Any] = {
         },
         "stance": {
             "type": "string",
-            "enum": ["supports", "contradicts", "neutral"],
+            "enum": list(SOURCE_STANCES),
         },
         "uri": {"type": "string"},
         "title": {"type": "string"},
@@ -441,7 +489,7 @@ _SOURCE_ADD_SCHEMA: dict[str, Any] = {
     "required": ["kind", "idempotency_key"],
     "description": (
         "source.add — kind and stance use storage-pinned enums "
-        "(persistence.md §5.2 / migration 003). Free-text fields "
+        "(persistence.md §5.2; stance expanded by migration 017). Free-text fields "
         "(title/note/excerpt/extracted_text/summary) are scanned at "
         "write time for sensitive-shaped substrings per trade-trace-sy1. "
         "freshness_at is the evidence-current timestamp used by "

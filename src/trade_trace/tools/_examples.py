@@ -281,6 +281,27 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "idempotency_key": _IDEM,
         },
     },
+    "source.attach_to_outcome": {
+        "minimal": {
+            "source_id": "src_SOURCE_ID_HERE",
+            "target_id": "out_OUTCOME_ID_HERE",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "source.attach_to_snapshot": {
+        "minimal": {
+            "source_id": "src_SOURCE_ID_HERE",
+            "target_id": "snp_SNAPSHOT_ID_HERE",
+            "idempotency_key": _IDEM,
+        },
+    },
+    "source.attach_to_instrument": {
+        "minimal": {
+            "source_id": "src_SOURCE_ID_HERE",
+            "target_id": "ins_INSTRUMENT_ID_HERE",
+            "idempotency_key": _IDEM,
+        },
+    },
     "memory.retain": {
         "minimal": {
             "node_type": "observation",

@@ -55,6 +55,9 @@ from trade_trace.storage.migrations.m015_pm_inline_sources_transition import (
 from trade_trace.storage.migrations.m016_risk_policy_receipts import (
     _migration_016_risk_policy_receipts,
 )
+from trade_trace.storage.migrations.m017_expanded_source_stances import (
+    _migration_017_expanded_source_stances,
+)
 
 MIGRATIONS: list[Migration] = [
     _migration_001_meta_table,
@@ -73,6 +76,7 @@ MIGRATIONS: list[Migration] = [
     _migration_014_pm_forecast_memory_transition,
     _migration_015_pm_inline_sources_transition,
     _migration_016_risk_policy_receipts,
+    _migration_017_expanded_source_stances,
 ]
 
 
@@ -107,6 +111,7 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
     (14, []),
     (15, []),
     (16, ["risk_policy_versions", "risk_check_receipts", "risk_check_rule_results"]),
+    (17, []),
 ]
 
 
@@ -159,6 +164,7 @@ _MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
     }),
     (15, {}),
     (16, {}),
+    (17, {}),
 ]
 
 
@@ -186,6 +192,7 @@ __all__ = [
     "_migration_014_pm_forecast_memory_transition",
     "_migration_015_pm_inline_sources_transition",
     "_migration_016_risk_policy_receipts",
+    "_migration_017_expanded_source_stances",
     "_require_fts5",
     "apply_pending_migrations",
     "current_version",
