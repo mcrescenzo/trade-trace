@@ -102,6 +102,7 @@ def report_calibration_integrity(conn: sqlite3.Connection) -> dict[str, Any]:
         sample_kind="outcomes",
     )
     suspicious_late = _suspicious_late_rate(conn, total_forecasts=total_forecasts)
+    abstention_coverage = _abstention_coverage(conn, total_forecasts=total_forecasts)
 
     sample_warning = "no_data" if (
         total_decisions == 0 and total_forecasts == 0 and total_outcomes == 0
@@ -125,6 +126,7 @@ def report_calibration_integrity(conn: sqlite3.Connection) -> dict[str, Any]:
             "disputed_rate": disputed,
             "void_cancelled_rate": void_cancelled,
             "suspicious_late_rate": suspicious_late,
+            "abstention_coverage": abstention_coverage,
         },
     }
 
@@ -218,6 +220,45 @@ def _suspicious_late_rate(
         "sample_ids": {"forecasts": sample_ids},
         "truncated": truncated,
     }
+
+
+def _abstention_coverage(
+    conn: sqlite3.Connection, *, total_forecasts: int,
+) -> dict[str, Any]:
+    """Abstention coverage (trade-trace-4kec.8): how many considered-and-passed
+    records exist alongside committed forecasts. Calibration metrics exclude
+    abstentions by construction (they are not forecasts); surfacing the count
+    here lets the agent see the full considered set and judge survivorship bias.
+    `abstention_share_pct` is abstentions / (forecasts + abstentions)."""
+
+    if not _table_exists(conn, "abstentions"):
+        abstentions = 0
+        sample_ids: list[str] = []
+    else:
+        rows = conn.execute(
+            "SELECT id FROM abstentions ORDER BY created_at, id"
+        ).fetchall()
+        sample_ids = [row[0] for row in rows]
+        abstentions = len(sample_ids)
+    truncated = abstentions > MAX_SAMPLE_IDS
+    if truncated:
+        sample_ids = sample_ids[:MAX_SAMPLE_IDS]
+    considered_total = total_forecasts + abstentions
+    return {
+        "diagnostic": "abstention_coverage",
+        "count": abstentions,
+        "total": considered_total,
+        "abstention_share_pct": _rate_pct(abstentions, considered_total),
+        "sample_ids": {"abstentions": sample_ids},
+        "truncated": truncated,
+    }
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?", (table,)
+    ).fetchone()
+    return row is not None
 
 
 __all__ = ["MAX_SAMPLE_IDS", "report_calibration_integrity"]

@@ -198,6 +198,9 @@ def test_no_credential_columns_in_schema(tmp_path):
 # -- 6. shipped v0.0.2 catalog pins -------------------
 
 SHIPPED_PUBLIC_TOOLS = {
+    "abstention.get",
+    "abstention.list",
+    "abstention.record",
     "decision.add",
     "export.drain",
     "forecast.add",

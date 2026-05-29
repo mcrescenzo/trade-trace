@@ -213,6 +213,16 @@ def report_coach(
                     "narrow slice."
                 )
             continue
+        if diagnostic_key == "abstention_coverage":
+            share = diag["abstention_share_pct"]
+            if share is not None and diag["count"] > 0:
+                callouts.append(
+                    f"abstention_coverage: {diag['count']} of {diag['total']} "
+                    f"considered markets were recorded as no-bet ({share:.1f}%) "
+                    "— calibration excludes these by construction; review for "
+                    "survivorship context."
+                )
+            continue
         rate = diag["rate_pct"]
         if rate is not None and rate > 0:
             callouts.append(

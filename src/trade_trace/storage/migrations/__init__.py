@@ -83,6 +83,9 @@ from trade_trace.storage.migrations.m025_polymarket_resolution_finality import (
 from trade_trace.storage.migrations.m026_replay_evaluation_artifacts import (
     _migration_026_replay_evaluation_artifacts,
 )
+from trade_trace.storage.migrations.m027_abstentions import (
+    _migration_027_abstentions,
+)
 
 MIGRATIONS: list[Migration] = [
     _migration_001_meta_table,
@@ -111,6 +114,7 @@ MIGRATIONS: list[Migration] = [
     _migration_024_autonomous_records,
     _migration_025_polymarket_resolution_finality,
     _migration_026_replay_evaluation_artifacts,
+    _migration_027_abstentions,
 ]
 
 
@@ -155,6 +159,7 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
     (24, ["autonomous_run_records", "autonomous_incident_records"]),
     (25, []),
     (26, ["replay_evaluation_artifacts"]),
+    (27, ["abstentions"]),
 ]
 
 
@@ -217,6 +222,7 @@ _MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
     (24, {}),
     (25, {}),
     (26, {}),
+    (27, {}),
 ]
 
 
@@ -254,6 +260,7 @@ __all__ = [
     "_migration_024_autonomous_records",
     "_migration_025_polymarket_resolution_finality",
     "_migration_026_replay_evaluation_artifacts",
+    "_migration_027_abstentions",
     "_require_fts5",
     "apply_pending_migrations",
     "current_version",

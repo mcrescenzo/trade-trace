@@ -32,6 +32,8 @@ _CANONICAL_UTC_RE = re.compile(
 # explicitly added to this governed set.
 TIMESTAMP_API_GOVERNED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
     {
+        ("abstentions", "as_of"),
+        ("abstentions", "created_at"),
         ("account_snapshots", "as_of"),
         ("account_snapshots", "captured_at"),
         ("account_snapshots", "effective_at"),

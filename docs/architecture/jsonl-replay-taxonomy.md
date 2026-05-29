@@ -37,6 +37,9 @@ The `events` table currently emits these `event_type` values
 - H05 risk audit: `risk_policy_version.created`,
   `risk_check_receipt.recorded`.
 - Pre-trade intent: `pretrade_intent.recorded`.
+- Abstention / no-bet: `abstention.recorded` (local "considered and passed"
+  record so the calibration denominator is not survivorship-biased; a journal
+  fact, not trade activity).
 - Approval/waiver ledger: `approval_waiver.recorded` (local audit evidence
   only; not a live permission, order, signing, custody, or execution gate).
 - External execution receipt: `external_execution_receipt.imported` (sanitized
@@ -95,6 +98,10 @@ row.
 - `risk_check_receipt.recorded` → `risk.check_record`
 - `pretrade_intent.recorded` → `pretrade_intent.record` (local,
   non-executing proposed intent audit packet only).
+- `abstention.recorded` → `abstention.record` (local append-only
+  considered-and-passed record; idempotency is keyed by the caller-supplied or
+  auto-derived key over the instrument/thesis/as_of/considered_probability, and
+  replay performs no network or execution action).
 - `approval_waiver.recorded` → `approval.record` (local append-only approval,
   waiver, hard-block attempt, and scoped autonomy evidence only; no execution
   or live permissioning behavior is replayed).

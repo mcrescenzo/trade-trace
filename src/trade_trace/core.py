@@ -27,6 +27,7 @@ from trade_trace.events.log import IdempotencyConflictError
 from trade_trace.events.semantic_keys import derive_idempotency_key
 from trade_trace.events.unit_of_work import DRY_RUN_FLAG
 from trade_trace.storage.paths import HomePathValidationError
+from trade_trace.tools.abstention import register_abstention_tools
 from trade_trace.tools.account_snapshots import register_account_snapshot_tools
 from trade_trace.tools.adapter_polymarket import register_adapter_polymarket_tools
 from trade_trace.tools.admin import register_admin_tools
@@ -252,6 +253,7 @@ def build_registry() -> ToolRegistry:
     a CLI-name collision; the test suite re-runs the same code path."""
 
     registry = ToolRegistry()
+    register_abstention_tools(registry)
     register_account_snapshot_tools(registry)
     register_admin_tools(registry)
     register_approval_tools(registry)
