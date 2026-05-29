@@ -1,6 +1,6 @@
 # v0.0.2 PM-pivot tool/report catalog reconciliation
 
-> Status: **shipped** as of 2026-05-25; scope reined in 2026-05-29 (epic trade-trace-4kec). The default public registry now exposes **56** tools, generated from `build_registry().public_names()`. A further **40** Product-B tools are frozen behind the experimental tier (`public_names(include_experimental=True)`; see §4.6) and **3** redundant report tools were removed — the 99-tool catalog reconciles as KEEP 56 / FREEZE 40 / CUT 3. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
+> Status: **shipped** as of 2026-05-25; scope reined in + decision-time features added 2026-05-29 (epic trade-trace-4kec). The default public registry now exposes **69** tools, generated from `build_registry().public_names()`. The scope-reignin half froze **40** Product-B tools behind the experimental tier (`public_names(include_experimental=True)`; see §4.6) and removed **3** redundant report tools (KEEP 56 / FREEZE 40 / CUT 3 of the prior 99); the build half then reinvested the freed budget into **13** decision-time D1–D5 tools (§1.3), taking the default catalog to 69. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
 
 ## Why this exists
 
@@ -27,9 +27,9 @@ authoritative source the v0.0.2 implementation beads cite.
 
 ## 1. Current runtime baseline (2026-05-25)
 
-Generated from `build_registry().public_names()` for the default public catalog: 56 tools.
+Generated from `build_registry().public_names()` for the default public catalog: 69 tools. (The scope-reignin freeze/cut landed the surface at 56; epic trade-trace-4kec then reinvested the budget into 13 decision-time D1–D5 tools — see §1.3.)
 
-`decision.add`, `export.drain`, `forecast.add`, `import.commit`, `journal.backup`, `journal.config_set`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.refresh`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `playbook.record_adherence`, `playbook.upsert`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_integrity`, `report.coach`, `report.compare`, `report.current_exposure`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `snapshot.add`, `snapshot.fetch`, `strategy.upsert`, `tool.schema`.
+`abstention.get`, `abstention.list`, `abstention.record`, `decision.add`, `export.drain`, `forecast.add`, `forecast.commit_blind`, `forecast.independence`, `forecast.interpret_resolution`, `forecast.resolution_interpretation`, `forecast.reveal_snapshot`, `import.commit`, `journal.backup`, `journal.config_set`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.find_similar`, `market.refresh`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `playbook.record_adherence`, `playbook.upsert`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_advisory`, `report.calibration_integrity`, `report.coach`, `report.compare`, `report.current_exposure`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.mistake_tripwire`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.process_quality`, `report.resolution_misreads`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `snapshot.add`, `snapshot.fetch`, `strategy.upsert`, `tool.schema`.
 
 ### Frozen Product-B surface (experimental tier, epic trade-trace-4kec)
 
@@ -106,16 +106,36 @@ since reined in to the 56-tool public catalog in §1 by epic
 trade-trace-4kec. Treat the 89 → 45 language below as the historical
 reduction target, not the current runtime truth.
 
-### 1.2 Shipped reports (26 public)
+### 1.2 Shipped reports (30 public)
 
 Pinned by `SHIPPED_REPORTS` in
 `tests/security/test_mvp_boundary_audit.py`. The names below are
 authoritative; any addition must update that pin and this doc in the
 same commit. Eleven report tools were frozen behind the experimental
 tier and three were removed by epic trade-trace-4kec — see §1's frozen
-list and the cut note.
+list and the cut note — and four decision-time reports were added (§1.3).
 
-`report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_integrity`, `report.coach`, `report.compare`, `report.current_exposure`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`.
+`report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_advisory`, `report.calibration_integrity`, `report.coach`, `report.compare`, `report.current_exposure`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.mistake_tripwire`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.process_quality`, `report.resolution_misreads`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`.
+
+### 1.3 Decision-time D1–D5 tools (13, epic trade-trace-4kec build half)
+
+These reinvest the freed surface budget into the decision-time deficits the
+triage identified (see `product-ab-fork-decision.md`):
+
+- **D1 calibration**: `report.calibration_advisory` (read-at-decision-time
+  recalibration), `abstention.record`/`abstention.get`/`abstention.list`
+  (no-bet record so the denominator is not survivorship-biased),
+  `report.process_quality` (bet-size vs declared-edge Kelly-consistency,
+  outcome-independent).
+- **D2/D5 mistakes & continuity**: `report.mistake_tripwire` (fire recurring
+  mistake patterns matching a candidate decision's tags),
+  `market.find_similar` (structural/analogical recall over markets, no
+  embeddings/remote).
+- **D3/D4 independence & ground truth**: `forecast.commit_blind` /
+  `forecast.reveal_snapshot` / `forecast.independence` (prove a forecast
+  preceded the market snapshot), `forecast.interpret_resolution` /
+  `forecast.resolution_interpretation` + `report.resolution_misreads`
+  (resolution-criteria reading vs actual source → contract-misread class).
 
 ---
 
@@ -451,7 +471,7 @@ update those pins and docs together.
 PYTHONPATH=src python -c \
   "from trade_trace.core import default_registry; \
    print(len(default_registry().public_names()))"
-# Expected: 56
+# Expected: 69
 
 # 1b. Frozen experimental Product-B surface (epic trade-trace-4kec)
 PYTHONPATH=src python -c \
