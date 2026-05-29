@@ -198,16 +198,8 @@ def test_no_credential_columns_in_schema(tmp_path):
 # -- 6. shipped v0.0.2 catalog pins -------------------
 
 SHIPPED_PUBLIC_TOOLS = {
-    "account_snapshot.get",
-    "account_snapshot.import",
-    "account_snapshot.list",
-    "account_snapshot.report",
     "decision.add",
     "export.drain",
-    "external_receipt.get",
-    "external_receipt.import",
-    "external_receipt.list",
-    "external_receipt.report",
     "forecast.add",
     "forecast.anchor_to_snapshot",
     "import.commit",
@@ -225,13 +217,8 @@ SHIPPED_PUBLIC_TOOLS = {
     "memory.reflect",
     "memory.retain",
     "outcome.fetch",
-    "paper_fill.get",
-    "paper_fill.list",
-    "paper_fill.record",
     "playbook.record_adherence",
     "playbook.upsert",
-    "reconciliation.get",
-    "reconciliation.record",
     "replay_artifact.get",
     "replay_artifact.list",
     "replay_artifact.record",
@@ -267,7 +254,6 @@ SHIPPED_REPORTS = {
     "report.watchlist",
     "report.unscored_forecasts",
     "report.decision_velocity",
-    "report.execution_quality",
     "report.playbook_adherence",
     "report.policy_candidates",
     "report.coach",
@@ -279,10 +265,7 @@ SHIPPED_REPORTS = {
     "report.lifecycle",
     "report.work_queue",
     "report.open_positions",
-    "report.operational_health",
-    "report.paper_exposure",
     "report.recall_receipts",
-    "report.reconciliation_mismatches",
     "report.memory_usefulness",
     "report.strategy_health",
 }
@@ -394,6 +377,46 @@ def test_frozen_autonomous_ops_cluster_is_experimental_but_dispatchable():
     )
     assert EXPERIMENTAL_AUTONOMOUS_OPS.issubset(set(_all_dispatchable_tool_names()))
     for tool in EXPERIMENTAL_AUTONOMOUS_OPS:
+        assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
+
+
+EXPERIMENTAL_RECONCILIATION = {
+    "paper_fill.record",
+    "paper_fill.get",
+    "paper_fill.list",
+    "report.paper_exposure",
+    "external_receipt.import",
+    "external_receipt.get",
+    "external_receipt.list",
+    "external_receipt.report",
+    "account_snapshot.import",
+    "account_snapshot.get",
+    "account_snapshot.list",
+    "account_snapshot.report",
+    "reconciliation.record",
+    "reconciliation.get",
+    "report.reconciliation_mismatches",
+    "report.execution_quality",
+    "report.operational_health",
+}
+
+
+def test_frozen_reconciliation_cluster_is_experimental_but_dispatchable():
+    """Epic trade-trace-4kec.4: the reconciliation/execution-truth cluster is
+    frozen behind the experimental tier — hidden from the default catalog,
+    surfaced only under explicit opt-in, still dispatchable."""
+
+    registry = default_registry()
+    public = set(registry.public_names())
+    assert EXPERIMENTAL_RECONCILIATION.isdisjoint(public)
+    assert EXPERIMENTAL_RECONCILIATION.isdisjoint(
+        set(registry.public_names(include_legacy=True))
+    )
+    assert EXPERIMENTAL_RECONCILIATION.issubset(
+        set(registry.public_names(include_experimental=True))
+    )
+    assert EXPERIMENTAL_RECONCILIATION.issubset(set(_all_dispatchable_tool_names()))
+    for tool in EXPERIMENTAL_RECONCILIATION:
         assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
 
 

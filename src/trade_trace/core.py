@@ -193,7 +193,29 @@ EXPERIMENTAL_AUTONOMOUS_OPS: frozenset[str] = frozenset({
     "autonomous_incident.report",
 })
 
-EXPERIMENTAL_FROZEN_TOOLS: frozenset[str] = EXPERIMENTAL_AUTONOMOUS_OPS
+EXPERIMENTAL_RECONCILIATION: frozenset[str] = frozenset({
+    "paper_fill.record",
+    "paper_fill.get",
+    "paper_fill.list",
+    "report.paper_exposure",
+    "external_receipt.import",
+    "external_receipt.get",
+    "external_receipt.list",
+    "external_receipt.report",
+    "account_snapshot.import",
+    "account_snapshot.get",
+    "account_snapshot.list",
+    "account_snapshot.report",
+    "reconciliation.record",
+    "reconciliation.get",
+    "report.reconciliation_mismatches",
+    "report.execution_quality",
+    "report.operational_health",
+})
+
+EXPERIMENTAL_FROZEN_TOOLS: frozenset[str] = (
+    EXPERIMENTAL_AUTONOMOUS_OPS | EXPERIMENTAL_RECONCILIATION
+)
 
 
 def _apply_experimental_freeze(registry: ToolRegistry) -> None:
