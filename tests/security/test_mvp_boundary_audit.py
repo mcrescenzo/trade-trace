@@ -217,6 +217,7 @@ SHIPPED_PUBLIC_TOOLS = {
     "journal.schema",
     "journal.status",
     "market.bind",
+    "market.find_similar",
     "market.refresh",
     "memory.link",
     "memory.recall",

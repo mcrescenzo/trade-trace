@@ -774,6 +774,14 @@
       ],
       "category": "resolution_interpretation_keys",
       "reason": "report.resolution_misreads (trade-trace-4kec.12) joins interpretations to markets/outcomes by instrument_id to classify contract misreads; current schema column."
+    },
+    {
+      "pattern": "src/trade_trace/tools/market_similarity.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "market_similarity_keys",
+      "reason": "market.find_similar (trade-trace-4kec.13) keys structural similarity off the reference instrument_id and snapshots.instrument_id; current schema columns, not legacy aliases."
     }
   ]
 }
