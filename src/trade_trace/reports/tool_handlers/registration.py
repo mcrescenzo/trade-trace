@@ -17,7 +17,7 @@ from .audit_quality import _report_audit_readiness, _report_playbook_adherence, 
 from .calibration_diagnostics import (
     _report_calibration, _report_calibration_advisory,
     _report_calibration_anchored, _report_calibration_integrity,
-    _report_calibration_terminal, _report_mistake_tripwire,
+    _report_calibration_terminal, _report_mistake_tripwire, _report_process_quality,
     _report_market_lifecycle, _report_resolution_quality,
     _report_time_decay_sharpening, _report_decision_velocity,
     _report_forecast_diagnostics, _report_unscored_forecasts,
@@ -389,6 +389,21 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         ),
         example_minimal={"tags": ["chased_momentum"]},
         json_schema=_REPORT_SCHEMAS["report.mistake_tripwire"],
+    ),
+    ReportToolRegistration(
+        "report.process_quality",
+        _report_process_quality,
+        description=(
+            "Score declared bet SIZE against declared EDGE (Kelly-consistency) "
+            "and direction over sized entry decisions, computed WITHOUT consulting "
+            "any resolution/outcome — process quality, not outcome quality, so the "
+            "agent does not learn the wrong lesson from variance. Per-decision "
+            "stated_edge/kelly_fraction/direction_consistent; summary "
+            "kelly_alignment and direction_consistency_rate. Deterministic, no "
+            "trade advice."
+        ),
+        example_minimal={},
+        json_schema=_REPORT_SCHEMAS["report.process_quality"],
     ),
     ReportToolRegistration(
         "report.strengths",

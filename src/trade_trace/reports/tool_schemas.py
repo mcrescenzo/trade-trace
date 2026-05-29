@@ -151,6 +151,13 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "optional ReportFilter and low-N threshold (default 20)."
         ),
     ),
+    "report.process_quality": _schema(
+        {
+            "instrument_id": {"type": "string", "description": "Optional: scope to one instrument."},
+            "min_sample": {"type": "integer", "minimum": 1},
+        },
+        description="Bet-sizing vs declared-edge (Kelly-consistency) process score, independent of outcome.",
+    ),
     "report.mistake_tripwire": _schema(
         {
             "tags": {"type": "array", "items": {"type": "string"}, "description": "Candidate decision tag fingerprint to check against recurring-mistake patterns."},

@@ -749,6 +749,14 @@
       ],
       "category": "mistake_tripwire_fingerprint_keys",
       "reason": "the report.mistake_tripwire handler forwards an optional instrument_id scope (trade-trace-4kec.10); current schema column, not a legacy alias."
+    },
+    {
+      "pattern": "src/trade_trace/reports/process_quality.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "process_quality_scope_key",
+      "reason": "report.process_quality (trade-trace-4kec.11) optionally scopes bet-sizing process scoring to one instrument_id; current schema column, not a legacy alias."
     }
   ]
 }

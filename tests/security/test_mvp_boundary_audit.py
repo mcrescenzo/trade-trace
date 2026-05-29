@@ -249,6 +249,7 @@ SHIPPED_REPORTS = {
     "report.mistake_tripwire",
     "report.strengths",
     "report.process_analytics",
+    "report.process_quality",
     "report.pnl",
     "report.risk",
     "report.opportunity",

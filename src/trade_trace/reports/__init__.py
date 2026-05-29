@@ -53,6 +53,7 @@ from trade_trace.reports.pm_native import (
 from trade_trace.reports.pnl import report_pnl
 from trade_trace.reports.policy_candidates import report_policy_candidates
 from trade_trace.reports.process_analytics import report_process_analytics
+from trade_trace.reports.process_quality import report_process_quality
 from trade_trace.reports.recall_receipts import report_recall_receipts
 from trade_trace.reports.replay import export_case_bundle
 from trade_trace.reports.replay_evaluate import evaluate_output
@@ -117,6 +118,7 @@ __all__ = [
     "report_opportunity",
     "report_pnl",
     "report_process_analytics",
+    "report_process_quality",
     "report_recall_receipts",
     "report_playbook_adherence",
     "report_policy_candidates",
