@@ -38,6 +38,7 @@ from trade_trace.reports import (
     report_forecast_diagnostics,
     report_lifecycle,
     report_memory_usefulness,
+    report_mistake_tripwire,
     report_mistakes,
     report_opportunity,
     report_playbook_adherence,

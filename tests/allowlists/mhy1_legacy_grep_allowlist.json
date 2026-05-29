@@ -732,6 +732,23 @@
       ],
       "category": "abstention_record_first_class_keys",
       "reason": "abstention.record/get/list reference instrument_id and thesis_id as first-class foreign keys to the market and (optional) thesis the agent considered and passed (trade-trace-4kec.8); these are current schema columns, not legacy aliases."
+    },
+    {
+      "pattern": "src/trade_trace/reports/tag_aggregates.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "mistake_tripwire_fingerprint_keys",
+      "reason": "report.mistake_tripwire (trade-trace-4kec.10) joins theses/forecasts and optionally scopes by instrument_id to fingerprint a candidate decision against recurring-mistake tags; these are current schema columns, not legacy aliases."
+    },
+    {
+      "pattern": "src/trade_trace/reports/tool_handlers/calibration_diagnostics.py",
+      "terms": [
+        "instrument_id"
+      ],
+      "category": "mistake_tripwire_fingerprint_keys",
+      "reason": "the report.mistake_tripwire handler forwards an optional instrument_id scope (trade-trace-4kec.10); current schema column, not a legacy alias."
     }
   ]
 }

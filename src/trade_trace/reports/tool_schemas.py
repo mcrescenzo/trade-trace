@@ -151,6 +151,16 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "optional ReportFilter and low-N threshold (default 20)."
         ),
     ),
+    "report.mistake_tripwire": _schema(
+        {
+            "tags": {"type": "array", "items": {"type": "string"}, "description": "Candidate decision tag fingerprint to check against recurring-mistake patterns."},
+            "instrument_id": {"type": "string", "description": "Optional: scope prior mistakes to one instrument."},
+            "min_sample": {"type": "integer", "minimum": 1},
+            "brier_threshold": {"type": "number", "minimum": 0, "maximum": 2},
+        },
+        required=["tags"],
+        description="Fire recurring-mistake patterns matching a candidate decision's tag fingerprint; deterministic, no trade advice.",
+    ),
     "report.market_lifecycle": _schema(
         {"filter": _FILTER_PROP},
         description="Local market lifecycle timing and engagement counts over caller-recorded market rows.",

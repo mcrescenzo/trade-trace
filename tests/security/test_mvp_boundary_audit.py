@@ -246,6 +246,7 @@ SHIPPED_REPORTS = {
     "report.source_quality",
     "report.audit_readiness",
     "report.mistakes",
+    "report.mistake_tripwire",
     "report.strengths",
     "report.process_analytics",
     "report.pnl",

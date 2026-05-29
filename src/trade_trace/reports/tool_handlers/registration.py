@@ -17,7 +17,7 @@ from .audit_quality import _report_audit_readiness, _report_playbook_adherence, 
 from .calibration_diagnostics import (
     _report_calibration, _report_calibration_advisory,
     _report_calibration_anchored, _report_calibration_integrity,
-    _report_calibration_terminal,
+    _report_calibration_terminal, _report_mistake_tripwire,
     _report_market_lifecycle, _report_resolution_quality,
     _report_time_decay_sharpening, _report_decision_velocity,
     _report_forecast_diagnostics, _report_unscored_forecasts,
@@ -375,6 +375,20 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
             "decision_count, scored_forecast_count, mean_brier."
         ),
         json_schema=_REPORT_SCHEMAS["report.mistakes"]
+    ),
+    ReportToolRegistration(
+        "report.mistake_tripwire",
+        _report_mistake_tripwire,
+        description=(
+            "Decision-time recurring-mistake trip-wire: given the tag fingerprint "
+            "of a decision you are about to make, fire — without an explicit recall "
+            "query — the candidate tags that match your own poorly-calibrated "
+            "patterns (mean Brier >= threshold over >= min_sample scored "
+            "forecasts), with the prior failing decisions/forecasts. Read-only, "
+            "deterministic, no trade advice."
+        ),
+        example_minimal={"tags": ["chased_momentum"]},
+        json_schema=_REPORT_SCHEMAS["report.mistake_tripwire"],
     ),
     ReportToolRegistration(
         "report.strengths",

@@ -23,6 +23,7 @@ from .common import (
     report_filter_validation_to_tool_error,
     report_forecast_diagnostics,
     report_market_lifecycle,
+    report_mistake_tripwire,
     report_resolution_quality,
     report_time_decay_sharpening,
     report_unscored_forecasts,
@@ -86,6 +87,32 @@ def _report_calibration_advisory(args: dict[str, Any], ctx: ToolContext) -> dict
                 ErrorCode.VALIDATION_ERROR,
                 str(exc),
                 details={"field": "probability"},
+            ) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_mistake_tripwire(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.mistake_tripwire` — decision-time recurring-mistake trip-wire
+    (trade-trace-4kec.10)."""
+
+    db = open_db_for_args(args)
+    try:
+        try:
+            min_sample = args.get("min_sample")
+            brier_threshold = args.get("brier_threshold")
+            data = report_mistake_tripwire(
+                db.connection,
+                tags=args.get("tags") or [],
+                instrument_id=args.get("instrument_id"),
+                min_sample=int(min_sample) if min_sample is not None else 10,
+                brier_threshold=float(brier_threshold) if brier_threshold is not None else 0.25,
+            )
+        except (ValueError, TypeError) as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR, str(exc), details={"field": "tags"}
             ) from exc
     finally:
         db.close()

@@ -65,7 +65,11 @@ from trade_trace.reports.strategy_health import (
     DEFAULT_HEALTH_MIN_SAMPLE,
     report_strategy_health,
 )
-from trade_trace.reports.tag_aggregates import report_mistakes, report_strengths
+from trade_trace.reports.tag_aggregates import (
+    report_mistake_tripwire,
+    report_mistakes,
+    report_strengths,
+)
 from trade_trace.reports.unscored import report_unscored_forecasts
 from trade_trace.reports.watchlist import report_watchlist
 from trade_trace.reports.work_queue import agent_next_actions, report_work_queue
@@ -109,6 +113,7 @@ __all__ = [
     "report_decision_velocity",
     "report_forecast_diagnostics",
     "report_mistakes",
+    "report_mistake_tripwire",
     "report_opportunity",
     "report_pnl",
     "report_process_analytics",
