@@ -213,8 +213,27 @@ EXPERIMENTAL_RECONCILIATION: frozenset[str] = frozenset({
     "report.operational_health",
 })
 
+# Anchored-calibration unit (standalone anchor writer + its sole readers) plus
+# speculative viewers that re-read already-written rows or expose unpopulated
+# downstream-use signals. If the anchored flow is revived, the anchor write
+# should fold into forecast.add (see trade-trace-4kec.9).
+EXPERIMENTAL_ANCHORED_VIEWERS: frozenset[str] = frozenset({
+    "forecast.anchor_to_snapshot",
+    "report.calibration_anchored",
+    "report.calibration_terminal",
+    "snapshot.fetch_series",
+    "report.decision_velocity",
+    "report.memory_usefulness",
+    "report.recall_receipts",
+    "report.market_lifecycle",
+    "report.resolution_quality",
+    "journal.restore",
+})
+
 EXPERIMENTAL_FROZEN_TOOLS: frozenset[str] = (
-    EXPERIMENTAL_AUTONOMOUS_OPS | EXPERIMENTAL_RECONCILIATION
+    EXPERIMENTAL_AUTONOMOUS_OPS
+    | EXPERIMENTAL_RECONCILIATION
+    | EXPERIMENTAL_ANCHORED_VIEWERS
 )
 
 

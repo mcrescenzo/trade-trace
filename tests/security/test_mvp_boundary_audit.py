@@ -201,13 +201,11 @@ SHIPPED_PUBLIC_TOOLS = {
     "decision.add",
     "export.drain",
     "forecast.add",
-    "forecast.anchor_to_snapshot",
     "import.commit",
     "journal.backup",
     "journal.config_set",
     "journal.fixture_seed",
     "journal.init",
-    "journal.restore",
     "journal.schema",
     "journal.status",
     "market.bind",
@@ -228,7 +226,6 @@ SHIPPED_PUBLIC_TOOLS = {
     "review.bundle",
     "snapshot.add",
     "snapshot.fetch",
-    "snapshot.fetch_series",
     "strategy.upsert",
     "tool.schema",
 }
@@ -237,11 +234,7 @@ SHIPPED_PUBLIC_TOOLS = {
 SHIPPED_REPORTS = {
     "report.bootstrap",
     "report.calibration",
-    "report.calibration_anchored",
     "report.calibration_integrity",
-    "report.calibration_terminal",
-    "report.market_lifecycle",
-    "report.resolution_quality",
     "report.time_decay_sharpening",
     "report.source_quality",
     "report.audit_readiness",
@@ -253,7 +246,6 @@ SHIPPED_REPORTS = {
     "report.opportunity",
     "report.watchlist",
     "report.unscored_forecasts",
-    "report.decision_velocity",
     "report.playbook_adherence",
     "report.policy_candidates",
     "report.coach",
@@ -265,8 +257,6 @@ SHIPPED_REPORTS = {
     "report.lifecycle",
     "report.work_queue",
     "report.open_positions",
-    "report.recall_receipts",
-    "report.memory_usefulness",
     "report.strategy_health",
 }
 
@@ -417,6 +407,39 @@ def test_frozen_reconciliation_cluster_is_experimental_but_dispatchable():
     )
     assert EXPERIMENTAL_RECONCILIATION.issubset(set(_all_dispatchable_tool_names()))
     for tool in EXPERIMENTAL_RECONCILIATION:
+        assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
+
+
+EXPERIMENTAL_ANCHORED_VIEWERS = {
+    "forecast.anchor_to_snapshot",
+    "report.calibration_anchored",
+    "report.calibration_terminal",
+    "snapshot.fetch_series",
+    "report.decision_velocity",
+    "report.memory_usefulness",
+    "report.recall_receipts",
+    "report.market_lifecycle",
+    "report.resolution_quality",
+    "journal.restore",
+}
+
+
+def test_frozen_anchored_viewers_cluster_is_experimental_but_dispatchable():
+    """Epic trade-trace-4kec.5: the anchored-calibration unit and speculative
+    viewers are frozen behind the experimental tier — hidden from the default
+    catalog, surfaced only under explicit opt-in, still dispatchable."""
+
+    registry = default_registry()
+    public = set(registry.public_names())
+    assert EXPERIMENTAL_ANCHORED_VIEWERS.isdisjoint(public)
+    assert EXPERIMENTAL_ANCHORED_VIEWERS.isdisjoint(
+        set(registry.public_names(include_legacy=True))
+    )
+    assert EXPERIMENTAL_ANCHORED_VIEWERS.issubset(
+        set(registry.public_names(include_experimental=True))
+    )
+    assert EXPERIMENTAL_ANCHORED_VIEWERS.issubset(set(_all_dispatchable_tool_names()))
+    for tool in EXPERIMENTAL_ANCHORED_VIEWERS:
         assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
 
 

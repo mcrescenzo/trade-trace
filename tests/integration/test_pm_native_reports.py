@@ -79,12 +79,14 @@ def _seed_scored_forecast(home: Path, market_id: str, *, probability: float = 0.
 
 
 def test_pm_native_report_tools_registered():
-    names = set(default_registry().public_names())
-    assert {
-        "report.market_lifecycle",
-        "report.resolution_quality",
-        "report.time_decay_sharpening",
-    }.issubset(names)
+    registry = default_registry()
+    public = set(registry.public_names())
+    assert "report.time_decay_sharpening" in public
+    # market_lifecycle / resolution_quality are frozen experimental
+    # (trade-trace-4kec.5): hidden from the default catalog but dispatchable.
+    experimental = set(registry.public_names(include_experimental=True))
+    assert {"report.market_lifecycle", "report.resolution_quality"}.issubset(experimental)
+    assert {"report.market_lifecycle", "report.resolution_quality"}.isdisjoint(public)
 
 
 def test_market_lifecycle_reports_state_durations(home: Path):
