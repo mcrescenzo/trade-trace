@@ -1,14 +1,16 @@
 # v0.0.2 PM-pivot tool/report catalog reconciliation
 
-> Status: **shipped** as of 2026-05-25. The pivot has landed: the current default public registry exposes **65** tools, generated from `build_registry().public_names()`. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
+> Status: **shipped** as of 2026-05-25; scope reined in 2026-05-29 (epic trade-trace-4kec). The default public registry now exposes **56** tools, generated from `build_registry().public_names()`. A further **40** Product-B tools are frozen behind the experimental tier (`public_names(include_experimental=True)`; see §4.6) and **3** redundant report tools were removed — the 99-tool catalog reconciles as KEEP 56 / FREEZE 40 / CUT 3. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
 
 ## Why this exists
 
 `next-steps.md` declared three different tool-count baselines —
 **81**, **84**, and **45** target — across Parts I, II, and XV.
 This document originally reconciled those planning numbers against the
-then-current 89-tool registry. The pivot has since landed; the runtime
-registry now reports **65 public tools** in the default catalog.
+then-current 89-tool registry. The pivot has since landed and the scope
+was reined in by epic trade-trace-4kec; the runtime registry now reports
+**56 public tools** in the default catalog, with 40 Product-B tools frozen
+behind the experimental tier.
 
 This doc pins the **authoritative runtime baseline** (Section 1),
 keeps the old-tool disposition table as historical implementation
@@ -25,9 +27,23 @@ authoritative source the v0.0.2 implementation beads cite.
 
 ## 1. Current runtime baseline (2026-05-25)
 
-Generated from `build_registry().public_names()` for the default public catalog: 65 tools.
+Generated from `build_registry().public_names()` for the default public catalog: 56 tools.
 
-`decision.add`, `export.drain`, `forecast.add`, `forecast.anchor_to_snapshot`, `import.commit`, `journal.backup`, `journal.config_set`, `journal.fixture_seed`, `journal.init`, `journal.restore`, `journal.schema`, `journal.status`, `market.bind`, `market.refresh`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `playbook.record_adherence`, `playbook.upsert`, `replay.case_bundle`, `replay.evaluate_output`, `report.amm_slippage`, `report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_anchored`, `report.calibration_integrity`, `report.calibration_terminal`, `report.calibration_trajectory`, `report.coach`, `report.compare`, `report.current_exposure`, `report.decision_velocity`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.market_lifecycle`, `report.memory_usefulness`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.recall_receipts`, `report.resolution_quality`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strategy_performance`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `snapshot.add`, `snapshot.fetch`, `snapshot.fetch_series`, `strategy.upsert`, `tool.schema`.
+`decision.add`, `export.drain`, `forecast.add`, `import.commit`, `journal.backup`, `journal.config_set`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.refresh`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `playbook.record_adherence`, `playbook.upsert`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_integrity`, `report.coach`, `report.compare`, `report.current_exposure`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `snapshot.add`, `snapshot.fetch`, `strategy.upsert`, `tool.schema`.
+
+### Frozen Product-B surface (experimental tier, epic trade-trace-4kec)
+
+40 tools are registered and dispatchable but hidden from the default catalog
+behind the experimental tier (`public_names(include_experimental=True)` /
+`MCP_INCLUDE_EXPERIMENTAL=1`; see §4.6). They are the autonomous-ops cluster,
+the reconciliation/execution-truth cluster, and the anchored-calibration unit
+plus speculative viewers:
+
+`account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `approval.get`, `approval.list`, `approval.record`, `approval.report`, `autonomous_incident.record`, `autonomous_incident.report`, `autonomous_run.get`, `autonomous_run.record`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.anchor_to_snapshot`, `journal.restore`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `report.calibration_anchored`, `report.calibration_terminal`, `report.decision_velocity`, `report.execution_quality`, `report.market_lifecycle`, `report.memory_usefulness`, `report.operational_health`, `report.paper_exposure`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.resolution_quality`, `risk.check_record`, `risk.policy_version_add`, `snapshot.fetch_series`.
+
+The 3 removed redundant report tools (`report.calibration_trajectory`,
+`report.strategy_performance`, `report.amm_slippage`) are gone from the
+registry entirely, not frozen.
 
 Renamed public tools expose `legacy_name` metadata: `resolution.add` has legacy `outcome.add`, `playbook.record_adherence` has legacy `decision.record_adherence`, `playbook.upsert` has legacy `playbook.create`, and `strategy.upsert` has legacy `strategy.create`. `tool.schema` and MCP tool metadata also provide removed-tool/deprecation hints for legacy callers.
 
@@ -85,18 +101,21 @@ correct for that moment but missed:
   audit snapshot.
 
 The "84" number in next-steps.md was therefore stale during planning;
-the implementation ultimately landed with the 65-tool public catalog in
-§1. Treat the 89 → 45 language below as the historical reduction target,
-not the current runtime truth.
+the implementation ultimately landed with the 65-tool public catalog,
+since reined in to the 56-tool public catalog in §1 by epic
+trade-trace-4kec. Treat the 89 → 45 language below as the historical
+reduction target, not the current runtime truth.
 
-### 1.2 Shipped reports (35)
+### 1.2 Shipped reports (26 public)
 
 Pinned by `SHIPPED_REPORTS` in
 `tests/security/test_mvp_boundary_audit.py`. The names below are
 authoritative; any addition must update that pin and this doc in the
-same commit.
+same commit. Eleven report tools were frozen behind the experimental
+tier and three were removed by epic trade-trace-4kec — see §1's frozen
+list and the cut note.
 
-`report.amm_slippage`, `report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_anchored`, `report.calibration_integrity`, `report.calibration_terminal`, `report.calibration_trajectory`, `report.coach`, `report.compare`, `report.current_exposure`, `report.decision_velocity`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.market_lifecycle`, `report.memory_usefulness`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.recall_receipts`, `report.resolution_quality`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strategy_performance`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`.
+`report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_integrity`, `report.coach`, `report.compare`, `report.current_exposure`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`.
 
 ---
 
@@ -432,16 +451,25 @@ update those pins and docs together.
 PYTHONPATH=src python -c \
   "from trade_trace.core import default_registry; \
    print(len(default_registry().public_names()))"
-# Expected: 60
+# Expected: 56
 
-# 2. Shipped public catalog, legacy metadata, admin filtering, and reports pin
+# 1b. Frozen experimental Product-B surface (epic trade-trace-4kec)
+PYTHONPATH=src python -c \
+  "from trade_trace.core import default_registry as r; \
+   print(len(r().public_names(include_experimental=True)) - len(r().public_names()))"
+# Expected: 40
+
+# 2. Shipped public catalog, legacy metadata, admin filtering, reports pin, and freezes
 PYTHONPATH=src pytest \
   tests/security/test_mvp_boundary_audit.py::test_shipped_public_tool_catalog_is_locked \
   tests/security/test_mvp_boundary_audit.py::test_legacy_catalog_tools_are_hidden_but_metadata_explains_transition \
   tests/security/test_mvp_boundary_audit.py::test_admin_tools_are_not_in_default_catalog \
   tests/security/test_mvp_boundary_audit.py::test_shipped_report_tool_set_is_locked \
+  tests/security/test_mvp_boundary_audit.py::test_frozen_autonomous_ops_cluster_is_experimental_but_dispatchable \
+  tests/security/test_mvp_boundary_audit.py::test_frozen_reconciliation_cluster_is_experimental_but_dispatchable \
+  tests/security/test_mvp_boundary_audit.py::test_frozen_anchored_viewers_cluster_is_experimental_but_dispatchable \
   -q
-# Expected: 4 passed
+# Expected: 7 passed
 ```
 
 ---
