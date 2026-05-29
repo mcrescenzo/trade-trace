@@ -138,6 +138,19 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
         {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
         description="Optional ReportFilter and low-N warning threshold; defaults min_sample=20.",
     ),
+    "report.calibration_advisory": _schema(
+        {
+            "probability": {"type": "number", "minimum": 0, "maximum": 1},
+            "filter": _FILTER_PROP,
+            "min_sample": {"type": "integer", "minimum": 1},
+        },
+        required=["probability"],
+        description=(
+            "Candidate YES probability (required, in [0,1]) to recalibrate "
+            "against the caller's own prior resolved forecasts in that band; "
+            "optional ReportFilter and low-N threshold (default 20)."
+        ),
+    ),
     "report.market_lifecycle": _schema(
         {"filter": _FILTER_PROP},
         description="Local market lifecycle timing and engagement counts over caller-recorded market rows.",

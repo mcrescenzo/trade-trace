@@ -25,6 +25,7 @@ from trade_trace.reports import (
     export_case_bundle,
     report_audit_readiness,
     report_calibration,
+    report_calibration_advisory,
     report_calibration_anchored,
     report_calibration_integrity,
     report_calibration_terminal,

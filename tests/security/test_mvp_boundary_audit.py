@@ -234,6 +234,7 @@ SHIPPED_PUBLIC_TOOLS = {
 SHIPPED_REPORTS = {
     "report.bootstrap",
     "report.calibration",
+    "report.calibration_advisory",
     "report.calibration_integrity",
     "report.time_decay_sharpening",
     "report.source_quality",

@@ -19,6 +19,7 @@ from trade_trace.reports.calibration import (
     DEFAULT_BIN_POLICY,
     DEFAULT_MIN_SAMPLE,
     report_calibration,
+    report_calibration_advisory,
     report_calibration_anchored,
     report_calibration_terminal,
 )
@@ -95,6 +96,7 @@ __all__ = [
     "evaluate_output",
     "liquidity_bucket",
     "report_calibration",
+    "report_calibration_advisory",
     "report_calibration_anchored",
     "report_calibration_terminal",
     "report_calibration_integrity",

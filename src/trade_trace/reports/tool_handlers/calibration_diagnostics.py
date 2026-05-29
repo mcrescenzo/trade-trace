@@ -15,6 +15,7 @@ from .common import (
     _propagate_report_meta,
     _unsupported_filter_to_tool_error,
     open_db_for_args,
+    report_calibration_advisory,
     report_calibration_anchored,
     report_calibration_integrity,
     report_calibration_terminal,
@@ -56,6 +57,36 @@ def _report_calibration(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         # Embed integrity diagnostics in the panel so the panel can never
         # be read without the denominator/hygiene context.
         data["integrity_diagnostics"] = report_calibration_integrity(db.connection)
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_calibration_advisory(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.calibration_advisory` — decision-time recalibration for a
+    candidate forecast probability (trade-trace-4kec.7)."""
+
+    db = open_db_for_args(args)
+    try:
+        try:
+            min_sample = args.get("min_sample")
+            data = report_calibration_advisory(
+                db.connection,
+                probability=args.get("probability"),
+                raw_filter=args.get("filter"),
+                min_sample=int(min_sample) if min_sample is not None else 20,
+            )
+        except ValidationError as exc:
+            raise report_filter_validation_to_tool_error(exc) from exc
+        except UnsupportedFilterError as exc:
+            raise _unsupported_filter_to_tool_error(exc) from exc
+        except (ValueError, TypeError) as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                str(exc),
+                details={"field": "probability"},
+            ) from exc
     finally:
         db.close()
     _propagate_report_meta(ctx, data)

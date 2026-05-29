@@ -15,7 +15,8 @@ from trade_trace.reports.tool_schemas import _REPORT_SCHEMAS
 
 from .audit_quality import _report_audit_readiness, _report_playbook_adherence, _report_source_quality
 from .calibration_diagnostics import (
-    _report_calibration, _report_calibration_anchored, _report_calibration_integrity,
+    _report_calibration, _report_calibration_advisory,
+    _report_calibration_anchored, _report_calibration_integrity,
     _report_calibration_terminal,
     _report_market_lifecycle, _report_resolution_quality,
     _report_time_decay_sharpening, _report_decision_velocity,
@@ -222,6 +223,21 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
             "report.calibration_integrity under data.integrity_diagnostics."
         ),
         json_schema=_REPORT_SCHEMAS["report.calibration"]
+    ),
+    ReportToolRegistration(
+        "report.calibration_advisory",
+        _report_calibration_advisory,
+        description=(
+            "Decision-time recalibration for a candidate forecast probability: "
+            "given the YES probability you are about to commit, returns your own "
+            "prior resolved forecasts in that equal-width 0.1 band, their "
+            "observed resolution rate, and a calibration-derived "
+            "suggested_probability (band gap = observed_frequency - "
+            "mean_probability). Read-only, deterministic, no trade advice. "
+            "Excludes late-recorded forecasts by default per dogfood-protocol §2.2."
+        ),
+        example_minimal={"probability": 0.7, "filter": {}},
+        json_schema=_REPORT_SCHEMAS["report.calibration_advisory"],
     ),
     ReportToolRegistration(
         "report.calibration_anchored",

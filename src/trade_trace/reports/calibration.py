@@ -156,6 +156,161 @@ def report_calibration_terminal(
     return _market_baseline_report(conn, raw_filter=raw_filter, min_sample=min_sample, mode="terminal")
 
 
+ADVISORY_REPORT_NAME = "report.calibration_advisory"
+"""Forward-facing, decision-time recalibration surface (trade-trace-4kec.7).
+
+Unlike the backward-facing `report.calibration*` panels, this answers a
+prospective question: "given a forecast I am about to commit at probability p,
+how did my past forecasts in this band actually resolve, and what calibration
+adjustment does that imply?" It is read-only, deterministic, and emits no trade
+advice — only the caller's own historical resolution rate and the
+calibration-derived recalibration of the candidate probability."""
+
+
+def _band_for_probability(probability: float) -> dict[str, Any]:
+    """Equal-width 0.1 band the candidate probability falls into, matching the
+    `equal_width_0.1` reliability-bin assignment in `_ece_and_bins`
+    (lower edge belongs to the upper bin; the top band is closed on the right)."""
+
+    idx = min(int(probability * 10), 9)
+    lower = idx / 10.0
+    upper = (idx + 1) / 10.0
+    return {
+        "bin_index": idx,
+        "lower": lower,
+        "upper": upper,
+        "bin_midpoint": (lower + upper) / 2.0,
+    }
+
+
+def report_calibration_advisory(
+    conn: sqlite3.Connection,
+    *,
+    probability: Any,
+    raw_filter: dict[str, Any] | None = None,
+    min_sample: int = DEFAULT_MIN_SAMPLE,
+) -> dict[str, Any]:
+    """Decision-time recalibration for a candidate forecast probability.
+
+    Returns the caller's historical resolution rate for the equal-width 0.1
+    band the candidate falls into, plus a calibration-derived adjustment hint
+    (`observed_frequency - mean_probability` in that band) and the resulting
+    `suggested_probability`. Deterministic and read-only; no trade advice."""
+
+    if not isinstance(probability, (int, float)) or isinstance(probability, bool):
+        raise ValueError("probability must be a number in [0, 1]")
+    if not (0.0 <= float(probability) <= 1.0):
+        raise ValueError("probability must be in [0, 1]")
+    probability = float(probability)
+
+    rf = ReportFilter.model_validate(raw_filter or {})
+    enforce_supported_filter(rf, report=ADVISORY_REPORT_NAME)
+    rows = _load_scored_rows(conn, rf)
+    if rf.outcome.include_late_recorded:
+        excluded_late = 0
+    else:
+        excluded_late = sum(1 for r in rows if r.late_recorded)
+        rows = [r for r in rows if not r.late_recorded]
+
+    band = _band_for_probability(probability)
+    band_rows = [r for r in rows if min(int(r.p_yes * 10), 9) == band["bin_index"]]
+
+    sample_size = len(band_rows)
+    caveats: list[str] = [
+        "Recalibration is derived only from the caller's own past resolved "
+        "forecasts in this probability band; it is not trade advice, a signal, "
+        "or an edge/profit claim.",
+    ]
+    if excluded_late > 0:
+        caveats.append(
+            f"excluded {excluded_late} late-recorded forecast(s) per "
+            "dogfood-protocol.md §2.2; pass outcome.include_late_recorded=true to include."
+        )
+
+    observed_frequency: float | None
+    mean_probability: float | None
+    calibration_gap: float | None
+    suggested_probability: float | None
+    sample_warning: str | None
+    if sample_size == 0:
+        observed_frequency = None
+        mean_probability = None
+        calibration_gap = None
+        suggested_probability = None
+        sample_warning = (
+            f"no prior resolved forecasts in band {band['lower']}–{band['upper']}; "
+            "no calibration adjustment available"
+        )
+    else:
+        observed_frequency = sum(r.y for r in band_rows) / sample_size
+        mean_probability = sum(r.p_yes for r in band_rows) / sample_size
+        calibration_gap = observed_frequency - mean_probability
+        suggested_probability = min(1.0, max(0.0, probability + calibration_gap))
+        sample_warning = (
+            f"only {sample_size} prior forecast(s) in this band; recalibration "
+            f"is unreliable below {min_sample}"
+            if sample_size < min_sample
+            else None
+        )
+
+    summary = {
+        "probability": probability,
+        "band": band,
+        "sample_size": sample_size,
+        "observed_frequency": (
+            round(observed_frequency, 6) if observed_frequency is not None else None
+        ),
+        "mean_probability": (
+            round(mean_probability, 6) if mean_probability is not None else None
+        ),
+        "calibration_gap": (
+            round(calibration_gap, 6) if calibration_gap is not None else None
+        ),
+        "suggested_probability": (
+            round(suggested_probability, 6) if suggested_probability is not None else None
+        ),
+        "suggested_adjustment": (
+            round(calibration_gap, 6) if calibration_gap is not None else None
+        ),
+        "filter": applied_filter_view(rf, report=ADVISORY_REPORT_NAME),
+        "sample_warning": sample_warning,
+        "caveats": caveats,
+        "late_recorded_excluded": excluded_late,
+    }
+    record_ids = {
+        "forecasts": sorted({r.forecast_id for r in band_rows}),
+        "forecast_scores": sorted({r.score_id for r in band_rows}),
+        "outcomes": sorted({r.outcome_id for r in band_rows}),
+    }
+    groups = [
+        {
+            "key": f"band_{band['bin_index']}",
+            "label": (
+                f"Prior resolved forecasts in probability band "
+                f"{band['lower']}–{band['upper']}"
+            ),
+            "metrics": {
+                "sample_size": sample_size,
+                "observed_frequency": summary["observed_frequency"],
+                "mean_probability": summary["mean_probability"],
+                "calibration_gap": summary["calibration_gap"],
+                "suggested_probability": summary["suggested_probability"],
+            },
+            "filter": applied_filter_view(rf, report=ADVISORY_REPORT_NAME),
+            "record_ids": record_ids,
+            "examples": _build_examples(conn, band_rows, max_examples=3),
+            "sample_size": sample_size,
+            "sample_warning": sample_warning,
+            "truncated": False,
+        }
+    ]
+    return standard_report_result(
+        summary=summary,
+        groups=groups,
+        extra={"bin_policy": "equal_width_0.1"},
+    )
+
+
 def _market_baseline_report(conn: sqlite3.Connection, *, raw_filter: dict[str, Any] | None, min_sample: int, mode: str) -> dict[str, Any]:
     rf = ReportFilter.model_validate(raw_filter or {})
     enforce_supported_filter(rf, report=f"report.calibration_{mode}")
