@@ -38,6 +38,7 @@ from trade_trace.tools.errors import ToolError
 from trade_trace.tools.export import register_export_tools
 from trade_trace.tools.external_receipts import register_external_receipt_tools
 from trade_trace.tools.fixture import register_fixture_tools
+from trade_trace.tools.forecast_independence import register_forecast_independence_tools
 from trade_trace.tools.ideas import register_idea_tools
 from trade_trace.tools.imports import register_import_stubs
 from trade_trace.tools.journal import register_journal_tools
@@ -261,6 +262,7 @@ def build_registry() -> ToolRegistry:
     register_external_receipt_tools(registry)
     register_export_tools(registry)
     register_fixture_tools(registry)
+    register_forecast_independence_tools(registry)
     register_idea_tools(registry)
     register_journal_tools(registry)
     register_journal_bundle_status(registry)

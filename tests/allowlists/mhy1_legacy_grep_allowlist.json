@@ -723,6 +723,15 @@
       ],
       "category": "legacy_tool_compatibility",
       "reason": "Reviewed tool compatibility/example/fixture surface intentionally deferred from destructive cleanup."
+    },
+    {
+      "pattern": "src/trade_trace/tools/abstention.py",
+      "terms": [
+        "instrument_id",
+        "thesis_id"
+      ],
+      "category": "abstention_record_first_class_keys",
+      "reason": "abstention.record/get/list reference instrument_id and thesis_id as first-class foreign keys to the market and (optional) thesis the agent considered and passed (trade-trace-4kec.8); these are current schema columns, not legacy aliases."
     }
   ]
 }
