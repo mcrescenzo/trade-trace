@@ -50,6 +50,7 @@ def mcp_tool_specs(
     *,
     include_admin: bool = False,
     include_legacy: bool = False,
+    include_experimental: bool = False,
 ) -> list[dict[str, Any]]:
     """Return the MCP tool catalog from the explicit/default registry only.
 
@@ -65,6 +66,7 @@ def mcp_tool_specs(
     for registration in reg.public_registrations(
         include_admin=include_admin,
         include_legacy=include_legacy,
+        include_experimental=include_experimental,
     ):
         metadata = registration.metadata()
         description = registration.description
@@ -200,6 +202,7 @@ def _build_stdio_server(registry: ToolRegistry | None = None):
 
     reg = registry if registry is not None else default_registry()
     include_admin = os.environ.get("MCP_INCLUDE_ADMIN") == "1"
+    include_experimental = os.environ.get("MCP_INCLUDE_EXPERIMENTAL") == "1"
     server = Server("trade-trace")
 
     @server.list_tools()
@@ -210,7 +213,11 @@ def _build_stdio_server(registry: ToolRegistry | None = None):
                 description=spec["description"],
                 inputSchema=spec["input_schema"] or {"type": "object", "properties": {}},
             )
-            for spec in mcp_tool_specs(reg, include_admin=include_admin)
+            for spec in mcp_tool_specs(
+                reg,
+                include_admin=include_admin,
+                include_experimental=include_experimental,
+            )
         ]
 
     @server.call_tool(validate_input=False)

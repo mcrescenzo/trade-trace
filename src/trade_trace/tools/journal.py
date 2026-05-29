@@ -60,6 +60,10 @@ _TOOL_SCHEMA_JSON_SCHEMA: dict[str, Any] = {
             "type": "boolean",
             "description": "Include legacy/folded tools preserved for transitional dispatch.",
         },
+        "include_experimental": {
+            "type": "boolean",
+            "description": "Include experimental/frozen tools hidden from the default catalog; they remain dispatchable.",
+        },
     },
     "required": [],
 }
@@ -287,6 +291,7 @@ def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     wanted = args.get("tool")
     include_admin = bool(args.get("include_admin"))
     include_legacy = bool(args.get("include_legacy"))
+    include_experimental = bool(args.get("include_experimental"))
     if wanted is None:
         # Per bead trade-trace-dgdq: catalog mode mirrors MCP list-tools
         # by exposing each tool's `json_schema` so agents can discover
@@ -306,6 +311,7 @@ def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 for reg in registry.public_registrations(
                     include_admin=include_admin,
                     include_legacy=include_legacy,
+                    include_experimental=include_experimental,
                 )
             ],
         }

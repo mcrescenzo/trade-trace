@@ -395,6 +395,26 @@ Admin and legacy surfaces are opt-in inspection modes; current quickstarts
 should point agents at the 60-tool public catalog and `tool.schema` for
 runtime truth.
 
+### 4.6 Experimental tier (frozen Product-B surface)
+
+`catalog_visibility="experimental"` is a distinct opt-in tier from `legacy`,
+used to freeze the autonomous-ops / reconciliation surface (epic
+trade-trace-4kec) without deleting handlers. Experimental tools are:
+
+- **Hidden** from the default catalog — absent from `public_names()`,
+  `tool.schema` catalog mode, and the MCP list-tools surface.
+- **Still dispatchable** — `dispatch()` resolves by `by_name`, so a frozen
+  tool remains callable for tests and explicit opt-in callers.
+- **Not surfaced by `include_legacy`** — the two tiers are independent;
+  `include_legacy=True` does not reveal experimental tools and vice versa.
+
+Opt-in mechanisms (mirroring the admin/legacy precedent):
+
+- **Flag**: `tool.schema {"include_experimental": true}` and
+  `public_registrations(include_experimental=True)`.
+- **Env**: set `MCP_INCLUDE_EXPERIMENTAL=1` to surface the tier in the MCP
+  list-tools catalog (parallel to `MCP_INCLUDE_ADMIN=1`).
+
 ### 4.5 Boundary-audit pin
 
 `tests/security/test_mvp_boundary_audit.py` pins the shipped public tool

@@ -228,12 +228,27 @@ class ToolRegistry:
     def cli_invocations(self) -> list[tuple[str, ...]]:
         return sorted(self.by_cli)
 
-    def public_names(self, *, include_admin: bool = False, include_legacy: bool = False) -> list[str]:
-        """Return tool names visible in the default v0.0.2 catalog."""
+    def public_names(
+        self,
+        *,
+        include_admin: bool = False,
+        include_legacy: bool = False,
+        include_experimental: bool = False,
+    ) -> list[str]:
+        """Return tool names visible in the default v0.0.2 catalog.
+
+        `experimental` is a distinct opt-in tier from `legacy`: it stays hidden
+        unless `include_experimental` is set, and `include_legacy` does not
+        surface it. Every other non-public visibility rides with `legacy`.
+        """
 
         out: list[str] = []
         for name, reg in self.by_name.items():
-            if not include_legacy and reg.catalog_visibility != "public":
+            vis = reg.catalog_visibility
+            if vis == "experimental":
+                if not include_experimental:
+                    continue
+            elif vis != "public" and not include_legacy:
                 continue
             if not include_admin and reg.is_admin:
                 continue
@@ -241,10 +256,16 @@ class ToolRegistry:
         return sorted(out)
 
     def public_registrations(
-        self, *, include_admin: bool = False, include_legacy: bool = False
+        self,
+        *,
+        include_admin: bool = False,
+        include_legacy: bool = False,
+        include_experimental: bool = False,
     ) -> list[ToolRegistration]:
         return [self.by_name[name] for name in self.public_names(
-            include_admin=include_admin, include_legacy=include_legacy,
+            include_admin=include_admin,
+            include_legacy=include_legacy,
+            include_experimental=include_experimental,
         )]
 
     def mark(
