@@ -202,14 +202,6 @@ SHIPPED_PUBLIC_TOOLS = {
     "account_snapshot.import",
     "account_snapshot.list",
     "account_snapshot.report",
-    "autonomous_incident.record",
-    "autonomous_incident.report",
-    "autonomous_run.get",
-    "autonomous_run.record",
-    "approval.get",
-    "approval.list",
-    "approval.record",
-    "approval.report",
     "decision.add",
     "export.drain",
     "external_receipt.get",
@@ -238,9 +230,6 @@ SHIPPED_PUBLIC_TOOLS = {
     "paper_fill.record",
     "playbook.record_adherence",
     "playbook.upsert",
-    "pretrade_intent.get",
-    "pretrade_intent.list",
-    "pretrade_intent.record",
     "reconciliation.get",
     "reconciliation.record",
     "replay_artifact.get",
@@ -250,8 +239,6 @@ SHIPPED_PUBLIC_TOOLS = {
     "replay.evaluate_output",
     "resolution.add",
     "review.bundle",
-    "risk.check_record",
-    "risk.policy_version_add",
     "snapshot.add",
     "snapshot.fetch",
     "snapshot.fetch_series",
@@ -372,6 +359,42 @@ def test_legacy_catalog_tools_are_hidden_but_metadata_explains_transition():
         if not (metadata.get("redirect") is not None or metadata.get("renamed_to") is not None or metadata.get("removed_in") == "0.0.2"):
             missing_transition_metadata.append((tool, metadata))
     assert missing_transition_metadata == []
+
+
+EXPERIMENTAL_AUTONOMOUS_OPS = {
+    "pretrade_intent.record",
+    "pretrade_intent.get",
+    "pretrade_intent.list",
+    "approval.record",
+    "approval.get",
+    "approval.list",
+    "approval.report",
+    "risk.check_record",
+    "risk.policy_version_add",
+    "autonomous_run.record",
+    "autonomous_run.get",
+    "autonomous_incident.record",
+    "autonomous_incident.report",
+}
+
+
+def test_frozen_autonomous_ops_cluster_is_experimental_but_dispatchable():
+    """Epic trade-trace-4kec.3: the autonomous-ops cluster is frozen behind the
+    experimental tier — hidden from the default catalog, surfaced only under the
+    explicit opt-in, and still dispatchable for tests/contract revival."""
+
+    registry = default_registry()
+    public = set(registry.public_names())
+    assert EXPERIMENTAL_AUTONOMOUS_OPS.isdisjoint(public)
+    assert EXPERIMENTAL_AUTONOMOUS_OPS.isdisjoint(
+        set(registry.public_names(include_legacy=True))
+    )
+    assert EXPERIMENTAL_AUTONOMOUS_OPS.issubset(
+        set(registry.public_names(include_experimental=True))
+    )
+    assert EXPERIMENTAL_AUTONOMOUS_OPS.issubset(set(_all_dispatchable_tool_names()))
+    for tool in EXPERIMENTAL_AUTONOMOUS_OPS:
+        assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
 
 
 def test_admin_tools_are_not_in_default_catalog():

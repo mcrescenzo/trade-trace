@@ -172,6 +172,38 @@ def _apply_v002_catalog_overlay(registry: ToolRegistry) -> None:
             registry.mark(name, is_admin=True)
 
 
+# Epic trade-trace-4kec freezes the Product-B surface behind the experimental
+# tier rather than deleting it: handlers stay dispatchable for tests and
+# explicit opt-in callers, but they leave the default public catalog so a future
+# "contract surface" story can revive them. Each cluster is a separate child
+# bead; the sets are unioned and marked in one pass.
+EXPERIMENTAL_AUTONOMOUS_OPS: frozenset[str] = frozenset({
+    "pretrade_intent.record",
+    "pretrade_intent.get",
+    "pretrade_intent.list",
+    "approval.record",
+    "approval.get",
+    "approval.list",
+    "approval.report",
+    "risk.check_record",
+    "risk.policy_version_add",
+    "autonomous_run.record",
+    "autonomous_run.get",
+    "autonomous_incident.record",
+    "autonomous_incident.report",
+})
+
+EXPERIMENTAL_FROZEN_TOOLS: frozenset[str] = EXPERIMENTAL_AUTONOMOUS_OPS
+
+
+def _apply_experimental_freeze(registry: ToolRegistry) -> None:
+    """Mark frozen Product-B tools experimental (epic trade-trace-4kec)."""
+
+    for name in EXPERIMENTAL_FROZEN_TOOLS:
+        if name in registry.by_name:
+            registry.mark(name, catalog_visibility="experimental")
+
+
 def build_registry() -> ToolRegistry:
     """Build a fresh registry with every MVP tool registered.
 
@@ -206,6 +238,7 @@ def build_registry() -> ToolRegistry:
     register_report_tools(registry)
     register_signal_tools(registry)
     _apply_v002_catalog_overlay(registry)
+    _apply_experimental_freeze(registry)
     registry.validate()
     return registry
 

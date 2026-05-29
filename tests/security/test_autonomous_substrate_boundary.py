@@ -21,12 +21,12 @@ AUDITED_DOCS: tuple[Path, ...] = (
 def test_autonomous_substrate_tool_schemas_and_mcp_specs_respect_boundary():
     registry = default_registry()
     items: list[tuple[str, object]] = []
-    for registration in registry.public_registrations(include_admin=True, include_legacy=True):
+    for registration in registry.public_registrations(include_admin=True, include_legacy=True, include_experimental=True):
         items.append((f"tool.{registration.name}.description", registration.description))
         if registration.json_schema is not None:
             items.append((f"tool.{registration.name}.json_schema", registration.json_schema))
         items.append((f"tool.{registration.name}.metadata", registration.metadata()))
-    for spec in mcp_tool_specs(registry, include_admin=True, include_legacy=True):
+    for spec in mcp_tool_specs(registry, include_admin=True, include_legacy=True, include_experimental=True):
         items.append((f"mcp.{spec['name']}", spec))
     assert_no_boundary_violations(items)
 
