@@ -71,6 +71,11 @@ SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
     "forecast.independence_revealed": SemanticKeySpec(
         structural_fields=frozenset({"forecast_id", "snapshot_id"}),
     ),
+    "forecast.resolution_interpreted": SemanticKeySpec(
+        structural_fields=frozenset(
+            {"forecast_id", "instrument_id", "interpreted_resolution_source", "expected_outcome_label", "as_of"}
+        ),
+    ),
     # M1 ledger entity-creation events. Structural fields are the smallest
     # set that defines logical identity; ids are deliberately excluded so
     # that an idempotency-key replay with a fresh server-generated id still
@@ -439,6 +444,7 @@ TOOL_PRIMARY_EVENT_TYPE: dict[str, str] = {
     "abstention.record":      "abstention.recorded",
     "forecast.commit_blind":  "forecast.blind_committed",
     "forecast.reveal_snapshot": "forecast.independence_revealed",
+    "forecast.interpret_resolution": "forecast.resolution_interpreted",
 }
 
 

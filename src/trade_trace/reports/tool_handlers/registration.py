@@ -18,6 +18,7 @@ from .calibration_diagnostics import (
     _report_calibration, _report_calibration_advisory,
     _report_calibration_anchored, _report_calibration_integrity,
     _report_calibration_terminal, _report_mistake_tripwire, _report_process_quality,
+    _report_resolution_misreads,
     _report_market_lifecycle, _report_resolution_quality,
     _report_time_decay_sharpening, _report_decision_velocity,
     _report_forecast_diagnostics, _report_unscored_forecasts,
@@ -404,6 +405,20 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         ),
         example_minimal={},
         json_schema=_REPORT_SCHEMAS["report.process_quality"],
+    ),
+    ReportToolRegistration(
+        "report.resolution_misreads",
+        _report_resolution_misreads,
+        description=(
+            "Compare the agent's recorded resolution-criteria interpretation "
+            "(forecast.interpret_resolution) against each market's actual "
+            "resolution source. A contract_misread — interpreted source != actual "
+            "source on a resolved market — is a distinct error class from "
+            "calibration error (right about the world, wrong about the contract). "
+            "Diagnostic, not trade advice."
+        ),
+        example_minimal={},
+        json_schema=_REPORT_SCHEMAS["report.resolution_misreads"],
     ),
     ReportToolRegistration(
         "report.strengths",

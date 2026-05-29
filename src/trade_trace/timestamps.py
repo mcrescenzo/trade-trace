@@ -37,6 +37,8 @@ TIMESTAMP_API_GOVERNED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
         ("forecast_independence_locks", "blind_committed_at"),
         ("forecast_independence_locks", "revealed_at"),
         ("forecast_independence_locks", "created_at"),
+        ("resolution_interpretations", "as_of"),
+        ("resolution_interpretations", "created_at"),
         ("account_snapshots", "as_of"),
         ("account_snapshots", "captured_at"),
         ("account_snapshots", "effective_at"),

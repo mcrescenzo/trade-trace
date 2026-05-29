@@ -151,6 +151,10 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "optional ReportFilter and low-N threshold (default 20)."
         ),
     ),
+    "report.resolution_misreads": _schema(
+        {"instrument_id": {"type": "string", "description": "Optional: scope to one instrument."}},
+        description="Contract-misread diagnostic: compares recorded resolution-criteria interpretations against actual resolution sources.",
+    ),
     "report.process_quality": _schema(
         {
             "instrument_id": {"type": "string", "description": "Optional: scope to one instrument."},

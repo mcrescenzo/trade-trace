@@ -57,6 +57,7 @@ from trade_trace.reports.process_quality import report_process_quality
 from trade_trace.reports.recall_receipts import report_recall_receipts
 from trade_trace.reports.replay import export_case_bundle
 from trade_trace.reports.replay_evaluate import evaluate_output
+from trade_trace.reports.resolution_misreads import report_resolution_misreads
 from trade_trace.reports.risk import DEFAULT_RISK_MIN_SAMPLE, report_risk
 from trade_trace.reports.source_quality import (
     STALE_SOURCE_THRESHOLD_DAYS,
@@ -120,6 +121,7 @@ __all__ = [
     "report_process_analytics",
     "report_process_quality",
     "report_recall_receipts",
+    "report_resolution_misreads",
     "report_playbook_adherence",
     "report_policy_candidates",
     "report_risk",

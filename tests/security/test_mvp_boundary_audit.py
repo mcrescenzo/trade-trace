@@ -206,6 +206,8 @@ SHIPPED_PUBLIC_TOOLS = {
     "forecast.add",
     "forecast.commit_blind",
     "forecast.independence",
+    "forecast.interpret_resolution",
+    "forecast.resolution_interpretation",
     "forecast.reveal_snapshot",
     "import.commit",
     "journal.backup",
@@ -266,6 +268,7 @@ SHIPPED_REPORTS = {
     "report.lifecycle",
     "report.work_queue",
     "report.open_positions",
+    "report.resolution_misreads",
     "report.strategy_health",
 }
 

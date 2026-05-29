@@ -43,6 +43,9 @@ The `events` table currently emits these `event_type` values
 - Forecast independence lock: `forecast.blind_committed` and
   `forecast.independence_revealed` (immutable proof that a forecast was
   committed blind to the market price before the snapshot was revealed).
+- Resolution interpretation: `forecast.resolution_interpreted` (the agent's
+  reading of how a market will resolve, recorded at forecast time and later
+  checked against the actual resolution source).
 - Approval/waiver ledger: `approval_waiver.recorded` (local audit evidence
   only; not a live permission, order, signing, custody, or execution gate).
 - External execution receipt: `external_execution_receipt.imported` (sanitized
@@ -109,6 +112,10 @@ row.
   `forecast.independence_revealed` → `forecast.reveal_snapshot` (local
   append-only blind-commit/reveal ordering proof; idempotency is keyed over the
   forecast/snapshot, and replay performs no network or execution action).
+- `forecast.resolution_interpreted` → `forecast.interpret_resolution` (local
+  append-only record of the agent's resolution-criteria reading; idempotency is
+  keyed over the forecast/instrument/source/as_of, and replay performs no
+  network or execution action).
 - `approval_waiver.recorded` → `approval.record` (local append-only approval,
   waiver, hard-block attempt, and scoped autonomy evidence only; no execution
   or live permissioning behavior is replayed).

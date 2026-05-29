@@ -54,6 +54,7 @@ from trade_trace.tools.reconciliation import register_reconciliation_tools
 from trade_trace.tools.reflection import register_reflection_tools
 from trade_trace.tools.replay_artifacts import register_replay_artifact_tools
 from trade_trace.tools.reports import register_report_tools
+from trade_trace.tools.resolution_interpretation import register_resolution_interpretation_tools
 from trade_trace.tools.review_bundle import register_review_bundle
 from trade_trace.tools.risk import register_risk_tools
 from trade_trace.tools.signals import register_signal_tools
@@ -274,6 +275,7 @@ def build_registry() -> ToolRegistry:
     register_pretrade_intent_tools(registry)
     register_reflection_tools(registry)
     register_reconciliation_tools(registry)
+    register_resolution_interpretation_tools(registry)
     register_replay_artifact_tools(registry)
     register_strategy_tools(registry)
     register_review_bundle(registry)

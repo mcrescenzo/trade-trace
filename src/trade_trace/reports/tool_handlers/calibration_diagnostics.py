@@ -25,6 +25,7 @@ from .common import (
     report_market_lifecycle,
     report_mistake_tripwire,
     report_process_quality,
+    report_resolution_misreads,
     report_resolution_quality,
     report_time_decay_sharpening,
     report_unscored_forecasts,
@@ -136,6 +137,21 @@ def _report_process_quality(args: dict[str, Any], ctx: ToolContext) -> dict[str,
             )
         except (ValueError, TypeError) as exc:
             raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc), details={"field": "min_sample"}) from exc
+    finally:
+        db.close()
+    _propagate_report_meta(ctx, data)
+    return data
+
+
+def _report_resolution_misreads(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`report.resolution_misreads` — contract-misread error class
+    (trade-trace-4kec.12)."""
+
+    db = open_db_for_args(args)
+    try:
+        data = report_resolution_misreads(
+            db.connection, instrument_id=args.get("instrument_id")
+        )
     finally:
         db.close()
     _propagate_report_meta(ctx, data)

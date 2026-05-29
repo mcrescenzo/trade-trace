@@ -47,6 +47,7 @@ from trade_trace.reports import (
     report_process_analytics,
     report_process_quality,
     report_recall_receipts,
+    report_resolution_misreads,
     report_risk,
     report_source_quality,
     report_strategy_health,
