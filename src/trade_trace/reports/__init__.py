@@ -27,7 +27,7 @@ from trade_trace.reports.coach import (
     TradingAdvicePhraseError,
     report_coach,
 )
-from trade_trace.reports.compare import report_compare, report_strategy_performance
+from trade_trace.reports.compare import report_compare
 from trade_trace.reports.decision_velocity import report_decision_velocity
 from trade_trace.reports.forecast_diagnostics import report_forecast_diagnostics
 from trade_trace.reports.integrity import (
@@ -45,8 +45,6 @@ from trade_trace.reports.playbook_adherence import (
     report_playbook_adherence,
 )
 from trade_trace.reports.pm_native import (
-    report_amm_slippage,
-    report_calibration_trajectory,
     report_market_lifecycle,
     report_resolution_quality,
     report_time_decay_sharpening,
@@ -100,10 +98,8 @@ __all__ = [
     "report_calibration_anchored",
     "report_calibration_terminal",
     "report_calibration_integrity",
-    "report_calibration_trajectory",
     "report_market_lifecycle",
     "report_resolution_quality",
-    "report_amm_slippage",
     "report_lifecycle",
     "report_memory_usefulness",
     "report_coach",
@@ -120,7 +116,6 @@ __all__ = [
     "report_risk",
     "report_source_quality",
     "report_strategy_health",
-    "report_strategy_performance",
     "report_strengths",
     "report_time_decay_sharpening",
     "report_unscored_forecasts",

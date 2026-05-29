@@ -20,7 +20,6 @@ from .common import (
     report_compare,
     report_filter_validation_to_tool_error,
     report_opportunity,
-    report_strategy_performance,
 )
 
 
@@ -46,34 +45,6 @@ def _report_compare(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 str(exc),
                 details={"field": "base_report/group_by"},
             ) from exc
-    finally:
-        db.close()
-    _propagate_report_meta(ctx, data)
-    return data
-
-
-def _report_strategy_performance(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    """`report.strategy_performance` — wrapper over `report.compare`.
-
-    trade-trace-4md decision: implemented as a convenience wrapper around
-    `report.compare(base_report='pnl', group_by='strategy_id')` rather than a
-    separate metric stack.
-    """
-    db = open_db_for_args(args)
-    try:
-        try:
-            data = report_strategy_performance(
-                db.connection,
-                strategy_id=args.get("strategy_id"),
-                raw_filter=args.get("filter"),
-                min_sample=args.get("min_sample"),
-            )
-        except ValidationError as exc:
-            raise report_filter_validation_to_tool_error(exc) from exc
-        except (UnsupportedFilterError, ValueError) as exc:
-            if isinstance(exc, UnsupportedFilterError):
-                raise _unsupported_filter_to_tool_error(exc) from exc
-            raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
     finally:
         db.close()
     _propagate_report_meta(ctx, data)

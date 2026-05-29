@@ -16,15 +16,14 @@ from trade_trace.reports.tool_schemas import _REPORT_SCHEMAS
 from .audit_quality import _report_audit_readiness, _report_playbook_adherence, _report_source_quality
 from .calibration_diagnostics import (
     _report_calibration, _report_calibration_anchored, _report_calibration_integrity,
-    _report_calibration_terminal, _report_calibration_trajectory,
-    _report_amm_slippage, _report_market_lifecycle, _report_resolution_quality,
+    _report_calibration_terminal,
+    _report_market_lifecycle, _report_resolution_quality,
     _report_time_decay_sharpening, _report_decision_velocity,
     _report_forecast_diagnostics, _report_unscored_forecasts,
 )
 from .common import _make_filter_only_report, _make_request_report
 from .compare_policy_coach import (
     _report_coach, _report_compare, _report_filter_schema, _report_opportunity,
-    _report_strategy_performance,
 )
 from trade_trace.reports.execution_quality import report_execution_quality
 from trade_trace.reports.operational_health import report_operational_health
@@ -239,13 +238,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         json_schema=_REPORT_SCHEMAS["report.calibration"],
     ),
     ReportToolRegistration(
-        "report.calibration_trajectory",
-        _report_calibration_trajectory,
-        description="Time-to-resolution trajectory calibration over scored binary forecasts using equal-mass bins; local journal only, no market calls.",
-        optional_keys=("filter", "min_sample"),
-        json_schema=_REPORT_SCHEMAS["report.calibration_trajectory"],
-    ),
-    ReportToolRegistration(
         "report.market_lifecycle",
         _report_market_lifecycle,
         description="Local market lifecycle durations and engagement counts across open/closed/resolving/resolved states; no external market calls.",
@@ -258,13 +250,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         description="Local resolution quality diagnostics: status mix, ambiguous/void/disputed/cancelled counts, and pre-resolution uncertainty flags.",
         optional_keys=("filter",),
         json_schema=_REPORT_SCHEMAS["report.resolution_quality"],
-    ),
-    ReportToolRegistration(
-        "report.amm_slippage",
-        _report_amm_slippage,
-        description="AMM decision price versus linked local snapshot mark, reported in basis points; no broker, wallet, external quote, or advice path.",
-        optional_keys=("filter",),
-        json_schema=_REPORT_SCHEMAS["report.amm_slippage"],
     ),
     ReportToolRegistration(
         "report.time_decay_sharpening",
@@ -483,18 +468,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         enum_notes={"base_report": "calibration or pnl", "group_by": "Allowed values depend on base_report and are validated by the report schema."},
         common_failures=("group_by is not allowed for the selected base_report.",),
         next_actions=("Use report.filter_schema to build the filter object before calling report.compare.",),
-    ),
-    ReportToolRegistration(
-        "report.strategy_performance",
-        _report_strategy_performance,
-        description=(
-            "Convenience wrapper implemented as report.compare with "
-            "base_report='pnl' and group_by='strategy_id'. Optional "
-            "strategy_id narrows to a single strategy; omitted compares all "
-            "strategies including the __none__ no-strategy bucket."
-        ),
-        example_minimal={"strategy_id": "strat_example", "filter": {}},
-        json_schema=_REPORT_SCHEMAS["report.strategy_performance"]
     ),
     ReportToolRegistration(
         "report.watchlist",

@@ -83,9 +83,7 @@ def test_pm_native_report_tools_registered():
     assert {
         "report.market_lifecycle",
         "report.resolution_quality",
-        "report.amm_slippage",
         "report.time_decay_sharpening",
-        "report.calibration_trajectory",
     }.issubset(names)
 
 
@@ -166,58 +164,15 @@ def test_resolution_quality_counts_ambiguous_like_statuses(home: Path):
     assert env["data"]["groups"][0]["metrics"]["pre_resolution_uncertainty_flag_count"] == 1
 
 
-def test_amm_slippage_uses_decision_price_and_linked_snapshot(home: Path):
-    market_id = _seed_market(home, mechanism="amm")
-    snapshot = _envelope(
-        home,
-        "snapshot.add",
-        {
-            "instrument_id": market_id,
-            "captured_at": "2027-01-09T00:00:00Z",
-            "source": "manual",
-            "mid": 0.50,
-            "implied_probability": 0.50,
-        },
-    )["data"]["id"]
-    thesis = _envelope(home, "thesis.add", {"instrument_id": market_id, "side": "yes", "body": "AMM slippage test thesis"})[
-        "data"
-    ]["id"]
-    decision = _envelope(
-        home,
-        "decision.add",
-        {
-            "instrument_id": market_id,
-            "thesis_id": thesis,
-            "type": "paper_enter",
-            "side": "yes",
-            "quantity": 10,
-            "price": 0.55,
-            "snapshot_id": snapshot,
-            "reason": "AMM fill against local snapshot mark",
-        },
-    )["data"]["id"]
-
-    env = _envelope(home, "report.amm_slippage", {})
-
-    assert env["ok"] is True
-    group = env["data"]["groups"][0]
-    assert group["key"] == decision
-    assert group["metrics"]["slippage_bps"] == pytest.approx(1000.0)
-
-
-def test_time_decay_and_trajectory_reports_bucket_scored_forecasts(home: Path):
+def test_time_decay_report_buckets_scored_forecasts(home: Path):
     market_id = _seed_market(home)
     _seed_scored_forecast(home, market_id, probability=0.8)
 
     decay = _envelope(home, "report.time_decay_sharpening", {"min_sample": 1})
-    trajectory = _envelope(home, "report.calibration_trajectory", {"min_sample": 1})
 
     assert decay["ok"] is True
-    assert trajectory["ok"] is True
     assert decay["data"]["summary"]["sample_size"] == 1
-    assert trajectory["data"]["summary"]["sample_size"] == 1
     assert decay["data"]["bin_policy"] == "equal_mass"
-    assert trajectory["data"]["bin_policy"] == "equal_mass"
 
 
 def test_terminal_calibration_uses_set_based_latest_snapshot_query():

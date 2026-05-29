@@ -1,4 +1,4 @@
-"""report.compare and report.strategy_performance (trade-trace-4md)."""
+"""report.compare (trade-trace-4md)."""
 
 from __future__ import annotations
 
@@ -37,10 +37,9 @@ def _seed_positions(home: Path) -> None:
         db.close()
 
 
-def test_compare_and_strategy_performance_registered():
+def test_compare_registered():
     names = default_registry().names()
     assert "report.compare" in names
-    assert "report.strategy_performance" in names
 
 
 def test_compare_pnl_grouping_stable_order_and_sample_warning(home):
@@ -61,49 +60,6 @@ def test_compare_rejects_injected_group_by(home):
     env = _env(home, "report.compare", {"base_report": "pnl", "group_by": "status; DROP TABLE positions"})
     assert env["ok"] is False
     assert env["error"]["code"] == "VALIDATION_ERROR"
-
-
-def test_strategy_performance_wrapper_no_strategy_edge(home):
-    _seed_positions(home)
-    env = _env(home, "report.strategy_performance", {})
-    assert env["ok"], env
-    assert env["data"]["summary"]["base_report"] == "pnl"
-    assert env["data"]["summary"]["group_by"] == "strategy_id"
-    assert [g["key"] for g in env["data"]["groups"]] == ["__none__"]
-    assert env["data"]["groups"][0]["metrics"]["closed_count"] == 2
-
-
-def test_strategy_performance_contract_is_wrapper_only_not_old_prd_metric_stack(home):
-    _seed_positions(home)
-    env = _env(home, "report.strategy_performance", {})
-    assert env["ok"], env
-
-    data = env["data"]
-    assert data["summary"]["base_report"] == "pnl"
-    assert data["summary"]["group_by"] == "strategy_id"
-    assert data["groups"]
-
-    deferred_top_level_fields = {
-        "calibration_trend",
-        "mistake_tag_frequency",
-        "playbook_adherence_summary",
-    }
-    assert deferred_top_level_fields.isdisjoint(data)
-    assert deferred_top_level_fields.isdisjoint(data["summary"])
-
-    for group in data["groups"]:
-        assert set(group["metrics"]) >= {"closed_count", "realized_pnl", "unrealized_pnl", "mark_to_market_pnl"}
-        assert "positions" in group["record_ids"]
-        assert deferred_top_level_fields.isdisjoint(group)
-        assert deferred_top_level_fields.isdisjoint(group["metrics"])
-
-
-def test_strategy_performance_single_strategy_absent_is_empty(home):
-    _seed_positions(home)
-    env = _env(home, "report.strategy_performance", {"strategy_id": "strat_missing"})
-    assert env["ok"], env
-    assert env["data"]["groups"] == []
-    assert env["data"]["summary"]["sample_size"] == 0
 
 
 # -- documented group_by matches runtime (trade-trace-cs0r) -----------

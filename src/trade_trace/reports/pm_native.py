@@ -13,7 +13,7 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Any
 
-from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
+from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import applied_filter_view, enforce_supported_filter
 from trade_trace.reports.calibration import (
@@ -69,45 +69,6 @@ def _market_where(rf: ReportFilter, *, alias: str = "m") -> tuple[list[str], lis
     if rf.time_window.created_at_lt:
         where.append(f"{alias}.created_at < ?")
         params.append(rf.time_window.created_at_lt)
-    return where, params
-
-
-def _decision_where(rf: ReportFilter, *, alias: str = "d") -> tuple[list[str], list[Any]]:
-    where: list[str] = []
-    params: list[Any] = []
-    if rf.actors.actor_id:
-        where.append(f"{alias}.actor_id IN ({_placeholders(len(rf.actors.actor_id))})")
-        params.extend(rf.actors.actor_id)
-    if rf.actors.agent_id:
-        where.append(f"{alias}.agent_id IN ({_placeholders(len(rf.actors.agent_id))})")
-        params.extend(rf.actors.agent_id)
-    if rf.actors.model_id:
-        where.append(f"{alias}.model_id IN ({_placeholders(len(rf.actors.model_id))})")
-        params.extend(rf.actors.model_id)
-    if rf.actors.environment:
-        where.append(f"{alias}.environment IN ({_placeholders(len(rf.actors.environment))})")
-        params.extend(rf.actors.environment)
-    if rf.actors.run_id:
-        where.append(f"{alias}.run_id IN ({_placeholders(len(rf.actors.run_id))})")
-        params.extend(rf.actors.run_id)
-    if rf.instrument.instrument_id:
-        where.append(f"{alias}.instrument_id IN ({_placeholders(len(rf.instrument.instrument_id))})")
-        params.extend(rf.instrument.instrument_id)
-    if rf.decision.decision_type:
-        where.append(f"{alias}.type IN ({_placeholders(len(rf.decision.decision_type))})")
-        params.extend(rf.decision.decision_type)
-    if rf.time_window.decision_at_gte:
-        where.append(f"{alias}.created_at >= ?")
-        params.append(rf.time_window.decision_at_gte)
-    if rf.time_window.decision_at_lt:
-        where.append(f"{alias}.created_at < ?")
-        params.append(rf.time_window.decision_at_lt)
-    if rf.strategy.strategy_id is not None:
-        if rf.strategy.strategy_id == STRATEGY_NONE_SENTINEL:
-            where.append(f"{alias}.strategy_id IS NULL")
-        else:
-            where.append(f"{alias}.strategy_id = ?")
-            params.append(rf.strategy.strategy_id)
     return where, params
 
 
@@ -436,79 +397,6 @@ def report_resolution_quality(
     return standard_report_result(summary=summary, groups=groups)
 
 
-def report_amm_slippage(
-    conn: sqlite3.Connection,
-    *,
-    raw_filter: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    report = "report.amm_slippage"
-    rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report=report)
-    where, params = _decision_where(rf)
-    where.append("m.mechanism = 'amm'")
-    where.append("d.price IS NOT NULL")
-    where.append("d.snapshot_id IS NOT NULL")
-    sql = """
-        SELECT d.id, d.instrument_id, d.type, d.side, d.price, d.created_at,
-               s.id, COALESCE(s.mid, s.implied_probability, s.price),
-               m.title, m.external_id
-        FROM decisions d
-        JOIN markets m ON m.id = d.instrument_id
-        JOIN snapshots s ON s.id = d.snapshot_id
-    """
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY d.created_at, d.id"
-    groups: list[dict[str, Any]] = []
-    slippages: list[float] = []
-    missing_mark_count = 0
-    for row in conn.execute(sql, params).fetchall():
-        decision_id, market_id, dtype, side, price, created_at, snapshot_id, mark, title, external_id = row
-        if mark is None or float(mark) == 0.0:
-            missing_mark_count += 1
-            slippage_bps = None
-        else:
-            slippage_bps = (float(price) - float(mark)) / float(mark) * 10000.0
-            slippages.append(slippage_bps)
-        groups.append({
-            "key": decision_id,
-            "label": f"{dtype} on {title or external_id}",
-            "metrics": {
-                "decision_price": price,
-                "snapshot_mark": mark,
-                "slippage_bps": slippage_bps,
-            },
-            "decision": {
-                "id": decision_id,
-                "market_id": market_id,
-                "type": dtype,
-                "side": side,
-                "created_at": created_at,
-                "snapshot_id": snapshot_id,
-            },
-            "filter": applied_filter_view(rf, report=report),
-            "record_ids": {"decisions": [decision_id], "markets": [market_id], "snapshots": [snapshot_id]},
-            "examples": [],
-            "sample_size": 1,
-            "sample_warning": None,
-            "truncated": False,
-        })
-    avg_abs = (sum(abs(x) for x in slippages) / len(slippages)) if slippages else None
-    summary = {
-        "sample_size": len(groups),
-        "sample_warning": None if groups else "no AMM decisions with price and linked snapshot mark matched filter",
-        "filter": applied_filter_view(rf, report=report),
-        "metrics": {
-            "decision_count": len(groups),
-            "priced_mark_count": len(slippages),
-            "missing_mark_count": missing_mark_count,
-            "avg_abs_slippage_bps": avg_abs,
-        },
-        "caveats": ["Slippage is computed from caller-recorded decision price and linked local snapshot mark only; no external quote lookup."],
-    }
-    return standard_report_result(summary=summary, groups=groups)
-
-
 def _time_decay_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[dict[str, Any]]:
     scored = _load_scored_rows(conn, rf)
     if not rf.outcome.include_late_recorded:
@@ -561,21 +449,6 @@ def report_time_decay_sharpening(
         min_sample=min_sample,
         report="report.time_decay_sharpening",
         label="Forecast calibration by time-to-resolution bucket",
-    )
-
-
-def report_calibration_trajectory(
-    conn: sqlite3.Connection,
-    *,
-    raw_filter: dict[str, Any] | None = None,
-    min_sample: int = DEFAULT_MIN_SAMPLE,
-) -> dict[str, Any]:
-    return _time_decay_report(
-        conn,
-        raw_filter=raw_filter,
-        min_sample=min_sample,
-        report="report.calibration_trajectory",
-        label="Trajectory calibration trend by time-to-resolution bucket",
     )
 
 
@@ -637,8 +510,6 @@ __all__ = [
     "_DECISION_FILTERS",
     "_MARKET_FILTERS",
     "_TIME_DECAY_FILTERS",
-    "report_amm_slippage",
-    "report_calibration_trajectory",
     "report_market_lifecycle",
     "report_resolution_quality",
     "report_time_decay_sharpening",

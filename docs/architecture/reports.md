@@ -5,19 +5,19 @@
 
 **Implementation status (v0.0.2 PM pivot):** shipped: report.calibration,
 report.calibration_anchored, report.calibration_terminal,
-report.calibration_trajectory, report.calibration_integrity,
+report.calibration_integrity,
 report.forecast_diagnostics,
 report.book, report.risk, report.audit, report.lifecycle,
 report.recall, report.work_queue, report.bootstrap, report.coach,
 report.strategy_health, report.compare, report.policy_candidates,
 report.filter_schema, report.market_lifecycle,
-report.resolution_quality, report.amm_slippage, and
+report.resolution_quality, and
 report.time_decay_sharpening. Legacy report names such as
 report.pnl, report.watchlist, report.open_positions,
 report.current_exposure, report.exposure_anomalies,
 report.audit_readiness, report.source_quality,
 report.playbook_adherence, report.recall_receipts,
-report.memory_usefulness, report.strategy_performance,
+report.memory_usefulness,
 report.opportunity,
 report.unscored_forecasts, and report.decision_velocity are retained
 only as hidden/legacy compatibility metadata or consolidated into the
@@ -539,46 +539,6 @@ Output: a `ReportResult` whose `groups[]` is one entry per distinct
 value of `group_by`, each with the `base_report`'s metric set. Each
 group carries its own sub-filter for drill-down. Sample warnings are
 per group; the summary aggregates over all groups.
-
-### 4.7.1 `report.strategy_performance` (shipped wrapper)
-
-Decision for trade-trace-4md, reaffirmed for trade-trace-7h9n: this is
-implemented as a convenience wrapper over
-`report.compare(base_report='pnl', group_by='strategy_id')`; it is not a
-separate metric stack. Optional `strategy_id` narrows to one strategy;
-omission compares all strategies and includes the `__none__` no-strategy
-bucket when positions cannot be traced to a strategy-linked decision.
-
-Current output fields are the `report.compare`/`ReportResult` fields for
-the P&L base report: `summary.base_report="pnl"`,
-`summary.group_by="strategy_id"`, `groups[]`, per-group filters,
-per-group `record_ids.positions`, examples, sample warnings, and P&L
-metrics inherited from `report.compare`/`report.pnl` (`realized_pnl`,
-`unrealized_pnl`, `mark_to_market_pnl`, `closed_count`, `open_count`).
-Those position IDs are the contributing record IDs for the shipped
-contract.
-
-Deferred old-PRD fields are explicitly not emitted by
-`report.strategy_performance`: calibration trend, mistake-tag frequency,
-and playbook-adherence summary remain future/separate contract work.
-Use the following drill-downs instead of inferring those metrics from the
-wrapper:
-
-- Calibration trend: run `report.calibration` for one strategy, or
-  `report.compare(base_report='calibration', group_by='strategy_id')` to
-  compare strategies. Drill down with the returned forecast,
-  forecast-score, and outcome IDs.
-- Mistake-tag frequency: run `report.mistakes` with a strategy/time
-  filter when that compatibility report supports the desired slice, and
-  drill down using its returned decision/forecast IDs and filter.
-- Playbook-adherence summary: run `report.playbook_adherence` with the
-  same strategy/time filter and drill down using its returned decision or
-  adherence row IDs.
-
-Caveats: the wrapper reports local journal rows only; unsupported or
-missing source data is not backfilled, estimated, or inferred into the
-deferred fields. It is deterministic, read-only, and does not provide trading advice,
-signals, edge claims, or profit recommendations.
 
 ### 4.8 `report.calibration_integrity` (MVP hardening)
 

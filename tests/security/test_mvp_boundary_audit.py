@@ -266,10 +266,8 @@ SHIPPED_REPORTS = {
     "report.calibration_anchored",
     "report.calibration_integrity",
     "report.calibration_terminal",
-    "report.calibration_trajectory",
     "report.market_lifecycle",
     "report.resolution_quality",
-    "report.amm_slippage",
     "report.time_decay_sharpening",
     "report.source_quality",
     "report.audit_readiness",
@@ -300,7 +298,6 @@ SHIPPED_REPORTS = {
     "report.reconciliation_mismatches",
     "report.memory_usefulness",
     "report.strategy_health",
-    "report.strategy_performance",
 }
 
 

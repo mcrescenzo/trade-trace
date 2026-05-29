@@ -1,4 +1,4 @@
-"""`report.compare` and `report.strategy_performance`.
+"""`report.compare`.
 
 The compare report is intentionally allowlist-driven: public `group_by` values map
 to fixed SQL expressions, never interpolated from caller input. Metric calculation
@@ -91,34 +91,6 @@ def report_compare(
     if base_report == "calibration":
         return _compare_calibration(conn, group_by=group_by, raw_filter=raw_filter, min_sample=min_sample or DEFAULT_MIN_SAMPLE)
     return _compare_pnl(conn, group_by=group_by, raw_filter=raw_filter, min_sample=min_sample or DEFAULT_PNL_MIN_SAMPLE)
-
-
-def report_strategy_performance(
-    conn: sqlite3.Connection,
-    *,
-    strategy_id: str | None = None,
-    raw_filter: dict[str, Any] | None = None,
-    min_sample: int | None = None,
-) -> dict[str, Any]:
-    """Convenience wrapper over `report.compare`.
-
-    Decision for trade-trace-4md: implement, not supersede. The wrapper returns
-    P&L grouped by strategy. If `strategy_id` is supplied, it narrows the result
-    to that strategy; when omitted it compares all strategies, including the
-    `__none__` no-strategy bucket.
-    """
-    merged = dict(raw_filter or {})
-    if strategy_id is not None:
-        strategy = dict(merged.get("strategy") or {})
-        strategy["strategy_id"] = strategy_id
-        merged["strategy"] = strategy
-    return report_compare(
-        conn,
-        base_report="pnl",
-        group_by="strategy_id",
-        raw_filter=merged,
-        min_sample=min_sample,
-    )
 
 
 def _compare_calibration(conn: sqlite3.Connection, *, group_by: str, raw_filter: dict[str, Any] | None, min_sample: int) -> dict[str, Any]:
@@ -290,5 +262,4 @@ __all__ = [
     "DOCUMENTED_GROUP_BY",
     "SUPPORTED_GROUP_BY_BY_BASE_REPORT",
     "report_compare",
-    "report_strategy_performance",
 ]
