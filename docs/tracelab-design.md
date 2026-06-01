@@ -38,7 +38,14 @@ out explicitly. The implementation is tracked as beads under epic
 (`agent:trader-a`, `agent:trader-b`), sharing **one** `TRADE_TRACE_HOME`.
 `MCP_ACTOR_ID` is read per-call in `mcp_server.py` and is fully decoupled from
 home resolution, so two server processes can safely point at the same DB
-(proven by `tests/contracts/test_mcp_schema_compat.py`). Agents work from the
+(proven by `tests/contracts/test_mcp_schema_compat.py`). The launch contract is
+materialized by `tools/tracelab/agent_launch.py`: every trader process receives
+one shared absolute `TRADE_TRACE_HOME`, a unique `MCP_ACTOR_ID`, a per-actor
+`TRADE_TRACE_LOG_DIR`, and an enabled shared dispatch trace path. The helper
+rejects duplicate actor ids before launch because the idempotency uniqueness
+scope is `(event_type, actor_id, idempotency_key)`: distinct actors may safely
+reuse a key, but two misconfigured processes sharing one actor id can collide
+with `IDEMPOTENCY_CONFLICT` if their payloads differ. Agents work from the
 system's native affordances (`report.bootstrap`, `report.work_queue`,
 `report.coach` + the trader profile); they are **not** handed a hardcoded rail
 script. Adoption of the discipline rails is measured, not dictated.
