@@ -13,8 +13,9 @@ import argparse
 import json
 import sqlite3
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from trade_trace.storage.database import open_database_readonly, read_snapshot
 
@@ -28,8 +29,9 @@ READ_RAIL_TOOLS = {
 CAVEATS = {
     "read_rail_adoption": (
         "Observational per-actor call counts from the live B1 dispatch trace only; "
-        "not a causal precedence/looked-before-leaped claim and not reproducible "
-        "from post-hoc replay/JSONL reconstruction."
+        "not a causal precedence/looked-before-leaped claim and not replay-reproducible "
+        "from post-hoc replay/JSONL reconstruction because replay drops signal.emitted "
+        "and memory_node.invalidated diagnostic lines and never reconstructs read dispatch calls."
     ),
     "write_rail_adoption": (
         "Derived from durable forecast_independence_locks records: "
@@ -74,7 +76,7 @@ def count_read_rail_calls(trace_path: Path | str | None) -> dict[str, Any]:
         actor: {rail: counts.get(rail, 0) for rail in READ_RAIL_TOOLS.values()}
         for actor, counts in sorted(per_actor.items())
     }
-    for actor, counts in actors.items():
+    for counts in actors.values():
         counts["total"] = sum(counts.values())
     return {
         "kind": "observational_call_counts",

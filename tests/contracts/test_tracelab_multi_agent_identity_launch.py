@@ -57,6 +57,12 @@ def test_launcher_materializes_shared_home_distinct_actor_and_log_env(tmp_path: 
         "agent:trader-a",
         "agent:trader-b",
     ]
+    assert all(launch.env["TRADE_TRACE_DISPATCH_TRACE"] == "1" for launch in launches)
+    assert all(
+        launch.env["TRADE_TRACE_DISPATCH_TRACE_MAX_BYTES"] == "10485760"
+        for launch in launches
+    )
+    assert all(launch.env["TRADE_TRACE_DISPATCH_TRACE_MAX_FILES"] == "5" for launch in launches)
 
 
 def test_launcher_rejects_duplicate_actor_ids_before_launch(tmp_path: Path):

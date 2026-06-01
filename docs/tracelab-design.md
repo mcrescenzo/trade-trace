@@ -81,7 +81,10 @@ A set of scripts under `tools/tracelab/`:
   not contend for the single-writer lock or perturb the latency/concurrency
   invariants it measures). Captures every dispatch return path. This is the
   keystone for read-rail adoption and for the zero-row dispatch classes the
-  reconciler cannot otherwise see.
+  reconciler cannot otherwise see. TraceLab launches make rotation explicit via
+  `TRADE_TRACE_DISPATCH_TRACE_MAX_BYTES=10485760` and
+  `TRADE_TRACE_DISPATCH_TRACE_MAX_FILES=5` (see
+  `docs/tracelab/run-config.json`).
 - Health counts live entirely in the read-only sidecar — **no** change to any
   shipped tool contract.
 
@@ -148,9 +151,11 @@ contract-misread rate, independence-proven rate, abstention discipline, pnl
 (with the resolution-only-close caveat).
 
 **System-affordance findings (qualitative payoff):** per-actor read-rail call
-counts (observational, not a causal precedence claim — read rails emit nothing
-today, so this is trace-only and not replay-reproducible) and a catalogue of
-where the shipped surface confused agents.
+counts (observational, not a causal precedence claim) are captured from the
+live B1 dispatch trace only. They are **not replay-reproducible**: JSONL
+replay/import drops `signal.emitted` and `memory_node.invalidated` diagnostic
+lines and never reconstructs read dispatch calls, so coach, tripwire,
+advisory, and other rail-adoption findings must come from the live trace.
 
 **Expected-and-documented findings:** neither `paper_exit` nor resolution closes
 a position today (pinned by an evidence test); `outcome.fetch` unreliability;
@@ -169,6 +174,15 @@ the combinator-stripped `forecast.add` schema; `snapshot.fetch` at=now-only.
   B14 invariant checker (.13), B15 skill + adoption (.14), B16 scorecard (.15)
 - **Phase 4 — run ops, safety, teardown:** B17 golden smoke (.16),
   B19 capture hygiene + disk bounds (.18), B20 teardown (.19)
+
+## Capture hygiene run-config (B19)
+
+`docs/tracelab/run-config.json` is the explicit TraceLab operational cap for
+instrumentation growth: JSONL `export.drain` is disabled during the run,
+transcripts are capped at 14 days and 20 files per agent, and the live B1 trace
+uses size/count rotation. This bounds the one-inode-per-event export tree,
+transcripts, and trace log over the 1–2 week run while preserving the live
+SQLite/B1 evidence required for scoring.
 
 ## Open items for the run-config doc (B18)
 

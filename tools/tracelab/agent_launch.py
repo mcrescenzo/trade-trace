@@ -12,6 +12,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.tracelab.run_config import dispatch_trace_rotation_env
+
 
 class DuplicateActorIdError(ValueError):
     """Raised when a multi-agent launch would reuse an actor id."""
@@ -69,12 +71,12 @@ def build_trader_agent_launches(
         name = _safe_name(actor_id) or f"agent-{idx}"
         log_dir = logs / name
         env = dict(os.environ if base_env is None else base_env)
+        env.update(dispatch_trace_rotation_env())
         env.update(
             {
                 "TRADE_TRACE_HOME": str(home),
                 "MCP_ACTOR_ID": actor_id,
                 "TRADE_TRACE_LOG_DIR": str(log_dir),
-                "TRADE_TRACE_DISPATCH_TRACE": "1",
                 "TRADE_TRACE_DISPATCH_TRACE_PATH": str(trace),
             }
         )

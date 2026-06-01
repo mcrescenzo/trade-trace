@@ -65,6 +65,14 @@ A metric may be marked **blocked** only when the cited fixture/report surface is
 - Do not treat realized returns, backtest returns, or live performance as evidence that the continuity loop is useful. The scorecard measures process continuity, provenance, caveats, and reproducible local report behavior only.
 - Do not treat missing rows as absent when `truncation.is_partial=true`, counts are unavailable, or sections were not requested.
 
+## TraceLab B16 replay caveat
+
+For TraceLab scorecard evidence (B16), rail-adoption findings for coach,
+tripwire, advisory, and other read rails must be cited from the **live B1 dispatch trace**, not from replay output. JSONL replay/import is useful for
+supported durable write events, but the replay path drops `signal.emitted` and
+`memory_node.invalidated` diagnostic lines and never reconstructs read dispatch
+calls; therefore these rail-adoption findings are not replay-reproducible.
+
 ## Evidence packet template
 
 For a sanitized dogfood evidence note, record:

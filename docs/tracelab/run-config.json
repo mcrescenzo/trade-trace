@@ -1,0 +1,29 @@
+{
+  "schema": "trade-trace.tracelab.run-config.v1",
+  "capture_hygiene": {
+    "exporter_jsonl_drain": {
+      "enabled_during_run": false,
+      "reason": "TraceLab substrate-invariant scoring reads the live SQLite database and B1 dispatch trace; one-inode-per-event JSONL exports are not needed during the 1-2 week run.",
+      "operator_instruction": "Do not schedule or invoke export.drain during the TraceLab run. If a post-run JSONL artifact is needed, drain once after final backup and analysis."
+    },
+    "transcripts": {
+      "retention_days": 14,
+      "max_files_per_agent": 20,
+      "operator_instruction": "Keep only the newest 20 transcript/log transcript artifacts per trader agent and never retain TraceLab raw transcripts beyond 14 days unless copied into a separately approved evidence bundle."
+    },
+    "dispatch_trace_rotation": {
+      "env": {
+        "TRADE_TRACE_DISPATCH_TRACE": "1",
+        "TRADE_TRACE_DISPATCH_TRACE_MAX_BYTES": "10485760",
+        "TRADE_TRACE_DISPATCH_TRACE_MAX_FILES": "5"
+      },
+      "operator_instruction": "B1 dispatch trace must be rotated by size and retained-file count; these values match dispatch_trace.py defaults and are made explicit for TraceLab launches."
+    }
+  },
+  "replay_caveat": {
+    "rail_adoption_source": "live_b1_dispatch_trace_only",
+    "not_replay_reproducible": true,
+    "dropped_replay_signals": ["signal.emitted", "memory_node.invalidated"],
+    "statement": "Coach, mistake-tripwire, calibration-advisory, and other read-rail adoption findings must be captured from the live B1 dispatch trace. JSONL replay/import drops signal.emitted and memory_node.invalidated diagnostic lines and does not reconstruct read dispatch calls, so these findings are not replay-reproducible."
+  }
+}
