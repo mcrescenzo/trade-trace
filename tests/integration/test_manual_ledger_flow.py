@@ -444,6 +444,41 @@ def test_outcome_add_creates_row(home):
     assert env["data"]["status"] == "resolved_final"
 
 
+def test_resolved_final_does_not_close_open_paper_position(home):
+    """Evidence pin for trade-trace-04is.21/B16: a final resolution is
+    forecast-scoring-only today and has no wiring to close paper positions.
+    """
+
+    inst_id, thesis_id = _setup_thesis(home)
+    decision = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "thesis_id": thesis_id,
+        "type": "paper_enter",
+        "side": "yes",
+        "quantity": 10,
+        "price": 0.37,
+    })
+    assert decision["ok"] is True, decision
+    position_id = decision["data"]["position_id"]
+
+    outcome = _envelope(home, "outcome.add", {
+        "instrument_id": inst_id,
+        "resolved_at": "2026-06-30T00:00:00Z",
+        "outcome_label": "YES",
+        "outcome_value": 1.0,
+        "status": "resolved_final",
+        "confidence": 0.99,
+    })
+    assert outcome["ok"] is True, outcome
+
+    with sqlite3.connect(db_path(home)) as conn:
+        row = conn.execute(
+            "SELECT status, resolved_at FROM positions WHERE id = ?",
+            (position_id,),
+        ).fetchone()
+        assert row == ("open", None)
+
+
 def test_resolve_record_is_alias_for_outcome_add(home):
     venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
     inst = _envelope(home, "instrument.add", {

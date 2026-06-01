@@ -171,3 +171,12 @@ seeded watchlist reaches agents (via `report.watchlist`/`work_queue`, not prompt
 injection); minimum-N abort/extend rule + per-day Gamma call budget; owner HITL
 sign-off before enabling the network; confirmation of whether `coach`/`bootstrap`
 take the writer lock so the retry policy covers every writing read.
+
+Canonical substrate proof for positive idempotency replay/conflict semantics
+lives in package tests, not in the run-artifact checker: see
+`tests/integration/test_mcp_idempotency.py` for same-actor/same-key/same-payload
+replay producing zero new events and same-actor/same-key/different-payload
+surfacing `IDEMPOTENCY_CONFLICT` without a second event row.
+
+Canonical B16/scorecard evidence for the expected resolution-does-not-close
+finding lives in `tests/integration/test_manual_ledger_flow.py::test_resolved_final_does_not_close_open_paper_position`: after `decision.add(type=paper_enter)` opens a paper position, `outcome.add(status=resolved_final)` leaves the `positions` row `status='open'` with `resolved_at IS NULL`.
