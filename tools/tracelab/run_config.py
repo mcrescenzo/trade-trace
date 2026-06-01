@@ -43,3 +43,11 @@ def exporter_drain_enabled_during_run(config: dict[str, Any] | None = None) -> b
 
     cfg = config or load_run_config()
     return bool(cfg["capture_hygiene"]["exporter_jsonl_drain"]["enabled_during_run"])
+
+
+def include_late_recorded_default(config: dict[str, Any] | None = None) -> bool:
+    """Return the decided TraceLab default for late-recorded scored forecasts."""
+
+    cfg = config or load_run_config()
+    policy = cfg["scorecard"]["late_recorded_policy"]
+    return bool(policy["include_late_recorded_default"])

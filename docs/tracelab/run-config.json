@@ -8,6 +8,13 @@
     "retry_envelope_seconds": 7,
     "quiescence_window": "b12-nightly-backup-quiescence"
   },
+  "scorecard": {
+    "late_recorded_policy": {
+      "include_late_recorded_default": false,
+      "operator_override_key": "include_late_recorded",
+      "statement": "Scorecards exclude late-recorded records by default unless include_late_recorded=true is deliberately supplied."
+    }
+  },
   "capture_hygiene": {
     "exporter_jsonl_drain": {
       "enabled_during_run": false,
