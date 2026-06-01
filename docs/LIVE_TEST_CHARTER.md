@@ -40,7 +40,7 @@ The MVP single-writer assumption is:
   - `details.reason = "single_writer_lock"`
   - `details.held_by_pid` when discoverable
   - `details.retry_after_seconds = 2` as the initial recommended wait
-- The calling agent backs off for the documented `retry_after_seconds` hint and retries; callers may use an exponential policy starting from that hint.
+- A blocked write is retried once inside the in-process dispatch harness before the envelope is surfaced to an MCP/CLI caller. The retry reuses the same `request_id`; dispatch trace rows record `attempt` and, for retries, `retry_of=<request_id>` so reviewers can pair lock-error -> success under one lineage.
 - `single_writer_lock` is a transient, recoverable failure envelope, not data loss.
 - Reads are never blocked by writers and never fail with `single_writer_lock`.
 - Multi-writer coordination, write fan-out, connection-pool retry/backoff, or migration to a different engine are deferred P1+ work.
@@ -61,6 +61,8 @@ The expected contention behavior is:
 This is **not** a parallel-write demonstration. Treating simultaneous successful writes as the criterion would contradict the v0.0.2 architecture. Success is clean lock reporting plus one-retry recovery, not proof that two writers committed at the same instant.
 
 `memory.recall` participates in this contract at the SQLite layer because `memory.recall` appends `memory_recall_events`. A recall call can therefore act as a short writer and can receive the same `single_writer_lock` envelope when another process holds the write lock. The live test must not classify that as a read-path failure if it recovers under the documented retry rule.
+
+Side-effect inspection for report tools: `report.coach` opens the journal read-only (`file:...?mode=ro`) through its handler stack and does not take the write lock. `report.bootstrap` / `agent.bootstrap` currently uses `open_db_for_args`, which can open a normal journal connection while composing the packet; it is therefore covered by the same dispatch-level retry wrapper if SQLite reports `single_writer_lock`.
 
 ## Phase 5 quantitative exit criteria
 

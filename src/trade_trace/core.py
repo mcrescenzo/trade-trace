@@ -11,6 +11,7 @@ PRD §2.3 / contracts.md §2 parity contract.
 from __future__ import annotations
 
 import sqlite3
+import time
 import uuid
 from typing import Any
 
@@ -303,6 +304,7 @@ def default_registry() -> ToolRegistry:
 
 
 _REQUEST_ID_COUNTER: list[int] = [0]
+_SINGLE_WRITER_LOCK_MAX_RETRIES = 1
 
 
 def _reset_deterministic_request_id_counter() -> None:
@@ -324,6 +326,14 @@ def new_request_id() -> str:
     return uuid.uuid4().hex
 
 
+def _is_single_writer_lock_error(env: SuccessEnvelope | ErrorEnvelope) -> bool:
+    if not isinstance(env, ErrorEnvelope):
+        return False
+    if env.error.code != ErrorCode.STORAGE_ERROR:
+        return False
+    return env.error.details.get("reason") == "single_writer_lock"
+
+
 def dispatch(
     tool_name: str,
     args: dict[str, Any],
@@ -343,7 +353,12 @@ def dispatch(
     meta = Meta(tool=tool_name, actor_id=actor_id, request_id=rid)
     trace_started_ns = dispatch_trace.now_ns() if dispatch_trace.is_enabled() else 0
 
-    def _trace_return(env: SuccessEnvelope | ErrorEnvelope) -> SuccessEnvelope | ErrorEnvelope:
+    def _trace_return(
+        env: SuccessEnvelope | ErrorEnvelope,
+        *,
+        attempt: int | None = None,
+        retry_of: str | None = None,
+    ) -> SuccessEnvelope | ErrorEnvelope:
         if trace_started_ns:
             dispatch_trace.emit(
                 tool=tool_name,
@@ -352,6 +367,8 @@ def dispatch(
                 args=args,
                 env=env,
                 started_ns=trace_started_ns,
+                attempt=attempt,
+                retry_of=retry_of,
             )
         return env
 
@@ -470,18 +487,18 @@ def dispatch(
             else:
                 extras[key] = value
 
-    try:
+    def _invoke_once() -> SuccessEnvelope | ErrorEnvelope:
         try:
             data = registration.handler(args, ctx)
         except ToolError as exc:
             _apply_hints()
-            return _trace_return(error_envelope(meta, exc.code, exc.message, exc.details))
+            return error_envelope(meta, exc.code, exc.message, exc.details)
         except HomePathValidationError as exc:
             # Traversal attempts in --home / journal home (bead trade-trace-pqex)
             # surface as a typed VALIDATION_ERROR envelope regardless of which
             # tool handler called resolve_home.
             _apply_hints()
-            return _trace_return(error_envelope(
+            return error_envelope(
                 meta,
                 ErrorCode.VALIDATION_ERROR,
                 str(exc),
@@ -490,10 +507,10 @@ def dispatch(
                     "value": exc.value,
                     "reason": "path_traversal_rejected",
                 },
-            ))
+            )
         except IdempotencyConflictError as exc:
             _apply_hints()
-            return _trace_return(error_envelope(
+            return error_envelope(
                 meta,
                 ErrorCode.IDEMPOTENCY_CONFLICT,
                 str(exc),
@@ -504,7 +521,7 @@ def dispatch(
                     "original_event_id": exc.original_event_id,
                     "diff_summary": exc.diff_summary,
                 },
-            ))
+            )
         except sqlite3.IntegrityError as exc:
             # SQLite CHECK / FK / UNIQUE / append-only-trigger violations all
             # surface as IntegrityError. Translate them into a typed envelope so
@@ -520,7 +537,7 @@ def dispatch(
             else:
                 code = ErrorCode.STORAGE_ERROR
             _apply_hints()
-            return _trace_return(error_envelope(meta, code, msg, {"sqlite_error": msg}))
+            return error_envelope(meta, code, msg, {"sqlite_error": msg})
         except sqlite3.Error as exc:
             _apply_hints()
             msg = str(exc)
@@ -532,27 +549,48 @@ def dispatch(
                 # that 2-second starting point. SQLite already waited for the
                 # connection's busy_timeout before surfacing this error.
                 details.update({"reason": "single_writer_lock", "retry_after_seconds": 2})
-            return _trace_return(error_envelope(
+            return error_envelope(
                 meta,
                 ErrorCode.STORAGE_ERROR,
                 msg,
                 details,
-            ))
+            )
 
         if not isinstance(data, dict):
             # Handlers must return a dict; treat anything else as an invariant
             # violation so the bug surfaces immediately rather than producing
             # a malformed envelope.
             _apply_hints()
-            return _trace_return(error_envelope(
+            return error_envelope(
                 meta,
                 ErrorCode.INVARIANT_VIOLATION,
                 f"tool {tool_name!r} returned non-dict result",
                 {"result_type": type(data).__name__},
-            ))
+            )
 
         _apply_hints()
-        return _trace_return(SuccessEnvelope(data=data, meta=meta))
+        return SuccessEnvelope(data=data, meta=meta)
+
+    try:
+        retry_of: str | None = None
+        for attempt in range(1, _SINGLE_WRITER_LOCK_MAX_RETRIES + 2):
+            env = _invoke_once()
+            if (
+                isinstance(env, ErrorEnvelope)
+                and _is_single_writer_lock_error(env)
+                and attempt <= _SINGLE_WRITER_LOCK_MAX_RETRIES
+            ):
+                _trace_return(env, attempt=attempt, retry_of=retry_of)
+                retry_of = rid
+                retry_after = env.error.details.get("retry_after_seconds", 2)
+                try:
+                    delay = float(retry_after)
+                except (TypeError, ValueError):
+                    delay = 2.0
+                time.sleep(max(delay, 0.0))
+                continue
+            return _trace_return(env, attempt=attempt, retry_of=retry_of)
+        raise AssertionError("unreachable single-writer retry loop exit")
     finally:
         if dry_run_token is not None:
             DRY_RUN_FLAG.reset(dry_run_token)

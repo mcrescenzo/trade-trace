@@ -111,6 +111,8 @@ def emit(
     args: dict[str, Any],
     env: SuccessEnvelope | ErrorEnvelope,
     started_ns: int,
+    attempt: int | None = None,
+    retry_of: str | None = None,
 ) -> None:
     if not is_enabled():
         return
@@ -138,6 +140,10 @@ def emit(
                 "idempotency_disabled": bool(meta.get("idempotency_disabled")),
             },
         }
+        if attempt is not None:
+            record["attempt"] = attempt
+        if retry_of is not None:
+            record["retry_of"] = retry_of
         if "reason" in details:
             record["details"]["reason"] = _safe_json_value(details["reason"])
         if "retry_after_seconds" in details:

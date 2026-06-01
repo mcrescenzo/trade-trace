@@ -9,6 +9,7 @@ WAL-mode source of truth.
 
 from __future__ import annotations
 
+import json
 import os
 import signal
 import sqlite3
@@ -20,6 +21,7 @@ from textwrap import dedent
 
 from tests._mcp_helpers import envelope_default as _envelope
 from tests._mcp_helpers import mcp_default as _mcp
+from trade_trace.dispatch_trace import ENABLE_ENV, PATH_ENV
 from trade_trace.storage.database import BUSY_TIMEOUT_MS, open_database
 from trade_trace.storage.paths import db_path
 
@@ -81,15 +83,17 @@ def _start_sqlite_writer(db_file: Path, ready_file: Path, *, hold_seconds: float
     return subprocess.Popen([sys.executable, "-c", code], text=True)
 
 
-def test_second_writer_contention_emits_single_writer_lock_with_retry_hint(tmp_path: Path) -> None:
-    """operability.md §3.2/§3.3: a second writer waits busy_timeout, then
-    returns STORAGE_ERROR details.reason=single_writer_lock with a retry hint
-    starting at 2 seconds; persistence.md §2 keeps this scoped to one WAL DB.
+def test_second_writer_contention_emits_single_writer_lock_with_retry_hint(tmp_path: Path, monkeypatch) -> None:
+    """Second writer lock errors are retried in-process and recover under the
+    same request lineage before the caller sees the envelope.
     """
     home = tmp_path / "home"
+    trace_path = tmp_path / "dispatch-trace.jsonl"
+    monkeypatch.setenv(ENABLE_ENV, "1")
+    monkeypatch.setenv(PATH_ENV, str(trace_path))
     instrument_id = _seed_writable_journal(home)
     ready = tmp_path / "writer-ready"
-    holder = _start_sqlite_writer(db_path(home), ready, hold_seconds=12.0)
+    holder = _start_sqlite_writer(db_path(home), ready, hold_seconds=6.5)
     try:
         _wait_for_file(ready)
         start = time.monotonic()
@@ -105,27 +109,20 @@ def test_second_writer_contention_emits_single_writer_lock_with_retry_hint(tmp_p
         )
         elapsed = time.monotonic() - start
         assert elapsed >= (BUSY_TIMEOUT_MS / 1000) * 0.80
-        assert elapsed < (BUSY_TIMEOUT_MS / 1000) + 2.0
-        assert first["ok"] is False
-        assert first["error"]["code"] == "STORAGE_ERROR"
-        assert first["error"]["details"]["reason"] == "single_writer_lock"
-        first_hint = first["error"]["details"]["retry_after_seconds"]
-        assert first_hint >= 2
-
-        second = _envelope(
-            home,
-            "decision.add",
-            {
-                "instrument_id": instrument_id,
-                "type": "skip",
-                "reason": "contended writer two",
-                "idempotency_key": "cc-contention-2",
-            },
-        )
-        assert second["error"]["details"]["reason"] == "single_writer_lock"
-        # The server emits the initial recommended wait. Callers may apply an
-        # exponential retry policy starting from this 2-second hint.
-        assert second["error"]["details"]["retry_after_seconds"] >= first_hint
+        assert elapsed < (BUSY_TIMEOUT_MS / 1000) + 4.0
+        assert first["ok"] is True
+        records = [json.loads(line) for line in trace_path.read_text().splitlines()]
+        lock_records = [record for record in records if record.get("details", {}).get("reason") == "single_writer_lock"]
+        assert lock_records
+        for lock_record in lock_records:
+            request_id = lock_record["request_id"]
+            assert any(
+                record.get("ok") is True
+                and record.get("request_id") == request_id
+                and record.get("retry_of") == request_id
+                and record.get("attempt") == lock_record.get("attempt", 0) + 1
+                for record in records
+            )
     finally:
         if holder.poll() is None:
             holder.terminate()
