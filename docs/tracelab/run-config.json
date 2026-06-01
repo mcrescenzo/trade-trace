@@ -1,5 +1,13 @@
 {
   "schema": "trade-trace.tracelab.run-config.v1",
+  "schedule": {
+    "definition_module": "tools.tracelab.schedule",
+    "documentation": "docs/tracelab/stagger-schedule.md",
+    "run_duration_days": 14,
+    "busy_timeout_seconds": 5,
+    "retry_envelope_seconds": 7,
+    "quiescence_window": "b12-nightly-backup-quiescence"
+  },
   "capture_hygiene": {
     "exporter_jsonl_drain": {
       "enabled_during_run": false,
@@ -23,7 +31,10 @@
   "replay_caveat": {
     "rail_adoption_source": "live_b1_dispatch_trace_only",
     "not_replay_reproducible": true,
-    "dropped_replay_signals": ["signal.emitted", "memory_node.invalidated"],
+    "dropped_replay_signals": [
+      "signal.emitted",
+      "memory_node.invalidated"
+    ],
     "statement": "Coach, mistake-tripwire, calibration-advisory, and other read-rail adoption findings must be captured from the live B1 dispatch trace. JSONL replay/import drops signal.emitted and memory_node.invalidated diagnostic lines and does not reconstruct read dispatch calls, so these findings are not replay-reproducible."
   }
 }

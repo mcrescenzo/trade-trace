@@ -77,6 +77,12 @@ The Phase 5 exit criteria are exactly:
 
 If any criterion fails, Phase 5 has not passed.
 
+## TraceLab stagger schedule and backup quiescence
+
+The deterministic 14-day accelerated schedule for the two trader agents and governed sidecars is documented in [`docs/tracelab/stagger-schedule.md`](tracelab/stagger-schedule.md) and defined for dry simulation in `tools/tracelab/schedule.py`.
+
+The named backup quiescence window is `b12-nightly-backup-quiescence`: trader agents plus writer sidecars are paused while `backup-b7` runs `journal.backup`. This keeps WAL checkpoint/copy backups consistent without redefining the charter as a parallel-write throughput test.
+
 ## Evidence and sanitization rules
 
 Evidence must be enough for a reviewer to determine whether each exit criterion passed without exposing secrets or overstating runtime behavior.
