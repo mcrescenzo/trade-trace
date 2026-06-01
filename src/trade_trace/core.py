@@ -14,6 +14,7 @@ import sqlite3
 import uuid
 from typing import Any
 
+from trade_trace import dispatch_trace
 from trade_trace.contracts.envelope import (
     ErrorEnvelope,
     Meta,
@@ -340,18 +341,31 @@ def dispatch(
     reg = registry if registry is not None else default_registry()
     rid = request_id or new_request_id()
     meta = Meta(tool=tool_name, actor_id=actor_id, request_id=rid)
+    trace_started_ns = dispatch_trace.now_ns() if dispatch_trace.is_enabled() else 0
+
+    def _trace_return(env: SuccessEnvelope | ErrorEnvelope) -> SuccessEnvelope | ErrorEnvelope:
+        if trace_started_ns:
+            dispatch_trace.emit(
+                tool=tool_name,
+                actor_id=actor_id,
+                request_id=rid,
+                args=args,
+                env=env,
+                started_ns=trace_started_ns,
+            )
+        return env
 
     # actor_id grammar validation per PRD §2 / trade-trace-3mp. Runs before
     # the tool lookup so malformed actors are rejected uniformly.
     try:
         validate_actor_id(actor_id)
     except ToolError as exc:
-        return error_envelope(meta, exc.code, exc.message, exc.details)
+        return _trace_return(error_envelope(meta, exc.code, exc.message, exc.details))
 
     try:
         registration = reg.get(tool_name)
     except KeyError:
-        return error_envelope(
+        return _trace_return(error_envelope(
             meta,
             ErrorCode.NOT_FOUND,
             f"unknown tool {tool_name!r}",
@@ -360,7 +374,7 @@ def dispatch(
                 "tool": tool_name,
                 "known_tools": reg.names(),
             },
-        )
+        ))
 
     ctx = ToolContext(tool=tool_name, actor_id=actor_id, request_id=rid, raw_args=args)
 
@@ -394,7 +408,7 @@ def dispatch(
             args = {**args, "idempotency_key": derived}
             ctx_idempotency_source: str | None = "auto"
         else:
-            return error_envelope(
+            return _trace_return(error_envelope(
                 meta,
                 ErrorCode.VALIDATION_ERROR,
                 (
@@ -410,7 +424,7 @@ def dispatch(
                     "opt_out_mcp": "_allow_no_idempotency",
                     "auto_derivation_available": False,
                 },
-            )
+            ))
     else:
         ctx_idempotency_source = (
             "caller" if (
@@ -461,13 +475,13 @@ def dispatch(
             data = registration.handler(args, ctx)
         except ToolError as exc:
             _apply_hints()
-            return error_envelope(meta, exc.code, exc.message, exc.details)
+            return _trace_return(error_envelope(meta, exc.code, exc.message, exc.details))
         except HomePathValidationError as exc:
             # Traversal attempts in --home / journal home (bead trade-trace-pqex)
             # surface as a typed VALIDATION_ERROR envelope regardless of which
             # tool handler called resolve_home.
             _apply_hints()
-            return error_envelope(
+            return _trace_return(error_envelope(
                 meta,
                 ErrorCode.VALIDATION_ERROR,
                 str(exc),
@@ -476,10 +490,10 @@ def dispatch(
                     "value": exc.value,
                     "reason": "path_traversal_rejected",
                 },
-            )
+            ))
         except IdempotencyConflictError as exc:
             _apply_hints()
-            return error_envelope(
+            return _trace_return(error_envelope(
                 meta,
                 ErrorCode.IDEMPOTENCY_CONFLICT,
                 str(exc),
@@ -490,7 +504,7 @@ def dispatch(
                     "original_event_id": exc.original_event_id,
                     "diff_summary": exc.diff_summary,
                 },
-            )
+            ))
         except sqlite3.IntegrityError as exc:
             # SQLite CHECK / FK / UNIQUE / append-only-trigger violations all
             # surface as IntegrityError. Translate them into a typed envelope so
@@ -506,7 +520,7 @@ def dispatch(
             else:
                 code = ErrorCode.STORAGE_ERROR
             _apply_hints()
-            return error_envelope(meta, code, msg, {"sqlite_error": msg})
+            return _trace_return(error_envelope(meta, code, msg, {"sqlite_error": msg}))
         except sqlite3.Error as exc:
             _apply_hints()
             msg = str(exc)
@@ -518,27 +532,27 @@ def dispatch(
                 # that 2-second starting point. SQLite already waited for the
                 # connection's busy_timeout before surfacing this error.
                 details.update({"reason": "single_writer_lock", "retry_after_seconds": 2})
-            return error_envelope(
+            return _trace_return(error_envelope(
                 meta,
                 ErrorCode.STORAGE_ERROR,
                 msg,
                 details,
-            )
+            ))
 
         if not isinstance(data, dict):
             # Handlers must return a dict; treat anything else as an invariant
             # violation so the bug surfaces immediately rather than producing
             # a malformed envelope.
             _apply_hints()
-            return error_envelope(
+            return _trace_return(error_envelope(
                 meta,
                 ErrorCode.INVARIANT_VIOLATION,
                 f"tool {tool_name!r} returned non-dict result",
                 {"result_type": type(data).__name__},
-            )
+            ))
 
         _apply_hints()
-        return SuccessEnvelope(data=data, meta=meta)
+        return _trace_return(SuccessEnvelope(data=data, meta=meta))
     finally:
         if dry_run_token is not None:
             DRY_RUN_FLAG.reset(dry_run_token)
