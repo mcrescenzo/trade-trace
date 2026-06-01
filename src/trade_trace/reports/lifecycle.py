@@ -275,6 +275,9 @@ def _derive_decision_case(
 
     if marker is not None:
         reason_codes.append("material_non_action_marker_present")
+    metadata = _metadata_dict(decision.get("metadata_json"))
+    if metadata.get("tracelab_seeded") is True:
+        reason_codes.append("tracelab_seeded")
     if not any(ref["kind"] == "source" for ref in refs):
         caveats.append("missing_source_ref")
 
@@ -411,14 +414,19 @@ def _iso(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _material_marker(metadata_json: str | None) -> dict[str, Any] | None:
+def _metadata_dict(metadata_json: str | None) -> dict[str, Any]:
     if not metadata_json:
-        return None
+        return {}
     try:
         metadata = json.loads(metadata_json)
     except json.JSONDecodeError:
-        return None
-    marker = metadata.get("material_non_action") if isinstance(metadata, dict) else None
+        return {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _material_marker(metadata_json: str | None) -> dict[str, Any] | None:
+    metadata = _metadata_dict(metadata_json)
+    marker = metadata.get("material_non_action")
     return marker if isinstance(marker, dict) else None
 
 
