@@ -11,10 +11,12 @@ import json
 import time
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from urllib.error import HTTPError
 
 from trade_trace.mcp_server import mcp_call
 
@@ -30,7 +32,7 @@ class SeederAbort(RuntimeError):
         self,
         message: str,
         *,
-        candidates: list["Candidate"] | None = None,
+        candidates: list[Candidate] | None = None,
         gamma_requests: int | None = None,
         histogram: dict[str, int] | None = None,
     ) -> None:
@@ -191,8 +193,15 @@ def fetch_gamma_markets(base_url: str, *, budget: GammaBudget, limit: int, offse
     url = f"{base}/markets?{query}"
     budget.spend()
     req = urllib.request.Request(url, headers={"User-Agent": "trade-trace-tracelab-seeder/0.1"})
-    with urllib.request.urlopen(req, timeout=timeout_seconds) as response:  # noqa: S310 - allowlisted URL only
-        payload = json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_seconds) as response:  # noqa: S310 - allowlisted URL only
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        if exc.code == 429:
+            raise SeederAbort(f"Gamma rate limit: HTTP 429 for /markets offset={offset}") from exc
+        if 400 <= exc.code < 500:
+            raise SeederAbort(f"Gamma schema drift: /markets HTTP {exc.code} for offset={offset}") from exc
+        raise
     if isinstance(payload, dict):
         items = payload.get("markets") or payload.get("data") or payload.get("items")
     else:

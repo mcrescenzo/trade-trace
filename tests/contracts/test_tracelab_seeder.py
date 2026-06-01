@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from email.message import Message
 from pathlib import Path
+from urllib.error import HTTPError
 
 import pytest
 
@@ -153,6 +155,34 @@ def test_seed_writes_partial_artifact_on_budget_exhaustion(tmp_path: Path) -> No
     assert payload["condition_ids"] == ["cond-1", "cond-2"]
     assert payload["histogram"]["accepted"] == 2
     assert payload["histogram"]["pages_scanned"] == 2
+
+
+def test_seed_writes_partial_artifact_on_gamma_429(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    artifact = tmp_path / "partial-429.json"
+
+    def raise_429(*args, **kwargs):
+        raise HTTPError("https://gamma-api.polymarket.com/markets", 429, "Too Many Requests", hdrs=Message(), fp=None)
+
+    monkeypatch.setattr(seeder.urllib.request, "urlopen", raise_429)
+
+    with pytest.raises(seeder.SeederAbort, match="Gamma rate limit: HTTP 429"):
+        seeder.seed(
+            home=str(tmp_path / "home"),
+            artifact_path=str(artifact),
+            dry_run=True,
+            base_url=seeder.GAMMA_BASE_URL,
+            request_cap=5,
+            target=3,
+            page_size=1,
+            as_of=datetime(2026, 6, 1, tzinfo=UTC),
+        )
+
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    assert payload["complete"] is False
+    assert "Gamma rate limit: HTTP 429" in payload["abort_reason"]
+    assert payload["gamma_requests"] == 1
+    assert payload["candidate_count"] == 0
+    assert payload["histogram"]["pages_scanned"] == 0
 
 
 def test_cli_filter_args_are_plumbed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
