@@ -29,7 +29,7 @@ READ_RAIL_TOOLS = {
 CAVEATS = {
     "read_rail_adoption": (
         "Observational per-actor call counts from the live B1 dispatch trace only; "
-        "not a causal precedence/looked-before-leaped claim and not replay-reproducible "
+        "not a causal precedence/looked-before-leaped claim and not reproducible; not replay-reproducible "
         "from post-hoc replay/JSONL reconstruction because replay drops signal.emitted "
         "and memory_node.invalidated diagnostic lines and never reconstructs read dispatch calls."
     ),
