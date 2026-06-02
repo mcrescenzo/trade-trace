@@ -119,6 +119,33 @@ def test_forecast_presence_flags_no_scoreable_forecast_without_silent_zero(home)
     assert outcomes == 0
 
 
+def test_feeder_treats_committed_but_unrevealed_forecast_as_no_scoreable_forecast(home):
+    instrument_id, thesis_id = _setup_market(home)
+    forecast = _add_scoreable_forecast(home, thesis_id)
+    assert forecast["ok"] is True
+    committed = _envelope(home, "forecast.commit_blind", {"forecast_id": forecast["data"]["id"]})
+    assert committed["ok"] is True
+
+    result = feed_manual_resolutions(home, [ManualResolution(
+        instrument_id=instrument_id,
+        resolved_at="2026-06-30T00:00:00Z",
+        outcome_label="yes",
+        confidence=0.99,
+        confirm_outcome_label="yes",
+    )])
+
+    assert result.submitted_count == 0
+    assert result.resolved_but_no_forecast_count == 1
+    db = open_database(db_path(home))
+    try:
+        scores = db.connection.execute("SELECT COUNT(*) FROM forecast_scores").fetchone()[0]
+        outcomes = db.connection.execute("SELECT COUNT(*) FROM outcomes").fetchone()[0]
+    finally:
+        db.close()
+    assert scores == 0
+    assert outcomes == 0
+
+
 def test_integration_feed_writes_forecast_scores_row(home):
     instrument_id, thesis_id = _setup_market(home)
     forecast = _add_scoreable_forecast(home, thesis_id)

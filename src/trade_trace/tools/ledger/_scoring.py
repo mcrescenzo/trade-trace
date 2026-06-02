@@ -117,6 +117,18 @@ def _autoscore_pending_forecasts(
         JOIN theses t ON t.id = f.thesis_id
         WHERE t.instrument_id = ?
           AND f.scoring_support = 'supported'
+          AND NOT (
+            EXISTS (
+              SELECT 1 FROM events e
+              WHERE e.subject_id = f.id
+                AND e.event_type = 'forecast.blind_committed'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM forecast_independence_locks fil
+              WHERE fil.forecast_id = f.id
+                AND fil.independence_proven = 1
+            )
+          )
         """,
         (instrument_id,),
     )

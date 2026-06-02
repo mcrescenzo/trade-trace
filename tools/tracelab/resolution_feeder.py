@@ -95,6 +95,18 @@ def scoreable_forecast_count(home: str | Path, instrument_id: str) -> int:
             WHERE t.instrument_id = ?
               AND f.scoring_support = 'supported'
               AND f.scoring_state IN ('pending', 'scored')
+              AND NOT (
+                EXISTS (
+                  SELECT 1 FROM events e
+                  WHERE e.subject_id = f.id
+                    AND e.event_type = 'forecast.blind_committed'
+                )
+                AND NOT EXISTS (
+                  SELECT 1 FROM forecast_independence_locks fil
+                  WHERE fil.forecast_id = f.id
+                    AND fil.independence_proven = 1
+                )
+              )
             """,
             (instrument_id,),
         ).fetchone()
