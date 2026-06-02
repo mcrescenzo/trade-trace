@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import time
 from pathlib import Path
 from typing import Any
 
 from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope, dump_envelope
+from trade_trace.events.semantic_keys import TOOL_PRIMARY_EVENT_TYPE
+from trade_trace.replay_fingerprint import compute_replay_fingerprint
 from trade_trace.security import redact_for_log, scan_text
 
 ENABLE_ENV = "TRADE_TRACE_DISPATCH_TRACE"
@@ -21,6 +24,8 @@ PATH_ENV = "TRADE_TRACE_DISPATCH_TRACE_PATH"
 MAX_BYTES_ENV = "TRADE_TRACE_DISPATCH_TRACE_MAX_BYTES"
 MAX_FILES_ENV = "TRADE_TRACE_DISPATCH_TRACE_MAX_FILES"
 HOME_ENV = "TRADE_TRACE_HOME"
+REPLAY_SECRET_ENV = "TRADE_TRACE_REPLAY_FINGERPRINT_SECRET"
+REPLAY_SECRET_FILE_ENV = "TRADE_TRACE_REPLAY_FINGERPRINT_SECRET_FILE"
 
 _DEFAULT_MAX_BYTES = 10 * 1024 * 1024
 _DEFAULT_MAX_FILES = 5
@@ -64,6 +69,45 @@ def _chmod_0600(path: Path) -> None:
         os.chmod(path, 0o600)
     except OSError:
         pass
+
+
+def _replay_secret() -> tuple[str | None, str | None]:
+    secret = os.environ.get(REPLAY_SECRET_ENV)
+    if secret:
+        return secret, None
+    secret_file = os.environ.get(REPLAY_SECRET_FILE_ENV)
+    if secret_file:
+        try:
+            path = Path(secret_file).expanduser()
+            if not path.is_file():
+                return None, "secret_missing"
+            if path.stat().st_mode & (stat.S_IRGRP | stat.S_IROTH):
+                return None, "secret_file_unsafe"
+            file_secret = path.read_text(encoding="utf-8").strip()
+            return (file_secret, None) if file_secret else (None, "secret_missing")
+        except OSError:
+            return None, "secret_missing"
+    return None, "secret_missing"
+
+
+def _add_replay_fingerprint(record: dict[str, Any], *, tool: str, actor_id: str, args: dict[str, Any]) -> None:
+    key = args.get("idempotency_key")
+    if not isinstance(key, str) or not key:
+        return
+    event_type = TOOL_PRIMARY_EVENT_TYPE.get(tool)
+    if event_type is None:
+        record["meta"]["replay_fingerprint_status"] = "event_type_unmapped"
+        return
+    secret, status = _replay_secret()
+    if secret is None:
+        record["meta"]["replay_fingerprint_status"] = status or "secret_missing"
+        return
+    record["replay_fingerprint"] = compute_replay_fingerprint(
+        secret=secret,
+        event_type=event_type,
+        actor_id=actor_id,
+        idempotency_key=key,
+    )
 
 
 def _rotate(path: Path, max_bytes: int, max_files: int) -> None:
@@ -144,6 +188,7 @@ def emit(
             record["attempt"] = attempt
         if retry_of is not None:
             record["retry_of"] = retry_of
+        _add_replay_fingerprint(record, tool=tool, actor_id=actor_id, args=args)
         if "reason" in details:
             record["details"]["reason"] = _safe_json_value(details["reason"])
         if "retry_after_seconds" in details:

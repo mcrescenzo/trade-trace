@@ -14,7 +14,10 @@ from trade_trace.dispatch_trace import (
     MAX_BYTES_ENV,
     MAX_FILES_ENV,
     PATH_ENV,
+    REPLAY_SECRET_ENV,
+    REPLAY_SECRET_FILE_ENV,
 )
+from trade_trace.replay_fingerprint import compute_replay_fingerprint
 from trade_trace.storage.paths import HomePathValidationError
 from trade_trace.tools.errors import ToolError
 
@@ -212,3 +215,75 @@ def test_trace_rotates_at_configured_cap(tmp_path: Path, monkeypatch):
     assert not trace_path.with_name("dispatch.jsonl.3").exists()
     assert stat.S_IMODE(os.stat(trace_path).st_mode) == 0o600
     assert stat.S_IMODE(os.stat(trace_path.with_name("dispatch.jsonl.2")).st_mode) == 0o600
+
+
+def test_replay_fingerprint_missing_secret_status_is_non_secret(tmp_path: Path, monkeypatch):
+    trace_path = tmp_path / "dispatch.jsonl"
+    raw_key = "raw-missing-secret-key"
+    monkeypatch.setenv(ENABLE_ENV, "1")
+    monkeypatch.setenv(PATH_ENV, str(trace_path))
+    monkeypatch.delenv(REPLAY_SECRET_ENV, raising=False)
+    monkeypatch.delenv(REPLAY_SECRET_FILE_ENV, raising=False)
+
+    env = dispatch(
+        "decision.add",
+        {"idempotency_key": raw_key},
+        actor_id="cli:test",
+        request_id="r-missing-secret",
+        registry=_registry("decision.add", lambda args, ctx: {"ok": True}, is_write=True),
+    )
+
+    assert env.ok is True
+    text = trace_path.read_text()
+    assert raw_key not in text
+    rec = _records(trace_path)[0]
+    assert rec["meta"]["replay_fingerprint_status"] == "secret_missing"
+    assert "replay_fingerprint" not in rec
+
+
+def test_replay_fingerprint_secret_file_permissions(tmp_path: Path, monkeypatch):
+    trace_path = tmp_path / "dispatch.jsonl"
+    secret_file = tmp_path / "secret.txt"
+    secret = "file-secret-value"
+    raw_key = "file-secret-raw-key"
+    secret_file.write_text(secret)
+    os.chmod(secret_file, 0o600)
+    monkeypatch.setenv(ENABLE_ENV, "1")
+    monkeypatch.setenv(PATH_ENV, str(trace_path))
+    monkeypatch.delenv(REPLAY_SECRET_ENV, raising=False)
+    monkeypatch.setenv(REPLAY_SECRET_FILE_ENV, str(secret_file))
+    registry = _registry("decision.add", lambda args, ctx: {"ok": True}, is_write=True)
+
+    env = dispatch(
+        "decision.add",
+        {"idempotency_key": raw_key},
+        actor_id="cli:test",
+        request_id="r-file-ok",
+        registry=registry,
+    )
+
+    assert env.ok is True
+    first = _records(trace_path)[0]
+    assert first["replay_fingerprint"] == compute_replay_fingerprint(
+        secret=secret,
+        event_type="decision.created",
+        actor_id="cli:test",
+        idempotency_key=raw_key,
+    )
+    os.chmod(secret_file, 0o644)
+    unsafe_key = "unsafe-file-raw-key"
+    dispatch(
+        "decision.add",
+        {"idempotency_key": unsafe_key},
+        actor_id="cli:test",
+        request_id="r-file-unsafe",
+        registry=registry,
+    )
+
+    text = trace_path.read_text()
+    assert raw_key not in text
+    assert unsafe_key not in text
+    assert secret not in text
+    second = _records(trace_path)[1]
+    assert second["meta"]["replay_fingerprint_status"] == "secret_file_unsafe"
+    assert "replay_fingerprint" not in second
