@@ -11,11 +11,14 @@ from __future__ import annotations
 
 import sqlite3
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.reports._filter_support import process_filter
+from trade_trace.timestamps import (
+    parse_report_timestamp_lenient_naive_as_utc as _parse_ts,
+)
 
 DEFAULT_OPPORTUNITY_MIN_SAMPLE = 20
 _COVERAGE_RANK = {"missing": 0, "sparse": 1, "partial": 2, "complete": 3}
@@ -23,17 +26,6 @@ _ENTER_TYPES = {"paper_enter", "actual_enter", "add"}
 _SKIP_TYPES = {"skip", "watch"}
 
 
-def _parse_ts(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    text = value.replace("Z", "+00:00")
-    try:
-        dt = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt
 
 
 def _price(row: sqlite3.Row) -> float | None:

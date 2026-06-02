@@ -11,6 +11,9 @@ from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 from trade_trace.storage.database import read_snapshot
+from trade_trace.timestamps import (
+    parse_report_timestamp_lenient_utc_naive_as_utc as _dt,
+)
 from trade_trace.tools._helpers import now_iso, open_db_for_args
 
 REPORT_NAME = "report.operational_health"
@@ -30,16 +33,6 @@ _STALE_SNAPSHOT_STATUSES = {"stale", "missing", "unknown"}
 _UNRESOLVED_RECONCILIATION = {"unresolved", "accepted_caveat"}
 
 
-def _dt(value: Any) -> datetime | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
 
 
 def _iso(value: datetime) -> str:

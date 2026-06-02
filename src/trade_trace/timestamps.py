@@ -222,6 +222,24 @@ def parse_report_timestamp_lenient_naive_as_utc(
     return dt
 
 
+def parse_report_timestamp_lenient_utc_naive_as_utc(
+    value: str | datetime | None,
+) -> datetime | None:
+    """execution_quality/operational_health-compatible report timestamp parsing.
+
+    Missing/falsey and invalid inputs return None. Naive datetimes are treated as
+    UTC by attaching UTC tzinfo. Aware datetimes are normalized to UTC via
+    astimezone(UTC) (unlike the preserve-offset lenient variants).
+    """
+
+    dt = parse_report_timestamp_lenient_preserve_naive_offset(value)
+    if dt is None:
+        return None
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
 def parse_report_timestamp_strict_utc_naive_as_utc(
     value: str | datetime | None,
 ) -> datetime:

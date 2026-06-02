@@ -6,6 +6,9 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+from trade_trace.timestamps import (
+    parse_report_timestamp_lenient_utc_naive_as_utc as _dt,
+)
 from trade_trace.tools._helpers import open_db_for_args
 
 DEFAULT_MIN_SAMPLE = 5
@@ -27,17 +30,6 @@ def _loads(value: Any, default: Any) -> Any:
     return value
 
 
-def _dt(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    text = value.replace("Z", "+00:00")
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
 
 
 def _iso_now(args: dict[str, Any]) -> datetime:

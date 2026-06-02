@@ -54,6 +54,40 @@ def _resolve_strategy_filter(conn: sqlite3.Connection, value: str | None) -> str
     return row[0] if row else value
 
 
+def apply_actor_instrument_filters(
+    rf: ReportFilter,
+    where: list[str],
+    params: list[Any],
+    *,
+    forecast_alias: str = "f",
+    instrument_alias: str = "i",
+) -> None:
+    """Append the actor (5 fields) + `instrument.venue_id` WHERE clauses shared by
+    the scored-forecast reports (calibration / forecast_diagnostics).
+
+    Mutates `where`/`params` in place. Each emitted `IN (...)` clause's
+    placeholders are extended into `params` immediately after the clause is
+    appended, so the caller's surrounding clause order does not affect
+    placeholder/param alignment.
+    """
+
+    for values, column in (
+        (rf.actors.actor_id, "actor_id"),
+        (rf.actors.agent_id, "agent_id"),
+        (rf.actors.model_id, "model_id"),
+        (rf.actors.environment, "environment"),
+        (rf.actors.run_id, "run_id"),
+    ):
+        if values:
+            where.append(f"{forecast_alias}.{column} IN ({_placeholders(len(values))})")
+            params.extend(values)
+    if rf.instrument.venue_id:
+        where.append(
+            f"{instrument_alias}.venue_id IN ({_placeholders(len(rf.instrument.venue_id))})"
+        )
+        params.extend(rf.instrument.venue_id)
+
+
 class UnsupportedFilterError(ValueError):
     """A report saw a non-default value in a path it does not support."""
 
@@ -320,6 +354,7 @@ __all__ = [
     "_placeholders",
     "_resolve_strategy_filter",
     "applied_filter_view",
+    "apply_actor_instrument_filters",
     "enforce_supported_filter",
     "process_filter",
 ]

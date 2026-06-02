@@ -1,6 +1,12 @@
 # MVP Dogfood and Provenance Protocol
 
-> Status: **shipped**. The MVP loop-usefulness protocol agents follow today; pinned by tests under `tests/integration/test_final_dogfood_verification.py`.
+> Status: **shipped**. The MVP loop-usefulness protocol agents follow today.
+> The legacy 0.0.1 `journal.fixture_seed` dogfood verification module
+> (`tests/integration/test_final_dogfood_verification.py`) was superseded by the
+> v0.0.2 PM-only fixture/report gate and has been removed; the loop is now pinned
+> by `tests/integration/test_fixture_seed.py`,
+> `tests/integration/test_pm_native_reports.py`, and the
+> [agent-continuity dogfood scorecard](agent-continuity-scorecard.md).
 
 
 Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),

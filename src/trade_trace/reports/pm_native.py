@@ -27,19 +27,13 @@ from trade_trace.reports.calibration import (
     _empty_metrics,
     _load_scored_rows,
 )
+from trade_trace.timestamps import (
+    parse_report_timestamp_lenient_preserve_naive_offset as _parse_ts,
+)
 from trade_trace.tools.ledger._finality import (
     finality_uncertain_for_outcome,
     is_auto_scoreable_final,
 )
-
-
-def _parse_ts(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
 
 
 def _hours_between(start: str | None, end: str | None) -> float | None:
