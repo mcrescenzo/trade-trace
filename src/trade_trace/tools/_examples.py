@@ -719,7 +719,7 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
     },
     "model.import": {
         "minimal": {
-            "src": "/tmp/models/bge-small-en-v1.5",
+            "path": "/tmp/models/bge-small-en-v1.5",
             "idempotency_key": _IDEM,
         },
     },

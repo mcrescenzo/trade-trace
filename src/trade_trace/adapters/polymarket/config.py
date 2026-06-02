@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from sqlite3 import Connection
+from sqlite3 import Connection, Error
 
 ACTOR_ID = "system:polymarket-adapter"
 KEY_ENABLED = "network.polymarket.enabled"
@@ -69,7 +69,7 @@ def load_config(conn: Connection | None = None) -> PolymarketConfig:
             "SELECT key, value FROM config WHERE key IN (?, ?, ?, ?)",
             (KEY_ENABLED, KEY_GAMMA_BASE_URL, KEY_POLYGON_RPC_URL, KEY_TIMEOUT_SECONDS),
         ).fetchall()
-    except Exception:
+    except Error:
         return PolymarketConfig()
     return config_from_mapping({str(k): str(v) for k, v in rows})
 

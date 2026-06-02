@@ -12,19 +12,15 @@ from typing import Any
 
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
 from trade_trace.reports._envelope import standard_report_result
-from trade_trace.reports._filter_support import process_filter
+from trade_trace.reports._filter_support import _resolve_strategy_filter, process_filter
 from trade_trace.storage.database import read_snapshot
+from trade_trace.timestamps import (
+    parse_report_timestamp_strict_utc_naive_as_utc as _parse_ts,
+)
 from trade_trace.tools._helpers import now_iso
 
 REPORT_NAME = "report.strategy_health"
 DEFAULT_HEALTH_MIN_SAMPLE = 5
-
-
-def _parse_ts(value: str) -> datetime:
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt.astimezone(UTC)
 
 
 def _iso(dt: datetime) -> str:
@@ -58,13 +54,6 @@ def _extend_filter_sql(alias: str, rf: ReportFilter, params: list[Any], *, time_
             clauses.append("d.created_at < ?")
             params.append(tw.decision_at_lt)
     return "".join(f" AND {clause}" for clause in clauses)
-
-
-def _resolve_strategy_filter(conn: sqlite3.Connection, value: str | None) -> str | None:
-    if value in (None, STRATEGY_NONE_SENTINEL):
-        return value
-    row = conn.execute("SELECT id FROM strategies WHERE id = ? OR slug = ? ORDER BY id LIMIT 1", (value, value)).fetchone()
-    return row[0] if row else value
 
 
 def _ids(conn: sqlite3.Connection, sql: str, params: list[Any]) -> list[str]:

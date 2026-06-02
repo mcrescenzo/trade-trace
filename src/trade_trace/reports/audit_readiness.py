@@ -9,7 +9,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from typing import Any
 
-from trade_trace.timestamps import to_utc_iso8601
+from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
 
 MAX_SAMPLES = 100
 DEFAULT_STALE_SNAPSHOT_THRESHOLD_DAYS = 1
@@ -87,7 +87,7 @@ def _parse(ts: str | None) -> datetime | None:
         return None
     try:
         return datetime.fromisoformat(to_utc_iso8601(ts).replace("Z", "+00:00"))
-    except Exception:
+    except (ValueError, TimestampValidationError):
         return None
 
 
@@ -166,7 +166,7 @@ def _missing_microstructure(conn: sqlite3.Connection) -> dict[str, Any]:
             missing.append("spread")
         try:
             empty_depth = not bool(json.loads(depth or "{}"))
-        except Exception:
+        except json.JSONDecodeError:
             empty_depth = True
         if empty_depth:
             missing.append("liquidity_depth_json")

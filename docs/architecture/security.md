@@ -26,7 +26,7 @@ addendum.
 |---|---|---|
 | Journal SQLite database | `$TRADE_TRACE_HOME/trade-trace.sqlite` | Every decision, thesis, forecast, outcome, source. The primary historical record. |
 | JSONL export outbox | `$TRADE_TRACE_HOME/export/jsonl/<YYYY>/<MM>/<DD>/*.jsonl` | A redundant audit log: one file per committed event, replayable on a fresh DB (persistence.md §4). |
-| Embeddings model weights | `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/` (only after `tt model import --src ...`) | Local model artifacts verified against Trade Trace-pinned SHA-256/size lock data for an immutable HuggingFace revision. Source-provided manifests are not trusted. No agent input is sent over the network when `embeddings.provider = none` (the default). |
+| Embeddings model weights | `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/` (only after `tt model import --path ...`) | Local model artifacts verified against Trade Trace-pinned SHA-256/size lock data for an immutable HuggingFace revision. Source-provided manifests are not trusted. No agent input is sent over the network when `embeddings.provider = none` (the default). |
 
 Notably *not* held: broker credentials, exchange API keys, wallet seed
 phrases, signing keys. The PRD §2.8 product boundary forbids them; the
@@ -160,7 +160,7 @@ Adding a new persisted free-text column to a migration requires:
   datadog, rollbar, posthog}`.
 - The Polymarket adapter is opt-in and disabled by default. With the default configuration, Trade Trace creates no adapter HTTP client and generates zero outbound traffic.
 - Semantic embeddings are local-only in v0.0.2. `tt journal config_set --key embeddings.provider --value local --confirm` only records the local provider choice and reports whether imported model files are present; it does not download, stage, or verify model assets.
-- Local embedding installs use `tt model import --src <pre-staged BAAI/bge-small-en-v1.5> --confirm`. That path only reads local files, ignores any source-provided manifest as proof, rejects unsafe paths/symlinks through the verified copy pipeline, verifies pinned lock data, and copies only allowlisted files into `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/`; it performs zero outbound calls.
+- Local embedding installs use `tt model import --path <pre-staged BAAI/bge-small-en-v1.5> --confirm`. That path only reads local files, ignores any source-provided manifest as proof, rejects unsafe paths/symlinks through the verified copy pipeline, verifies pinned lock data, and copies only allowlisted files into `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/`; it performs zero outbound calls.
 - Remote/API embedding providers and keyring-backed embedding credentials are unsupported. `keyring.revoke` is a legacy no-op retained for older clients.
 
 ## 8. Redaction of `review.bundle` (Contract; Impl is P1)

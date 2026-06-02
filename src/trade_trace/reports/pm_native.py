@@ -15,7 +15,11 @@ from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.reports._envelope import standard_report_result
-from trade_trace.reports._filter_support import applied_filter_view, enforce_supported_filter
+from trade_trace.reports._filter_support import (
+    _placeholders,
+    applied_filter_view,
+    enforce_supported_filter,
+)
 from trade_trace.reports.calibration import (
     DEFAULT_BIN_POLICY,
     DEFAULT_MIN_SAMPLE,
@@ -27,10 +31,6 @@ from trade_trace.tools.ledger._finality import (
     finality_uncertain_for_outcome,
     is_auto_scoreable_final,
 )
-
-
-def _placeholders(count: int) -> str:
-    return ", ".join("?" for _ in range(count))
 
 
 def _parse_ts(value: str | None) -> datetime | None:

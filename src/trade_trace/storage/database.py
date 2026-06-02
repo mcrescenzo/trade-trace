@@ -62,17 +62,6 @@ class Database:
         _chmod_wal_shm_siblings(self.path)
         self.connection.close()
 
-    def ensure_user_only_permissions(self) -> None:
-        """Re-apply 0600 to the DB plus any WAL/SHM siblings.
-
-        Callers run this after writes to tighten the perms an
-        unfortunately-loose umask may have allowed. Safe to call
-        repeatedly; missing siblings are no-ops.
-        """
-
-        chmod_user_only_file(self.path)
-        _chmod_wal_shm_siblings(self.path)
-
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
         """Run a block in a single SQLite transaction. Commits on success,

@@ -13,12 +13,16 @@ from typing import Any
 
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
 from trade_trace.reports._envelope import standard_report_result
-from trade_trace.reports._filter_support import applied_filter_view, enforce_supported_filter
+from trade_trace.reports._filter_support import (
+    _placeholders,
+    _resolve_strategy_filter,
+    applied_filter_view,
+    enforce_supported_filter,
+)
 from trade_trace.reports.calibration import (
     DEFAULT_MIN_SAMPLE,
     _compute_metrics,
     _empty_metrics,
-    _placeholders,
     _resolve_p_yes_and_y,
 )
 from trade_trace.storage.database import read_snapshot
@@ -118,11 +122,6 @@ def _compose_forecast_diagnostics(
     return standard_report_result(summary=summary, groups=groups)
 
 
-def _resolve_strategy_filter(conn: sqlite3.Connection, value: str | None) -> str | None:
-    if value in (None, STRATEGY_NONE_SENTINEL):
-        return value
-    row = conn.execute("SELECT id FROM strategies WHERE id = ? OR slug = ? ORDER BY id LIMIT 1", (value, value)).fetchone()
-    return row[0] if row else value
 
 
 def _base_where(conn: sqlite3.Connection, rf: ReportFilter) -> tuple[list[str], list[Any]]:

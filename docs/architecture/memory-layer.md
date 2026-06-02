@@ -21,7 +21,7 @@ It is **not** a generic agent memory framework. The schema is trading-shaped: ev
 ## 2. Design principles
 
 1. **One SQLite file is the entire product state.** Ledger, memory, edges, FTS index, and (when enabled) vector index live in one DB. `cp trade-trace.sqlite` is a complete backup. Load-bearing for the air-gappable install promise. Backup/restore caveats (open WAL, in-flight outbox drain) covered in [`operability.md`](operability.md) §5.
-2. **Zero-config first run, no surprise network.** `pip install trade-trace && tt journal init && trade-trace-mcp` works without flags or API keys. Vectors are **off** by MVP default; `journal.init` makes zero outbound calls. The SEMANTIC strategy is opt-in via explicit config (`tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` or `tt model import --src <path-to-bge-small> --idempotency-key <uuid> --confirm`); this preserves the absolute air-gap promise from VISION §safety on first run.
+2. **Zero-config first run, no surprise network.** `pip install trade-trace && tt journal init && trade-trace-mcp` works without flags or API keys. Vectors are **off** by MVP default; `journal.init` makes zero outbound calls. The SEMANTIC strategy is opt-in via explicit config (`tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` or `tt model import --path <path-to-bge-small> --idempotency-key <uuid> --confirm`); this preserves the absolute air-gap promise from VISION §safety on first run.
 3. **Optional capabilities, never required.** Vectors, API embedding providers, graph traversal, edge-density confidence — all opt-in or deferred. The MVP product is fully functional without them.
 4. **Trading-specific edges, generic everything else.** Custom typed edges from memory to ledger rows are the moat. Retrieval primitives (BM25, vector, RRF) are standard.
 5. **System-emitted signals are not memory.** They live in a separate table because they have a different author (the system) and a different lifecycle (time-bounded notifications, not durable knowledge the agent authored).
@@ -207,7 +207,7 @@ So the agent can triangulate (e.g., "BM25 surfaced this node, semantic didn't �
 
 - **`SEMANTIC`** — vector similarity using the local ONNX/tokenizers BGE-small path when the operator has both installed the `[embeddings]` extra and imported verified local model assets. There is no automatic model download.
   - `tt journal config_set --key embeddings.provider --value local --idempotency-key <uuid> --confirm` enables use of local assets if present. Missing assets/dependencies degrade semantic recall; journal operations continue.
-  - `tt model import --src <path-to-bge-small> --idempotency-key <uuid> --confirm` copies a pre-staged model directory after SHA-256/size verification against Trade Trace-pinned lock data. This is the only model-staging path and performs zero outbound network calls.
+  - `tt model import --path <path-to-bge-small> --idempotency-key <uuid> --confirm` copies a pre-staged model directory after SHA-256/size verification against Trade Trace-pinned lock data. This is the only model-staging path and performs zero outbound network calls.
   - `tt model warm` attempts a dummy local embed and returns `available=false` if assets/dependencies are absent.
   - Once local embeddings are available, `memory.recall` can include SEMANTIC in the enabled strategies.
 
@@ -276,7 +276,7 @@ The supported local path is explicit and air-gapped:
 2. Pre-stage the pinned `BAAI/bge-small-en-v1.5` assets outside Trade Trace.
 3. Import those assets:
    ```bash
-   tt model import --src <path-to-bge-small> --idempotency-key <uuid> --confirm
+   tt model import --path <path-to-bge-small> --idempotency-key <uuid> --confirm
    ```
 4. Enable local provider use:
    ```bash

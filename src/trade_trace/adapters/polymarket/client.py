@@ -1,8 +1,9 @@
 """Lazy opt-in Polymarket client foundation.
 
-`httpx` and `tenacity` are imported only in this adapter module. Constructing the
-client performs no network I/O; methods fail closed before any outbound call if
-adapter config is disabled or required endpoint config is missing.
+`httpx` is imported only in this adapter module; retries use a hand-rolled
+stdlib backoff (`random` + `time.sleep`), not a third-party retry library.
+Constructing the client performs no network I/O; methods fail closed before any
+outbound call if adapter config is disabled or required endpoint config is missing.
 """
 
 from __future__ import annotations

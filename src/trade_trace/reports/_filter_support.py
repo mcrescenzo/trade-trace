@@ -26,9 +26,32 @@ typed `VALIDATION_ERROR` envelope.
 
 from __future__ import annotations
 
+import sqlite3
 from typing import Any
 
-from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
+
+
+def _placeholders(count: int) -> str:
+    """Return `count` comma-separated SQL `?` placeholders for an `IN (...)`."""
+
+    return ", ".join("?" for _ in range(count))
+
+
+def _resolve_strategy_filter(conn: sqlite3.Connection, value: str | None) -> str | None:
+    """Resolve a strategy id-or-slug filter value to its canonical strategy id.
+
+    Passes None and `STRATEGY_NONE_SENTINEL` through unchanged; otherwise looks
+    the value up by id or slug and returns the matched id (or the original
+    value when nothing matches)."""
+
+    if value in (None, STRATEGY_NONE_SENTINEL):
+        return value
+    row = conn.execute(
+        "SELECT id FROM strategies WHERE id = ? OR slug = ? ORDER BY id LIMIT 1",
+        (value, value),
+    ).fetchone()
+    return row[0] if row else value
 
 
 class UnsupportedFilterError(ValueError):
@@ -294,6 +317,8 @@ def process_filter(rf: ReportFilter, *, report: str) -> dict[str, Any]:
 __all__ = [
     "SUPPORTED_FILTER_FIELDS",
     "UnsupportedFilterError",
+    "_placeholders",
+    "_resolve_strategy_filter",
     "applied_filter_view",
     "enforce_supported_filter",
     "process_filter",

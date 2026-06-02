@@ -124,12 +124,6 @@ def _where(cols: set[str], rf: ReportFilter, alias: str = "") -> tuple[str, list
     return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
 
 
-def _query(conn: sqlite3.Connection, table: str, sql: str, params: tuple[Any, ...] = ()) -> list[sqlite3.Row | tuple[Any, ...]]:
-    if not _has_table(conn, table):
-        return []
-    return conn.execute(sql, params).fetchall()
-
-
 def _build(conn: sqlite3.Connection, args: dict[str, Any]) -> dict[str, Any]:
     limit = min(max(int(args.get("limit", DEFAULT_LIMIT)), 1), 500)
     as_of_dt = _dt(args.get("as_of")) or _dt(now_iso()) or datetime.now(UTC)

@@ -415,15 +415,13 @@ def dispatch(
     # of identical input collapse onto the same key, while collisions
     # surface through the existing IDEMPOTENCY_CONFLICT path. Tools
     # outside the registry continue to require an explicit key.
-    if (
-        registration.is_write
-        and not allow_no_idempotency
-        and not args.get("idempotency_key")
-    ):
+    is_retryable_write = registration.is_write and not allow_no_idempotency
+    ctx_idempotency_source: str | None
+    if is_retryable_write and not args.get("idempotency_key"):
         derived = derive_idempotency_key(tool_name, args)
         if derived is not None:
             args = {**args, "idempotency_key": derived}
-            ctx_idempotency_source: str | None = "auto"
+            ctx_idempotency_source = "auto"
         else:
             return _trace_return(error_envelope(
                 meta,
@@ -442,14 +440,12 @@ def dispatch(
                     "auto_derivation_available": False,
                 },
             ))
+    elif is_retryable_write:
+        # Reached only when an idempotency_key is present (the branch above
+        # consumed the missing-key case), so the caller supplied the key.
+        ctx_idempotency_source = "caller"
     else:
-        ctx_idempotency_source = (
-            "caller" if (
-                registration.is_write
-                and not allow_no_idempotency
-                and args.get("idempotency_key")
-            ) else None
-        )
+        ctx_idempotency_source = None
 
     # Dry-run plumbing per trade-trace-268. The flag is request-scoped so
     # concurrent dispatches do not contaminate each other; UnitOfWork picks

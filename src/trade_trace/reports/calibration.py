@@ -16,6 +16,7 @@ from typing import Any
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
 from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import (
+    _placeholders,
     applied_filter_view,
     enforce_supported_filter,
 )
@@ -523,10 +524,6 @@ def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_Score
         if materialized is not None:
             rows.append(materialized)
     return rows
-
-
-def _placeholders(count: int) -> str:
-    return ", ".join("?" for _ in range(count))
 
 
 def _resolve_p_yes_and_y(

@@ -25,7 +25,11 @@ DOC_PATHS = [
 STALE_SNIPPETS = [
     "journal config_set embeddings.provider",
     "journal restore --from",
-    "tt model import --path",
+    # model.import's input arg is `path` (admin.py `_model_import` requires it
+    # and the derived schema/CLI flag is now `--path`); `--src` was a drifted
+    # spelling that always failed dispatch with "path is required".
+    "tt model import --src",
+    "model import --src",
     "model import <path>",
     "memory.reflect(target, body, *, importance?, derived_from?",
 ]

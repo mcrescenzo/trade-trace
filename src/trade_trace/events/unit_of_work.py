@@ -51,7 +51,6 @@ class UnitOfWork:
         self.conn = conn
         self.event_writer = EventWriter(conn)
         self._projections: list[ProjectionUpdater] = []
-        self._committed = False
 
     @property
     def dry_run(self) -> bool:
@@ -81,7 +80,6 @@ class UnitOfWork:
             self.conn.execute("ROLLBACK")
             return
         self.conn.execute("COMMIT")
-        self._committed = True
 
     def _rollback(self) -> None:
         self.conn.execute("ROLLBACK")

@@ -30,7 +30,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from typing import Any
 
-from trade_trace.timestamps import to_utc_iso8601
+from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
 
 STALE_SOURCE_THRESHOLD_DAYS = 7
 """Per acceptance: a source is *stale* relative to a decision if its
@@ -115,7 +115,7 @@ def _count(conn: sqlite3.Connection, sql: str) -> int:
 def _safe_metadata(raw: str | None) -> dict[str, Any]:
     try:
         parsed = json.loads(raw or "{}")
-    except Exception:
+    except json.JSONDecodeError:
         return {}
     return parsed if isinstance(parsed, dict) else {}
 
@@ -296,7 +296,7 @@ def _stale_sources(
         try:
             fresh_iso = to_utc_iso8601(fresh)
             d_ts_iso = to_utc_iso8601(d_ts)
-        except Exception:
+        except (ValueError, TimestampValidationError):
             continue
         fresh_dt = datetime.fromisoformat(fresh_iso.replace("Z", "+00:00"))
         d_dt = datetime.fromisoformat(d_ts_iso.replace("Z", "+00:00"))
@@ -322,7 +322,7 @@ def _stale_sources(
         try:
             fresh_iso = to_utc_iso8601(str(att.get("freshness_at")))
             d_ts_iso = to_utc_iso8601(d_row[0])
-        except Exception:
+        except (ValueError, TimestampValidationError):
             continue
         fresh_dt = datetime.fromisoformat(fresh_iso.replace("Z", "+00:00"))
         d_dt = datetime.fromisoformat(d_ts_iso.replace("Z", "+00:00"))
@@ -431,50 +431,6 @@ def _duplicated_sources(conn: sqlite3.Connection) -> dict[str, Any]:
     return _bundle(
         diagnostic="duplicated_sources",
         items=items, sample_kind="content_hashes",
-    )
-
-
-# -- (e) sensitive_sources ------------------------------------------
-
-
-def _sensitive_sources(conn: sqlite3.Connection) -> dict[str, Any]:
-    """Sources with `redaction_status='sensitive'` that show up in attached
-    edges. report.bundle (reports.md §5.3) unconditionally strips these;
-    the diagnostic surfaces them so the agent knows which edges are
-    operating against a bundle blank-out."""
-
-    cur = conn.execute(
-        """
-        SELECT DISTINCT s.id, s.redaction_status, e.target_kind, e.target_id
-        FROM edges e
-        JOIN sources s ON s.id = e.source_id
-        WHERE e.source_kind = 'source'
-          AND s.redaction_status = 'sensitive'
-        ORDER BY s.id
-        """
-    )
-    items = [
-        {
-            "id": s_id, "redaction_status": status,
-            "target_kind": target_kind, "target_id": target_id,
-        }
-        for s_id, status, target_kind, target_id in cur.fetchall()
-    ]
-    seen = {(it["id"], it["target_kind"], it["target_id"]) for it in items}
-    for att in _inline_source_attachments(conn):
-        if att.get("redaction_status") != "sensitive":
-            continue
-        key = (att["id"], att["target_kind"], att["target_id"])
-        if key in seen:
-            continue
-        seen.add(key)
-        items.append({
-            "id": att["id"], "redaction_status": "sensitive",
-            "target_kind": att["target_kind"], "target_id": att["target_id"],
-        })
-    return _bundle(
-        diagnostic="sensitive_sources",
-        items=items, sample_kind="sources",
     )
 
 

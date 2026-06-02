@@ -1,13 +1,14 @@
-"""Injectable UTC clock per operability.md §2.2.
+"""Small injectable UTC clock abstraction (`Clock` / `SystemClock` /
+`FixedClock`).
 
-The system clock is the source of "now." For test determinism, the clock is
-injectable: tests fake `now` to verify time-passing signals (`watch.stale`,
-`report.unscored_forecasts`) and bi-temporal validity filters.
-
-`now` is read at most once per tool call and cached for the duration of the
-transaction; this ensures a single call's reads of `time_horizon_at <= now`
-and `valid_to > now` see the same `now`. (The per-call caching lives in the
-core dispatcher; this module supplies the underlying source.)
+NOTE on current usage: as of this writing nothing in `src/` imports this
+module. The live runtime "now" injection point the rest of the codebase
+actually uses is the `CLOCK_OVERRIDE` ContextVar in
+`trade_trace.tools._helpers` (read at most once per tool call and cached for
+the transaction, so a single call's `time_horizon_at <= now` and
+`valid_to > now` reads agree). These classes are presently exercised only by
+`tests/test_timestamps.py`; they remain a clean, dependency-free clock
+contract for tests and any future explicit-injection callers.
 """
 
 from __future__ import annotations
@@ -54,7 +55,7 @@ class FixedClock:
 # process-global injection surface invited per-test bleed and
 # disagreed with the per-call ContextVar pattern.
 #
-# Clock / SystemClock / FixedClock above stay — Clock is the protocol
-# consumers type against and FixedClock is used by tests that need a
-# stationary instant. Production code passes a Clock explicitly to
-# callers that need it; nothing reads from a module-global.
+# Clock / SystemClock / FixedClock above stay — Clock is the protocol to
+# type against and FixedClock is used by tests that need a stationary
+# instant. No src module currently imports them; runtime now-injection is
+# the CLOCK_OVERRIDE ContextVar (see module docstring), not a module-global.

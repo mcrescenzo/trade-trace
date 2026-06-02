@@ -57,7 +57,7 @@ The `snapshots.source` and `outcomes.source` columns are free-form strings. MVP 
 Trade Trace makes no outbound network calls by default. The v0.0.2 outbound surface is intentionally narrow:
 
 - **Polymarket adapter** — disabled by default and configured explicitly. Adapter calls are agent-triggered; there is no background fetch daemon, scheduler, default RPC URL, or committed credential. Security policy requires endpoint allowlisting, TLS verification, scrubbed error/log output, and no request/response body logging.
-- **Local semantic embeddings** — no outbound network path. Operators may install `[embeddings]`, pre-stage the pinned BGE-small assets, import them with `tt model import --src <dir> --confirm`, and set `embeddings.provider=local`. `journal.config_set` does not download model files.
+- **Local semantic embeddings** — no outbound network path. Operators may install `[embeddings]`, pre-stage the pinned BGE-small assets, import them with `tt model import --path <dir> --confirm`, and set `embeddings.provider=local`. `journal.config_set` does not download model files.
 
 Remote/API embedding providers are unsupported in v0.0.2. There is no telemetry, usage analytics, auto-update, webhook, broker integration, or trade execution.
 

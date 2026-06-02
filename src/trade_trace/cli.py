@@ -3,7 +3,9 @@
 The CLI maps `subject.verb` MCP tool names to space-separated invocations
 (`tt subject verb`). Tool args are passed via long flags (`--key value`).
 Output is JSON on stdout by default; `--human` emits prose hints to stderr
-without affecting stdout content. Exit code is 0 when `ok=true`, 1 otherwise.
+without affecting stdout content. Exit codes: 0 on success (`ok=true`); 2 on
+`VALIDATION_ERROR` (and when no command is given); 3 on `INVARIANT_VIOLATION`;
+1 for every other error class.
 
 This adapter is intentionally argparse-based — no third-party CLI dep is
 required at M0 so the install path stays light. Typer/Click can land later
@@ -16,6 +18,7 @@ import argparse
 import getpass
 import json
 import sys
+import uuid
 from typing import Any
 
 from trade_trace.contracts.envelope import (
@@ -265,11 +268,10 @@ def _emit_cli_error(
     JSON-arg, and stray-positional error paths per bead trade-trace-hd2r
     (SIMP-001)."""
 
-    import uuid as _uuid
     meta = Meta(
         tool=tool,
         actor_id=actor_id,
-        request_id=request_id or _uuid.uuid4().hex,
+        request_id=request_id or uuid.uuid4().hex,
     )
     env = error_envelope(meta, code, message, details)
     print(json.dumps(env.model_dump(mode="json", exclude_none=True), sort_keys=True))
@@ -438,11 +440,7 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
     # CLI/MCP parity on the numeric-bound half of the input schema
     # (bead trade-trace-cms2). Required/type/enum failures still fall through
     # to handlers which have friendlier prose.
-    registration = (
-        registry.by_name.get(tool_name)
-        if tool_name in registry.by_name
-        else None
-    )
+    registration = registry.by_name.get(tool_name)
     schema = registration.json_schema if registration is not None else None
     if schema:
         validation_error = reportable_schema_validation_error(

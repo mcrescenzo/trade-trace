@@ -44,7 +44,7 @@ REDACTING_STANCES = {"redacted", "sensitive"}
 def _metadata_with_evidence_stance(raw: str | None, stance: str) -> str:
     try:
         parsed = json.loads(raw or "{}")
-    except Exception:
+    except json.JSONDecodeError:
         parsed = {}
     if not isinstance(parsed, dict):
         parsed = {}
@@ -178,7 +178,7 @@ def _inline_source_object(conn, source_id: str, edge_type: str) -> dict[str, Any
     ) = row
     try:
         meta = json.loads(metadata_json or "{}")
-    except Exception:
+    except json.JSONDecodeError:
         meta = {}
     if not isinstance(meta, dict):
         meta = {}
@@ -208,7 +208,7 @@ def _inline_source_object(conn, source_id: str, edge_type: str) -> dict[str, Any
 def _metadata_with_appended_source(raw: str | None, source: dict[str, Any]) -> str:
     try:
         parsed = json.loads(raw or "{}")
-    except Exception:
+    except json.JSONDecodeError:
         parsed = {}
     if not isinstance(parsed, dict):
         parsed = {}

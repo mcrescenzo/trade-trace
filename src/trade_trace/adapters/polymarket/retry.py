@@ -28,7 +28,10 @@ def retry_after_delay(retry_after: str | None, computed_backoff: float) -> float
 
 
 def retry_policy_kwargs() -> dict[str, object]:
-    """Expose the tenacity policy shape without constructing network clients."""
+    """Return the retry policy as plain config constants (wait/stop names,
+    backoff bounds, retryable status/JSON-RPC codes). These mirror tenacity's
+    API names for readability but are not a tenacity policy object; the adapter
+    applies them with a hand-rolled stdlib backoff loop (see client.py)."""
 
     return {
         "wait": "wait_random_exponential",

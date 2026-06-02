@@ -28,6 +28,7 @@ from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFi
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.reports._filter_support import (
     UnsupportedFilterError,
+    _placeholders,
     applied_filter_view,
     enforce_supported_filter,
 )
@@ -138,10 +139,6 @@ def _select_decision_ids(
         f"ORDER BY d.created_at ASC, d.id ASC LIMIT ?"
     )
     return [row[0] for row in conn.execute(sql, [*params, max_records])]
-
-
-def _placeholders(n: int) -> str:
-    return ", ".join("?" for _ in range(n))
 
 
 # -- row fetchers --------------------------------------------------------
@@ -387,21 +384,6 @@ def _fetch_json_scoped_table(
                 selected_by_id[record["id"]] = record
 
     return sorted(selected_by_id.values(), key=lambda record: tuple(record.get(part.strip().split()[0]) for part in order_by.split(",")))
-
-
-def _fetch_scoped_table(
-    conn: sqlite3.Connection, table: str, cols: list[str], clauses: list[str],
-    params: list[Any], *, order_by: str, omissions: list[str], omission: str,
-) -> list[dict[str, Any]]:
-    scoped_clauses = [clause for clause in clauses if clause]
-    if not scoped_clauses:
-        if _table_exists(conn, table):
-            omissions.append(omission)
-        return []
-    return _fetch_table(
-        conn, table, cols, " OR ".join(scoped_clauses), params,
-        order_by=order_by,
-    )
 
 
 def _gather_autonomous_lifecycle(

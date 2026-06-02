@@ -3,7 +3,6 @@
 Extracted from the monolithic `tools/ledger.py` per bead trade-trace-ji9c.
 This module owns the tiny utilities every domain handler needs:
 
-- `_idempotency_key` / `_allow_no_idempotency`: caller-key plumbing.
 - `_TAG_FORBIDDEN_CHARS` + `_store_tags`: decision-tag normalization +
   HTML/whitespace rejection (bead trade-trace-8u3s).
 - `examples_for`: pull example_minimal / example_rich kwargs out of the
@@ -28,18 +27,6 @@ def examples_for(tool: str) -> dict[str, Any]:
     if ex is None:
         return {"example_minimal": None, "example_rich": None}
     return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
-
-
-def _idempotency_key(args: dict[str, Any]) -> str | None:
-    """Extract the caller-supplied idempotency_key. Returns None for the
-    `_allow_no_idempotency: true` opt-in path; EventWriter then enforces the
-    at-least-once semantics."""
-
-    return args.get("idempotency_key")
-
-
-def _allow_no_idempotency(args: dict[str, Any]) -> bool:
-    return bool(args.get("_allow_no_idempotency"))
 
 
 _TAG_FORBIDDEN_CHARS = frozenset("<>")

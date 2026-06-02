@@ -18,6 +18,9 @@ from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFi
 from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 from trade_trace.reports.watchlist import DEFAULT_STALE_THRESHOLD_DAYS
+from trade_trace.timestamps import (
+    parse_report_timestamp_strict_utc_naive_as_utc as _parse_ts,
+)
 from trade_trace.tools._helpers import now_iso
 
 LifecycleState = Literal[
@@ -397,17 +400,6 @@ def _derive_forecast_case(
 
 def _row_dict(row: tuple[Any, ...], columns: list[str]) -> dict[str, Any]:
     return dict(zip(columns, row, strict=True))
-
-
-def _parse_ts(value: str) -> datetime:
-    # Match strategy_health._parse_ts: a naive ISO string used to be passed
-    # through `astimezone(UTC)`, which in Python 3.11+ interprets naive
-    # datetimes as local time before converting. Treat naive inputs as UTC
-    # (trade-trace-nq8x).
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt.astimezone(UTC)
 
 
 def _iso(value: datetime) -> str:

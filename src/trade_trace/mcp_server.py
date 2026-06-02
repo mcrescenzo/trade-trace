@@ -238,7 +238,7 @@ def _build_stdio_server(registry: ToolRegistry | None = None):
                 },
             )
 
-        registration = reg.get(name) if name in reg.names() else None
+        registration = reg.by_name.get(name)
         schema = registration.json_schema if registration is not None else None
         if schema:
             validation_error = reportable_schema_validation_error(
