@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import json
 import secrets
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
 
@@ -101,6 +103,23 @@ def open_db_for_args(args: dict[str, Any]):
             details={"home": str(home), "db_path": str(path)},
         )
     return open_database(path, create_parent=False)
+
+
+@contextmanager
+def db_for_args(args: dict[str, Any]) -> Iterator[Any]:
+    """Context-manager form of `open_db_for_args` for write handlers.
+
+    Opens the write DB and guarantees `close()` on exit, replacing the
+    repeated ``db = open_db_for_args(args); try: ... finally: db.close()``
+    idiom. Yields the `Database`; use ``db.connection`` for the underlying
+    sqlite3 connection (e.g. ``with db_for_args(args) as db: UnitOfWork(db.connection)``).
+    """
+
+    db = open_db_for_args(args)
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def require(args: dict[str, Any], field: str) -> Any:

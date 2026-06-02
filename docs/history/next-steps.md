@@ -1,6 +1,14 @@
 # Trade Trace v0.0.2: Prediction-Market Pivot + Remediation Roadmap
 
-> **Status:** Planning / historical roadmap. PM-only pivot approved 2026-05-22. Single comprehensive v0.0.2 release.
+> ⚠️ **ARCHIVED — SUPERSEDED HISTORICAL DOCUMENT. Do not use as current guidance.**
+> This is the planning-era v0.0.2 pivot roadmap, archived under `docs/history/`.
+> Most of its work has shipped, and its CLI examples are *target spellings* that
+> do **not** match the `subject.verb` grammar on `main`. For the current state
+> see `README.md`, `docs/AGENT_GUIDE.md`, and the reconciled tool-count /
+> transport baselines in `docs/architecture/v002-pm-pivot-catalog.md`. Kept only
+> as a historical record of the planning rationale.
+
+> **Status:** Planning / historical roadmap (archived). PM-only pivot approved 2026-05-22. Single comprehensive v0.0.2 release.
 > **CLI examples are target spellings for v0.0.2, not the current `default_registry` surface.** Today's CLI uses the `subject.verb` grammar shipped on `main` (e.g., `tt journal.init`, `tt forecast.add`); the hyphenated `subject verb` forms below land with the planned CLI grammar respec in Part X. For current canonical CLI guidance, see `README.md` and `docs/AGENT_GUIDE.md`.
 > **Method:** Two investigation rounds + three-agent catalog audit + brainstorming session + follow-up audit pass against codebase (2026-05-22 PM).
 > **Predecessor:** This document expands the original v0.0.1rc3 remediation plan with the v0.0.2 PM pivot strategic frame. Existing technical remediation items are preserved and re-prioritized under the new scope.

@@ -16,11 +16,11 @@ from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
     common_metadata,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_if_contains_secrets,
     require,
     store_metadata_json,
@@ -66,8 +66,7 @@ def _thesis_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "metadata_json": metadata_json,
         }
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(
                 uow, event_type="thesis.created",
@@ -133,8 +132,6 @@ def _thesis_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     },
                     actor_id=ctx.actor_id, idempotency_key=None, ctx=ctx,
                 )
-    finally:
-        db.close()
     return {"id": thesis_id, "instrument_id": instrument_id, "version": version,
             "side": side, "created_at": created_at}
 

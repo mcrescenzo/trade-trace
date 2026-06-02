@@ -25,7 +25,7 @@
       "reason": "Architecture, PRD, and audit documents describe old-to-new mappings and historical contracts."
     },
     {
-      "pattern": "next-steps.md",
+      "pattern": "docs/history/next-steps.md",
       "terms": [
         "forecast_outcomes",
         "thesis_id",

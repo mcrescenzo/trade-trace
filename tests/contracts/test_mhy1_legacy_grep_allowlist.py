@@ -35,7 +35,6 @@ def test_mhy1_legacy_grep_hits_are_reviewed_or_deferred() -> None:
             "src",
             "tests",
             "docs",
-            "next-steps.md",
             ":!tests/allowlists/mhy1_legacy_grep_allowlist.json",
             ":!tests/contracts/test_mhy1_legacy_grep_allowlist.py",
         ],

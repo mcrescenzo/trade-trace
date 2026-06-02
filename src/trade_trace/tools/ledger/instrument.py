@@ -14,11 +14,11 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_if_contains_secrets,
     require,
     store_metadata_json,
@@ -42,8 +42,7 @@ def _instrument_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     idempotency_key = args.get("idempotency_key")
     expiration = normalize_timestamp(args, "expiration_or_resolution_at")
     metadata_json = store_metadata_json(args)
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             payload_common = {
                 "venue_id": venue_id,
@@ -109,8 +108,6 @@ def _instrument_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 payload=payload, actor_id=ctx.actor_id,
                 idempotency_key=idempotency_key, ctx=ctx,
             )
-    finally:
-        db.close()
     return {
         "id": inst_id,
         "venue_id": venue_id,

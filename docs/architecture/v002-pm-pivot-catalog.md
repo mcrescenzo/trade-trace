@@ -4,7 +4,8 @@
 
 ## Why this exists
 
-`next-steps.md` declared three different tool-count baselines —
+`next-steps.md` (the planning roadmap, now archived at
+`docs/history/next-steps.md`) declared three different tool-count baselines —
 **81**, **84**, and **45** target — across Parts I, II, and XV.
 This document originally reconciled those planning numbers against the
 then-current 89-tool registry. The pivot has since landed and the scope

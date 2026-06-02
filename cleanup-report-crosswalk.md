@@ -58,5 +58,31 @@ Materialized 2026-06-02 from the report-only `/repo-cleanup` workflow run
 - `bd ready --exclude-type epic` → all 15 children ready; gate correctly **not** ready ✓
 - Open `cleanup-audit` beads: 17 (epic + 15 children + gate) ✓
 
-This crosswalk does not assert code/test readiness — no source finding was applied. It records the
-backlog graph only.
+## Implementation outcomes (2026-06-02)
+
+The full `cleanup-audit` program was implemented and verified. Final gate `trade-trace-vc5f`
+and epic `trade-trace-laow` closed. Quality gates on the whole tree: `ruff check src tests`
+clean, `mypy src` clean (178 files), `pytest` **2218 passed / 7 skipped** (7 = opt-in perf
+baselines, unrelated).
+
+| Bead | Outcome | Notes |
+|------|---------|-------|
+| CL1 `exsb` | **Fixed** | Was a real schema↔handler mismatch (not mere doc drift): the schema is auto-derived from `example_minimal`, so `src` made the CLI flag `--src` while the handler required `path`. Made `path` canonical end-to-end; inverted the truthfulness guard (now forbids `--src`). |
+| CL2 `i6v1` | **Fixed** | Removed unused `tenacity` dep + 2 false docstrings. |
+| CL3 `joqs` | **Fixed** | Deleted 6 dead items; `clock.py` kept (tests import it) with corrected comment. |
+| CL4 `8m9b` | **Fixed** | `_placeholders`/`_resolve_strategy_filter` → `_filter_support`; strict `_parse_ts` → canonical `timestamps`. |
+| CL5 `17ih` | **Fixed** | 4 lenient parsers → exact canonical fns; **added 1 missing canonical** + parity tests. |
+| CL6 `bijy` | **Fixed (2 of 3)** | Extracted `apply_actor_instrument_filters` for calibration + forecast_diagnostics; pm_native excluded (different shape, documented). |
+| CL7 `tnpv` | **Fixed** | Narrowed 8 broad `except Exception` clauses. |
+| CL8 `j7y0` | **Fixed** | Deleted the 425-line skipped dogfood module + corrected `dogfood-protocol.md`. |
+| CL9 `vg6g` | **Fixed (4 of 5)** | Applied 4 simplifications; **rejected `simplification-25`** as not behavior-preserving (documented). |
+| CL10 `tyqp` | **Fixed** | Corrected the stale cli.py exit-code docstring. |
+| CL11 `i861` | **Fixed** | Removed the stray `$(mktemp -d)` dir. |
+| CL12 `5ikc` | **Verified-intentional (no change)** | Drift detector is still-planned/partly-shipped (guarded by an `UNSUPPORTED_CAPABILITY` test); placeholder is correct per the finding's "leave as-is if planned" path. |
+| CL13 `ppqp` | **Fixed** | Archived `next-steps.md` → `docs/history/` with a superseded banner; updated catalog ref + legacy-grep allowlist/test. |
+| CL14 `7ut3` | **Won't-do (evaluated)** | `create_entity` callback abstraction is net-negative over 3 divergent handlers (replay emit/select ordering differs, distinct columns/payloads/returns, thesis supersedes edge) in safety-critical idempotency code; the safely-shared db-lifecycle was harvested by CL15. |
+| CL15 `7rlv` | **Fixed (helper + seed)** | Added `db_for_args` context manager; migrated the 3 ledger create-handlers. Remaining ~27 modules' incremental migration tracked as follow-up `trade-trace-0hrq` (acceptance allowed "incrementally"). |
+
+**Dispositions summary:** 11 fully fixed · 1 verified-intentional (CL12) · 1 won't-do with rationale
+(CL14) · 2 sub-item carve-outs documented (CL6 pm_native, CL9 simplification-25) · 1 follow-up bead
+filed (`trade-trace-0hrq`). Notable correctness catch: CL1 was a genuine broken-CLI bug, not doc drift.

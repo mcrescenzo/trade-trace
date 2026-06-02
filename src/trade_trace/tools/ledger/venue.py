@@ -15,10 +15,10 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     now_iso,
-    open_db_for_args,
     require,
     store_metadata_json,
 )
@@ -30,8 +30,7 @@ def _venue_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     kind = require(args, "kind")
     metadata_json = store_metadata_json(args)
     idempotency_key = args.get("idempotency_key")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(
                 uow, event_type="venue.created",
@@ -69,8 +68,6 @@ def _venue_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 payload=payload, actor_id=ctx.actor_id,
                 idempotency_key=idempotency_key, ctx=ctx,
             )
-    finally:
-        db.close()
     return {"id": venue_id, "name": name, "kind": kind, "created_at": created_at}
 
 
