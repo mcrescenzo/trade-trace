@@ -382,6 +382,14 @@ def _derive_forecast_case(
     elif _review_overdue(forecast["resolution_at"], as_of_dt):
         state = "pending_review"
         reason_codes.append("resolution_at_due_without_score")
+    elif not forecast["resolution_at"]:
+        # An open forecast with no resolution_at can never become due by clock,
+        # so it would otherwise stay silently "open" and never surface in
+        # report.work_queue as a resolve obligation (trade-trace-ptyi). Treat the
+        # missing horizon itself as a review obligation so the agent loop is
+        # prompted to record an outcome or set a resolution horizon.
+        state = "pending_review"
+        reason_codes.append("resolution_at_missing")
     else:
         state = "open"
         reason_codes.append("forecast_pending")

@@ -32,6 +32,7 @@ from trade_trace.tools.decision_matrix import (
     allowed_decision_types,
     decision_matrix_contract,
     material_non_action_taxonomy,
+    price_convention,
     validate_decision_fields,
     validate_material_non_action,
 )
@@ -265,7 +266,15 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
         "snapshot_id": {"type": "string"},
         "side": {"type": "string"},
         "quantity": {"type": "number"},
-        "price": {"type": "number"},
+        "price": {
+            "type": "number",
+            "description": (
+                "Side-native price you paid for the contract on `side`, NOT a "
+                "normalized YES price. For a `no` prediction-market position "
+                "this is the NO-contract price (1 - yes_price); record what you "
+                "actually paid. See x-price-convention for marking/rebuild rules."
+            ),
+        },
         "fees": {"type": "number"},
         "slippage": {"type": "number"},
         "reason": {"type": "string"},
@@ -292,6 +301,7 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
         "paper_exit remain journal records only for projection purposes."
     ),
     "x-decision-matrix": _DECISION_MATRIX_CONTRACT,
+    "x-price-convention": price_convention(),
     "x-material-non-action-taxonomy": material_non_action_taxonomy(),
     "x-decision-examples": {
         "skip": {

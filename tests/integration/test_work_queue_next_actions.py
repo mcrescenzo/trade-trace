@@ -106,6 +106,36 @@ def test_agent_next_actions_is_alias_projection_and_schema_registered(home):
             assert key in props
 
 
+def test_open_forecast_with_null_resolution_at_surfaces_as_resolve_due(home):
+    # trade-trace-ptyi: an open binary forecast whose resolution_at is null can
+    # never become due by clock, but it must still appear in the work_queue as a
+    # resolve obligation so a work_queue-driven agent loop learns to act on it.
+    with _conn(home) as conn:
+        _seed_base(conn)
+        conn.execute(
+            """
+            INSERT INTO forecasts (id, thesis_id, kind, resolution_at, yes_label, resolution_rule_text,
+                                   scoring_support, scoring_state, metadata_json, created_at, actor_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            ("fc-null", "th", "binary", None, "yes", "caller supplies outcome", "supported", "pending", "{}", "2026-01-01T00:03:00Z", "test"),
+        )
+
+    data = _call("report.work_queue", home, {"as_of": "2026-01-20T00:00:00Z"})
+    null_items = [
+        item
+        for item in data["work_queue"]
+        if item["kind"] == "resolve_due_forecast"
+        and {"kind": "forecast", "id": "fc-null"} in item["source_refs"]
+    ]
+    assert len(null_items) == 1, data["work_queue"]
+    item = null_items[0]
+    assert item["priority"] == "due"
+    assert item["required_external_input"] is True
+    assert item["due_at"] is None
+    assert "resolution_at_missing" in item["trigger_evidence"]["reason_codes"]
+
+
 def test_work_queue_boundary_language_has_no_scheduler_daemon_broker_execution_path(home):
     with _conn(home) as conn:
         _seed_base(conn)

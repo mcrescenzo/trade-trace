@@ -317,10 +317,23 @@ def _process_quality_gaps(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     """Return concrete, non-statistical cleanup actions for early journals."""
 
     actions: list[dict[str, Any]] = []
+    # Forecast linkage is evaluated at the INSTRUMENT level, not the decision
+    # row alone (bead trade-trace-t9n5). skip/watch/hold decisions deliberately
+    # carry no `forecast_id` of their own — a bot records a real forecast then
+    # skips for insufficient edge. Flagging those rows as "no linked forecast"
+    # is a false positive: the market IS forecasted. A decision is therefore
+    # only flagged when neither the decision row carries a forecast_id NOR any
+    # forecast exists for the same instrument (joined via the forecast's
+    # thesis, which is NOT NULL and carries instrument_id).
     missing_forecast = _sample_ids(conn, """
-        SELECT id FROM decisions
-        WHERE forecast_id IS NULL
-        ORDER BY created_at, id
+        SELECT d.id FROM decisions d
+        WHERE d.forecast_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM forecasts f
+            JOIN theses t ON t.id = f.thesis_id
+            WHERE t.instrument_id = d.instrument_id
+          )
+        ORDER BY d.created_at, d.id
         LIMIT 5
     """)
     if missing_forecast:

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 from trade_trace.adapters.polymarket.cache import MARKET_CACHE_TTL_SECONDS
 from trade_trace.adapters.polymarket.client import PolymarketClient
@@ -426,6 +427,119 @@ def _snapshot_fetch_series(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
     return {"items": items, "count": len(items)}
 
 
+def _candidate_close_at(raw: dict[str, Any]) -> str | None:
+    return raw.get("endDate") or raw.get("end_date") or raw.get("close_at") or raw.get("closeTime")
+
+
+def _market_search_candidate(raw: dict[str, Any]) -> dict[str, Any] | None:
+    """Project a Gamma market object into a binary-market discovery candidate.
+
+    Returns ``None`` for markets the v0.0.2 adapter cannot bind (non-binary,
+    non-YES/NO, or scalar), so callers only ever see markets they could hand
+    straight to ``market.bind`` / ``market.refresh`` without an out-of-band
+    Gamma lookup. This is read-only: no normalization side effects, no writes.
+    """
+
+    if not isinstance(raw, dict):
+        return None
+    if raw.get("market_type") == "scalar" or raw.get("type") == "scalar" or raw.get("isScalar"):
+        return None
+    gamma_market_id = _first_present(raw, "id", "marketId", "gammaMarketId")
+    if gamma_market_id is None:
+        return None
+    external_id = str(gamma_market_id)
+    try:
+        normalized = _normalize_gamma_market(raw, external_id)
+    except ToolError:
+        return None
+    raw_outcomes = normalized.get("outcomes") or normalized.get("tokens") or []
+    if len(raw_outcomes) != 2:
+        return None
+    try:
+        labels = [_outcome_label(o, external_id, idx) for idx, o in enumerate(raw_outcomes)]
+    except ToolError:
+        return None
+    if set(labels) != {"yes", "no"}:
+        return None
+    return {
+        "external_id": external_id,
+        "gamma_market_id": external_id,
+        "slug": _first_present(raw, "slug", "marketSlug"),
+        "question": raw.get("question") or raw.get("title"),
+        "outcomes": labels,
+        "close_at": _candidate_close_at(raw),
+        "event_slug": _first_present(raw, "eventSlug", "event_slug"),
+        "active": _normalize_bool_like(_first_present(raw, "active", "enableOrderBook")),
+        "closed": _normalize_bool_like(raw.get("closed")),
+    }
+
+
+def _market_search(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """Read-only live discovery of bindable binary markets via the Gamma list API.
+
+    Unlike market.bind/refresh/snapshot.fetch (which all require an already-known
+    external_id) and market.find_similar (which needs an already-bound market),
+    this surfaces candidate markets a bot can forecast on without any out-of-band
+    Gamma curl. No DB writes, no advice, no trade execution (bead trade-trace-663l).
+    """
+
+    limit = args.get("limit", 20)
+    if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "limit must be an integer between 1 and 100",
+            details={"field": "limit", "value": args.get("limit")},
+        )
+    query = args.get("query")
+    if query is not None and not isinstance(query, str):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "query must be a string when supplied",
+            details={"field": "query"},
+        )
+    closed = bool(args.get("closed", False))
+    # Over-fetch from Gamma so binary-only filtering still yields up to `limit`
+    # bindable candidates; cap the upstream request to keep it bounded.
+    fetch_limit = min(100, max(limit * 5, limit))
+    params = [f"limit={fetch_limit}", f"closed={'true' if closed else 'false'}"]
+    if not closed:
+        params.append("active=true")
+    if query:
+        params.append(f"q={quote(query, safe='')}")
+    with db_for_args(args) as db:
+        client = PolymarketClient(load_config(db.connection))
+        try:
+            raw = client.gamma_get(f"/markets?{'&'.join(params)}")
+        except AdapterError as exc:
+            raise _tool_error(exc) from exc
+    if isinstance(raw, dict):
+        rows = raw.get("markets") or raw.get("data") or raw.get("results") or []
+    elif isinstance(raw, list):
+        rows = raw
+    else:
+        rows = []
+    candidates: list[dict[str, Any]] = []
+    for row in rows:
+        candidate = _market_search_candidate(row) if isinstance(row, dict) else None
+        if candidate is not None:
+            candidates.append(candidate)
+        if len(candidates) >= limit:
+            break
+    return {
+        "source": "polymarket",
+        "query": query,
+        "closed": closed,
+        "count": len(candidates),
+        "candidates": candidates,
+        "no_advice_boundary": {
+            "external_fetch_performed": True,
+            "db_write_performed": False,
+            "trade_execution_performed": False,
+            "advice_generated": False,
+        },
+    }
+
+
 def _outcome_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     with db_for_args(args) as db:
         client = PolymarketClient(load_config(db.connection))
@@ -458,6 +572,34 @@ def _outcome_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 def register_adapter_polymarket_tools(registry: ToolRegistry) -> None:
     registry.register("market.refresh", _market_refresh, is_write=True, example_minimal={"market_id":"mkt_..."})
-    registry.register("snapshot.fetch", _snapshot_fetch, is_write=True, example_minimal={"market_id":"mkt_...","at":"now","idempotency_key":"00000000-0000-4000-8000-snapshotfetch01"}, optional_keys=("at", "idempotency_key"))
+    # snapshot.fetch / outcome.fetch are retryable writes whose semantic
+    # identity is NOT in the auto-derivation registry (TOOL_PRIMARY_EVENT_TYPE),
+    # so the dispatcher cannot synthesize an idempotency_key for them — a call
+    # that omits it returns MISSING_IDEMPOTENCY_KEY. The advertised schema must
+    # therefore mark idempotency_key REQUIRED, not optional, so schema text and
+    # dispatcher enforcement agree (bead trade-trace-2cmb). `at` stays optional
+    # because the handler defaults it ("now").
+    registry.register("snapshot.fetch", _snapshot_fetch, is_write=True, example_minimal={"market_id":"mkt_...","at":"now","idempotency_key":"00000000-0000-4000-8000-snapshotfetch01"}, optional_keys=("at",))
     registry.register("snapshot.fetch_series", _snapshot_fetch_series, is_write=True, example_minimal={"market_id":"mkt_...","from":"2026-01-01T00:00:00Z","to":"2026-01-02T00:00:00Z"})
-    registry.register("outcome.fetch", _outcome_fetch, is_write=True, example_minimal={"market_id":"mkt_..."})
+    registry.register("outcome.fetch", _outcome_fetch, is_write=True, example_minimal={"market_id":"mkt_...","idempotency_key":"00000000-0000-4000-8000-outcomefetch001"})
+    # Live read-only discovery: find bindable binary markets WITHOUT a pre-known
+    # external_id or an already-bound market (bead trade-trace-663l). Adapter-only;
+    # fails closed with ADAPTER_DISABLED when network.polymarket.enabled is false.
+    registry.register(
+        "market.search",
+        _market_search,
+        is_write=False,
+        example_minimal={"query": "election", "limit": 20, "closed": False},
+        optional_keys=("query", "limit", "closed"),
+        description=(
+            "Discover candidate binary (YES/NO) Polymarket markets to bind/forecast on. "
+            "Read-only live Gamma list query: returns external_id/gamma_market_id, slug, "
+            "question, outcomes, and close time. No DB writes, no advice, no trade execution. "
+            "Adapter-only: fails closed with ADAPTER_DISABLED when the adapter is off. "
+            "Hand a returned external_id straight to market.bind / market.refresh."
+        ),
+        usage_summary="Find bindable binary markets live without a pre-known external_id.",
+        examples=("tt market search --query election --limit 20",),
+        common_failures=("ADAPTER_DISABLED", "ADAPTER_TIMEOUT", "EXTERNAL_API_ERROR"),
+        next_actions=("Pass a candidate external_id to market.bind, then snapshot.fetch / forecast.add.",),
+    )

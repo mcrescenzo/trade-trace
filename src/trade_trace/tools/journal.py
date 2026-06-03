@@ -332,7 +332,7 @@ def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         "cli_invocation": "tt " + " ".join(reg.cli_invocation),
         "description": reg.description,
         "is_write": reg.is_write,
-        "example_minimal": reg.example_minimal,
+        "example_minimal": reg.display_example_minimal(),
         "example_rich": reg.example_rich,
         "required_metadata": {
             "actor_id_pattern": ACTOR_ID_PATTERN,

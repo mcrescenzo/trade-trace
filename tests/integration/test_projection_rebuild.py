@@ -503,6 +503,195 @@ def test_rebuild_memory_node_stats_reports_skipped_corrupt_rows(home):
     assert summary["rebuilt_rows"] == 2
 
 
+# -- side-aware unrealized P&L (trade-trace-ctvb) -----------------------
+
+
+def _seed_open_position_with_mark(
+    home: Path,
+    *,
+    side: str,
+    open_qty: float,
+    entry_price: float,
+    yes_mark: float,
+) -> tuple[str, str]:
+    """Seed an open position (one `open` position_event linked to a
+    decision carrying `side`) plus a snapshot whose `price` is the
+    YES-contract mark. Returns `(position_id, instrument_id)`.
+
+    `open_qty` is the SIGNED quantity_delta the decision path would write:
+    positive for yes/long, negative for no/short (mirrors
+    `_paper_enter_quantity_delta`). `entry_price` is the side-native price
+    the bot paid; `yes_mark` is the unchanged YES-contract mark."""
+
+    from trade_trace.tools._helpers import new_id
+
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market",
+        "title": "X",
+    })
+    instrument_id = inst["data"]["id"]
+    position_id = new_id("pos")
+    decision_id = new_id("dec")
+
+    db = open_database(db_path(home))
+    try:
+        with db.transaction():
+            db.connection.execute(
+                "INSERT INTO snapshots(id, instrument_id, captured_at, source, "
+                "price, implied_probability, created_at, actor_id) "
+                "VALUES (?, ?, ?, 'test', ?, ?, ?, 'agent:default')",
+                (new_id("snp"), instrument_id, "2026-05-18T13:00:00Z",
+                 yes_mark, yes_mark, "2026-05-18T13:00:00Z"),
+            )
+            db.connection.execute(
+                "INSERT INTO decisions(id, instrument_id, type, side, quantity, "
+                "price, created_at, actor_id) "
+                "VALUES (?, ?, 'paper_enter', ?, ?, ?, ?, 'agent:default')",
+                (decision_id, instrument_id, side, abs(open_qty),
+                 entry_price, "2026-05-18T14:00:00Z"),
+            )
+            db.connection.execute(
+                "INSERT INTO position_events(id, position_id, instrument_id, "
+                "decision_id, event_type, quantity_delta, price, fees, slippage, "
+                "created_at, actor_id) "
+                "VALUES (?, ?, ?, ?, 'open', ?, ?, 0, 0, ?, 'agent:default')",
+                (new_id("pev"), position_id, instrument_id, decision_id,
+                 open_qty, entry_price, "2026-05-18T14:00:00Z"),
+            )
+    finally:
+        db.close()
+    return position_id, instrument_id
+
+
+def test_no_side_flat_position_reports_zero_unrealized_pnl(home):
+    """trade-trace-ctvb regression: a flat NO position entered at the NO
+    price (0.875) while the YES mark is unchanged (0.125) must report
+    unrealized_pnl ~= 0, NOT the old phantom +75.5 from marking the
+    NO-contract entry against the raw YES mark."""
+
+    _seed_open_position_with_mark(
+        home, side="no", open_qty=-100, entry_price=0.875, yes_mark=0.125,
+    )
+    _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+
+    row = _positions_snapshot(home)[0]
+    assert row[3] == "no"  # side
+    assert row[4] == "open"  # status
+    # unrealized_pnl index is 9 per _positions_snapshot column order.
+    assert row[9] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_no_side_position_marks_against_complemented_mark(home):
+    """A NO position is in profit when the YES mark falls (NO contract
+    appreciates). Entered NO @ 0.875 (yes 0.125), YES mark drops to 0.075
+    so NO mark = 0.925; unrealized = (0.925 - 0.875) * 100 = +5.0."""
+
+    _seed_open_position_with_mark(
+        home, side="no", open_qty=-100, entry_price=0.875, yes_mark=0.075,
+    )
+    _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+
+    row = _positions_snapshot(home)[0]
+    assert row[9] == pytest.approx((0.925 - 0.875) * 100, rel=1e-6)
+
+
+@pytest.mark.parametrize("side", ["No", "NO", "Yes", "Long"])
+def test_decisions_side_check_constraint_rejects_non_lowercase(home, side):
+    """trade-trace-ctvb hardening: the worry that a ``'No'`` / ``'NO'`` side
+    would skip the NO-complement and resurrect the phantom +75.5 PnL is not
+    reachable — ``decisions.side`` carries a CHECK constraint
+    (m003_m1_ledger.py) that admits only the lowercase enum
+    ('long','short','yes','no','flat_neutral','pairs_long_short'). A
+    non-lowercase side is rejected at write time, so the projection never
+    marks an unnormalized side. This pins that contract.
+
+    `_unrealized_pnl` still lowercases defensively (a pure function should
+    not assume the schema), but THIS is the boundary that closes the gap."""
+
+    import sqlite3
+
+    db = open_database(db_path(home))
+    try:
+        with pytest.raises(sqlite3.IntegrityError):
+            with db.transaction():
+                db.connection.execute(
+                    "INSERT INTO decisions(id, instrument_id, type, side, "
+                    "quantity, price, created_at, actor_id) VALUES "
+                    "(?, NULL, 'paper_enter', ?, 100, 0.5, "
+                    "'2026-05-18T14:00:00Z', 'agent:default')",
+                    ("dec_badside", side),
+                )
+    finally:
+        db.close()
+
+
+def test_yes_side_position_marks_against_yes_mark(home):
+    """A YES/long position still marks directly against the YES mark:
+    entered YES @ 0.40, mark 0.55 => unrealized = (0.55 - 0.40) * 100."""
+
+    _seed_open_position_with_mark(
+        home, side="yes", open_qty=100, entry_price=0.40, yes_mark=0.55,
+    )
+    _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+
+    row = _positions_snapshot(home)[0]
+    assert row[9] == pytest.approx((0.55 - 0.40) * 100, rel=1e-6)
+
+
+def test_generic_short_side_marks_without_complement(home):
+    """A generic `short` (not a prediction-market `no`) is marked against
+    the SAME instrument price with no 1-price complement. Short opened @
+    0.50, mark falls to 0.40 => profit (0.50 - 0.40) * 100 = +10."""
+
+    _seed_open_position_with_mark(
+        home, side="short", open_qty=-100, entry_price=0.50, yes_mark=0.40,
+    )
+    _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+
+    row = _positions_snapshot(home)[0]
+    # Signed convention: (mark - entry) * qty = (0.40 - 0.50) * -100 = +10.
+    assert row[9] == pytest.approx(10.0, rel=1e-6)
+
+
+def test_rebuild_corrects_existing_no_side_unrealized_pnl(home):
+    """Migration/rebuild story (trade-trace-ctvb): positions is rebuildable
+    from position_events, so an existing row carrying the old phantom
+    unrealized_pnl is corrected in place by re-running the rebuild — no
+    position_events migration is needed because the side-native entry price
+    was already stored. Simulate a stale projection row, rebuild, and
+    confirm the phantom value is replaced with ~0."""
+
+    position_id, _ = _seed_open_position_with_mark(
+        home, side="no", open_qty=-100, entry_price=0.875, yes_mark=0.125,
+    )
+    # Simulate a pre-fix projection row by stamping the old phantom value.
+    db = open_database(db_path(home))
+    try:
+        with db.transaction():
+            db.connection.execute(
+                "DELETE FROM positions WHERE id = ?", (position_id,)
+            )
+            db.connection.execute(
+                "INSERT INTO positions(id, instrument_id, kind, side, status, "
+                "opened_at, unrealized_pnl, avg_entry_price, updated_at) "
+                "VALUES (?, ?, 'paper', 'no', 'open', ?, ?, ?, ?)",
+                (position_id, _, "2026-05-18T14:00:00Z", 75.5, 0.875,
+                 "2026-05-18T14:00:00Z"),
+            )
+    finally:
+        db.close()
+
+    stale = _positions_snapshot(home)[0]
+    assert stale[9] == pytest.approx(75.5, rel=1e-6)
+
+    _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+
+    fixed = _positions_snapshot(home)[0]
+    assert fixed[9] == pytest.approx(0.0, abs=1e-9)
+
+
 def test_rebuild_memory_node_stats_reports_zero_skipped_when_clean(home):
     """A clean DB has no corrupt rows; the diagnostics still surface the
     counter explicitly (zero) so callers can branch on its presence."""

@@ -161,6 +161,88 @@ def test_coach_source_contains_no_network_or_llm_primitives():
     )
 
 
+# -- instrument-level forecast linkage (trade-trace-t9n5) ------------
+
+
+def test_coach_does_not_flag_forecasted_then_skipped_market(home):
+    """A market with a real forecast that was then deliberately skipped must
+    NOT be flagged as 'no linked forecast' (bead trade-trace-t9n5).
+
+    The skip decision carries no forecast_id of its own, but the instrument is
+    forecasted; coach evaluates forecast linkage at the instrument level, so
+    the decision_completeness 'backfill a forecast link' warning must not
+    point at the skip."""
+
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market", "title": "X",
+    })
+    thesis = _envelope(home, "thesis.add", {
+        "instrument_id": inst["data"]["id"], "side": "yes", "body": "...",
+    })
+    # Real forecast recorded on the market.
+    _envelope(home, "forecast.add", {
+        "thesis_id": thesis["data"]["id"], "kind": "binary", "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.55},
+            {"outcome_label": "no", "probability": 0.45},
+        ],
+    })
+    # Deliberate skip for insufficient edge — carries no forecast_id of its own.
+    skip = _envelope(home, "decision.add", {
+        "instrument_id": inst["data"]["id"], "type": "skip",
+        "reason": "Forecast recorded but edge too thin after costs.",
+    })
+    skip_id = skip["data"]["id"]
+
+    env = _envelope(home, "report.coach", {})
+    assert env["ok"] is True
+    completeness = [
+        a for a in env["data"]["next_actions"]
+        if a["category"] == "decision_completeness"
+        and "no linked forecast" in a["reason"]
+    ]
+    # The forecasted-then-skipped decision must not be flagged as unforecasted.
+    flagged_ids = [
+        did for a in completeness for did in a["record_ids"].get("decisions", [])
+    ]
+    assert skip_id not in flagged_ids, (
+        "forecasted-then-skipped decision was wrongly flagged as unforecasted"
+    )
+
+
+def test_coach_still_flags_decision_on_unforecasted_instrument(home):
+    """The instrument-level check must not silence the warning entirely: a
+    decision on a market with NO forecast at all is still legitimately flagged
+    (bead trade-trace-t9n5 keeps the true positive)."""
+
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market", "title": "Y",
+    })
+    # No forecast on this instrument at all.
+    skip = _envelope(home, "decision.add", {
+        "instrument_id": inst["data"]["id"], "type": "skip",
+        "reason": "Out of scope; no forecast recorded.",
+    })
+    skip_id = skip["data"]["id"]
+
+    env = _envelope(home, "report.coach", {})
+    assert env["ok"] is True
+    flagged_ids = [
+        did
+        for a in env["data"]["next_actions"]
+        if a["category"] == "decision_completeness"
+        and "no linked forecast" in a["reason"]
+        for did in a["record_ids"].get("decisions", [])
+    ]
+    assert skip_id in flagged_ids, (
+        "decision on a genuinely unforecasted instrument should still be flagged"
+    )
+
+
 # -- aggregation surfaces ------------------------------------------
 
 

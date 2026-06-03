@@ -107,6 +107,7 @@ class ToolRegistration:
     is_write: bool = False
     example_minimal: dict[str, Any] | None = None
     example_rich: dict[str, Any] | None = None
+    display_minimal: dict[str, Any] | None = None
     json_schema: dict[str, Any] | None = None
     usage_summary: str = ""
     examples: list[str] = field(default_factory=list)
@@ -148,6 +149,23 @@ class ToolRegistration:
             out["next_actions"] = list(self.next_actions)
         return out
 
+    def display_example_minimal(self) -> dict[str, Any] | None:
+        """The minimal example surfaced to agents via ``tool.schema``.
+
+        Decoupled from ``example_minimal`` (the schema-derivation source)
+        per bead trade-trace-mpsu: a tool may advertise a full
+        ``example_minimal`` so the derived ``json_schema`` keeps every
+        accepted property, while showing a trimmed ``display_minimal``
+        (required + a couple of core fields) so the example does not bury
+        the handful of actually-required fields. When no ``display_minimal``
+        is registered, the displayed example falls back to
+        ``example_minimal``.
+        """
+
+        if self.display_minimal is not None:
+            return self.display_minimal
+        return self.example_minimal
+
 
 @dataclass
 class ToolRegistry:
@@ -167,6 +185,7 @@ class ToolRegistry:
         is_write: bool = False,
         example_minimal: dict[str, Any] | None = None,
         example_rich: dict[str, Any] | None = None,
+        display_minimal: dict[str, Any] | None = None,
         json_schema: dict[str, Any] | None = None,
         optional_keys: tuple[str, ...] | list[str] | None = None,
         usage_summary: str = "",
@@ -204,6 +223,7 @@ class ToolRegistry:
             is_write=is_write,
             example_minimal=example_minimal,
             example_rich=example_rich,
+            display_minimal=display_minimal,
             json_schema=effective_json_schema,
             usage_summary=usage_summary,
             examples=list(examples or ()),
@@ -303,6 +323,7 @@ class ToolRegistry:
         is_admin: bool | None = None,
         example_minimal: dict[str, Any] | None = None,
         example_rich: dict[str, Any] | None = None,
+        display_minimal: dict[str, Any] | None = None,
         json_schema: dict[str, Any] | None = None,
     ) -> None:
         """Register a new public name backed by an existing handler."""
@@ -315,6 +336,7 @@ class ToolRegistry:
             is_write=existing.is_write,
             example_minimal=example_minimal if example_minimal is not None else existing.example_minimal,
             example_rich=example_rich if example_rich is not None else existing.example_rich,
+            display_minimal=display_minimal if display_minimal is not None else existing.display_minimal,
             json_schema=json_schema if json_schema is not None else existing.json_schema,
             usage_summary=existing.usage_summary,
             examples=existing.examples,

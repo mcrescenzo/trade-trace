@@ -310,13 +310,13 @@ def _accumulate_position(
 
     status = "closed" if _approx_zero(qty) else "open"
 
+    kind, side = _derive_kind_and_side(conn, events)
+
     unrealized_pnl: float | None = None
     if status == "open" and avg_entry_price is not None:
         snap_price = _latest_snapshot_price(conn, instrument_id)
         if snap_price is not None:
-            unrealized_pnl = (snap_price - avg_entry_price) * qty
-
-    kind, side = _derive_kind_and_side(conn, events)
+            unrealized_pnl = _unrealized_pnl(side, snap_price, avg_entry_price, qty)
 
     return {
         "id": position_id,
@@ -338,6 +338,61 @@ def _accumulate_position(
 
 def _approx_zero(value: float) -> bool:
     return abs(value) < 1e-9
+
+
+# Prediction-market sides whose `decision.add price` is the side-NATIVE
+# contract price (the price actually paid for the NO contract), not the
+# YES-contract price. Snapshots store the YES-contract price, so the mark
+# for these sides must be complemented (1 - yes_price) before it is
+# compared against the side-native entry price. See the canonical price
+# convention documented on `decision.add` via
+# `decision_matrix.PRICE_CONVENTION` (trade-trace-ctvb).
+_COMPLEMENT_SIDES = frozenset({"no"})
+
+
+def _unrealized_pnl(
+    side: str | None,
+    snap_price: float,
+    avg_entry_price: float,
+    qty: float,
+) -> float:
+    """Compute side-aware unrealized P&L for an open position.
+
+    Canonical price convention (trade-trace-ctvb): `decision.add price` is
+    the SIDE-NATIVE price the bot paid for the contract — for a `no`
+    prediction-market side that is the NO-contract price (1 - yes_price),
+    not the YES-contract price. Snapshots (`snapshots.price`) always store
+    the YES-contract price (the YES implied probability / mid). So:
+
+    * Long / yes (qty > 0): mark and entry are both YES-contract prices
+      already, so ``(yes_mark - entry) * qty``.
+    * No prediction-market side (qty < 0, side == 'no'): the entry is a
+      NO-contract price; convert the YES mark to NO terms
+      (``1 - yes_mark``) and price the NO contracts the bot holds:
+      ``((1 - yes_mark) - entry) * |qty|``.
+    * Generic short (qty < 0, side == 'short'): there is no
+      complement — the short was opened and is marked against the SAME
+      instrument price, so the signed convention ``(mark - entry) * qty``
+      already yields a profit when the mark falls below entry.
+
+    Without this conversion a flat `no` position entered at the NO price
+    while the YES mark is unchanged reported a phantom P&L of
+    ``(yes_mark - no_entry) * (-qty)`` (e.g. (0.125 - 0.875) * (-100) =
+    +75.5) instead of ~0.
+
+    `side` is matched case-insensitively as defense-in-depth. The real
+    guarantee is upstream: ``decisions.side`` carries a CHECK constraint
+    admitting only the lowercase enum (m003_m1_ledger.py), so a ``'No'`` /
+    ``'NO'`` side is rejected at write time and never reaches this pure
+    function. The ``.lower()`` here keeps the math correct even if a future
+    caller marks a position from a path that does not go through that
+    constraint.
+    """
+
+    if side is not None and side.strip().lower() in _COMPLEMENT_SIDES:
+        side_native_mark = 1.0 - snap_price
+        return (side_native_mark - avg_entry_price) * abs(qty)
+    return (snap_price - avg_entry_price) * qty
 
 
 def _latest_snapshot_price(conn: sqlite3.Connection, instrument_id: str) -> float | None:

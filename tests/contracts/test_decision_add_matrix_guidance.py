@@ -27,9 +27,58 @@ def test_decision_add_schema_exposes_matrix_enum_and_examples(initialized_home):
     assert "defer" in schema["x-material-non-action-taxonomy"]["categories"]
     assert schema["x-decision-matrix"]["skip"]["required"] == ["instrument_id", "reason"]
     assert "quantity" in schema["x-decision-matrix"]["skip"]["forbidden"]
+    # forecast_id is an OPTIONAL field on the non-trade decision types so a bot
+    # that recorded a real forecast and then deliberately skipped/watched/held
+    # can carry the linkage on the decision row (bead trade-trace-t9n5). It must
+    # be optional (not required, not forbidden) for skip/watch/hold.
+    for non_trade in ("skip", "watch", "hold"):
+        matrix_row = schema["x-decision-matrix"][non_trade]
+        assert "forecast_id" in matrix_row["optional"], non_trade
+        assert "forecast_id" not in matrix_row["required"], non_trade
+        assert "forecast_id" not in matrix_row["forbidden"], non_trade
     examples = schema["x-decision-examples"]
     for decision_type in ("skip", "watch", "actual_enter", "actual_exit"):
         assert examples[decision_type]["type"] == decision_type
+
+
+def test_skip_decision_accepts_optional_forecast_id(initialized_home):
+    """A forecasted-then-skipped market can carry forecast_id on the skip row
+    (bead trade-trace-t9n5). forecast_id is optional on skip, so supplying it
+    must not raise a forbidden-field validation error; the linkage persists."""
+
+    venue = _mcp(initialized_home, "venue.add", {
+        "name": "Skip Forecast PM", "kind": "prediction_market",
+    })
+    assert venue.ok is True
+    instrument = _mcp(initialized_home, "instrument.add", {
+        "venue_id": venue.data["id"],
+        "asset_class": "prediction_market",
+        "title": "Forecasted-then-skipped market",
+    })
+    assert instrument.ok is True
+    thesis = _mcp(initialized_home, "thesis.add", {
+        "instrument_id": instrument.data["id"], "side": "yes", "body": "...",
+    })
+    assert thesis.ok is True
+    forecast = _mcp(initialized_home, "forecast.add", {
+        "thesis_id": thesis.data["id"], "kind": "binary", "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.55},
+            {"outcome_label": "no", "probability": 0.45},
+        ],
+    })
+    assert forecast.ok is True
+
+    env = _mcp(initialized_home, "decision.add", {
+        "type": "skip",
+        "instrument_id": instrument.data["id"],
+        "reason": "Real forecast recorded, but insufficient edge after costs.",
+        "forecast_id": forecast.data["id"],
+        "idempotency_key": "00000000-0000-4000-8000-000000000131",
+    })
+
+    assert env.ok is True, env
+    assert env.data["type"] == "skip"
 
 
 def test_forbidden_field_error_includes_matrix_and_corrected_payload(initialized_home):

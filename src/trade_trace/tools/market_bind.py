@@ -425,6 +425,22 @@ def register_market_bind_tool(registry: ToolRegistry) -> None:
             "accepting_orders": True,
             "idempotency_key": "00000000-0000-4000-8000-marketbind01",
         },
+        # `display_minimal` is the example surfaced by `tool.schema`; it is
+        # DECOUPLED from `example_minimal` (the json_schema-derivation source)
+        # per bead trade-trace-mpsu. `example_minimal` must keep every accepted
+        # property so the derived input schema stays complete, but the displayed
+        # example shows only the four required fields (source, external_id,
+        # state, mechanism) plus a couple of core fields so agents are not
+        # buried under ~30 optional keys.
+        display_minimal={
+            "source": "polymarket",
+            "external_id": "example-market-1",
+            "state": "open",
+            "mechanism": "clob",
+            "title": "Will example happen?",
+            "bound_via": "manual",
+            "idempotency_key": "00000000-0000-4000-8000-marketbind01",
+        },
         optional_keys=(
             "idempotency_key", "title", "question", "url", "resolution_source", "ambiguity_kind",
             "bound_via", "opened_at", "close_at", "closed_for_trading_at", "resolving_at",

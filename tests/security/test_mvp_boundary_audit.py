@@ -219,6 +219,7 @@ SHIPPED_PUBLIC_TOOLS = {
     "market.bind",
     "market.find_similar",
     "market.refresh",
+    "market.search",
     "memory.link",
     "memory.recall",
     "memory.reflect",
