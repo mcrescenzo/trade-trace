@@ -40,6 +40,14 @@ from trade_trace.tools.ledger._shared import _store_tags, examples_for
 
 
 def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    # 'type' is the field name (not 'decision_type'); a bare "type is required"
+    # leaves a caller guessing both the name and the valid values. List them.
+    if args.get("type") is None:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "type is required; one of " + ", ".join(allowed_decision_types()),
+            details={"field": "type", "allowed_decision_types": allowed_decision_types()},
+        )
     decision_type = require(args, "type")
     validate_decision_fields(decision_type, args)
     validate_material_non_action(decision_type, args)

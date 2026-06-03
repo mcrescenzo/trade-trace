@@ -80,6 +80,17 @@ def test_instrument_add_missing_title(home):
     assert env["error"]["details"]["field"] == "title"
 
 
+def test_decision_add_missing_type_lists_allowed(home):
+    # A missing 'type' must name the field and list the allowed decision types,
+    # not just "type is required". Regression for AX dogfood friction.
+    env = _envelope(home, "decision.add", {"side": "no", "quantity": 1, "price": 0.5})
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "type"
+    assert "paper_enter" in env["error"]["details"]["allowed_decision_types"]
+    assert "paper_enter" in env["error"]["message"]
+
+
 # -- snapshot.add --------------------------------------------------------
 
 
