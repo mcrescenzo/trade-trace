@@ -253,8 +253,14 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
             "enum": allowed_decision_types(),
             "description": "Decision discriminator. See x-decision-matrix for per-type required/optional/forbidden fields.",
         },
-        "instrument_id": {"type": "string"},
-        "thesis_id": {"type": "string"},
+        "instrument_id": {
+            "type": "string",
+            "description": "The market_id/instrument_id returned by market.bind (e.g. 'mkt_...'); for prediction markets these are the same id used as market_id in forecast.add.",
+        },
+        "thesis_id": {
+            "type": "string",
+            "description": "Thesis behind the decision. Optional when forecast_id is supplied: it is derived from the forecast.",
+        },
         "forecast_id": {"type": "string"},
         "snapshot_id": {"type": "string"},
         "side": {"type": "string"},
