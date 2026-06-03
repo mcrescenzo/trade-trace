@@ -9,7 +9,7 @@ from typing import Any
 from trade_trace.timestamps import (
     parse_report_timestamp_lenient_utc_naive_as_utc as _dt,
 )
-from trade_trace.tools._helpers import open_db_for_args
+from trade_trace.tools._helpers import db_for_args
 
 DEFAULT_MIN_SAMPLE = 5
 DEFAULT_STALE_SNAPSHOT_MINUTES = 15
@@ -127,8 +127,7 @@ def report_execution_quality(args: dict[str, Any]) -> dict[str, Any]:
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY r.as_of DESC, r.id DESC LIMIT ?"
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         records = db.connection.execute(sql, (*params, limit)).fetchall()
         rows: list[dict[str, Any]] = []
         all_codes: set[str] = set()
@@ -248,5 +247,3 @@ def report_execution_quality(args: dict[str, Any]) -> dict[str, Any]:
             "contributing_ids": {"receipt_ids": [row["receipt_id"] for row in rows], "intent_ids": sorted({x for row in rows for x in row["contributing_ids"]["intent_ids"]}), "snapshot_ids": sorted({x for row in rows for x in row["contributing_ids"]["snapshot_ids"]})},
         }
         return {"summary": summary, "rows": rows, "report_kind": "execution_quality_diagnostics", "non_executing": True, "local_evidence_only": True, "credential_blind": True, "advice_free": True, "truncated": len(records) == limit, "next_cursor": None}
-    finally:
-        db.close()

@@ -22,7 +22,7 @@ from .common import (
     _propagate_report_meta,
     _unsupported_filter_to_tool_error,
     datetime,
-    open_db_for_args,
+    db_for_args,
     report_filter_validation_to_tool_error,
     report_watchlist,
     timedelta,
@@ -43,8 +43,7 @@ def _report_watchlist(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             details={"field": "mode", "value": mode, "allowed": ["all", "stale"]},
         )
     stale_threshold_days = args.get("stale_threshold_days", 14)
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             data = report_watchlist(
                 db.connection, raw_filter=raw_filter,
@@ -55,8 +54,6 @@ def _report_watchlist(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -262,8 +259,7 @@ def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             details={"field": "kind", "value": kind, "allowed": ["paper", "actual", "simulation"]},
         )
     as_of, stale_mark_threshold_days, stale_cutoff = _exposure_temporal_bounds(args)
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         from trade_trace.reporting.position_rows import list_positions
 
         page = list_positions(
@@ -289,8 +285,6 @@ def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             for row in page.rows
         ]
         event_exposure_sets = _event_exposure_sets(connection, rows)
-    finally:
-        db.close()
 
     caveat_codes = sorted({code for row in rows for code in row["caveat_codes"]})
     if not rows:
@@ -355,8 +349,7 @@ def _report_exposure_anomalies(args: dict[str, Any], ctx: ToolContext) -> dict[s
     as_of, stale_mark_threshold_days, stale_cutoff = _exposure_temporal_bounds(args)
     anomalies: list[dict[str, Any]] = []
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         connection = db.connection
         decisions = connection.execute(
             """
@@ -480,8 +473,6 @@ def _report_exposure_anomalies(args: dict[str, Any], ctx: ToolContext) -> dict[s
                 {"positions": [row[0]], "instruments": [row[1]], "position_events": row[2].split(",") if row[2] else []},
                 {"position_id": row[0], "instrument_id": row[1], "first_event_at": row[3], "latest_event_at": row[4]},
             ))
-    finally:
-        db.close()
 
     codes = sorted({item["code"] for item in anomalies})
     if anomalies:
@@ -742,8 +733,7 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
     anomaly_args["as_of"] = effective_as_of
     anomaly_data = _report_exposure_anomalies(anomaly_args, ctx) if include_anomalies else None
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         watchlist = _watchlist_for_current_exposure(
             db.connection,
             instrument_id=args.get("instrument_id"),
@@ -768,8 +758,6 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
         latest_account_snapshot = db.connection.execute(
             "SELECT id, as_of, imported_at, staleness_status FROM account_snapshots ORDER BY source_precedence ASC, as_of DESC, imported_at DESC, id DESC LIMIT 1",
         ).fetchone()
-    finally:
-        db.close()
 
     open_positions = open_data.get("open_positions", [])
     hints = _current_exposure_hints(len(open_positions), len(watchlist), len(recent_activity), len(anomalies))

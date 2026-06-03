@@ -15,7 +15,7 @@ from .common import (
     ValidationError,
     _propagate_report_meta,
     _unsupported_filter_to_tool_error,
-    open_db_for_args,
+    db_for_args,
     report_coach,
     report_compare,
     report_filter_validation_to_tool_error,
@@ -25,8 +25,7 @@ from .common import (
 
 def _report_compare(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`report.compare` — compute a base report per deterministic group."""
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             data = report_compare(
                 db.connection,
@@ -45,16 +44,13 @@ def _report_compare(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 str(exc),
                 details={"field": "base_report/group_by"},
             ) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
 
 def _report_opportunity(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`report.opportunity` — path-dependent decision/outcome diagnostics."""
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             data = report_opportunity(
                 db.connection,
@@ -70,8 +66,6 @@ def _report_opportunity(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
             raise _unsupported_filter_to_tool_error(exc) from exc
         except ValueError as exc:
             raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc)) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -83,8 +77,7 @@ def _report_coach(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
     raw_filter = args.get("filter")
     stale_threshold_days = args.get("stale_threshold_days", 14)
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             data = report_coach(
                 db.connection, raw_filter=raw_filter,
@@ -100,8 +93,6 @@ def _report_coach(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 str(exc),
                 details={"forbidden_matches": exc.matches},
             ) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 

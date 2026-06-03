@@ -14,7 +14,7 @@ from trade_trace.storage.database import read_snapshot
 from trade_trace.timestamps import (
     parse_report_timestamp_lenient_utc_naive_as_utc as _dt,
 )
-from trade_trace.tools._helpers import now_iso, open_db_for_args
+from trade_trace.tools._helpers import db_for_args, now_iso
 
 REPORT_NAME = "report.operational_health"
 CONTRACT_VERSION = "operational_health.v0"
@@ -290,9 +290,6 @@ def _build(conn: sqlite3.Connection, args: dict[str, Any]) -> dict[str, Any]:
 
 def report_operational_health(args: dict[str, Any]) -> dict[str, Any]:
     """Return a local-only read-only health report over imported intelligence inputs."""
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with read_snapshot(db.connection):
             return _build(db.connection, args)
-    finally:
-        db.close()

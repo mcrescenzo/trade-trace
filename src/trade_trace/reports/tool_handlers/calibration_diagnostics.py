@@ -14,7 +14,7 @@ from .common import (
     _compat_report_calibration,
     _propagate_report_meta,
     _unsupported_filter_to_tool_error,
-    open_db_for_args,
+    db_for_args,
     report_calibration_advisory,
     report_calibration_anchored,
     report_calibration_integrity,
@@ -45,8 +45,7 @@ def _report_calibration(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
 
     raw_filter = args.get("filter")
     min_sample = args.get("min_sample")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             data = _compat_report_calibration(
                 db.connection,
@@ -60,8 +59,6 @@ def _report_calibration(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
         # Embed integrity diagnostics in the panel so the panel can never
         # be read without the denominator/hygiene context.
         data["integrity_diagnostics"] = report_calibration_integrity(db.connection)
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -70,8 +67,7 @@ def _report_calibration_advisory(args: dict[str, Any], ctx: ToolContext) -> dict
     """`report.calibration_advisory` — decision-time recalibration for a
     candidate forecast probability (trade-trace-4kec.7)."""
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             min_sample = args.get("min_sample")
             data = report_calibration_advisory(
@@ -90,8 +86,6 @@ def _report_calibration_advisory(args: dict[str, Any], ctx: ToolContext) -> dict
                 str(exc),
                 details={"field": "probability"},
             ) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -100,8 +94,7 @@ def _report_mistake_tripwire(args: dict[str, Any], ctx: ToolContext) -> dict[str
     """`report.mistake_tripwire` — decision-time recurring-mistake trip-wire
     (trade-trace-4kec.10)."""
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             min_sample = args.get("min_sample")
             brier_threshold = args.get("brier_threshold")
@@ -116,8 +109,6 @@ def _report_mistake_tripwire(args: dict[str, Any], ctx: ToolContext) -> dict[str
             raise ToolError(
                 ErrorCode.VALIDATION_ERROR, str(exc), details={"field": "tags"}
             ) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -126,8 +117,7 @@ def _report_process_quality(args: dict[str, Any], ctx: ToolContext) -> dict[str,
     """`report.process_quality` — bet-sizing vs declared edge (Kelly-consistency),
     outcome-independent (trade-trace-4kec.11)."""
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             min_sample = args.get("min_sample")
             data = report_process_quality(
@@ -137,8 +127,6 @@ def _report_process_quality(args: dict[str, Any], ctx: ToolContext) -> dict[str,
             )
         except (ValueError, TypeError) as exc:
             raise ToolError(ErrorCode.VALIDATION_ERROR, str(exc), details={"field": "min_sample"}) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -147,20 +135,16 @@ def _report_resolution_misreads(args: dict[str, Any], ctx: ToolContext) -> dict[
     """`report.resolution_misreads` — contract-misread error class
     (trade-trace-4kec.12)."""
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         data = report_resolution_misreads(
             db.connection, instrument_id=args.get("instrument_id")
         )
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
 
 def _report_calibration_anchored(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             min_sample = args.get("min_sample")
             data = report_calibration_anchored(
@@ -172,15 +156,12 @@ def _report_calibration_anchored(args: dict[str, Any], ctx: ToolContext) -> dict
             raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
 
 def _report_calibration_terminal(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             min_sample = args.get("min_sample")
             data = report_calibration_terminal(
@@ -192,24 +173,19 @@ def _report_calibration_terminal(args: dict[str, Any], ctx: ToolContext) -> dict
             raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
 
 def _pm_native_report_handler(func):
     def _handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        db = open_db_for_args(args)
-        try:
+        with db_for_args(args) as db:
             try:
                 data = func(db.connection, raw_filter=args.get("filter"))
             except ValidationError as exc:
                 raise report_filter_validation_to_tool_error(exc) from exc
             except UnsupportedFilterError as exc:
                 raise _unsupported_filter_to_tool_error(exc) from exc
-        finally:
-            db.close()
         _propagate_report_meta(ctx, data)
         return data
     return _handler
@@ -220,8 +196,7 @@ _report_resolution_quality = _pm_native_report_handler(report_resolution_quality
 
 
 def _report_time_decay_sharpening(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             min_sample = args.get("min_sample")
             data = report_time_decay_sharpening(
@@ -233,8 +208,6 @@ def _report_time_decay_sharpening(args: dict[str, Any], ctx: ToolContext) -> dic
             raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -242,8 +215,7 @@ def _report_time_decay_sharpening(args: dict[str, Any], ctx: ToolContext) -> dic
 def _report_forecast_diagnostics(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     raw_filter = args.get("filter")
     min_sample = args.get("min_sample")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             data = report_forecast_diagnostics(
                 db.connection,
@@ -254,8 +226,6 @@ def _report_forecast_diagnostics(args: dict[str, Any], ctx: ToolContext) -> dict
             raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -270,11 +240,8 @@ def _report_calibration_integrity(
     (cheaper, and explicitly framed as "is the data clean enough to
     trust the calibration numbers?")."""
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         data = report_calibration_integrity(db.connection)
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -284,16 +251,13 @@ def _report_unscored_forecasts(args: dict[str, Any], ctx: ToolContext) -> dict[s
     `resolution_at` with no resolved_final outcome on their instrument."""
 
     raw_filter = args.get("filter")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             data = report_unscored_forecasts(db.connection, raw_filter=raw_filter)
         except ValidationError as exc:
             raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -310,8 +274,7 @@ def _report_decision_velocity(args: dict[str, Any], ctx: ToolContext) -> dict[st
             details={"field": "bucket", "value": bucket,
                      "allowed": ["day", "week"]},
         )
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             data = report_decision_velocity(
                 db.connection, raw_filter=raw_filter, bucket=bucket,
@@ -320,8 +283,6 @@ def _report_decision_velocity(args: dict[str, Any], ctx: ToolContext) -> dict[st
             raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 

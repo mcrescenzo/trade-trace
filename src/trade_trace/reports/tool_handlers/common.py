@@ -60,7 +60,7 @@ from trade_trace.reports._filter_support import UnsupportedFilterError
 from trade_trace.storage import resolve_home
 from trade_trace.storage.paths import db_path
 from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
-from trade_trace.tools._helpers import open_db_for_args
+from trade_trace.tools._helpers import db_for_args
 from trade_trace.tools._report_filter_errors import (
     report_filter_validation_to_tool_error,
     unsupported_filter_to_tool_error,
@@ -284,11 +284,8 @@ def _run_report_data(
 ) -> dict[str, Any]:
     """Open/close the DB and propagate standard report meta for a tool call."""
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         data = build(db.connection)
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 

@@ -17,8 +17,8 @@ from .common import (
     _unsupported_filter_to_tool_error,
     agent_next_actions,
     compose_bootstrap_packet,
+    db_for_args,
     db_path,
-    open_db_for_args,
     report_filter_validation_to_tool_error,
     report_lifecycle,
     report_policy_candidates,
@@ -188,8 +188,7 @@ def _agent_next_actions(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
 def _report_bootstrap(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`report.bootstrap` / `agent.bootstrap` — JSON-first bootstrap packet surface."""
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         try:
             data = compose_bootstrap_packet(
                 db.connection,
@@ -205,8 +204,6 @@ def _report_bootstrap(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 str(exc),
                 details={"tool": ctx.tool, "field": "bootstrap_request"},
             ) from exc
-    finally:
-        db.close()
 
     from trade_trace.version import __version__
 

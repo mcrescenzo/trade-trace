@@ -13,7 +13,7 @@ from .common import (
     ValidationError,
     _propagate_report_meta,
     _unsupported_filter_to_tool_error,
-    open_db_for_args,
+    db_for_args,
     report_audit_readiness,
     report_filter_validation_to_tool_error,
     report_playbook_adherence,
@@ -32,8 +32,7 @@ def _report_playbook_adherence(
     raw_filter = args.get("filter")
     playbook_id = args.get("playbook_id")
     strategy_id = args.get("strategy_id")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         if playbook_id is not None:
             pb_row = db.connection.execute(
                 "SELECT 1 FROM playbooks WHERE id = ?", (playbook_id,),
@@ -56,8 +55,6 @@ def _report_playbook_adherence(
             raise report_filter_validation_to_tool_error(exc) from exc
         except UnsupportedFilterError as exc:
             raise _unsupported_filter_to_tool_error(exc) from exc
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -81,13 +78,10 @@ def _report_source_quality(
             details={"field": "stale_threshold_days",
                      "value": stale_threshold_days},
         )
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         data = report_source_quality(
             db.connection, stale_threshold_days=stale_threshold_days,
         )
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
@@ -107,15 +101,12 @@ def _report_audit_readiness(
                 f"{field} must be a non-negative integer",
                 details={"field": field, "value": value},
             )
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         data = report_audit_readiness(
             db.connection,
             stale_snapshot_threshold_days=stale_snapshot_threshold_days,
             stale_source_threshold_days=stale_source_threshold_days,
         )
-    finally:
-        db.close()
     _propagate_report_meta(ctx, data)
     return data
 
