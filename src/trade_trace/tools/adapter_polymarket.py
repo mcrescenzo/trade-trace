@@ -474,6 +474,38 @@ def _market_search_candidate(raw: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _extract_market_rows(raw: Any) -> list[Any]:
+    """Pull the market list out of a Gamma /markets response (list or wrapped)."""
+    if isinstance(raw, dict):
+        return raw.get("markets") or raw.get("data") or raw.get("results") or []
+    if isinstance(raw, list):
+        return raw
+    return []
+
+
+def _gamma_public_search_rows(client: PolymarketClient, query: str, limit: int) -> list[Any]:
+    """Flatten Gamma /public-search results into individual market rows.
+
+    /public-search is Gamma's real free-text search endpoint (unlike /markets,
+    whose `q` param is ignored). Its payload is event-centric: a top-level
+    ``events`` array whose entries carry a nested ``markets`` array. Flatten
+    those nested markets so the existing candidate projection/binary filter can
+    consume them unchanged (trade-trace-yz3q).
+    """
+    raw = client.gamma_get(f"/public-search?q={quote(query, safe='')}&limit_per_type={limit}")
+    rows: list[Any] = []
+    if isinstance(raw, dict):
+        for event in raw.get("events") or []:
+            if isinstance(event, dict):
+                rows.extend(m for m in (event.get("markets") or []) if isinstance(m, dict))
+        # Some deployments may also surface markets at the top level; include
+        # them defensively so we never miss a bindable candidate.
+        rows.extend(m for m in (raw.get("markets") or []) if isinstance(m, dict))
+    elif isinstance(raw, list):
+        rows.extend(m for m in raw if isinstance(m, dict))
+    return rows
+
+
 def _market_search(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """Read-only live discovery of bindable binary markets via the Gamma list API.
 
@@ -501,28 +533,35 @@ def _market_search(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     # Over-fetch from Gamma so binary-only filtering still yields up to `limit`
     # bindable candidates; cap the upstream request to keep it bounded.
     fetch_limit = min(100, max(limit * 5, limit))
-    params = [f"limit={fetch_limit}", f"closed={'true' if closed else 'false'}"]
-    if not closed:
-        params.append("active=true")
-    if query:
-        params.append(f"q={quote(query, safe='')}")
     with db_for_args(args) as db:
         client = PolymarketClient(load_config(db.connection))
         try:
-            raw = client.gamma_get(f"/markets?{'&'.join(params)}")
+            if query:
+                # Gamma's /markets list endpoint has no free-text search and
+                # silently ignores an unknown `q` param, so a query there is a
+                # no-op (trade-trace-yz3q). The real search endpoint is
+                # /public-search, which returns an event-centric shape; flatten
+                # events->markets and filter `closed` client-side below.
+                rows = _gamma_public_search_rows(client, query, fetch_limit)
+            else:
+                params = [f"limit={fetch_limit}", f"closed={'true' if closed else 'false'}"]
+                if not closed:
+                    params.append("active=true")
+                raw = client.gamma_get(f"/markets?{'&'.join(params)}")
+                rows = _extract_market_rows(raw)
         except AdapterError as exc:
             raise _tool_error(exc) from exc
-    if isinstance(raw, dict):
-        rows = raw.get("markets") or raw.get("data") or raw.get("results") or []
-    elif isinstance(raw, list):
-        rows = raw
-    else:
-        rows = []
     candidates: list[dict[str, Any]] = []
     for row in rows:
         candidate = _market_search_candidate(row) if isinstance(row, dict) else None
-        if candidate is not None:
-            candidates.append(candidate)
+        if candidate is None:
+            continue
+        # The /markets path filters closed markets upstream via query params;
+        # /public-search does not, so drop closed candidates here unless the
+        # caller opted into closed markets. Keeps both paths consistent.
+        if not closed and candidate.get("closed"):
+            continue
+        candidates.append(candidate)
         if len(candidates) >= limit:
             break
     return {

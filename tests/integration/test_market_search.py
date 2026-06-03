@@ -57,9 +57,13 @@ def test_market_search_disabled_fails_closed(tmp_path: Path):
     assert env.error.code == "ADAPTER_DISABLED"
 
 
-def test_market_search_returns_binary_candidates_without_prebound_market(
+def test_market_search_query_uses_public_search_and_flattens_events(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
+    # trade-trace-yz3q: a query must hit Gamma's real search endpoint
+    # (/public-search), NOT /markets (whose `q` is silently ignored). The
+    # /public-search payload nests markets under events, so the tool must
+    # flatten events[].markets[] before projecting binary candidates.
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok
     _enable_adapter(home)
@@ -67,12 +71,31 @@ def test_market_search_returns_binary_candidates_without_prebound_market(
 
     def fake_gamma_get(self: PolymarketClient, path: str):
         calls.append(path)
-        return [
-            _binary_market("540844", question="Will A happen?", slug="will-a", close_at="2026-12-31T00:00:00Z"),
-            # Non-binary: filtered out so callers only see bindable markets.
-            {"id": "999", "question": "Multi?", "slug": "multi", "outcomes": '["A","B","C"]'},
-            _binary_market("540999", question="Will B happen?", slug="will-b", close_at="2027-01-15T00:00:00Z"),
-        ]
+        return {
+            "events": [
+                {
+                    "id": "evt-1",
+                    "title": "Event one",
+                    "markets": [
+                        _binary_market(
+                            "540844", question="Will A happen?", slug="will-a", close_at="2026-12-31T00:00:00Z"
+                        ),
+                        # Non-binary nested market: filtered out.
+                        {"id": "999", "question": "Multi?", "slug": "multi", "outcomes": '["A","B","C"]'},
+                    ],
+                },
+                {
+                    "id": "evt-2",
+                    "title": "Event two",
+                    "markets": [
+                        _binary_market(
+                            "540999", question="Will B happen?", slug="will-b", close_at="2027-01-15T00:00:00Z"
+                        ),
+                    ],
+                },
+            ],
+            "pagination": {"hasMore": False},
+        }
 
     monkeypatch.setattr(PolymarketClient, "gamma_get", fake_gamma_get)
 
@@ -81,9 +104,10 @@ def test_market_search_returns_binary_candidates_without_prebound_market(
     assert env.ok, env
     assert isinstance(env, SuccessEnvelope)
     assert len(calls) == 1
-    assert calls[0].startswith("/markets?")
+    # The query path must route to /public-search, never /markets.
+    assert calls[0].startswith("/public-search?")
     assert "q=happen" in calls[0]
-    assert "active=true" in calls[0]
+    assert not calls[0].startswith("/markets")
     data = env.data
     assert data["source"] == "polymarket"
     assert data["count"] == 2
@@ -97,6 +121,35 @@ def test_market_search_returns_binary_candidates_without_prebound_market(
     assert first["close_at"] == "2026-12-31T00:00:00Z"
     assert data["no_advice_boundary"]["db_write_performed"] is False
     assert data["no_advice_boundary"]["trade_execution_performed"] is False
+
+
+def test_market_search_query_drops_closed_markets_from_public_search(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # /public-search returns closed markets too; market.search must drop them
+    # unless the caller opts in via closed=True (trade-trace-yz3q).
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+
+    open_market = _binary_market("100", question="Open?", slug="open", close_at="2027-01-01T00:00:00Z")
+    closed_market = _binary_market("200", question="Closed?", slug="closed", close_at="2025-01-01T00:00:00Z")
+    closed_market["closed"] = True
+
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"events": [{"id": "e", "markets": [open_market, closed_market]}]},
+    )
+
+    env = mcp_call("market.search", {"home": home, "query": "x", "limit": 20})
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert [c["external_id"] for c in env.data["candidates"]] == ["100"]
+
+    env_closed = mcp_call("market.search", {"home": home, "query": "x", "limit": 20, "closed": True})
+    assert env_closed.ok, env_closed
+    assert sorted(c["external_id"] for c in env_closed.data["candidates"]) == ["100", "200"]
 
 
 def test_market_search_respects_limit_after_binary_filtering(
