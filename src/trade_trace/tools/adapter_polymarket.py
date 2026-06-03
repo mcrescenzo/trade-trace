@@ -247,6 +247,7 @@ def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id:
                 if not row:
                     raise ToolError(ErrorCode.NOT_FOUND, "market_id not found", details={"market_id": refresh_market_id})
                 external_id = row[0]
+                fetch_id = _gamma_request_id(str(external_id), row[2])
                 current_now = now_iso()
                 if _market_cache_hit(row[1], row[2], row[3], now=current_now):
                     cached = db.connection.execute(
@@ -259,7 +260,8 @@ def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id:
                     }
             else:
                 external_id = require(args, "external_id")
-            payload = _market_payload(_fetch_market(client, str(external_id)), str(external_id))
+                fetch_id = str(external_id)
+            payload = _market_payload(_fetch_market(client, str(fetch_id)), str(external_id))
         except AdapterError as exc:
             raise _tool_error(exc) from exc
         with UnitOfWork(db.connection) as uow:
@@ -363,17 +365,33 @@ def _insert_snapshot(args: dict[str, Any], ctx: ToolContext, market_id: str, sna
             return {"id": sid, "instrument_id": market_id, "captured_at": captured_at, **snap}
 
 
+def _gamma_request_id(external_id: str, metadata_json: str | None) -> str:
+    """Return the id to use for the Gamma `/markets/{id}` lookup. Prefer the
+    explicit `gamma_market_id` captured under `polymarket_identity` at
+    market.bind time; fall back to `external_id`. This lets callers bind with
+    a namespaced external_id (e.g. ``polymarket:2334107``) without breaking
+    snapshot/outcome fetch, which otherwise 422s because Gamma expects the
+    bare numeric market id (ax-dogfood AX-009)."""
+    try:
+        meta = json.loads(metadata_json or "{}")
+    except (TypeError, ValueError):
+        meta = {}
+    identity = meta.get("polymarket_identity") if isinstance(meta, dict) else None
+    gid = identity.get("gamma_market_id") if isinstance(identity, dict) else None
+    return str(gid) if gid else external_id
+
+
 def _snapshot_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     if args.get("at") not in (None, "now"):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "snapshot.fetch supports only at=now in v0.0.2", details={"field":"at"})
     with db_for_args(args) as db:
         client = PolymarketClient(load_config(db.connection))
         market_id = require(args,"market_id")
-        row = db.connection.execute("SELECT external_id FROM markets WHERE id=?", (market_id,)).fetchone()
+        row = db.connection.execute("SELECT external_id, metadata_json FROM markets WHERE id=?", (market_id,)).fetchone()
         if not row:
             raise ToolError(ErrorCode.NOT_FOUND,"market_id not found",details={"market_id":market_id})
         try:
-            raw = _fetch_market(client, str(row[0]))
+            raw = _fetch_market(client, _gamma_request_id(str(row[0]), row[1]))
         except AdapterError as exc:
             raise _tool_error(exc) from exc
     return _insert_snapshot(args, ctx, market_id, _snapshot_from_raw(raw if isinstance(raw, dict) else {}), now_iso())
@@ -384,11 +402,11 @@ def _snapshot_fetch_series(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
     with db_for_args(args) as db:
         client = PolymarketClient(load_config(db.connection))
         market_id=require(args,"market_id")
-        row = db.connection.execute("SELECT external_id FROM markets WHERE id=?", (market_id,)).fetchone()
+        row = db.connection.execute("SELECT external_id, metadata_json FROM markets WHERE id=?", (market_id,)).fetchone()
         if not row:
             raise ToolError(ErrorCode.NOT_FOUND,"market_id not found",details={"market_id":market_id})
         try:
-            raw = client.gamma_get(f"/markets/{row[0]}/prices?from={require(args,'from')}&to={require(args,'to')}")
+            raw = client.gamma_get(f"/markets/{_gamma_request_id(str(row[0]), row[1])}/prices?from={require(args,'from')}&to={require(args,'to')}")
         except AdapterError as exc:
             raise _tool_error(exc) from exc
     points = raw.get("points", raw) if isinstance(raw, dict) else raw

@@ -82,8 +82,10 @@ When a run is partially complete, use `report.lifecycle`, `report.work_queue`, `
 1. `market.bind` — create or identify the market metadata row for the external market/instrument.
 
 ```json
-{"tool":"market.bind","args":{"external_id":"polymarket:event-x","title":"Will event X happen by 2026-06-30?","idempotency_key":"agent-run-42:market:event-x"}}
+{"tool":"market.bind","args":{"source":"polymarket","external_id":"polymarket:event-x","gamma_market_id":"123456","title":"Will event X happen by 2026-06-30?","idempotency_key":"agent-run-42:market:event-x"}}
 ```
+
+For Polymarket markets, pass the bare numeric Gamma market id as `gamma_market_id` (and you may use a namespaced `external_id` such as `polymarket:123456` for your own bookkeeping). `snapshot.fetch`, `snapshot.fetch_series`, and `market.refresh` issue the Gamma `/markets/{id}` lookup using `gamma_market_id` when present, falling back to `external_id`; Gamma expects the bare numeric id, so an `external_id` like `polymarket:123456` without a `gamma_market_id` returns `ADAPTER_PROTOCOL_ERROR` (HTTP 422).
 
 2. `snapshot.add` — record caller-supplied market state when relevant. Keep resolution criteria/evidence explicit enough that future resolution is auditable.
 

@@ -11,6 +11,7 @@ from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage.paths import db_path
+from trade_trace.tools.adapter_polymarket import _gamma_request_id
 
 FIXTURES = Path(__file__).parent / "fixtures" / "polymarket"
 
@@ -268,3 +269,28 @@ def test_snapshot_fetch_series_enabled_writes_each_fixture_point(tmp_path: Path,
     assert isinstance(env, SuccessEnvelope)
     assert env.data["count"] == 2
     assert [item["captured_at"] for item in env.data["items"]] == ["2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z"]
+
+
+# -- _gamma_request_id: prefer gamma_market_id over external_id (AX-009) --
+# snapshot.fetch / snapshot.fetch_series / market.refresh build the Gamma
+# /markets/{id} URL from the bound market row. Gamma expects the bare numeric
+# market id, so a namespaced external_id (e.g. "polymarket:2334107") used to
+# 422. When market.bind captured a gamma_market_id, the fetch now uses it.
+
+
+def test_gamma_request_id_prefers_gamma_market_id():
+    meta = json.dumps({"polymarket_identity": {"gamma_market_id": "2334107"}})
+    assert _gamma_request_id("polymarket:2334107", meta) == "2334107"
+
+
+def test_gamma_request_id_falls_back_to_external_id_when_absent():
+    assert _gamma_request_id("2334107", None) == "2334107"
+    assert _gamma_request_id("2334107", "{}") == "2334107"
+    assert _gamma_request_id(
+        "2334107", json.dumps({"polymarket_identity": {}})
+    ) == "2334107"
+
+
+def test_gamma_request_id_falls_back_on_malformed_metadata():
+    assert _gamma_request_id("2334107", "not-json") == "2334107"
+    assert _gamma_request_id("2334107", json.dumps({"polymarket_identity": None})) == "2334107"
