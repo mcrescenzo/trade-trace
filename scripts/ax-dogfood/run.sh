@@ -20,6 +20,11 @@ export TRADE_TRACE_HOME="${TRADE_TRACE_HOME:-$HOME/.trade-trace-axloop}"
 export MCP_ACTOR_ID="agent:ax-dogfood"
 REPO_DIR="${AX_REPO_DIR:-/home/hermes/code/trade-trace}"
 MODEL="${AX_MODEL:-opus}"
+AX_BRANCH="ax-dogfood"
+
+# Cron runs with a bare environment; make sure the user bin dir (claude, tt,
+# git, gh, python3, flock) is on PATH regardless of how this is invoked.
+export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 LOG_DIR="$TRADE_TRACE_HOME/logs"
 LOCKFILE="$TRADE_TRACE_HOME/.run.lock"
@@ -38,6 +43,14 @@ if ! flock -n 200; then
 fi
 
 cd "$REPO_DIR"
+
+# Defensive: never operate on the wrong branch. The playbook checks this too,
+# but harden the wrapper in case the checkout was left elsewhere. A dirty tree
+# makes checkout fail -> we stop rather than run against an unexpected state.
+git checkout "$AX_BRANCH" >>"$LOG_FILE" 2>&1 || {
+  echo "[$(stamp)] ERROR: could not checkout $AX_BRANCH (dirty tree or wrong repo?); skipping run" >>"$LOG_FILE"
+  exit 1
+}
 
 PLAYBOOK="$REPO_DIR/scripts/ax-dogfood/playbook.md"
 [ -f "$PLAYBOOK" ] || { echo "[$(stamp)] ERROR: playbook not found at $PLAYBOOK" >>"$LOG_FILE"; exit 1; }
