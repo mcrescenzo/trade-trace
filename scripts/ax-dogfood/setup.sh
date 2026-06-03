@@ -47,10 +47,11 @@ import sys, json
 d = json.load(sys.stdin)["data"]
 pm = d.get("adapter_state", {}).get("polymarket", {})
 ep = pm.get("configured_endpoints", {})
-ok = bool(d.get("outbound_network_active")) and bool(pm.get("enabled")) and bool(ep.get("gamma_base_url"))
-print(f"  outbound_network_active={d.get(\"outbound_network_active\")}  "
-      f"enabled={pm.get(\"enabled\")}  gamma_set={ep.get(\"gamma_base_url\")}")
-sys.exit(0 if ok else 1)
+net = d.get("outbound_network_active")
+enabled = pm.get("enabled")
+gamma = ep.get("gamma_base_url")
+print("  outbound_network_active={}  enabled={}  gamma_set={}".format(net, enabled, gamma))
+sys.exit(0 if (net and enabled and gamma) else 1)
 ' || die "adapter did not come up enabled — check config above."
 
 log "Ready. Home '$TRADE_TRACE_HOME' is initialized with live Polymarket access."
