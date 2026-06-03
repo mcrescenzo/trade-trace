@@ -29,9 +29,10 @@
 
 | id | first-seen run | surface | description | status | ref |
 |----|----------------|---------|-------------|--------|-----|
-| _none yet_ | | | | | |
-
-<!--
-Example row (delete when the first real item lands):
-| AX-001 | 2026-06-04-01 | schema | `forecast.add` schema does not say probability must sum to 1.0 across labels | fixed | a1b2c3d |
--->
+| AX-001 | 2026-06-03-01 | report | bootstrap caveat codes are cryptic; no inline gloss/glossary | filed | trade-trace-o1wr |
+| AX-002 | 2026-06-03-01 | tool | no live market discovery surface; bot must curl Gamma out-of-band | filed | trade-trace-663l |
+| AX-003 | 2026-06-03-01 | schema | market.bind `example_minimal` carries ~20 fields, obscures the 4 required | filed | trade-trace-mpsu |
+| AX-004 | 2026-06-03-01 | error | market.bind missing `source` → bare error, no allowed values | fixed | 4e4ea9c |
+| AX-005 | 2026-06-03-01 | error | decision.add missing `type` (not `decision_type`) → bare error, no allowed values | fixed | 8e974a5 |
+| AX-006 | 2026-06-03-01 | tool | `market_id` vs `instrument_id` naming inconsistency across tools | filed | trade-trace-nqyv |
+| AX-007 | 2026-06-03-01 | tool | paper_enter needs `thesis_id` but forecast.add returns `forecast_id` | filed | trade-trace-4x1b |
