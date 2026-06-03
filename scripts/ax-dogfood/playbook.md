@@ -56,7 +56,12 @@ git rev-parse --abbrev-ref HEAD   # must print: ax-dogfood
    re-report or re-fix anything already in those files. Behaviors in the
    intentional-design list are deliberate — if one still impedes a real bot,
    file a Beads *question*, do not change it.
-3. Establish a run id: `date -u +%Y-%m-%d-%H%M` (call it `RUN_ID`). Use the date
+3. **Load the open bead queue (dedup context).** Run
+   `bd list --status open --label ax-dogfood` and `bd ready`, and read the
+   open friction beads. The loop fires hourly, so duplicate filings are the
+   main backlog-noise risk — hold this list in mind so that anything you file
+   in Phase C is compared against what already exists, not just keyword-matched.
+4. Establish a run id: `date -u +%Y-%m-%d-%H%M` (call it `RUN_ID`). Use the date
    part for the run-report filename `docs/ax-dogfood/runs/YYYY-MM-DD-NN.md`,
    where `NN` is the next free 2-digit sequence for today.
 
@@ -137,10 +142,14 @@ Now you may read source freely. Triage every friction item from Phase B:
     to hot-reload the server, and do not be surprised if the live MCP still shows
     old behavior this session.
 - **File to Beads** (genuinely new tool/feature, major or cross-cutting rework,
-  contract-firewall item, or anything ambiguous/design-level): `bd search`
-  first to avoid duplicates, then `bd create --type=... --label=ax-dogfood`
-  with the friction evidence in the description. For intentional-but-confusing
-  behavior, file it as a *question*.
+  contract-firewall item, or anything ambiguous/design-level): first **dedup
+  against the open queue you loaded in Phase A** — compare your finding to those
+  open `ax-dogfood` beads *and* run `bd search <keywords>`. If a bead already
+  covers it (even under different wording), append your new evidence to it with
+  `bd update <id> --notes="..."` instead of filing a new one. Only when nothing
+  matches, `bd create --type=... --label=ax-dogfood` with the friction evidence
+  in the description. For intentional-but-confusing behavior, file it as a
+  *question*.
 - If a fix fails the gates and you can't make it pass honestly, `git revert` /
   discard it and file a bead instead.
 
