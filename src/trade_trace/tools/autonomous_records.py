@@ -17,11 +17,11 @@ from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_credential_metadata,
     reject_if_contains_secrets,
     require,
@@ -173,8 +173,7 @@ def _record_run(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     if material_hash != _hash_material("autonomous_run", material):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "material_hash does not match canonical autonomous run", details={"field": "material_hash"})
     idempotency_key = args.get("idempotency_key")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(uow, event_type=_RUN_EVENT, actor_id=ctx.actor_id, idempotency_key=idempotency_key)
             if replay is not None:
@@ -189,8 +188,6 @@ def _record_run(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             uow.execute("INSERT INTO autonomous_run_records(id, schema_version, semantic_key, material_hash, mode, run_status, run_id, session_id, actor_id_recorded, model_id, provider_id, environment_label, policy_version, started_at, ended_at, as_of, config_json, provenance_json, caveats_json, recorded_at, idempotency_key, recorder_actor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (rid, schema_version, text["semantic_key"], material_hash, mode, status, text["run_id"], text["session_id"], text["actor_id_recorded"], text["model_id"], text["provider_id"], text["environment_label"], text["policy_version"], started_at, ended_at, as_of, _canonical_json(config), _canonical_json(provenance), _canonical_json(caveats), now_iso(), idempotency_key, ctx.actor_id))
             emit_event(uow, event_type=_RUN_EVENT, subject_kind="autonomous_run", subject_id=rid, payload={"id": rid, **material, "material_hash": material_hash, "idempotency_key": idempotency_key}, actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx)
             return _run_response(uow.conn, rid)
-    finally:
-        db.close()
 
 
 def _record_incident(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -220,8 +217,7 @@ def _record_incident(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     if material_hash != _hash_material("autonomous_incident", material):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "material_hash does not match canonical autonomous incident", details={"field": "material_hash"})
     idempotency_key = args.get("idempotency_key")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             if text["run_record_id"] and uow.conn.execute("SELECT 1 FROM autonomous_run_records WHERE id = ?", (text["run_record_id"],)).fetchone() is None:
                 raise ToolError(ErrorCode.VALIDATION_ERROR, "autonomous incident references missing run record", details={"field": "run_record_id", "id": text["run_record_id"]})
@@ -238,17 +234,12 @@ def _record_incident(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             uow.execute("INSERT INTO autonomous_incident_records(id, schema_version, semantic_key, material_hash, incident_type, severity, resolution_status, run_record_id, run_id, session_id, occurred_at, as_of, summary, imported_fact_only, evidence_state, link_ids_json, evidence_refs_json, caveats_json, provenance_json, recorded_at, idempotency_key, recorder_actor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (iid, schema_version, material["semantic_key"], material_hash, incident_type, severity, status, text["run_record_id"], text["run_id"], text["session_id"], occurred_at, as_of, summary, 1 if material["imported_fact_only"] else 0, evidence_state, _canonical_json(links), _canonical_json(evidence_refs), _canonical_json(caveats), _canonical_json(provenance), now_iso(), idempotency_key, ctx.actor_id))
             emit_event(uow, event_type=_INCIDENT_EVENT, subject_kind="autonomous_incident", subject_id=iid, payload={"id": iid, **material, "material_hash": material_hash, "idempotency_key": idempotency_key}, actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx)
             return _incident_response(uow.conn, iid)
-    finally:
-        db.close()
 
 
 def _run_get(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         return _run_response(db.connection, require(args, "id"))
-    finally:
-        db.close()
 
 
 def _incident_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -261,8 +252,7 @@ def _incident_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             where.append(f"{field} = ?")
             params.append(args[field])
     sql_where = " WHERE " + " AND ".join(where) if where else ""
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         rows = db.connection.execute(f"SELECT {_INCIDENT_SELECT} FROM autonomous_incident_records{sql_where} ORDER BY occurred_at DESC, recorded_at DESC, id DESC LIMIT ?", (*params, limit)).fetchall()
         incidents = [_incident_row(r, public=True) for r in rows]
         blocked = [i for i in incidents if i["incident_type"] in {"blocked_action", "kill_switch", "cancel_only"}]
@@ -271,8 +261,6 @@ def _incident_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         contributing: dict[str, list[str]] = {"autonomous_incident_records": [i["id"] for i in incidents], "autonomous_run_records": sorted(set(run_record_ids))}
         caveat_codes = sorted(str(c["code"]) for i in incidents for c in i.get("caveats", []) if isinstance(c, dict) and c.get("code"))
         return {"kind": "report.autonomous_incidents", "contract_version": "report.autonomous_incidents.v1", "local_evidence_only": True, "non_supervising": True, "non_executing": True, "count": len(incidents), "recent_incidents": incidents, "blocked_actions": blocked, "unresolved_recovery_items": unresolved, "contributing_record_ids": contributing, "caveat_codes": caveat_codes, "redaction": "run/session ids and sensitive actor/account/strategy link labels are hashed in report output"}
-    finally:
-        db.close()
 
 
 def register_autonomous_record_tools(registry: ToolRegistry) -> None:

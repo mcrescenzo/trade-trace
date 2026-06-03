@@ -17,11 +17,11 @@ from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
     common_metadata,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     require,
     store_metadata_json,
 )
@@ -70,9 +70,8 @@ def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "confidence": args.get("confidence"),
         }
 
-    db = open_db_for_args(args)
     auto_scored: list[dict[str, Any]] = []
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(
                 uow, event_type="outcome.recorded",
@@ -144,8 +143,6 @@ def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                         uow, score, actor_id=ctx.actor_id, ctx=ctx,
                         scored_at=created_at,
                     )
-    finally:
-        db.close()
     return {"id": outcome_id, "instrument_id": instrument_id, "status": status,
             "resolved_at": resolved_at, "auto_scored_forecasts": auto_scored,
             "auto_scoreable": _is_auto_scoreable_final(status=status, confidence=args.get("confidence"), outcome_label=outcome_label),
@@ -165,8 +162,7 @@ def _resolve_pending(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "limit must be between 1 and 1000",
             details={"field": "limit", "value": limit},
         )
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         cur = db.connection.execute(
             """
             SELECT f.id, f.thesis_id, f.kind, f.resolution_at, t.instrument_id
@@ -202,8 +198,6 @@ def _resolve_pending(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             })
             if len(items) >= limit:
                 break
-    finally:
-        db.close()
     return {"items": items, "count": len(items), "truncated": len(items) == limit}
 
 

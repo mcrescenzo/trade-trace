@@ -19,11 +19,11 @@ from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_credential_metadata,
     reject_if_contains_secrets,
     require,
@@ -286,8 +286,7 @@ def _reconciliation_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
     resolution_status = str(args.get("resolution_status") or "unresolved")
     if resolution_status not in _RESOLUTION:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "unknown reconciliation resolution_status", details={"field": "resolution_status"})
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             expected, observed, ids, codes, caveats, imported_at = _build_derived(uow.conn, as_of=as_of, stale_snapshot_statuses={"stale", "missing", "unknown"})
             caller_codes = [str(code) for code in _list_arg(args, "mismatch_codes")]
@@ -328,17 +327,12 @@ def _reconciliation_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             uow.execute("INSERT INTO reconciliation_records(id, schema_version, semantic_key, material_hash, as_of, source, source_precedence_json, expected_state_json, observed_imported_state_json, diff_json, diff_severity, mismatch_codes_json, resolution_status, contributing_ids_json, caveats_json, provenance_json, imported_at, recorded_at, idempotency_key, actor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (record_id, schema_version, semantic_key, material_hash, as_of, source, _canonical_json(source_precedence), _canonical_json(expected), _canonical_json(observed), _canonical_json(diff), diff_severity, _canonical_json(codes), resolution_status, _canonical_json(ids), _canonical_json(caveats), _canonical_json(provenance), imported_at, recorded_at, args.get("idempotency_key"), ctx.actor_id))
             emit_event(uow, event_type=_EVENT, subject_kind="reconciliation_record", subject_id=record_id, payload={"id": record_id, **material, "material_hash": material_hash}, actor_id=ctx.actor_id, idempotency_key=args.get("idempotency_key"), ctx=ctx)
             return _response(uow.conn, record_id)
-    finally:
-        db.close()
 
 
 def _reconciliation_get(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         return _response(db.connection, require(args, "id"))
-    finally:
-        db.close()
 
 
 def _reconciliation_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -356,11 +350,8 @@ def _reconciliation_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY as_of DESC, recorded_at DESC, id DESC LIMIT ?"
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         records = [_row(row) for row in db.connection.execute(sql, (*params, limit)).fetchall()]
-    finally:
-        db.close()
     codes = sorted({code for record in records for code in record["mismatch_codes"]})
     return {"summary": {"bucket": "reconciliation_mismatches", "count": len(records), "mismatch_codes": codes, "source_precedence": list(_SOURCE_PRECEDENCE), "local_evidence_only": True, "non_executing": True}, "groups": records, "reconciliation_records": records, "report_kind": "local_reconciliation_mismatch_report", "agent_answer_hints": ["Use reconciliation rows as evidence for external operators; Trade Trace does not cancel, halt, remediate, fetch private state, or move funds.", "Current exposure remains caveated as local projected positions versus imported-observed positions when account snapshots are present."], "non_executing": True, "credential_blind": True}
 

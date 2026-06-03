@@ -22,10 +22,10 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     now_iso,
-    open_db_for_args,
     reject_if_contains_secrets,
     require,
     store_metadata_json,
@@ -262,8 +262,7 @@ def _strategy_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     meta_json = store_metadata_json(args, "meta_json")
     idempotency_key = args.get("idempotency_key")
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         # Slug uniqueness check happens before the INSERT so the error
         # surfaces with `details.field='slug'`, not as a UNIQUE
         # constraint translated to a generic VALIDATION_ERROR.
@@ -333,8 +332,6 @@ def _strategy_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 },
                 actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
             )
-    finally:
-        db.close()
     return _strategy_response({
         "id": strategy_id, "name": name, "slug": slug,
         "description": description, "hypothesis": hypothesis,
@@ -410,11 +407,8 @@ def _strategy_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         sql += " WHERE status = 'archived'"
     sql += " ORDER BY slug LIMIT ?"
     params = (limit,)
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         rows = db.connection.execute(sql, params).fetchall()
-    finally:
-        db.close()
     items = [_strategy_full_row_to_dict(row) for row in rows]
     return {"items": items, "count": len(items), "truncated": len(items) == limit}
 
@@ -451,8 +445,7 @@ def _strategy_show(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "strategy_id or slug is required",
             details={"field": "strategy_id_or_slug"},
         )
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         if strategy_id:
             row = db.connection.execute(
                 "SELECT id, name, slug, description, hypothesis, status, "
@@ -482,8 +475,6 @@ def _strategy_show(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             stale_threshold_days=stale_threshold_days,
         )
         return result
-    finally:
-        db.close()
 
 
 def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -533,8 +524,7 @@ def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         )
 
     idempotency_key = args.get("idempotency_key")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             row = uow.conn.execute(
                 "SELECT name, slug, description, hypothesis, status, "
@@ -594,8 +584,6 @@ def _strategy_update(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 "WHERE id = ?",
                 tuple(params),
             )
-    finally:
-        db.close()
     return _strategy_response(candidate_result)
 
 

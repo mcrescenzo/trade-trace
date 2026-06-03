@@ -11,11 +11,11 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_credential_metadata,
     reject_if_contains_secrets,
     require,
@@ -166,8 +166,7 @@ def _approval_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     if material_hash != computed_hash:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "material_hash does not match canonical approval/waiver record", details={"field": "material_hash"})
     idempotency_key = args.get("idempotency_key")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             missing = _validate_refs(uow.conn, args)
             if missing:
@@ -189,17 +188,12 @@ def _approval_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             )
             emit_event(uow, event_type=_EVENT, subject_kind="approval_waiver", subject_id=record_id, payload={"id": record_id, **material, "material_hash": material_hash, "idempotency_key": idempotency_key}, actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx)
             return _response(uow.conn, record_id)
-    finally:
-        db.close()
 
 
 def _approval_get(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         return _response(db.connection, require(args, "id"))
-    finally:
-        db.close()
 
 
 def _approval_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -211,23 +205,19 @@ def _approval_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         if args.get(field):
             where.append(f"{field} = ?")
             params.append(args[field])
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         sql = f"SELECT {_SELECT} FROM approval_waiver_records"
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
         rows = db.connection.execute(sql, (*params, limit)).fetchall()
         return {"records": [_row_to_response(row) for row in rows], "count": len(rows), "record_kind": "local_approval_waiver_autonomy_audit", "non_executing": True}
-    finally:
-        db.close()
 
 
 def _approval_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     listed = _approval_list(args, ctx)
     by_intent: dict[str, dict[str, Any]] = {}
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         for record in listed["records"]:
             intent_id = record.get("pretrade_intent_id") or "unlinked"
             entry = by_intent.setdefault(intent_id, {"pretrade_intent_id": None if intent_id == "unlinked" else intent_id, "proposed": None, "approval_waiver_records": [], "caveats": []})
@@ -246,8 +236,6 @@ def _approval_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             else:
                 entry["caveats"].append("Externally imported execution activity unavailable/not imported; no remediation inferred.")
         return {"kind": "approval_ledger_report", "record_kind": "local_approval_waiver_autonomy_audit_report", "non_executing": True, "count": listed["count"], "groups": list(by_intent.values())}
-    finally:
-        db.close()
 
 
 def register_approval_tools(registry: ToolRegistry) -> None:

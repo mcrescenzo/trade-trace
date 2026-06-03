@@ -38,11 +38,11 @@ from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
     common_metadata,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_if_contains_secrets,
     require,
 )
@@ -317,12 +317,9 @@ def _memory_retain(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """
 
     node_type = require(args, "node_type")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             return _memory_retain_in_uow(args, ctx, uow, node_type=node_type)
-    finally:
-        db.close()
 
 
 def _memory_retain_in_uow(
@@ -634,8 +631,7 @@ def _memory_reflect(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     retain_args.pop("target_kind", None)
     retain_args.pop("target_id", None)
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             result = _memory_retain_in_uow(retain_args, ctx, uow, node_type="reflection")
             node_id = result["id"]
@@ -662,8 +658,6 @@ def _memory_reflect(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 },
                 actor_id=ctx.actor_id, idempotency_key=None, ctx=ctx,
             )
-    finally:
-        db.close()
     result["edge_id"] = edge_id
     result["target_kind"] = target_kind
     result["target_id"] = target_id
@@ -677,13 +671,10 @@ def _verify_endpoint_exists(args, *, target_kind: str, target_id: str) -> None:
         # MVP. Accept without existence check; FK constraints will catch
         # later if/when those tables land.
         return
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         row = db.connection.execute(
             f"SELECT 1 FROM {table} WHERE id = ?", (target_id,),
         ).fetchone()
-    finally:
-        db.close()
     if row is None:
         raise ToolError(
             ErrorCode.NOT_FOUND,
@@ -733,8 +724,7 @@ def _memory_link(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     metadata_json = json.dumps(args.get("metadata_json") or {}, sort_keys=True)
     idempotency_key = args.get("idempotency_key")
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(
                 uow, event_type="edge.created",
@@ -781,8 +771,6 @@ def _memory_link(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 },
                 actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
             )
-    finally:
-        db.close()
     return {
         "id": edge_id, "source_kind": source_kind, "source_id": source_id,
         "target_kind": target_kind, "target_id": target_id,
@@ -819,8 +807,7 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     options = _parse_recall_options(args)
     seg = common_metadata(args)
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         provider = _embeddings_provider(db.connection)
         if provider != "none" and "semantic" not in options.requested_strategies:
             options = RecallOptions(
@@ -841,8 +828,6 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             db.connection, items=items, rankings=rankings, options=options,
             ctx=ctx, seg=seg,
         )
-    finally:
-        db.close()
 
     response = _build_recall_response(
         recall_id=recall_id, rankings=rankings, options=options,

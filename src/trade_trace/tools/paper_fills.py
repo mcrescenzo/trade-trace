@@ -19,11 +19,11 @@ from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_credential_metadata,
     reject_if_contains_secrets,
     require,
@@ -246,8 +246,7 @@ def _paper_fill_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]
     material_hash = args.get("material_hash") or _hash_material(material)
     if material_hash != _hash_material(material):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "material_hash does not match canonical paper fill")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(uow, event_type=_EVENT, actor_id=ctx.actor_id, idempotency_key=args.get("idempotency_key"))
             if replay is not None:
@@ -267,17 +266,12 @@ def _paper_fill_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]
             )
             emit_event(uow, event_type=_EVENT, subject_kind="paper_fill", subject_id=record_id, payload={"id": record_id, **material, "material_hash": material_hash}, actor_id=ctx.actor_id, idempotency_key=args.get("idempotency_key"), ctx=ctx)
             return _response(uow.conn, record_id)
-    finally:
-        db.close()
 
 
 def _paper_fill_get(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         return _response(db.connection, require(args, "id"))
-    finally:
-        db.close()
 
 
 def _paper_fill_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -289,12 +283,9 @@ def _paper_fill_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         if args.get(field):
             where.append(f"{field} = ?")
             params.append(args[field])
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         rows = db.connection.execute(f"SELECT {_SELECT} FROM paper_fill_records WHERE {' AND '.join(where)} ORDER BY order_as_of DESC, recorded_at DESC, id DESC LIMIT ?", (*params, limit)).fetchall()
         return {"records": [_row_to_response(r) for r in rows], "count": len(rows), "environment": "paper", "paper_only": True, "not_imported_account_truth": True}
-    finally:
-        db.close()
 
 
 def _paper_exposure_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:

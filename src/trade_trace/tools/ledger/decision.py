@@ -19,11 +19,11 @@ from trade_trace.projections import rebuild_positions
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
     common_metadata,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_if_contains_secrets,
     require,
     store_metadata_json,
@@ -137,8 +137,7 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "risk_reward_estimate": risk_reward_estimate,
         }
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(
                 uow, event_type="decision.created",
@@ -212,8 +211,6 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 result = _response(uow.conn, decision_id, created_at, review_by)
             else:
                 result = _response(uow.conn, decision_id, created_at, review_by)
-    finally:
-        db.close()
     return result
 
 

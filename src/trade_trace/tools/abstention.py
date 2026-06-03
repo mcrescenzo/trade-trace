@@ -16,11 +16,11 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     require,
     store_metadata_json,
 )
@@ -80,8 +80,7 @@ def _abstention_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]
     thesis_id = args.get("thesis_id")
     run_id = args.get("run_id")
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             if uow.conn.execute("SELECT 1 FROM instruments WHERE id = ?", (instrument_id,)).fetchone() is None:
                 raise ToolError(ErrorCode.VALIDATION_ERROR, "abstention references missing instrument", details={"field": "instrument_id", "id": instrument_id})
@@ -109,25 +108,19 @@ def _abstention_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]
             }
             emit_event(uow, event_type=_EVENT, subject_kind="abstention", subject_id=abstention_id, payload=payload, actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx)
             return _response(uow.conn, abstention_id)
-    finally:
-        db.close()
 
 
 def _abstention_get(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
     abstention_id = require(args, "id")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         return _response(db.connection, abstention_id)
-    finally:
-        db.close()
 
 
 def _abstention_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
     limit = min(int(args.get("limit", 50)), 200)
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         where = []
         params: list[Any] = []
         for field in ("instrument_id", "thesis_id", "run_id"):
@@ -140,8 +133,6 @@ def _abstention_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
         rows = db.connection.execute(sql, (*params, limit)).fetchall()
         return {"records": [_row_to_response(row) for row in rows], "count": len(rows), "record_kind": "abstention"}
-    finally:
-        db.close()
 
 
 def register_abstention_tools(registry: ToolRegistry) -> None:

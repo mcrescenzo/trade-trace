@@ -17,11 +17,11 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     require,
     store_metadata_json,
 )
@@ -84,8 +84,7 @@ def _interpret_resolution(args: dict[str, Any], ctx: ToolContext) -> dict[str, A
     metadata_json = store_metadata_json(args, "metadata_json")
     idempotency_key = args.get("idempotency_key")
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             conn = uow.conn
             row = conn.execute(
@@ -119,21 +118,16 @@ def _interpret_resolution(args: dict[str, Any], ctx: ToolContext) -> dict[str, A
                 actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
             )
             return _response(conn, interp_id)
-    finally:
-        db.close()
 
 
 def _get_interpretation(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
     forecast_id = require(args, "forecast_id")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         row = db.connection.execute(f"{_SELECT} WHERE forecast_id = ?", (forecast_id,)).fetchone()
         if row is None:
             raise ToolError(ErrorCode.NOT_FOUND, "no resolution interpretation for forecast", details={"forecast_id": forecast_id})
         return _row_to_response(row)
-    finally:
-        db.close()
 
 
 def register_resolution_interpretation_tools(registry: ToolRegistry) -> None:

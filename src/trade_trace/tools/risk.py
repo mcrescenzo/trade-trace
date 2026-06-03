@@ -11,11 +11,11 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_credential_metadata,
     reject_if_contains_secrets,
     require,
@@ -115,8 +115,7 @@ def _risk_policy_version_add(args: dict[str, Any], ctx: ToolContext) -> dict[str
             "effective_to": effective_to,
         }
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(uow, event_type=_POLICY_EVENT, actor_id=ctx.actor_id, idempotency_key=idempotency_key)
             if replay is not None:
@@ -130,8 +129,6 @@ def _risk_policy_version_add(args: dict[str, Any], ctx: ToolContext) -> dict[str
             )
             emit_event(uow, event_type=_POLICY_EVENT, subject_kind="risk_policy_version", subject_id=policy_id, payload=payload(policy_id), actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx)
             return _policy_response(uow.conn, policy_id)
-    finally:
-        db.close()
 
 
 def _receipt_response(conn: Any, receipt_id: str) -> dict[str, Any]:
@@ -226,8 +223,7 @@ def _risk_check_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]
         raise ToolError(ErrorCode.VALIDATION_ERROR, "receipt_hash does not match canonical receipt payload", details={"field": "receipt_hash"})
     idempotency_key = args.get("idempotency_key")
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(uow, event_type=_RECEIPT_EVENT, actor_id=ctx.actor_id, idempotency_key=idempotency_key)
             if replay is not None:
@@ -247,8 +243,6 @@ def _risk_check_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]
                 )
             emit_event(uow, event_type=_RECEIPT_EVENT, subject_kind="risk_check_receipt", subject_id=receipt_id, payload={"id": receipt_id, **receipt_material, "receipt_hash": receipt_hash}, actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx)
             return _receipt_response(uow.conn, receipt_id)
-    finally:
-        db.close()
 
 
 def register_risk_tools(registry: ToolRegistry) -> None:

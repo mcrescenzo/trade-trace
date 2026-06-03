@@ -20,11 +20,11 @@ from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
     common_metadata,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_if_contains_secrets,
     require,
     store_metadata_json,
@@ -54,12 +54,9 @@ def _metadata_with_evidence_stance(raw: str | None, stance: str) -> str:
 
 
 def _source_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             return _source_add_in_uow(args, ctx, uow)
-    finally:
-        db.close()
 
 
 def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) -> dict[str, Any]:
@@ -311,12 +308,9 @@ def _make_source_attacher(target_kind: str):
     the source's `stance` column per PRD §4.5."""
 
     def _handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-        db = open_db_for_args(args)
-        try:
+        with db_for_args(args) as db:
             with UnitOfWork(db.connection) as uow:
                 return _source_attach_in_uow(args, ctx, uow, target_kind=target_kind)
-        finally:
-            db.close()
 
     return _handler
 

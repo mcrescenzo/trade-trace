@@ -11,11 +11,11 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_credential_metadata,
     require,
     store_metadata_json,
@@ -154,8 +154,7 @@ def _pretrade_intent_record(args: dict[str, Any], ctx: ToolContext) -> dict[str,
         raise ToolError(ErrorCode.VALIDATION_ERROR, "material_hash does not match canonical intent packet", details={"field": "material_hash"})
     idempotency_key = args.get("idempotency_key")
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             missing = _validate_refs(uow.conn, args)
             if missing:
@@ -177,25 +176,19 @@ def _pretrade_intent_record(args: dict[str, Any], ctx: ToolContext) -> dict[str,
             )
             emit_event(uow, event_type=_EVENT, subject_kind="pretrade_intent", subject_id=intent_id, payload={"id": intent_id, **material, "material_hash": material_hash, "idempotency_key": idempotency_key}, actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx)
             return _response(uow.conn, intent_id)
-    finally:
-        db.close()
 
 
 def _pretrade_intent_get(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
     intent_id = require(args, "id")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         return _response(db.connection, intent_id)
-    finally:
-        db.close()
 
 
 def _pretrade_intent_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
     limit = min(int(args.get("limit", 50)), 200)
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         where = []
         params: list[Any] = []
         for field in ("market_id", "instrument_id", "forecast_id", "decision_id"):
@@ -208,8 +201,6 @@ def _pretrade_intent_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, A
         sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
         rows = db.connection.execute(sql, (*params, limit)).fetchall()
         return {"records": [_row_to_response(row) for row in rows], "count": len(rows), "record_kind": "proposed_local_pretrade_intent"}
-    finally:
-        db.close()
 
 
 def register_pretrade_intent_tools(registry: ToolRegistry) -> None:

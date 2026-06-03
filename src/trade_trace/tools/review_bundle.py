@@ -38,7 +38,7 @@ from trade_trace.reports.recall_receipts import (
     report_recall_receipts,
 )
 from trade_trace.security.patterns import redact_for_log
-from trade_trace.tools._helpers import open_db_for_args
+from trade_trace.tools._helpers import db_for_args
 from trade_trace.tools._report_filter_errors import (
     report_filter_validation_to_tool_error,
     unsupported_filter_to_tool_error,
@@ -74,7 +74,7 @@ class ReviewBundleInput(BaseModel):
     include_autonomous_lifecycle: bool = True
     redaction_profile: RedactionProfile = RedactionProfile.AUDIT_EXPORT
     max_examples_per_record: int = Field(default=3, ge=0, le=20)
-    home: str | None = None  # forwarded to open_db_for_args
+    home: str | None = None  # forwarded to db_for_args
 
 
 class ReviewBundleOutput(BaseModel):
@@ -956,8 +956,7 @@ def _assemble_bundle(
 def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     parsed, rf, filter_view = _prepare_bundle_filter(args)
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         conn = db.connection
         decision_ids, selected, target_kinds = _gather_selected_context(
             conn, rf, max_records=parsed.max_records,
@@ -978,8 +977,6 @@ def _review_bundle_handler(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             _gather_autonomous_lifecycle(conn, selected)
             if parsed.include_autonomous_lifecycle else {}
         )
-    finally:
-        db.close()
 
     caveats = _build_caveats(
         calibration_summary=calibration_summary,

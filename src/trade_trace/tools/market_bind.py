@@ -16,10 +16,10 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     now_iso,
-    open_db_for_args,
     require,
     store_metadata_json,
 )
@@ -97,12 +97,9 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     source = _required_enum(args, "source", _ALLOWED_SOURCES)
     external_id = require(args, "external_id")
     if source == "polymarket" and args.get("bound_via") != "manual":
-        probe_db = open_db_for_args(args)
-        try:
+        with db_for_args(args) as probe_db:
             if load_config(probe_db.connection).enabled:
                 return _upsert_market(args, ctx)
-        finally:
-            probe_db.close()
     state = _required_enum(args, "state", _ALLOWED_STATES)
     mechanism = _required_enum(args, "mechanism", _ALLOWED_MECHANISMS)
     resolution_source = _optional_enum(args, "resolution_source", _ALLOWED_RESOLUTION_SOURCES)
@@ -153,8 +150,7 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     market_id = args.get("id") or new_id("mkt")
     created_at = now_iso()
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(
                 uow,
@@ -295,8 +291,6 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 ctx=ctx,
             )
             return payload
-    finally:
-        db.close()
 
 
 def _ensure_market_bind_prerequisites(

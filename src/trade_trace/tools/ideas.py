@@ -21,8 +21,8 @@ from typing import Any
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
+    db_for_args,
     normalize_timestamp,
-    open_db_for_args,
     reject_if_contains_secrets,
     require,
 )
@@ -136,8 +136,7 @@ def _idea_capture(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         }
     )
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             source = _source_add_in_uow(
                 {
@@ -197,8 +196,6 @@ def _idea_capture(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 ctx,
                 uow,
             )
-    finally:
-        db.close()
 
     return {
         "capture_state": "draft_needs_enrichment",

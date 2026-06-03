@@ -23,7 +23,7 @@ from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
-from trade_trace.tools._helpers import open_db_for_args, require
+from trade_trace.tools._helpers import db_for_args, require
 from trade_trace.tools.errors import ToolError
 
 
@@ -234,8 +234,7 @@ def _reflection_prompt_for_outcome(
                 f"{name} must be bool",
                 details={"field": name, "value": value},
             )
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         packet = _packet_for(
             db.connection,
             outcome_id=outcome_id,
@@ -244,8 +243,6 @@ def _reflection_prompt_for_outcome(
             include_prior_reflections=include_prior_reflections,
             as_of=as_of,
         )
-    finally:
-        db.close()
     return packet
 
 

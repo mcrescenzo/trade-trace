@@ -19,10 +19,10 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     common_metadata,
+    db_for_args,
     emit_event,
     new_id,
     now_iso,
-    open_db_for_args,
     require,
     store_metadata_json,
 )
@@ -238,8 +238,7 @@ def _fetch_market(client: PolymarketClient, external_id: str) -> dict[str, Any]:
 
 
 def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id: str | None = None) -> dict[str, Any]:
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         cfg = load_config(db.connection)
         client = PolymarketClient(cfg)
         try:
@@ -278,8 +277,6 @@ def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id:
             out = {"id": market_id, **payload, "state_changed": changed}
             emit_event(uow, event_type="market.refreshed" if refresh_market_id else "market.bound", subject_kind="market", subject_id=market_id, payload=out, actor_id=ctx.actor_id, idempotency_key=args.get("idempotency_key"), ctx=ctx)
             return out
-    finally:
-        db.close()
 
 
 def _market_refresh(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -354,8 +351,7 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
 
 def _insert_snapshot(args: dict[str, Any], ctx: ToolContext, market_id: str, snap: dict[str, Any], captured_at: str) -> dict[str, Any]:
     seg = common_metadata(args)
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             _ensure_market_instrument(uow, market_id, actor_id=ctx.actor_id)
             sid = args.get("id") or new_id("snp")
@@ -365,15 +361,12 @@ def _insert_snapshot(args: dict[str, Any], ctx: ToolContext, market_id: str, sna
             uow.execute("INSERT INTO snapshots(id,instrument_id,captured_at,source,source_url,price,bid,ask,mid,spread,volume,open_interest,implied_probability,liquidity_depth_json,agent_id,model_id,environment,run_id,metadata_json,created_at,actor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (sid,market_id,captured_at,"polymarket",args.get("source_url"),snap.get("price"),snap.get("bid"),snap.get("ask"),snap.get("mid"),snap.get("spread"),snap.get("volume"),snap.get("open_interest"),snap.get("implied_probability"),_json(snap.get("liquidity_depth_json")),seg["agent_id"],seg["model_id"],seg["environment"],seg["run_id"],_json(metadata),created_at,ctx.actor_id))
             emit_event(uow,event_type="snapshot.added",subject_kind="snapshot",subject_id=sid,payload={"id":sid,"instrument_id":market_id,"captured_at":captured_at,"source":"polymarket"},actor_id=ctx.actor_id,idempotency_key=args.get("idempotency_key"),ctx=ctx)
             return {"id": sid, "instrument_id": market_id, "captured_at": captured_at, **snap}
-    finally:
-        db.close()
 
 
 def _snapshot_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     if args.get("at") not in (None, "now"):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "snapshot.fetch supports only at=now in v0.0.2", details={"field":"at"})
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         client = PolymarketClient(load_config(db.connection))
         market_id = require(args,"market_id")
         row = db.connection.execute("SELECT external_id FROM markets WHERE id=?", (market_id,)).fetchone()
@@ -383,15 +376,12 @@ def _snapshot_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             raw = _fetch_market(client, str(row[0]))
         except AdapterError as exc:
             raise _tool_error(exc) from exc
-    finally:
-        db.close()
     return _insert_snapshot(args, ctx, market_id, _snapshot_from_raw(raw if isinstance(raw, dict) else {}), now_iso())
 
 
 def _snapshot_fetch_series(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     # v0.0.2 adapter primitive stores returned points; Gamma path is intentionally generic for fixture-backed tests.
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         client = PolymarketClient(load_config(db.connection))
         market_id=require(args,"market_id")
         row = db.connection.execute("SELECT external_id FROM markets WHERE id=?", (market_id,)).fetchone()
@@ -401,8 +391,6 @@ def _snapshot_fetch_series(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             raw = client.gamma_get(f"/markets/{row[0]}/prices?from={require(args,'from')}&to={require(args,'to')}")
         except AdapterError as exc:
             raise _tool_error(exc) from exc
-    finally:
-        db.close()
     points = raw.get("points", raw) if isinstance(raw, dict) else raw
     items = []
     for idx, point in enumerate(points or []):
@@ -421,8 +409,7 @@ def _snapshot_fetch_series(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
 
 
 def _outcome_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         client = PolymarketClient(load_config(db.connection))
         market_id=require(args,"market_id")
         row = db.connection.execute("SELECT venue_metadata_json FROM markets WHERE id=?", (market_id,)).fetchone()
@@ -440,10 +427,7 @@ def _outcome_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             raise _tool_error(exc) from exc
         status = out.get("status") or ("void" if meta.get("voided") else "resolved_final")
         label = out.get("label") or meta.get("winningOutcome") or meta.get("winning_outcome") or "unknown"
-    finally:
-        db.close()
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             _ensure_market_instrument(uow, market_id, actor_id=ctx.actor_id)
             oid=args.get("id") or new_id("out")
@@ -452,8 +436,6 @@ def _outcome_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             uow.execute("INSERT INTO outcomes(id,instrument_id,resolved_at,outcome_label,outcome_value,status,source,confidence,agent_id,model_id,environment,run_id,metadata_json,created_at,actor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (oid,market_id,out.get("resolved_at") or now_iso(),label,out.get("value"),status,"polymarket",out.get("confidence"),None,None,None,None,metadata,created_at,ctx.actor_id))
             emit_event(uow,event_type="outcome.recorded",subject_kind="outcome",subject_id=oid,payload={"id":oid,"instrument_id":market_id,"status":status,"outcome_label":label},actor_id=ctx.actor_id,idempotency_key=args.get("idempotency_key"),ctx=ctx)
             return {"id":oid,"instrument_id":market_id,"status":status,"outcome_label":label,"metadata_json":metadata}
-    finally:
-        db.close()
 
 
 def register_adapter_polymarket_tools(registry: ToolRegistry) -> None:

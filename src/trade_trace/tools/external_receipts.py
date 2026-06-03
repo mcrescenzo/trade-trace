@@ -17,11 +17,11 @@ from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_credential_metadata,
     reject_if_contains_secrets,
     require,
@@ -177,8 +177,7 @@ def _external_receipt_import(args: dict[str, Any], ctx: ToolContext) -> dict[str
     if material_hash != _hash_material(material):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "material_hash does not match canonical external receipt", details={"field": "material_hash"})
     idempotency_key = args.get("idempotency_key")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             missing = _validate_refs(uow.conn, args)
             if missing:
@@ -200,17 +199,12 @@ def _external_receipt_import(args: dict[str, Any], ctx: ToolContext) -> dict[str
             )
             emit_event(uow, event_type=_EVENT, subject_kind="external_execution_receipt", subject_id=receipt_id, payload={"id": receipt_id, **material, "material_hash": material_hash, "idempotency_key": idempotency_key}, actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx)
             return _response(uow.conn, receipt_id)
-    finally:
-        db.close()
 
 
 def _external_receipt_get(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         return _response(db.connection, require(args, "id"))
-    finally:
-        db.close()
 
 
 def _external_receipt_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -222,16 +216,13 @@ def _external_receipt_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
         if args.get(field):
             where.append(f"{field} = ?")
             params.append(args[field])
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         sql = f"SELECT {_SELECT} FROM external_execution_receipts"
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY imported_at DESC, id DESC LIMIT ?"
         rows = db.connection.execute(sql, (*params, limit)).fetchall()
         return {"records": [_row_to_response(row) for row in rows], "count": len(rows), "record_kind": "sanitized_imported_external_execution_receipt"}
-    finally:
-        db.close()
 
 
 def _external_receipt_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -242,8 +233,7 @@ def _external_receipt_report(args: dict[str, Any], ctx: ToolContext) -> dict[str
     if invalid:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "states contains unknown lifecycle_state", details={"field": "states", "invalid": invalid})
     placeholders = ",".join("?" for _ in states)
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         rows = db.connection.execute(
             f"SELECT {_SELECT} FROM external_execution_receipts WHERE lifecycle_state IN ({placeholders}) ORDER BY imported_at DESC, id DESC LIMIT ?",
             (*states, limit),
@@ -257,8 +247,6 @@ def _external_receipt_report(args: dict[str, Any], ctx: ToolContext) -> dict[str
             "report_kind": "open_stale_partial_rejected_imported_external_receipts",
             "non_executing": True,
         }
-    finally:
-        db.close()
 
 
 def register_external_receipt_tools(registry: ToolRegistry) -> None:

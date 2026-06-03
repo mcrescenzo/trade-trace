@@ -33,7 +33,7 @@ from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
-from trade_trace.tools._helpers import new_id, now_iso, open_db_for_args
+from trade_trace.tools._helpers import db_for_args, new_id, now_iso
 from trade_trace.tools.errors import ToolError
 
 # The signals.kind open enum, mirrored from storage/policy.py for ergonomics.
@@ -218,9 +218,8 @@ def _signal_scan(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         kinds = frozenset(kinds_arg)
 
     dedupe = bool(args.get("dedupe", True))
-    db = open_db_for_args(args)
     emitted: list[dict[str, Any]] = []
-    try:
+    with db_for_args(args) as db:
         now_str = now_iso()
         with db.transaction():
             conn = db.connection
@@ -257,8 +256,6 @@ def _signal_scan(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                         "severity": "warn",
                         "forecast_id": fid,
                     })
-    finally:
-        db.close()
 
     return {
         "kinds_scanned": sorted(kinds),

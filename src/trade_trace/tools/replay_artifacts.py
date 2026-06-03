@@ -17,11 +17,11 @@ from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_credential_metadata,
     reject_if_contains_secrets,
     require,
@@ -148,8 +148,7 @@ def _record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     material_hash = args.get("material_hash") or _hash_material(material_base)
     if material_hash != _hash_material(material_base):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "material_hash does not match canonical replay evaluation artifact", details={"field": "material_hash"})
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(uow, event_type=_EVENT, actor_id=ctx.actor_id, idempotency_key=args.get("idempotency_key"))
             if replay is not None:
@@ -173,17 +172,12 @@ def _record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             )
             emit_event(uow, event_type=_EVENT, subject_kind="replay_evaluation_artifact", subject_id=artifact_id, payload={"id": artifact_id, **material_base, "material_hash": material_hash}, actor_id=ctx.actor_id, idempotency_key=args.get("idempotency_key"), ctx=ctx)
             return _response(uow.conn, artifact_id)
-    finally:
-        db.close()
 
 
 def _get(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         return _response(db.connection, require(args, "id"))
-    finally:
-        db.close()
 
 
 def _list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -195,8 +189,7 @@ def _list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         if args.get(field):
             where.append(f"{field} = ?")
             params.append(args[field])
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         sql = f"SELECT {_SELECT} FROM replay_evaluation_artifacts"
         if where:
             sql += " WHERE " + " AND ".join(where)
@@ -204,8 +197,6 @@ def _list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         rows = db.connection.execute(sql, (*params, limit)).fetchall()
         records = [_row_to_response(row) for row in rows]
         return {"records": records, "count": len(records), "report_caveats": ["Artifacts are externally supplied evidence, not Trade Trace backtest/simulation results.", "Distinguish evidence_mode and sample_size before comparing artifacts; no advice or performance recommendation is produced."], "non_executing": True}
-    finally:
-        db.close()
 
 
 def register_replay_artifact_tools(registry: ToolRegistry) -> None:

@@ -18,11 +18,11 @@ from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
     common_metadata,
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     reject_if_contains_secrets,
     require,
     store_metadata_json,
@@ -364,9 +364,8 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             ],
         }
 
-    db = open_db_for_args(args)
     auto_scored: dict[str, Any] | None = None
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             replay = check_idempotency_replay(
                 uow, event_type="forecast.created",
@@ -536,8 +535,6 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 )
                 _emit_forecast_scored(uow, auto_scored, actor_id=ctx.actor_id, ctx=ctx,
                                       scored_at=created_at)
-    finally:
-        db.close()
     result: dict[str, Any] = {
         "id": forecast_id, "thesis_id": thesis_id, "kind": kind,
         "scoring_state": "pending", "created_at": created_at,
@@ -593,8 +590,7 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
     idempotency_key = args.get("idempotency_key")
     seg = common_metadata(args)
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             prior_row = uow.execute(
                 "SELECT thesis_id FROM forecasts WHERE id = ?", (prior_id,),
@@ -735,8 +731,6 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                         uow, auto_scored, actor_id=ctx.actor_id, ctx=ctx,
                         scored_at=created_at,
                     )
-    finally:
-        db.close()
 
     result: dict[str, Any] = {
         "id": new_forecast_id,
@@ -754,16 +748,13 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
 def _forecast_anchor_to_snapshot(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     forecast_id = require(args, "forecast_id")
     snapshot_id = require(args, "snapshot_id")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             if uow.conn.execute("SELECT 1 FROM forecasts WHERE id = ?", (forecast_id,)).fetchone() is None:
                 raise ToolError(ErrorCode.NOT_FOUND, "forecast_id not found", details={"forecast_id": forecast_id})
             return _anchor_forecast_to_snapshot_in_transaction(
                 uow, args=args, ctx=ctx, forecast_id=forecast_id, snapshot_id=snapshot_id,
             )
-    finally:
-        db.close()
 
 
 def register_forecast_tools(registry: ToolRegistry) -> None:

@@ -21,11 +21,11 @@ from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
+    db_for_args,
     emit_event,
     new_id,
     normalize_timestamp,
     now_iso,
-    open_db_for_args,
     require,
     store_metadata_json,
 )
@@ -56,8 +56,7 @@ def _has_snapshot_anchor(conn: Any, forecast_id: str) -> bool:
 
 def _forecast_commit_blind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     forecast_id = require(args, "forecast_id")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             conn = uow.conn
             if conn.execute("SELECT 1 FROM forecasts WHERE id = ?", (forecast_id,)).fetchone() is None:
@@ -95,8 +94,6 @@ def _forecast_commit_blind(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
                 "blind_commit_seq": committed[0],
                 "already_committed": False,
             }
-    finally:
-        db.close()
 
 
 def _lock_response(conn: Any, forecast_id: str) -> dict[str, Any]:
@@ -127,8 +124,7 @@ def _forecast_reveal_snapshot(args: dict[str, Any], ctx: ToolContext) -> dict[st
     forecast_id = require(args, "forecast_id")
     snapshot_id = require(args, "snapshot_id")
     metadata_json = store_metadata_json(args, "metadata_json")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             conn = uow.conn
             if conn.execute("SELECT 1 FROM forecasts WHERE id = ?", (forecast_id,)).fetchone() is None:
@@ -183,15 +179,12 @@ def _forecast_reveal_snapshot(args: dict[str, Any], ctx: ToolContext) -> dict[st
                 (lock_id, forecast_id, snapshot_id, blind_committed_at, blind_commit_seq, revealed_at, reveal_seq, independence_proven, args.get("run_id"), metadata_json, created_at, ctx.actor_id),
             )
             return _lock_response(conn, forecast_id)
-    finally:
-        db.close()
 
 
 def _forecast_independence(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
     forecast_id = require(args, "forecast_id")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         conn = db.connection
         if conn.execute("SELECT 1 FROM forecasts WHERE id = ?", (forecast_id,)).fetchone() is None:
             raise ToolError(ErrorCode.NOT_FOUND, "forecast_id not found", details={"forecast_id": forecast_id})
@@ -211,8 +204,6 @@ def _forecast_independence(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
                 "independence_proven": False,
             }
         return {"status": "no_blind_commit", "forecast_id": forecast_id, "independence_proven": False}
-    finally:
-        db.close()
 
 
 def register_forecast_independence_tools(registry: ToolRegistry) -> None:

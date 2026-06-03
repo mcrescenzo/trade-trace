@@ -37,10 +37,10 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
     check_idempotency_replay,
+    db_for_args,
     emit_event,
     new_id,
     now_iso,
-    open_db_for_args,
     reject_if_contains_secrets,
     require,
     store_metadata_json,
@@ -213,8 +213,7 @@ def _playbook_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     metadata_json = store_metadata_json(args)
     idempotency_key = args.get("idempotency_key")
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         # Pre-check `name` uniqueness so the error surfaces with
         # `details.field='name'` instead of as a generic UNIQUE
         # constraint translation. Allow the idempotency-replay path
@@ -289,8 +288,6 @@ def _playbook_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 },
                 actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
             )
-    finally:
-        db.close()
     return {
         "id": playbook_id, "name": name, "description": description,
         "status": status, "created_at": created_at,
@@ -308,14 +305,11 @@ def _playbook_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "limit must be in [1, 1000]",
             details={"field": "limit", "value": limit},
         )
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         rows = db.connection.execute(
             "SELECT id, name, description, status, created_at "
             "FROM playbooks ORDER BY name LIMIT ?", (limit,),
         ).fetchall()
-    finally:
-        db.close()
     items = [
         {"id": r[0], "name": r[1], "description": r[2],
          "status": r[3], "created_at": r[4]}
@@ -388,8 +382,7 @@ def _empty_rule_discoverability_fields() -> dict[str, Any]:
 
 def _playbook_show(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     playbook_id = require(args, "playbook_id")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         row = db.connection.execute(
             "SELECT id, name, description, status, created_at "
             "FROM playbooks WHERE id = ?", (playbook_id,),
@@ -410,8 +403,6 @@ def _playbook_show(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         rules_by_version = _rule_summaries_by_version(
             db.connection, [v[0] for v in versions],
         )
-    finally:
-        db.close()
     return {
         "id": row[0], "name": row[1], "description": row[2],
         "status": row[3], "created_at": row[4],
@@ -424,8 +415,7 @@ def _playbook_show(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 def _playbook_list_versions(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     playbook_id = require(args, "playbook_id")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         # Validate playbook exists.
         row = db.connection.execute(
             "SELECT 1 FROM playbooks WHERE id = ?", (playbook_id,),
@@ -446,8 +436,6 @@ def _playbook_list_versions(args: dict[str, Any], ctx: ToolContext) -> dict[str,
         rules_by_version = _rule_summaries_by_version(
             db.connection, [r[0] for r in rows],
         )
-    finally:
-        db.close()
     items = [_enrich_version(r, rules_by_version.get(r[0], [])) for r in rows]
     return {"items": items, "count": len(items)}
 
@@ -513,8 +501,7 @@ def _playbook_propose_version(
     metadata_json = store_metadata_json(args)
     idempotency_key = args.get("idempotency_key")
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             _require_playbook(uow.conn, playbook_id)
             _require_reflection_node(uow.conn, reflection_node_id)
@@ -602,8 +589,6 @@ def _playbook_propose_version(
                 },
                 actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
             )
-    finally:
-        db.close()
     return {
         "id": version_id, "playbook_id": playbook_id,
         "version": next_version, "parent_version_id": parent_version_id,
@@ -643,8 +628,7 @@ def _decision_record_adherence(
         )
     metadata_json = store_metadata_json(args)
 
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             _require_decision(uow.conn, decision_id)
             _require_playbook_version(uow.conn, playbook_version_id)
@@ -704,8 +688,6 @@ def _decision_record_adherence(
                 },
                 actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx,
             )
-    finally:
-        db.close()
     return {
         "id": adherence_id, "decision_id": decision_id,
         "playbook_version_id": playbook_version_id,
@@ -726,8 +708,7 @@ def _playbook_adherence(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
 
     playbook_id = require(args, "playbook_id")
     strategy_id = args.get("strategy_id")
-    db = open_db_for_args(args)
-    try:
+    with db_for_args(args) as db:
         # Confirm the playbook exists so the report doesn't silently
         # return zero rows for a typo.
         _require_playbook(db.connection, playbook_id)
@@ -736,8 +717,6 @@ def _playbook_adherence(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
             playbook_id=playbook_id,
             strategy_id=strategy_id,
         )
-    finally:
-        db.close()
 
 
 # -- registration --------------------------------------------------
