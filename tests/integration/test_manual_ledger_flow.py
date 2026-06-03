@@ -267,6 +267,34 @@ def test_decision_add_paper_enter_full(home):
     assert env["data"]["tags"] == ["good-skip", "liquidity-ignored"]
 
 
+def test_decision_add_paper_enter_derives_thesis_from_forecast(home):
+    # AX dogfood ergonomics: a caller holding only forecast_id (what forecast.add
+    # returns) should be able to paper_enter without separately looking up the
+    # thesis. thesis_id is derived from the forecast.
+    inst_id, thesis_id = _setup_thesis(home)
+    fc = _envelope(home, "forecast.add", {
+        "thesis_id": thesis_id,
+        "kind": "binary",
+        "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.4},
+            {"outcome_label": "no", "probability": 0.6},
+        ],
+        "rationale_body": "edge",
+    })
+    assert fc["ok"] is True, fc
+    env = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "forecast_id": fc["data"]["id"],  # no thesis_id supplied
+        "type": "paper_enter",
+        "side": "no",
+        "quantity": 50,
+        "price": 0.6,
+    })
+    assert env["ok"] is True, env
+    assert env["data"].get("position_id")  # paper_enter opened a position
+
+
 # -- bead trade-trace-8u3s: tag sanitization at write time -----------
 
 

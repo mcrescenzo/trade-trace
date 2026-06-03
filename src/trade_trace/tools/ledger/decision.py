@@ -49,6 +49,18 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             details={"field": "type", "allowed_decision_types": allowed_decision_types()},
         )
     decision_type = require(args, "type")
+    # Ergonomics: forecast.add returns forecast_id (its thesis_id is easy to
+    # miss), but paper_enter and friends require thesis_id. If the caller gave
+    # forecast_id but no thesis_id, derive the thesis from the forecast so they
+    # do not have to look it up separately.
+    if not args.get("thesis_id") and args.get("forecast_id"):
+        with db_for_args(args) as _db:
+            row = _db.connection.execute(
+                "SELECT thesis_id FROM forecasts WHERE id = ?",
+                (args["forecast_id"],),
+            ).fetchone()
+        if row and row[0]:
+            args["thesis_id"] = row[0]
     validate_decision_fields(decision_type, args)
     validate_material_non_action(decision_type, args)
     reject_if_contains_secrets(args.get("reason"), field="reason")
