@@ -52,6 +52,15 @@ git checkout "$AX_BRANCH" >>"$LOG_FILE" 2>&1 || {
   exit 1
 }
 
+# Start clean: park any leftover debris from an interrupted prior run (tracked
+# changes + untracked files) into a recoverable, timestamped stash so it cannot
+# poison this run. Healthy runs commit everything, so this is a no-op normally;
+# when it fires, recover with `git -C "$REPO_DIR" stash list`. Never destructive.
+if [ -n "$(git status --porcelain)" ]; then
+  git stash push -u -m "axloop-debris-$(date -u +%Y%m%dT%H%M%SZ)" >>"$LOG_FILE" 2>&1 \
+    && echo "[$(stamp)] parked pre-run debris into a stash (recover: git stash list)" >>"$LOG_FILE"
+fi
+
 PLAYBOOK="$REPO_DIR/scripts/ax-dogfood/playbook.md"
 [ -f "$PLAYBOOK" ] || { echo "[$(stamp)] ERROR: playbook not found at $PLAYBOOK" >>"$LOG_FILE"; exit 1; }
 
