@@ -24,8 +24,12 @@ def test_market_bind_is_public_mcp_catalog_tool_and_local_only(tmp_path):
     assert "market.scan.dry_run" not in specs
     assert "market.scan.promote" not in specs
     rendered = (specs["market.bind"]["description"] + " " + str(specs["market.bind"]["metadata"])).lower()
-    assert "manual/local" in rendered
-    assert "no network" in rendered
+    # Dual-mode: local/manual by default, with a read-only Gamma enrich path
+    # when the polymarket adapter is enabled (AX dogfood FR-1 corrected the old
+    # "no network" claim, which was false for the adapter-enabled path).
+    assert "local/manual" in rendered
+    assert "gamma" in rendered and "read-only" in rendered
+    # It still disclaims the heavier outbound paths it never touches.
     assert "broker" in rendered and "wallet" in rendered and "scheduler" in rendered
     schema_props = specs["market.bind"]["input_schema"]["properties"]
     for key in ("gamma_event_id", "outcome_ids_by_label", "resolution_rule", "tick_size", "fee_rate_bps", "tradable", "accepting_orders"):

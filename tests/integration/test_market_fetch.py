@@ -95,6 +95,42 @@ def test_market_bind_enabled_fetches_fixture_backed_market(tmp_path: Path, monke
 
 
 
+def test_market_bind_prefers_gamma_market_id_over_namespaced_external_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Regression (AX dogfood FR-1): on the FIRST bind the row does not exist yet,
+    # so the Gamma /markets/{id} lookup must use the caller-supplied
+    # gamma_market_id, not the namespaced external_id. The AGENT_GUIDE's own
+    # market.bind example passes external_id="polymarket:<id>" + a bare
+    # gamma_market_id; building the URL from external_id 422s on the namespace.
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+    calls: list[str] = []
+
+    def fake_gamma_get(self: PolymarketClient, path: str):
+        calls.append(path)
+        return _fixture("market_binary_open.json")
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", fake_gamma_get)
+
+    env = mcp_call(
+        "market.bind",
+        {
+            "home": home,
+            "source": "polymarket",
+            "external_id": "polymarket:2410562",
+            "gamma_market_id": "2410562",
+        },
+    )
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    # The lookup used the bare gamma_market_id, not the namespaced external_id.
+    assert calls == ["/markets/2410562"]
+    # The caller's namespaced external_id is still persisted for bookkeeping.
+    assert env.data["external_id"] == "polymarket:2410562"
+    assert env.data["bound_via"] == "adapter"
+
+
 def test_market_bind_accepts_string_list_outcomes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok

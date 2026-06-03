@@ -261,7 +261,14 @@ def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id:
                     }
             else:
                 external_id = require(args, "external_id")
-                fetch_id = str(external_id)
+                # First bind: the row does not exist yet, so prefer the
+                # caller-supplied gamma_market_id over external_id (mirrors
+                # _gamma_request_id for the stored-row paths). This lets a
+                # caller bind with a namespaced external_id (e.g.
+                # "polymarket:2410562") plus a bare gamma_market_id without the
+                # Gamma /markets/{id} lookup 422-ing on the namespaced id.
+                gamma_market_id = args.get("gamma_market_id")
+                fetch_id = str(gamma_market_id) if gamma_market_id else str(external_id)
             payload = _market_payload(_fetch_market(client, str(fetch_id)), str(external_id))
         except AdapterError as exc:
             raise _tool_error(exc) from exc

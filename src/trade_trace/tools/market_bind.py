@@ -1,8 +1,11 @@
-"""Local-only `market.bind` tool for the v0.0.2 PM catalog.
+"""`market.bind` tool for the v0.0.2 PM catalog.
 
-This is intentionally a manual/local binding surface. It records market metadata
-in the existing `markets` table and makes no adapter, HTTP, scheduler, broker,
-wallet, or market-data calls.
+This is primarily a manual/local binding surface that records market metadata in
+the existing `markets` table. As a convenience, when source='polymarket', the
+Polymarket adapter is enabled, and the caller does not force `bound_via='manual'`,
+it enriches the row via a single read-only Gamma `/markets/{id}` lookup (see the
+dual-mode branch in `_market_bind`). It never touches a broker, wallet, scheduler,
+or order/advice path.
 """
 
 from __future__ import annotations
@@ -384,7 +387,10 @@ def register_market_bind_tool(registry: ToolRegistry) -> None:
         is_write=True,
         description=(
             "Bind a prediction/event market into the local markets table. "
-            "Manual/local only: no network, adapter, broker, wallet, scheduler, or advice path. "
+            "Local/manual by default; when source='polymarket', the adapter is enabled, and "
+            "bound_via is not 'manual', it enriches the row via a single read-only Polymarket "
+            "Gamma /markets/{id} lookup (no broker, wallet, scheduler, order, or advice path). "
+            "Pass bound_via='manual' to force the offline path. "
             "Returns stable market_id/instrument_id prerequisites for snapshot.add, forecast.add, and decision.add."
         ),
         example_minimal={
