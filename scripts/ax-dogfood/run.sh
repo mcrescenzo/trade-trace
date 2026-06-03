@@ -39,12 +39,17 @@ fi
 
 cd "$REPO_DIR"
 
+PLAYBOOK="$REPO_DIR/scripts/ax-dogfood/playbook.md"
+[ -f "$PLAYBOOK" ] || { echo "[$(stamp)] ERROR: playbook not found at $PLAYBOOK" >>"$LOG_FILE"; exit 1; }
+
 {
   echo "[$(stamp)] ===== ax-dogfood run start (home=$TRADE_TRACE_HOME model=$MODEL) ====="
 } >>"$LOG_FILE"
 
+# Feed the version-controlled playbook directly (the .claude/ slash command is
+# gitignored, so we do not depend on it for headless runs).
 set +e
-claude -p "/ax-dogfood" \
+claude -p "$(cat "$PLAYBOOK")" \
   --model "$MODEL" \
   --mcp-config scripts/ax-dogfood/mcp.json --strict-mcp-config \
   --dangerously-skip-permissions \
