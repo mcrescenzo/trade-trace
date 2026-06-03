@@ -129,9 +129,13 @@ Now you may read source freely. Triage every friction item from Phase B:
   **atomic commit** with a conventional message that references the friction.
   Add or update a regression test where it makes sense. Run `ruff check src tests`
   + `mypy src` + the targeted tests for what you touched before each commit.
-  - If a tool-code fix can't be verified against the already-running MCP server,
-    verify it with a unit test and note "effective next run" — do not fight to
-    hot-reload the server.
+  - The `trade-trace` MCP server is a long-lived process for this session, so a
+    tool-code fix does NOT take effect in the live MCP tools until a **fresh
+    session** boots a new server (a cron `run.sh` fire, or a restarted `/loop`
+    session — NOT the next `/loop` iteration in this same session). Verify such
+    fixes with a unit test and note "effective next fresh session"; do not fight
+    to hot-reload the server, and do not be surprised if the live MCP still shows
+    old behavior this session.
 - **File to Beads** (genuinely new tool/feature, major or cross-cutting rework,
   contract-firewall item, or anything ambiguous/design-level): `bd search`
   first to avoid duplicates, then `bd create --type=... --label=ax-dogfood`
