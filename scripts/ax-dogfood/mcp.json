@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "trade-trace": {
+      "command": "/home/hermes/.local/bin/trade-trace-mcp",
+      "args": [],
+      "env": {
+        "TRADE_TRACE_HOME": "${TRADE_TRACE_HOME}",
+        "MCP_ACTOR_ID": "agent:ax-dogfood"
+      }
+    }
+  }
+}
