@@ -36,3 +36,9 @@
 | AX-005 | 2026-06-03-01 | error | decision.add missing `type` (not `decision_type`) → bare error, no allowed values | fixed | 8e974a5 |
 | AX-006 | 2026-06-03-01 | tool | `market_id` vs `instrument_id` naming inconsistency across tools | fixed | ff641a6 (closed trade-trace-nqyv) |
 | AX-007 | 2026-06-03-01 | tool | paper_enter needs `thesis_id` but forecast.add returns `forecast_id` | fixed | 68fb687 (closed trade-trace-4x1b) |
+| AX-008 | 2026-06-03-02 | report | unrealized PnL for a `no`-side position marks NO entry (0.875) vs YES price (0.12), no side conversion → phantom +$75.50 on a flat position; `decision.add` price convention for `no` undocumented | filed | trade-trace-ctvb (P1) |
+| AX-009 | 2026-06-03-02 | tool | snapshot.fetch/fetch_series/market.refresh build the Gamma URL from `external_id`, ignoring `gamma_market_id`; namespaced external_id (per AGENT_GUIDE example) → HTTP 422 | fixed | 1ea628d |
+| AX-010 | 2026-06-03-02 | schema | forecast.add `confidence_label` enum not in tool.schema; invalid value leaked raw SQLite CHECK error | fixed | 4bd01ce |
+| AX-011 | 2026-06-03-02 | schema | snapshot.fetch/outcome.fetch advertise `idempotency_key` as optional/runtime-defaulted but reject calls that omit it (`auto_derivation_available:false`) | filed | trade-trace-2cmb (P2) |
+| AX-012 | 2026-06-03-02 | report | open forecast with `resolution_at:null` never surfaces in report.work_queue as resolve_due (only report.lifecycle shows it) | filed | trade-trace-ptyi (design Q) |
+| AX-013 | 2026-06-03-02 | report | skip/watch/hold decisions can't link `forecast_id`, so report.coach flags a forecasted-but-skipped market as unforecasted | filed | trade-trace-t9n5 (design Q) |
