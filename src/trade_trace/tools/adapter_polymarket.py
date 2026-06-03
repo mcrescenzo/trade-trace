@@ -284,6 +284,13 @@ def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id:
             else:
                 changed = True
                 uow.execute("INSERT INTO markets(id,source,external_id,title,question,url,state,mechanism,resolution_source,ambiguity_kind,bound_via,opened_at,close_at,closed_for_trading_at,resolving_at,resolved_at,voided_at,ambiguous_at,venue_metadata_json,metadata_json,created_at,actor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (market_id,"polymarket",str(external_id),payload["title"],payload["question"],payload["url"],payload["state"],payload["mechanism"],payload["resolution_source"],payload["ambiguity_kind"],"adapter",payload["opened_at"],payload["close_at"],payload["closed_for_trading_at"],payload["resolving_at"],payload["resolved_at"],payload["voided_at"],payload["ambiguous_at"],payload["venue_metadata_json"],payload["metadata_json"],created_at,ctx.actor_id))
+            # Materialize the compatibility instrument row at bind time so the
+            # market_id this tool returns is immediately usable by forecast.add /
+            # decision.add, as the docstring promises. The manual bind path does
+            # this via _ensure_market_bind_prerequisites; the adapter path
+            # previously left it to the first snapshot.fetch, so
+            # bind -> forecast.add (no snapshot yet) failed NOT_FOUND (AX-023).
+            _ensure_market_instrument(uow, market_id, actor_id=ctx.actor_id)
             out = {"id": market_id, **payload, "state_changed": changed}
             emit_event(uow, event_type="market.refreshed" if refresh_market_id else "market.bound", subject_kind="market", subject_id=market_id, payload=out, actor_id=ctx.actor_id, idempotency_key=args.get("idempotency_key"), ctx=ctx)
             return out
