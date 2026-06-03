@@ -56,6 +56,19 @@ def test_agent_guide_memory_recall_example_matches_query_required_schema():
     assert '"tool":"memory.recall","args":{"context"' not in text
 
 
+def test_agent_guide_market_bind_example_includes_required_state_and_mechanism():
+    # market_bind.py requires `source`, `external_id`, `state`, and `mechanism`
+    # via _required_enum; a docs example that omits state/mechanism fails
+    # dispatch with VALIDATION_ERROR for a cold agent copying it verbatim.
+    text = (ROOT / "docs" / "AGENT_GUIDE.md").read_text(encoding="utf-8")
+
+    bind_example = re.search(r'\{"tool":"market\.bind","args":\{[^\n]*\}\}', text)
+    assert bind_example is not None, "AGENT_GUIDE market.bind example not found"
+    snippet = bind_example.group(0)
+    assert '"state"' in snippet, "market.bind example must include required `state`"
+    assert '"mechanism"' in snippet, "market.bind example must include required `mechanism`"
+
+
 def test_prd_memory_recall_contract_marks_query_required_and_context_optional():
     text = (ROOT / "docs" / "PRD.md").read_text(encoding="utf-8")
 
