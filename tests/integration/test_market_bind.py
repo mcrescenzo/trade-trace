@@ -32,6 +32,23 @@ def test_market_bind_is_public_mcp_catalog_tool_and_local_only(tmp_path):
         assert key in schema_props
 
 
+def test_market_bind_missing_enum_field_error_lists_allowed_values(tmp_path):
+    # A missing required-enum field (source/state/mechanism) must surface the
+    # allowed values, not just a bare "<field> is required" — otherwise a caller
+    # has no way to discover the valid set. Regression for AX dogfood friction.
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}, actor_id="agent:test").ok
+
+    args = _bind_args(home)
+    del args["source"]
+    result = mcp_call("market.bind", args, actor_id="agent:test")
+    assert isinstance(result, ErrorEnvelope), result
+    assert result.error.code.value == "VALIDATION_ERROR"
+    assert result.error.details["field"] == "source"
+    assert result.error.details["allowed"] == ["kalshi", "manifold", "manual", "polymarket", "predictit"]
+    assert "polymarket" in result.error.message
+
+
 def test_market_bind_idempotency_replay_sets_envelope_meta(tmp_path):
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}, actor_id="agent:test").ok

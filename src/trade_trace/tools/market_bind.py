@@ -53,7 +53,16 @@ def _optional_enum(args: dict[str, Any], field: str, allowed: set[str]) -> str |
 
 
 def _required_enum(args: dict[str, Any], field: str, allowed: set[str]) -> str:
-    value = require(args, field)
+    # Surface the allowed set on BOTH the missing and the invalid path. A bare
+    # "<field> is required" (the default require() message) leaves a caller with
+    # no way to discover that e.g. `source` must be one of polymarket/kalshi/...
+    if field not in args or args[field] is None:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"{field} is required and must be one of {sorted(allowed)!r}",
+            details={"field": field, "allowed": sorted(allowed)},
+        )
+    value = args[field]
     if value not in allowed:
         raise ToolError(
             ErrorCode.VALIDATION_ERROR,
