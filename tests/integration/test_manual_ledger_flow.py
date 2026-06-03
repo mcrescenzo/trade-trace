@@ -225,6 +225,64 @@ def test_forecast_add_probability_out_of_range(home):
     assert env["error"]["code"] == "INVARIANT_VIOLATION"
 
 
+# -- confidence_label enum (ax-dogfood AX-010) ---------------------------
+# A bad confidence_label used to leak the raw SQLite CHECK constraint as the
+# user-facing message; it now returns a clean VALIDATION_ERROR whose details
+# carry the allowed values so an agent can discover the enum on failure.
+
+
+def test_thesis_add_invalid_confidence_label(home):
+    inst_id, _ = _setup_thesis(home)
+    env = _envelope(home, "thesis.add", {
+        "instrument_id": inst_id,
+        "side": "yes",
+        "body": "...",
+        "confidence_label": "moderate",  # not in the enum
+    })
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "confidence_label"
+    assert "medium" in env["error"]["details"]["allowed"]
+    assert "moderate" not in env["error"]["message"].lower() or "CHECK" not in env["error"]["message"]
+
+
+def test_forecast_add_folded_invalid_confidence_label(home):
+    inst_id, _ = _setup_thesis(home)
+    env = _envelope(home, "forecast.add", {
+        "instrument_id": inst_id,
+        "rationale_body": "edge",
+        "kind": "binary",
+        "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.4},
+            {"outcome_label": "no", "probability": 0.6},
+        ],
+        "confidence_label": "moderate",  # not in the enum
+    })
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "confidence_label"
+    assert set(env["error"]["details"]["allowed"]) == {
+        "very_low", "low", "medium", "high", "very_high"
+    }
+
+
+def test_forecast_add_folded_valid_confidence_label(home):
+    inst_id, _ = _setup_thesis(home)
+    env = _envelope(home, "forecast.add", {
+        "instrument_id": inst_id,
+        "rationale_body": "edge",
+        "kind": "binary",
+        "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.4},
+            {"outcome_label": "no", "probability": 0.6},
+        ],
+        "confidence_label": "medium",
+    })
+    assert env["ok"] is True, env
+
+
 # -- decision.add (required-field matrix) --------------------------------
 
 

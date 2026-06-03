@@ -20,6 +20,33 @@ from trade_trace.storage.paths import HomePathValidationError, db_path
 from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
 from trade_trace.tools.errors import ToolError
 
+# Allowed `theses.confidence_label` values. Mirrors the SQLite CHECK
+# constraint in storage/migrations/m003_m1_ledger.py and
+# reports/buckets.py:CONFIDENCE_LABELS. Validated in Python so an invalid
+# label returns a clean VALIDATION_ERROR with the allowed set instead of
+# leaking the raw SQLite CHECK-constraint failure (ax-dogfood AX-010).
+CONFIDENCE_LABELS: tuple[str, ...] = (
+    "very_low", "low", "medium", "high", "very_high",
+)
+
+
+def validate_confidence_label(value: Any) -> None:
+    """Raise a clean VALIDATION_ERROR (with allowed values) for an
+    out-of-enum `confidence_label`. None is allowed (column is nullable)."""
+
+    if value is None or value in CONFIDENCE_LABELS:
+        return
+    raise ToolError(
+        ErrorCode.VALIDATION_ERROR,
+        "invalid confidence_label",
+        details={
+            "field": "confidence_label",
+            "value": value,
+            "allowed": list(CONFIDENCE_LABELS),
+        },
+    )
+
+
 _DETERMINISTIC_ID_COUNTER: dict[str, int] = {}
 
 

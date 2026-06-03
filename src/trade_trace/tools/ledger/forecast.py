@@ -16,6 +16,7 @@ from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
+    CONFIDENCE_LABELS,
     check_idempotency_replay,
     common_metadata,
     db_for_args,
@@ -26,6 +27,7 @@ from trade_trace.tools._helpers import (
     reject_if_contains_secrets,
     require,
     store_metadata_json,
+    validate_confidence_label,
 )
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.ledger._scoring import (
@@ -81,7 +83,7 @@ FORECAST_ADD_JSON_SCHEMA: dict[str, Any] = {
         "falsification_criteria": {"type": "string"},
         "side": {"type": "string"},
         "time_horizon_at": {"type": "string"},
-        "confidence_label": {"type": "string"},
+        "confidence_label": {"type": "string", "enum": list(CONFIDENCE_LABELS)},
         "exit_triggers": {"type": "string"},
         "risk_notes": {"type": "string"},
         "strategy_id": {"type": "string"},
@@ -425,6 +427,7 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 ).fetchone() is None:
                     raise ToolError(ErrorCode.NOT_FOUND, "instrument_id not found", details={"instrument_id": instrument_id})
                 reject_if_contains_secrets(body, field="rationale_body")
+                validate_confidence_label(args.get("confidence_label"))
                 thesis_id = args.get("thesis_id") or new_id("th")
                 thesis_valid_from = normalize_timestamp(args, "valid_from") or created_at
                 thesis_metadata = store_metadata_json(args)
