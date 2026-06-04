@@ -159,6 +159,61 @@ def test_report_open_positions_surfaces_latest_mark_and_stale_caveat(rich_home: 
     assert body["data"]["summary"]["filter"]["as_of"] == "2026-05-21T00:00:00.000Z"
 
 
+def test_report_open_positions_remarks_open_position_when_fresh_mark_available(rich_home: Path) -> None:
+    # Repro (AX dogfood AX-025): a paper position opened before its first
+    # snapshot has a null projection unrealized_pnl and an `open_no_mark`
+    # caveat ("this position has no current mark"). The projection only marks
+    # unrealized_pnl at rebuild time, so landing a later snapshot used to leave
+    # the row advertising mark_state=available + a populated latest_mark while
+    # STILL carrying open_no_mark and a null unrealized_pnl — a contradictory
+    # signal. The report must re-mark from the live mark and drop the caveat.
+    before = _call(rich_home, {"limit": 100})
+    target = next(
+        row
+        for row in before["data"]["open_positions"]
+        if row["kind"] == "paper" and "MISSING_MARK" in row["caveat_codes"]
+    )
+    # Precondition: the unmarked row is null-PnL and carries open_no_mark.
+    assert target["unrealized_pnl"] is None
+    assert "open_no_mark" in target["read_model_caveats"]
+    assert target["mark_state"] == "missing"
+    assert target["avg_entry_price"] is not None
+
+    _insert_latest_snapshot(
+        rich_home,
+        instrument_id=target["instrument_id"],
+        captured_at="2026-05-20T23:00:00Z",
+        snapshot_id="snap_fresh_open_position_ax",
+    )
+
+    body = _call(
+        rich_home,
+        {
+            "instrument_id": target["instrument_id"],
+            "limit": 10,
+            "as_of": "2026-05-21T00:00:00Z",
+            "stale_mark_threshold_days": 14,
+        },
+    )
+    row = next(r for r in body["data"]["open_positions"] if r["position_id"] == target["position_id"])
+
+    assert row["mark_state"] == "available"
+    assert "MISSING_MARK" not in row["caveat_codes"]
+    # The contradiction is gone: no stale open_no_mark while a mark is attached.
+    assert "open_no_mark" not in row["read_model_caveats"]
+    assert all(entry["code"] != "open_no_mark" for entry in row["caveats"])
+    # Re-marked side-aware from the fresh snapshot YES-contract price (0.42),
+    # matching the canonical projection convention (trade-trace-ctvb).
+    yes_mark = 0.42
+    entry_price = target["avg_entry_price"]
+    qty = target["net_quantity"]
+    if (target["side"] or "").lower() == "no":
+        expected = ((1.0 - yes_mark) - entry_price) * abs(qty)
+    else:
+        expected = (yes_mark - entry_price) * qty
+    assert row["unrealized_pnl"] == pytest.approx(expected)
+
+
 @pytest.mark.parametrize(
     ("args", "message", "details"),
     [

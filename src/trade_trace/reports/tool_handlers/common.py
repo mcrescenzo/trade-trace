@@ -162,7 +162,13 @@ def _latest_snapshot_mark_by_instrument(connection: Any, instrument_ids: set[str
 
 
 def _position_row_payload(row: Any, latest_mark: dict[str, Any] | None, *, stale_cutoff: datetime) -> dict[str, Any]:
+    from trade_trace.projections import _unrealized_pnl
+    from trade_trace.reporting.position_rows import CAVEAT_OPEN_NO_MARK
+
     caveat_codes = _position_current_exposure_codes(row)
+    read_model_caveats = list(row.caveats)
+    caveat_entries = list(row.caveat_entries)
+    unrealized_pnl = row.unrealized_pnl
     mark_state = "missing"
     if latest_mark is not None:
         captured_at = _parse_report_timestamp(latest_mark["captured_at"], field="snapshots.captured_at")
@@ -171,6 +177,27 @@ def _position_row_payload(row: Any, latest_mark: dict[str, Any] | None, *, stale
             caveat_codes.append("STALE_MARK")
         if "MISSING_MARK" in caveat_codes:
             caveat_codes.remove("MISSING_MARK")
+        # Re-mark an open position whose stored projection PnL predates this
+        # snapshot. The positions projection only marks unrealized_pnl at
+        # rebuild time, so a position opened before its first snapshot keeps
+        # unrealized_pnl=None and an `open_no_mark` caveat even once a live
+        # mark is available — contradicting the mark_state/latest_mark on the
+        # very same row. Recompute from the latest mark's YES-contract price
+        # using the canonical side-aware convention (trade-trace-ctvb) and
+        # drop the now-false caveat so the row is self-consistent.
+        mark_price = latest_mark.get("price")
+        if (
+            row.status == "open"
+            and unrealized_pnl is None
+            and mark_price is not None
+            and row.avg_entry_price is not None
+            and row.net_quantity is not None
+        ):
+            unrealized_pnl = _unrealized_pnl(
+                row.side, float(mark_price), float(row.avg_entry_price), float(row.net_quantity)
+            )
+            read_model_caveats = [code for code in read_model_caveats if code != CAVEAT_OPEN_NO_MARK]
+            caveat_entries = [entry for entry in caveat_entries if entry.code != CAVEAT_OPEN_NO_MARK]
     elif "MISSING_MARK" not in caveat_codes:
         mark_state = "missing"
     return {
@@ -190,7 +217,7 @@ def _position_row_payload(row: Any, latest_mark: dict[str, Any] | None, *, stale
         "updated_at": row.updated_at,
         "closed_at": row.closed_at,
         "realized_pnl": row.realized_pnl,
-        "unrealized_pnl": row.unrealized_pnl,
+        "unrealized_pnl": unrealized_pnl,
         "realized_r_multiple": row.realized_r_multiple,
         "unrealized_r_multiple": row.unrealized_r_multiple,
         "initial_risk_amount": row.initial_risk_amount,
@@ -206,10 +233,10 @@ def _position_row_payload(row: Any, latest_mark: dict[str, Any] | None, *, stale
         "latest_mark": latest_mark,
         "mark_state": mark_state,
         "caveat_codes": caveat_codes,
-        "read_model_caveats": list(row.caveats),
+        "read_model_caveats": read_model_caveats,
         "caveats": [
             {"code": entry.code, "label": entry.label, "summary": entry.summary, "severity": entry.severity}
-            for entry in row.caveat_entries
+            for entry in caveat_entries
         ],
     }
 
