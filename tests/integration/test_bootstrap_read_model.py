@@ -231,6 +231,36 @@ def test_bootstrap_budgets_truncation_and_not_requested_sections_are_explicit(ho
     assert packet["memory_context"]["included"] is False
 
 
+def test_apply_budget_section_emptied_by_char_cap_reports_max_chars_not_stale_max_items():
+    """axloop AX-038: a multi-bucket section (e.g. active_ideas) is first
+    trimmed per-bucket to max_items, then — if the trimmed result still
+    exceeds max_chars — the whole section is discarded by the char guard.
+    The truncation reason must then be 'max_chars' (the cause of the empty
+    section), NOT a stale 'max_items': returned_count:0 under a >0 max_items
+    budget is self-contradictory and tells a consumer 'some rows omitted'
+    when in fact every row was dropped by the char cap."""
+    from trade_trace.reports.bootstrap import _apply_budget
+
+    section = {
+        "current_exposure": [],
+        "watches": [],
+        # 15 > max_items(10) so per-bucket trimming fires (reason starts 'max_items'),
+        # and the trimmed-to-10 blob is far larger than max_chars(100) so the
+        # char guard then empties the whole section.
+        "unresolved_forecasts": [{"id": f"fc{i}", "blob": "x" * 40} for i in range(15)],
+        "non_actions_and_reviews": [],
+        "recently_resolved_needing_learning": [],
+    }
+    out, trunc, omitted = _apply_budget("active_ideas", section, {"max_items": 10, "max_chars": 100})
+
+    assert out == {}  # _empty_section('active_ideas')
+    assert trunc["returned_count"] == 0
+    assert trunc["reason"] == "max_chars"  # the fix: not the stale 'max_items'
+    assert trunc["is_partial"] is True
+    assert omitted["max_chars"] == 1
+    assert omitted["max_items"] >= 1  # per-bucket trimming is still recorded
+
+
 def test_bootstrap_rejects_unsupported_filters_and_sections(home):
     with _conn(home) as conn:
         _seed_base(conn)

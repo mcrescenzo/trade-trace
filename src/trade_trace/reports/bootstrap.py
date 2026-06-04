@@ -533,7 +533,13 @@ def _apply_budget(name: str, value: Any, budget: dict[str, int]) -> tuple[Any, d
     reason = "max_items" if omitted["max_items"] else None
     if len(json.dumps(out, sort_keys=True)) > budget["max_chars"]:
         omitted["max_chars"] += 1
-        reason = reason or "max_chars"
+        # The char guard discards the whole section, so it — not any prior
+        # per-item trimming — is the controlling reason the section is empty.
+        # Reporting a stale "max_items" here would be self-contradictory
+        # (returned_count:0 under a >0 max_items budget) and would mislead a
+        # consumer into "some rows omitted" when in fact ALL rows were dropped
+        # by the char cap (axloop AX-038).
+        reason = "max_chars"
         out = _empty_section(name)
     returned = len(out) if isinstance(out, list) else sum(len(v) for v in out.values() if isinstance(v, list)) if isinstance(out, dict) else 1
     return out, _trunc(name, returned, available, reason=reason), omitted
