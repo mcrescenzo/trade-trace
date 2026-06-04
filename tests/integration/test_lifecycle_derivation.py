@@ -291,6 +291,28 @@ def test_report_lifecycle_status_alias_and_schema(home):
         assert key in props
 
 
+def test_report_lifecycle_invalid_state_error_lists_allowed_values(home):
+    """An unsupported `states` value must surface the allowed set, not just echo
+    the bad value (AX dogfood: enum-rejection errors should be self-documenting
+    so a bot need not guess valid values by trial-and-error)."""
+    with _conn(home) as conn:
+        _seed_base(conn)
+
+    env = dispatch(
+        "report.lifecycle",
+        {"home": str(home), "states": ["active"]},
+        actor_id="agent:test",
+        registry=default_registry(),
+    ).model_dump(mode="json")
+
+    assert env["ok"] is False
+    message = env["error"]["message"]
+    assert "active" in message
+    # The allowed enum members must appear so the caller can self-correct.
+    for allowed in ("open", "pending_review", "scored", "closed"):
+        assert allowed in message
+
+
 def test_parse_ts_treats_naive_iso_as_utc_not_local():
     """trade-trace-nq8x: a naive ISO string used to pass through
     `astimezone(UTC)`, which on Python 3.11+ first interprets naive

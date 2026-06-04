@@ -173,7 +173,10 @@ def report_lifecycle(
     state_filter = sorted(set(states or []))
     unknown = [state for state in state_filter if state not in allowed_states]
     if unknown:
-        raise ValueError(f"unsupported lifecycle state(s): {unknown!r}")
+        raise ValueError(
+            f"unsupported lifecycle state(s): {unknown!r}; "
+            f"allowed states are {sorted(allowed_states)!r}"
+        )
     resolved_as_of = _iso(_parse_ts(as_of or now_iso()))
 
     rf = ReportFilter.model_validate(raw_filter or {})
