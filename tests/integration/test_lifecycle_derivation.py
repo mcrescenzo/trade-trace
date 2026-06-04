@@ -313,6 +313,33 @@ def test_report_lifecycle_invalid_state_error_lists_allowed_values(home):
         assert allowed in message
 
 
+def test_report_lifecycle_due_count_excludes_future_due_at(home):
+    """AX dogfood (AX-036): summary.metrics.due_count must count only cases that
+    are actually due as of the read boundary (due_at <= as_of), not every case
+    that merely *has* a due_at. A forecast whose resolution_at is still in the
+    future is pending, not due — counting it as "due" misreads as an actionable
+    obligation hours early, and is the inverse of report.work_queue (which omits
+    future-due forecasts entirely). Mirrors watchlist.overdue_count semantics."""
+    with _conn(home) as conn:
+        _seed_base(conn)  # forecast fc: resolution_at=2026-01-10, scoring pending
+
+    # as_of BEFORE the forecast's resolution_at: the case exists but is not yet due.
+    before_due = _report(home, {
+        "as_of": "2026-01-05T00:00:00Z",
+        "filter": {"instrument": {"instrument_id": ["inst"]}},
+    })
+    fc_case = next(c for c in before_due["lifecycle_cases"] if "fc" in c["record_ids"].get("forecasts", []))
+    assert fc_case["due_at"] == "2026-01-10T00:00:00Z"  # future relative to as_of
+    assert before_due["summary"]["metrics"]["due_count"] == 0
+
+    # as_of AFTER the resolution_at: the same case is now genuinely due.
+    after_due = _report(home, {
+        "as_of": "2026-01-20T00:00:00Z",
+        "filter": {"instrument": {"instrument_id": ["inst"]}},
+    })
+    assert after_due["summary"]["metrics"]["due_count"] == 1
+
+
 def test_parse_ts_treats_naive_iso_as_utc_not_local():
     """trade-trace-nq8x: a naive ISO string used to pass through
     `astimezone(UTC)`, which on Python 3.11+ first interprets naive

@@ -178,6 +178,7 @@ def report_lifecycle(
             f"allowed states are {sorted(allowed_states)!r}"
         )
     resolved_as_of = _iso(_parse_ts(as_of or now_iso()))
+    as_of_dt = _parse_ts(resolved_as_of)
 
     rf = ReportFilter.model_validate(raw_filter or {})
     filter_view = process_filter(rf, report="report.lifecycle")
@@ -222,7 +223,7 @@ def report_lifecycle(
             "metrics": {
                 "case_count": len(cases),
                 "state_counts": state_counts,
-                "due_count": sum(1 for case in cases if case.get("due_at") is not None),
+                "due_count": sum(1 for case in cases if _review_overdue(case.get("due_at"), as_of_dt)),
                 "material_non_action_count": sum(1 for case in cases if case.get("material_non_action") is not None),
                 "stale_threshold_days": stale_threshold_days,
             },
