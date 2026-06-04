@@ -227,6 +227,35 @@ def _market_payload(raw: dict[str, Any], external_id: str) -> dict[str, Any]:
     }
 
 
+def _apply_caller_resolution_rule(payload_meta: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    """Fill ``resolution_rule.text`` from caller input when the venue has none.
+
+    Polymarket carries the resolution prose in ``description``, not the
+    ``resolutionCriteria``/``rules`` keys the adapter reads, so the
+    Gamma-derived ``resolution_rule.text`` is almost always null. Without this
+    merge a caller's own ``resolution_rule_text`` (the documented n33z
+    workaround) is silently dropped on the adapter bind path while the manual
+    path preserves it (AX-037). Venue-supplied text always wins; we only fill a
+    null/blank text and mark it ``caller_supplied`` so provenance stays honest.
+    """
+
+    caller_text = args.get("resolution_rule_text")
+    if not caller_text:
+        rule_arg = args.get("resolution_rule")
+        if isinstance(rule_arg, dict):
+            caller_text = rule_arg.get("text")
+    if not isinstance(caller_text, str) or not caller_text.strip():
+        return payload_meta
+    rule = dict(payload_meta.get("resolution_rule") or {})
+    existing = rule.get("text")
+    if isinstance(existing, str) and existing.strip():
+        return payload_meta
+    rule["text"] = caller_text.strip()
+    rule["provenance"] = "caller_supplied"
+    payload_meta["resolution_rule"] = rule
+    return payload_meta
+
+
 def _fetch_market(client: PolymarketClient, external_id: str) -> dict[str, Any]:
     raw = client.gamma_get(f"/markets/{external_id}")
     if isinstance(raw, list):
@@ -277,6 +306,11 @@ def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id:
             market_id = refresh_market_id or (existing[0] if existing else args.get("id") or new_id("mkt"))
             created_at = now_iso()
             payload_meta = json.loads(str(payload.get("metadata_json") or "{}"))
+            # Bind only: preserve a caller-supplied resolution_rule_text when the
+            # Gamma payload carries no rule text (AX-037). Refresh re-syncs venue
+            # truth and carries no caller args, so it is left untouched.
+            if not refresh_market_id:
+                payload_meta = _apply_caller_resolution_rule(payload_meta, args)
             payload["metadata_json"] = _json(payload_meta | {"adapter": "polymarket", "adapter_cached_at": created_at, "cache_ttl_seconds": MARKET_CACHE_TTL_SECONDS.get(str(payload.get("state") or ""))})
             if existing:
                 changed = any(existing[i] != payload[k] for i, k in enumerate(("id","state","mechanism","resolution_source","ambiguity_kind")) if k != "id")

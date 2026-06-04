@@ -15,6 +15,7 @@ from trade_trace.adapters.polymarket.retry import retry_policy_kwargs
 from trade_trace.mcp_server import mcp_call
 from trade_trace.tools._market_rows import adapter_cache_hit_row_dict
 from trade_trace.tools.adapter_polymarket import (
+    _apply_caller_resolution_rule,
     _market_cache_hit,
     _market_payload,
     _normalize_gamma_market,
@@ -219,6 +220,58 @@ def test_snapshot_price_falls_back_to_last_trade_without_two_sided_book():
     snap = _snapshot_from_raw({"lastTradePrice": "0.33"})
     assert snap["mid"] == pytest.approx(0.33)
     assert snap["price"] == pytest.approx(0.33)
+
+
+def test_adapter_market_payload_has_null_rule_text_for_description_only_market():
+    """ax-dogfood AX-037 (root cause): Polymarket carries the resolution prose
+    in `description`, not the `resolutionCriteria`/`rules` keys the adapter
+    reads, so the Gamma-derived `resolution_rule.text` is null — which is why a
+    caller-supplied rule text would otherwise be the only available source."""
+    market = _market_payload(
+        {
+            "id": "m1",
+            "question": "Will X happen?",
+            "outcomes": '["Yes","No"]',
+            "description": "Resolves YES per some venue page; full rule lives here.",
+        },
+        "m1",
+    )
+    metadata = json.loads(market["metadata_json"])
+    assert metadata["resolution_rule"]["text"] is None
+    assert metadata["resolution_rule"]["provenance"] == "polymarket_gamma_payload"
+
+
+def test_adapter_bind_preserves_caller_resolution_rule_text_when_venue_has_none():
+    """ax-dogfood AX-037: the adapter bind path silently dropped a
+    caller-supplied resolution_rule_text — the Gamma-derived resolution_rule
+    (text=null, since Polymarket's rule is in `description`) overwrote it, so
+    the documented n33z workaround ("the agent can just supply the rule text")
+    was ineffective on the path a live bot uses. The manual path preserved it.
+    Now a null/blank venue text is filled from the caller's text, marked
+    caller_supplied; venue text (when present) still wins."""
+    venue_null = {"resolution_rule": {"text": None, "source": "https://x", "provenance": "polymarket_gamma_payload"}}
+
+    # 1) resolution_rule_text fills a null venue text.
+    filled = _apply_caller_resolution_rule(json.loads(json.dumps(venue_null)), {"resolution_rule_text": "Agent-supplied rule."})
+    assert filled["resolution_rule"]["text"] == "Agent-supplied rule."
+    assert filled["resolution_rule"]["provenance"] == "caller_supplied"
+    assert filled["resolution_rule"]["source"] == "https://x"
+
+    # 2) nested resolution_rule.text also fills.
+    nested = _apply_caller_resolution_rule(json.loads(json.dumps(venue_null)), {"resolution_rule": {"text": "Nested rule."}})
+    assert nested["resolution_rule"]["text"] == "Nested rule."
+
+    # 3) venue-supplied text always wins; caller text does not clobber it.
+    venue_present = {"resolution_rule": {"text": "Venue rule.", "provenance": "polymarket_gamma_payload"}}
+    kept = _apply_caller_resolution_rule(json.loads(json.dumps(venue_present)), {"resolution_rule_text": "Agent rule."})
+    assert kept["resolution_rule"]["text"] == "Venue rule."
+    assert kept["resolution_rule"]["provenance"] == "polymarket_gamma_payload"
+
+    # 4) blank/absent caller text is a no-op (null preserved, no fake provenance).
+    untouched = _apply_caller_resolution_rule(json.loads(json.dumps(venue_null)), {"resolution_rule_text": "   "})
+    assert untouched["resolution_rule"]["text"] is None
+    assert untouched["resolution_rule"]["provenance"] == "polymarket_gamma_payload"
+    assert _apply_caller_resolution_rule(json.loads(json.dumps(venue_null)), {})["resolution_rule"]["text"] is None
 
 
 class _FakeResponse:
