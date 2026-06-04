@@ -601,13 +601,26 @@ def _market_search(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     # ethereum-markets both exist. Surface a point-of-failure nudge so a bot
     # recovers instead of dead-ending on a silent empty result.
     search_hint: str | None = None
-    if query and not candidates and len(query.split()) > 1:
-        search_hint = (
-            "Zero candidates: Gamma /public-search matches ALL query terms "
-            "(conjunctive), so a multi-word query often over-specifies. Retry "
-            "with fewer / more distinct keywords — one entity or topic at a "
-            "time (e.g. 'bitcoin' or 'fed rate', not 'bitcoin ethereum price')."
-        )
+    if query and not candidates:
+        if len(query.split()) > 1:
+            search_hint = (
+                "Zero candidates: Gamma /public-search matches ALL query terms "
+                "(conjunctive), so a multi-word query often over-specifies. Retry "
+                "with fewer / more distinct keywords — one entity or topic at a "
+                "time (e.g. 'bitcoin' or 'fed rate', not 'bitcoin ethereum price')."
+            )
+        else:
+            # AX dogfood AX-035: a single-term zero result previously returned a
+            # null hint, leaving a bot unable to tell a genuine no-match from a
+            # silent search failure (the AX-019 /markets no-op misread). The
+            # search did run; the term just matches no live market text.
+            search_hint = (
+                "Zero candidates: no open market matched this term. Gamma "
+                "/public-search is a literal term match over live market text, "
+                "so the term may not appear in any current market. Try a "
+                "different or broader single keyword, or set closed=true to "
+                "include resolved markets."
+            )
     return {
         "source": "polymarket",
         "query": query,

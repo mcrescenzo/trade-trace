@@ -130,7 +130,9 @@ def test_market_search_zero_results_multiword_query_carries_search_hint(
     # multi-keyword query ("bitcoin ethereum price") can match no single market
     # even though related markets exist. A bot must not silently dead-end on the
     # empty result; the response carries a search_hint nudging it to relax the
-    # query. A single-term zero-result query gets no hint (nothing to relax).
+    # query. AX-035: a single-term zero-result query also carries a hint — a
+    # distinct one telling the bot the search ran but the term matched no live
+    # market (so it isn't misread as a silent search failure, the AX-019 trap).
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok
     _enable_adapter(home)
@@ -149,7 +151,10 @@ def test_market_search_zero_results_multiword_query_carries_search_hint(
     single = mcp_call("market.search", {"home": home, "query": "bitcoin", "limit": 20})
     assert single.ok, single
     assert single.data["count"] == 0
-    assert single.data["search_hint"] is None
+    # AX-035: single-term zero result gets its own (non-relaxation) hint.
+    assert single.data["search_hint"] is not None
+    assert "conjunctive" not in single.data["search_hint"]
+    assert "closed=true" in single.data["search_hint"]
 
 
 def test_market_search_query_drops_closed_markets_from_public_search(
