@@ -74,6 +74,15 @@ def test_audit_readiness_surfaces_prediction_market_blockers_and_warnings(home: 
     assert by_check["stale_source"]["severity"] == "warning"
     assert by_check["contradictory_sources"]["severity"] == "blocking"
     assert dec in by_check["stale_snapshot"]["sample_ids"]["decisions"]
+    # Every surfaced issue carries point-of-failure remediation guidance so a
+    # caller has an in-surface path to clear a "blocking" count (AX dogfood run 22).
+    for issue in data["issues"]:
+        assert issue["remediation"], issue["check"]
+    # The resolution-rule blocker names the forecast-level remedy explicitly,
+    # not just the instrument-level one.
+    rr_remediation = by_check["missing_resolution_rule_provenance"]["remediation"]
+    assert "forecast.add" in rr_remediation
+    assert "resolution_rule_text" in rr_remediation
 
 
 def test_audit_readiness_ignores_non_prediction_market_entered_decisions(home: Path):

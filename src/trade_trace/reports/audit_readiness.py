@@ -18,6 +18,54 @@ DEFAULT_STALE_SOURCE_THRESHOLD_DAYS = 7
 ENTER_TYPES = ("actual_enter", "paper_enter")
 PM_CLASSES = ("prediction_market", "event_market")
 
+# Point-of-failure remediation guidance, one per check. Audit-readiness is a
+# diagnostic surface; without these a caller sees a "blocking" count with no
+# in-surface path to clear it (AX dogfood run 22). Purely advisory text — it
+# does not change which rows are flagged.
+REMEDIATIONS: dict[str, str] = {
+    "missing_resolution_rule_provenance": (
+        "Record the resolution rule at BOTH levels: pass resolution_rule_text to "
+        "market.bind (populates instrument resolution_criteria_text) AND to "
+        "forecast.add (populates the forecast resolution_rule_text). A forecast "
+        "clears this check only when has_instrument_criteria and has_forecast_rule "
+        "are both true; an instrument-level rule alone does not satisfy it."
+    ),
+    "missing_snapshot": (
+        "Capture a snapshot (snapshot.fetch or snapshot.add) and pass its "
+        "snapshot_id on the actual_enter/paper_enter decision. snapshot_id is "
+        "optional in the decision matrix, but an entered position with no priced "
+        "snapshot is treated as blocking for audit purposes."
+    ),
+    "stale_snapshot": (
+        "Capture a fresh snapshot at decision time; the linked snapshot was "
+        "captured more than stale_snapshot_threshold_days before the decision."
+    ),
+    "missing_market_microstructure": (
+        "Use snapshot.fetch (two-sided book) so bid/ask/spread/liquidity_depth_json "
+        "are populated, rather than a price-only snapshot.add."
+    ),
+    "stale_source": (
+        "Attach a fresher source or re-fetch; the supporting source freshness_at "
+        "predates the decision by more than stale_source_threshold_days."
+    ),
+    "contradictory_sources": (
+        "Reconcile the conflict: a supporting and a contradicting source of the "
+        "same kind back the same thesis. Supersede the thesis or drop one source."
+    ),
+    "weak_decision_provenance": (
+        "Record a decision reason or attach a source to the entered decision; it "
+        "currently has neither."
+    ),
+    "missing_retrieval_metadata": (
+        "Set retrieved_at or captured_at on the attached source so its provenance "
+        "is auditable."
+    ),
+    "missing_agent_metadata": (
+        "Set agent_id/model_id/run_id on the decision for attribution "
+        "(info-level; not blocking)."
+    ),
+}
+
 
 def report_audit_readiness(
     conn: sqlite3.Connection,
@@ -76,6 +124,7 @@ def _issue(check: str, severity: str, sample_kind: str, samples: list[dict[str, 
         "check": check,
         "severity": severity,
         "count": total,
+        "remediation": REMEDIATIONS.get(check, ""),
         "sample_ids": {sample_kind: [s["id"] for s in capped]},
         "samples": capped,
         "truncated": total > MAX_SAMPLES,
