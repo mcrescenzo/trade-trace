@@ -362,7 +362,14 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
     # was underwater). Anchor `price` to the mid so it agrees with the same
     # snapshot's `mid`/`implied_probability`; `mid` already falls back to the
     # last/raw price when no two-sided book is present.
-    depth = raw.get("book") or raw.get("liquidity") or raw.get("orderBook") or raw.get("depth") or raw
+    # Prefer a real depth/liquidity field; do NOT fall back to the whole raw
+    # Gamma payload. Sports and closed/resolved markets often carry none of
+    # book/liquidity/orderBook/depth, and the old `or raw` fallback then dumped
+    # the entire ~5KB market object (conditionId, clobTokenIds, description, …)
+    # into the `liquidity_depth_json` column — semantically wrong and a major
+    # size bloat that propagates into snapshot-embedding reports
+    # (ax-dogfood AX-031). When no depth field is present, store nothing.
+    depth = raw.get("book") or raw.get("liquidity") or raw.get("orderBook") or raw.get("depth")
     metadata = {
         "tick_size": _first_present(raw, "tickSize", "minimumTickSize", "tick_size"),
         "fee_rate_bps": _first_present(raw, "feeRateBps", "fee_rate_bps"),

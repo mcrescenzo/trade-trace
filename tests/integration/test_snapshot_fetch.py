@@ -11,7 +11,7 @@ from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.contracts.envelope import ErrorEnvelope, SuccessEnvelope
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage.paths import db_path
-from trade_trace.tools.adapter_polymarket import _gamma_request_id
+from trade_trace.tools.adapter_polymarket import _gamma_request_id, _snapshot_from_raw
 
 FIXTURES = Path(__file__).parent / "fixtures" / "polymarket"
 
@@ -89,6 +89,32 @@ def test_snapshot_fetch_enabled_captures_fixture_book(tmp_path: Path, monkeypatc
     assert env.data["implied_probability"] == pytest.approx(0.62)
     assert "liquidity_depth_json" in env.data
     assert env.data["metadata_json"]["tick_size"] is None or "tick_size" in env.data["metadata_json"]
+
+
+def test_snapshot_from_raw_without_depth_fields_does_not_dump_whole_payload():
+    """A closed/sports market payload that carries no book/liquidity/orderBook/
+    depth field must NOT have the entire raw Gamma object dumped into
+    liquidity_depth_json (ax-dogfood AX-031). A live market with a numeric
+    `liquidity` is unchanged; a depthless market stores nothing instead of the
+    5KB market blob (conditionId, clobTokenIds, description, …)."""
+
+    resolved_like = {
+        "bestBid": 0.999,
+        "bestAsk": 1.0,
+        "lastTradePrice": 0.999,
+        "conditionId": "0xdeadbeef",
+        "clobTokenIds": ["111", "222"],
+        "description": "Long resolution rule prose " * 50,
+        "outcomePrices": ["1", "0"],
+        "closed": True,
+    }
+    snap = _snapshot_from_raw(resolved_like)
+    assert snap["liquidity_depth_json"] is None
+    # The market metadata must not leak into the depth column.
+    assert snap["liquidity_depth_json"] != resolved_like
+
+    live_like = {"bestBid": 0.41, "bestAsk": 0.44, "liquidity": "21232.26239"}
+    assert _snapshot_from_raw(live_like)["liquidity_depth_json"] == "21232.26239"
 
 
 def test_snapshot_add_persists_top_level_snapshot_metadata_fields(tmp_path: Path):
