@@ -123,6 +123,35 @@ def test_market_search_query_uses_public_search_and_flattens_events(
     assert data["no_advice_boundary"]["trade_execution_performed"] is False
 
 
+def test_market_search_zero_results_multiword_query_carries_search_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # AX dogfood AX-026: Gamma /public-search is conjunctive — a natural
+    # multi-keyword query ("bitcoin ethereum price") can match no single market
+    # even though related markets exist. A bot must not silently dead-end on the
+    # empty result; the response carries a search_hint nudging it to relax the
+    # query. A single-term zero-result query gets no hint (nothing to relax).
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+
+    def fake_gamma_get(self: PolymarketClient, path: str):
+        return {"events": [], "pagination": {"hasMore": False}}
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", fake_gamma_get)
+
+    multi = mcp_call("market.search", {"home": home, "query": "bitcoin ethereum price", "limit": 20})
+    assert multi.ok, multi
+    assert multi.data["count"] == 0
+    assert multi.data["search_hint"] is not None
+    assert "conjunctive" in multi.data["search_hint"]
+
+    single = mcp_call("market.search", {"home": home, "query": "bitcoin", "limit": 20})
+    assert single.ok, single
+    assert single.data["count"] == 0
+    assert single.data["search_hint"] is None
+
+
 def test_market_search_query_drops_closed_markets_from_public_search(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):

@@ -578,12 +578,26 @@ def _market_search(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         candidates.append(candidate)
         if len(candidates) >= limit:
             break
+    # Gamma /public-search matches ALL query terms (conjunctive): a market must
+    # contain every word, so a natural multi-keyword query like
+    # "bitcoin ethereum price" returns zero even though bitcoin- and
+    # ethereum-markets both exist. Surface a point-of-failure nudge so a bot
+    # recovers instead of dead-ending on a silent empty result.
+    search_hint: str | None = None
+    if query and not candidates and len(query.split()) > 1:
+        search_hint = (
+            "Zero candidates: Gamma /public-search matches ALL query terms "
+            "(conjunctive), so a multi-word query often over-specifies. Retry "
+            "with fewer / more distinct keywords — one entity or topic at a "
+            "time (e.g. 'bitcoin' or 'fed rate', not 'bitcoin ethereum price')."
+        )
     return {
         "source": "polymarket",
         "query": query,
         "closed": closed,
         "count": len(candidates),
         "candidates": candidates,
+        "search_hint": search_hint,
         "no_advice_boundary": {
             "external_fetch_performed": True,
             "db_write_performed": False,
@@ -649,6 +663,10 @@ def register_adapter_polymarket_tools(registry: ToolRegistry) -> None:
             "Read-only live Gamma list query: returns external_id/gamma_market_id, slug, "
             "question, outcomes, and close time. No DB writes, no advice, no trade execution. "
             "Adapter-only: fails closed with ADAPTER_DISABLED when the adapter is off. "
+            "A query is matched against Gamma's free-text search conjunctively (ALL "
+            "terms must appear in one market), so prefer short single-topic queries; "
+            "a multi-word query that returns zero is usually over-specified and "
+            "carries a search_hint suggesting how to relax it. "
             "Hand a returned external_id straight to market.bind / market.refresh."
         ),
         usage_summary="Find bindable binary markets live without a pre-known external_id.",
