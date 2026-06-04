@@ -276,6 +276,55 @@ def test_sparse_and_missing_snapshot_caveats(home):
     assert data["summary"]["metrics"]["sparse_snapshot_count"] == 1
 
 
+def test_duplicate_outcomes_and_positions_do_not_fan_out_records(home):
+    """A decision must yield exactly one record even when its instrument carries
+    multiple resolved_final outcome rows (the resolution-retry duplicate wart) or
+    multiple position rows (paper-entry fragmentation). The join must not multiply
+    the decision into N identical records, which would inflate sample_size, bucket
+    counts, and the per-bucket means/sample-warnings."""
+    decision_id = _seed_decision_path(
+        home,
+        title="dup-fanout",
+        decision_type="skip",
+        outcome_value=1.0,
+        realized_pnl=0.10,
+        snapshots=[("2026-01-01T06:00:00Z", 1.09)],
+    )
+    conn = open_database(db_path(home), create_parent=False).connection
+    try:
+        inst = conn.execute(
+            "SELECT instrument_id FROM decisions WHERE id = ?", (decision_id,)
+        ).fetchone()[0]
+        with conn:
+            # A second (duplicate) resolved_final outcome on the same instrument,
+            # as left behind by a resolution.add retry.
+            conn.execute(
+                "INSERT INTO outcomes(id, instrument_id, resolved_at, outcome_label, "
+                "outcome_value, status, created_at, actor_id) VALUES "
+                "(?, ?, '2026-01-03T01:00:00Z', 'yes', 1.0, 'resolved_final', "
+                "'2026-01-03T01:00:00Z', 'agent:default')",
+                (new_id("outcome"), inst),
+            )
+            # A second position row on the same instrument (paper-entry fragmentation).
+            conn.execute(
+                "INSERT INTO positions(id, instrument_id, kind, side, status, opened_at, "
+                "closed_at, realized_pnl, avg_entry_price, updated_at) VALUES "
+                "(?, ?, 'paper', 'long', 'closed', '2026-01-01T00:00:00Z', "
+                "'2026-01-03T00:00:00Z', 0.05, 1.0, '2026-01-03T00:00:00Z')",
+                (new_id("pos"), inst),
+            )
+    finally:
+        conn.close()
+
+    data = _report(home)
+    matches = [r for r in data["records"] if r["decision_id"] == decision_id]
+    assert len(matches) == 1, f"expected one record, got {len(matches)} (join fan-out)"
+    assert data["summary"]["sample_size"] == 1
+    assert data["summary"]["metrics"]["decision_count"] == 1
+    for group in data["groups"]:
+        assert group["metrics"]["count"] == len(set(group["record_ids"]["decisions"])), group
+
+
 def test_report_opportunity_rejects_unsupported_filters_cleanly(home):
     env = _env(home, "report.opportunity", {"filter": {"decision": {"decision_type": ["skip"]}}})
     assert env["ok"] is False
