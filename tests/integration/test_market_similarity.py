@@ -86,6 +86,40 @@ def test_dissimilar_market_scores_below_threshold(home: Path):
     assert env["data"]["count"] == 0
 
 
+def test_sparse_match_exposes_coverage_and_ranks_below_full_match(home: Path):
+    """A snapshot-less candidate is comparable on only the snapshot-independent
+    dimensions (mechanism, resolution_source, ambiguous); matching all of those
+    yields score 1.0 — the same headline score as a candidate that matches all
+    six dimensions. The result must (a) expose comparable_dimensions so a consumer
+    can tell a 1.0-over-3 from a 1.0-over-6, and (b) rank the fuller, more
+    corroborated match first within the tied score band."""
+    ref = _market(home, 0, title="Ref", mechanism="amm", resolution_source="arbitration",
+                  ambiguity_kind="market_rules_unclear", prob=0.05, volume=10.0, spread=0.2)
+    full = _market(home, 1, title="Full analogue", mechanism="amm", resolution_source="arbitration",
+                   ambiguity_kind="market_rules_unclear", prob=0.08, volume=12.0, spread=0.2)
+    # Sparse candidate: matches the three snapshot-independent dims but has NO
+    # snapshot, so liquidity/spread/longshot are non-comparable.
+    venue = _envelope(home, "venue.add", {"name": "PMsparse", "kind": "prediction_market"})["data"]["id"]
+    sparse = _envelope(home, "instrument.add", {"venue_id": venue, "asset_class": "prediction_market", "title": "Sparse"})["data"]["id"]
+    _envelope(home, "market.bind", {
+        "id": sparse, "source": "polymarket", "external_id": f"ext-{sparse}", "title": "Sparse",
+        "state": "open", "mechanism": "amm", "resolution_source": "arbitration", "bound_via": "manual",
+        "ambiguity_kind": "market_rules_unclear",
+        "opened_at": "2027-01-01T00:00:00Z", "close_at": "2027-02-01T00:00:00Z",
+    })
+
+    env = _find_similar(home, ref, min_score=0.99)
+    assert env["ok"], env
+    matches = env["data"]["matches"]
+    by_id = {m["instrument_id"]: m for m in matches}
+    assert by_id[full]["score"] == pytest.approx(1.0)
+    assert by_id[sparse]["score"] == pytest.approx(1.0)
+    assert by_id[full]["comparable_dimensions"] == 6
+    assert by_id[sparse]["comparable_dimensions"] == 3
+    # Fuller coverage ranks first despite the tied headline score.
+    assert matches.index(by_id[full]) < matches.index(by_id[sparse])
+
+
 def test_rejects_unknown_market(home: Path):
     env = _find_similar(home, "ins_missing")
     assert env["ok"] is False
