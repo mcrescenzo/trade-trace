@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
 
 from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.adapters.polymarket.client import PolymarketClient
@@ -194,6 +195,30 @@ def test_adapter_normalizes_false_like_booleans_and_token_id_string_variants():
     snap = _snapshot_from_raw({"bestBid": "0.1", "bestAsk": "0.2", "active": "false", "accepting_orders": "false"})
     assert snap["metadata_json"]["tradable"] is False
     assert snap["metadata_json"]["accepting_orders"] is False
+
+
+def test_snapshot_price_marks_to_book_mid_not_off_book_last_trade():
+    """ax-dogfood AX-027: `snapshots.price` is the canonical YES mark the
+    positions projection values open positions against. When a live two-sided
+    book exists, that mark must be the within-book mid, NOT `lastTradePrice`,
+    which can be a stale print outside the current bid/ask. A live ETH market
+    printed lastTrade=0.49 while the book was 0.41/0.44 — marking a 0.44 entry
+    against 0.49 reported +PnL on a position the mid said was underwater."""
+    snap = _snapshot_from_raw({"bestBid": "0.41", "bestAsk": "0.44", "lastTradePrice": "0.49"})
+    assert snap["mid"] == pytest.approx(0.425)
+    # price must agree with the same snapshot's mid / implied_probability,
+    # not the off-book last trade (0.49, which is above the 0.44 ask).
+    assert snap["price"] == pytest.approx(0.425)
+    assert snap["implied_probability"] == pytest.approx(0.425)
+    assert snap["price"] != pytest.approx(0.49)
+
+
+def test_snapshot_price_falls_back_to_last_trade_without_two_sided_book():
+    """When no two-sided book is present the mid is undefined, so `price`
+    falls back to the last/raw price rather than dropping the only mark."""
+    snap = _snapshot_from_raw({"lastTradePrice": "0.33"})
+    assert snap["mid"] == pytest.approx(0.33)
+    assert snap["price"] == pytest.approx(0.33)
 
 
 class _FakeResponse:

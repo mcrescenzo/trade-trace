@@ -352,6 +352,16 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
     askf = _optional_float(ask, "bestAsk")
     pricef = _optional_float(price, "price")
     mid = (bidf + askf) / 2 if bidf is not None and askf is not None else pricef
+    # `snapshots.price` is the canonical YES-contract mark the positions
+    # projection and PnL reports value open positions against
+    # (x-price-convention; projections._latest_snapshot_price). When a live
+    # two-sided book exists, the within-book mid is that mark — NOT
+    # `lastTradePrice`, which can be a stale print sitting outside the current
+    # bid/ask (ax-dogfood AX-027: a live ETH market printed lastTrade=0.49 while
+    # the book was 0.41/0.44, marking a 0.44 entry at +PnL when the mid said it
+    # was underwater). Anchor `price` to the mid so it agrees with the same
+    # snapshot's `mid`/`implied_probability`; `mid` already falls back to the
+    # last/raw price when no two-sided book is present.
     depth = raw.get("book") or raw.get("liquidity") or raw.get("orderBook") or raw.get("depth") or raw
     metadata = {
         "tick_size": _first_present(raw, "tickSize", "minimumTickSize", "tick_size"),
@@ -363,7 +373,7 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
         "freshness": {"as_of": _first_present(raw, "asOf", "updatedAt", "timestamp"), "provenance": "polymarket_gamma_payload"},
         "depth_provenance": "caller_or_polymarket_gamma_payload",
     }
-    return {"price": pricef if pricef is not None else mid, "bid": bidf, "ask": askf, "mid": mid, "spread": (askf-bidf) if bidf is not None and askf is not None else None, "volume": raw.get("volume"), "open_interest": raw.get("openInterest"), "implied_probability": raw.get("impliedProbability") or mid, "liquidity_depth_json": depth, "metadata_json": metadata}
+    return {"price": mid, "bid": bidf, "ask": askf, "mid": mid, "spread": (askf-bidf) if bidf is not None and askf is not None else None, "volume": raw.get("volume"), "open_interest": raw.get("openInterest"), "implied_probability": raw.get("impliedProbability") or mid, "liquidity_depth_json": depth, "metadata_json": metadata}
 
 
 def _insert_snapshot(args: dict[str, Any], ctx: ToolContext, market_id: str, snap: dict[str, Any], captured_at: str) -> dict[str, Any]:
