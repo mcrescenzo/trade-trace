@@ -113,6 +113,9 @@ def test_resolved_final_requires_explicit_high_confidence_to_auto_score(tmp_path
     assert missing_conf["auto_scoreable"] is False
     assert missing_conf["finality_uncertain"] is True
     assert missing_conf["auto_scored_forecasts"] == []
+    # The missing-confidence trap must self-diagnose at the point of failure
+    # rather than silently writing no score (AX-030).
+    assert "confidence is missing" in missing_conf["auto_score_skipped_reason"]
     pending = _mcp(home, "resolve.pending", {}).data
     assert forecast_id in {item["forecast_id"] for item in pending["items"]}
 
@@ -126,6 +129,7 @@ def test_resolved_final_requires_explicit_high_confidence_to_auto_score(tmp_path
     assert low_conf["auto_scoreable"] is False
     assert low_conf["finality_uncertain"] is True
     assert low_conf["auto_scored_forecasts"] == []
+    assert "below the 0.9 auto-score threshold" in low_conf["auto_score_skipped_reason"]
 
     high_conf = _mcp(home, "outcome.add", {
         "instrument_id": instrument_id,
@@ -136,6 +140,7 @@ def test_resolved_final_requires_explicit_high_confidence_to_auto_score(tmp_path
     }).data
     assert high_conf["auto_scoreable"] is True
     assert high_conf["finality_uncertain"] is False
+    assert high_conf["auto_score_skipped_reason"] is None
     assert [score["forecast_id"] for score in high_conf["auto_scored_forecasts"]] == [forecast_id]
 
 

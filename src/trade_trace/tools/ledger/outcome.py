@@ -27,6 +27,9 @@ from trade_trace.tools._helpers import (
 )
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.ledger._finality import (
+    auto_score_block_reason as _auto_score_block_reason,
+)
+from trade_trace.tools.ledger._finality import (
     finality_uncertain_for_outcome as _finality_uncertain_for_outcome,
 )
 from trade_trace.tools.ledger._finality import (
@@ -99,6 +102,9 @@ def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                         "auto_scoreable": _is_auto_scoreable_final(
                             status=row_status, confidence=row_confidence, outcome_label=row_label,
                         ),
+                        "auto_score_skipped_reason": _auto_score_block_reason(
+                            status=row_status, confidence=row_confidence, outcome_label=row_label,
+                        ),
                         "finality_uncertain": _finality_uncertain_for_outcome(
                             status=row_status, confidence=row_confidence, outcome_label=row_label,
                         ),
@@ -146,6 +152,7 @@ def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     return {"id": outcome_id, "instrument_id": instrument_id, "status": status,
             "resolved_at": resolved_at, "auto_scored_forecasts": auto_scored,
             "auto_scoreable": _is_auto_scoreable_final(status=status, confidence=args.get("confidence"), outcome_label=outcome_label),
+            "auto_score_skipped_reason": _auto_score_block_reason(status=status, confidence=args.get("confidence"), outcome_label=outcome_label),
             "finality_uncertain": _finality_uncertain_for_outcome(status=status, confidence=args.get("confidence"), outcome_label=outcome_label),
             "created_at": created_at}
 

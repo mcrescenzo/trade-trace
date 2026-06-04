@@ -245,6 +245,11 @@ WRITE_TOOL_EXAMPLES: dict[str, dict[str, Any]] = {
             "resolved_at": "2026-05-22T20:30:00Z",
             "outcome_label": "yes",
             "status": "resolved_final",
+            # confidence is REQUIRED for a resolved_final outcome to auto-score a
+            # pending binary forecast (>=0.9 + a binary label); omitting it makes
+            # the write succeed but score nothing. See auto_score_skipped_reason
+            # on the result for the point-of-failure hint.
+            "confidence": 0.99,
             "settlement_price": 1.0,
             "resolution_source_url": "https://example.com/press",
             "metadata_json": {"reporter": "nvidia"},
