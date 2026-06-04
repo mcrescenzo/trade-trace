@@ -214,6 +214,57 @@ def test_report_open_positions_remarks_open_position_when_fresh_mark_available(r
     assert row["unrealized_pnl"] == pytest.approx(expected)
 
 
+def test_report_open_positions_remarks_when_stored_pnl_predates_latest_mark(rich_home: Path) -> None:
+    # Repro (AX dogfood AX-028): the AX-025 fix only re-marked rows whose
+    # stored projection unrealized_pnl was NULL. A position whose stored PnL was
+    # marked against an OLDER snapshot kept that stale non-null value while the
+    # report attached a fresher latest_mark — so latest_mark.price and
+    # unrealized_pnl on the SAME row disagreed (observed live: latest_mark
+    # price=0.415 while unrealized_pnl still reflected a 0.49 mark). The report
+    # must always re-mark from the live mark. The helper stores a stale
+    # projection unrealized_pnl=3.25 (avg_entry_price=0.55), deliberately
+    # inconsistent with the fresh 0.42 mark.
+    _insert_actual_open_position(rich_home)
+    before = _call(rich_home, {"kind": "actual", "limit": 10})
+    target = next(
+        r for r in before["data"]["open_positions"] if r["position_id"] == "pos_actual_open_dr4m"
+    )
+    instrument_id = target["instrument_id"]
+
+    # A clearly-latest snapshot (far-future captured_at) at a known YES mark
+    # (0.42, set by the helper) that differs from the stored 0.55 projection PnL.
+    _insert_latest_snapshot(
+        rich_home,
+        instrument_id=instrument_id,
+        captured_at="2026-12-31T00:00:00Z",
+        snapshot_id="snap_stale_pnl_remark_ax028",
+    )
+
+    body = _call(
+        rich_home,
+        {
+            "kind": "actual",
+            "instrument_id": instrument_id,
+            "limit": 10,
+            "as_of": "2027-01-01T00:00:00Z",
+            "stale_mark_threshold_days": 14,
+        },
+    )
+    row = next(r for r in body["data"]["open_positions"] if r["position_id"] == "pos_actual_open_dr4m")
+
+    assert row["mark_state"] == "available"
+    assert row["latest_mark"]["price"] == pytest.approx(0.42)
+    # Re-marked side-aware from the fresh 0.42 mark, NOT left at the stale
+    # stored projection value (3.25). pos_actual_open_dr4m is a yes side with
+    # net_quantity=+2.0 and avg_entry_price=0.55.
+    yes_mark = 0.42
+    entry_price = row["avg_entry_price"]
+    qty = row["net_quantity"]
+    expected = (yes_mark - entry_price) * qty
+    assert row["unrealized_pnl"] == pytest.approx(expected)
+    assert row["unrealized_pnl"] != pytest.approx(3.25)
+
+
 @pytest.mark.parametrize(
     ("args", "message", "details"),
     [

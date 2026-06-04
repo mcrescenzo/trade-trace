@@ -177,18 +177,23 @@ def _position_row_payload(row: Any, latest_mark: dict[str, Any] | None, *, stale
             caveat_codes.append("STALE_MARK")
         if "MISSING_MARK" in caveat_codes:
             caveat_codes.remove("MISSING_MARK")
-        # Re-mark an open position whose stored projection PnL predates this
-        # snapshot. The positions projection only marks unrealized_pnl at
-        # rebuild time, so a position opened before its first snapshot keeps
-        # unrealized_pnl=None and an `open_no_mark` caveat even once a live
-        # mark is available — contradicting the mark_state/latest_mark on the
-        # very same row. Recompute from the latest mark's YES-contract price
-        # using the canonical side-aware convention (trade-trace-ctvb) and
-        # drop the now-false caveat so the row is self-consistent.
+        # Re-mark an open position from the live mark whenever one is
+        # available. The positions projection only marks unrealized_pnl at
+        # rebuild time against whatever snapshot was latest then, so a later
+        # snapshot never refreshes the stored value. That leaves two distinct
+        # contradictions on a row that advertises mark_state=available + a
+        # populated latest_mark: (AX-025) a position opened before its first
+        # snapshot keeps unrealized_pnl=None and an `open_no_mark` caveat; and
+        # (AX-028) a position whose stored unrealized_pnl was marked against an
+        # OLDER snapshot now disagrees with the fresher latest_mark on the very
+        # same row (e.g. latest_mark.price=0.415 while unrealized_pnl still
+        # reflects a stale 0.49 mark). Always recompute from the latest mark's
+        # YES-contract price using the canonical side-aware convention
+        # (trade-trace-ctvb) so unrealized_pnl and latest_mark never disagree,
+        # and drop the now-false open_no_mark caveat.
         mark_price = latest_mark.get("price")
         if (
             row.status == "open"
-            and unrealized_pnl is None
             and mark_price is not None
             and row.avg_entry_price is not None
             and row.net_quantity is not None
