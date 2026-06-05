@@ -206,3 +206,77 @@ def test_defer_material_non_action_accepts_all_documented_decision_types(initial
         assert env.ok is True, (decision_type, env)
         assert env.data["type"] == decision_type
         assert env.data["review_by"] == "2026-06-01T12:00:00.000Z"
+
+
+def test_declared_risk_fields_are_optional_on_entry_types_and_self_documenting(initialized_home):
+    """declared_risk_amount/unit are accepted by the handler and feed
+    report.risk R-multiples + report.opportunity edge thresholds, but were
+    invisible on the advertised surface (AX-045): absent from x-decision-matrix
+    optional lists, the JSON-schema properties, and the examples — so a bot
+    following the schema could never discover the field. They must now surface
+    as OPTIONAL on the entry/add decision types (additive; forbidden nowhere)."""
+
+    env = _mcp(initialized_home, "tool.schema", {"tool": "decision.add"})
+    assert env.ok, env
+    schema = env.data["json_schema"]
+
+    for entry_type in ("paper_enter", "actual_enter", "add"):
+        row = schema["x-decision-matrix"][entry_type]
+        for field in ("declared_risk_amount", "declared_risk_unit"):
+            assert field in row["optional"], (entry_type, field)
+            assert field not in row["required"], (entry_type, field)
+            assert field not in row["forbidden"], (entry_type, field)
+
+    # Surfaced in the advertised JSON-schema properties so a bot reading the
+    # schema (not just the matrix) sees the field exists.
+    assert "declared_risk_amount" in schema["properties"]
+    assert "declared_risk_unit" in schema["properties"]
+
+    # The copy-paste entry example now records risk.
+    actual_enter_example = schema["x-decision-examples"]["actual_enter"]
+    assert "declared_risk_amount" in actual_enter_example
+    assert "declared_risk_unit" in actual_enter_example
+
+
+def test_paper_enter_declared_risk_flows_to_position_initial_risk(initialized_home):
+    """A paper_enter carrying declared_risk_amount populates the position's
+    initial_risk_amount and clears the missing_risk_budget caveat that
+    report.open_positions otherwise attaches (AX-045 — the field report.risk
+    depends on is now reachable from decision.add)."""
+
+    venue = _mcp(initialized_home, "venue.add", {
+        "name": "Declared Risk PM", "kind": "prediction_market",
+    })
+    assert venue.ok is True
+    instrument = _mcp(initialized_home, "instrument.add", {
+        "venue_id": venue.data["id"],
+        "asset_class": "prediction_market",
+        "title": "Declared-risk market",
+    })
+    assert instrument.ok is True
+    thesis = _mcp(initialized_home, "thesis.add", {
+        "instrument_id": instrument.data["id"], "side": "yes", "body": "...",
+    })
+    assert thesis.ok is True
+
+    env = _mcp(initialized_home, "decision.add", {
+        "type": "paper_enter",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "side": "yes",
+        "quantity": 100,
+        "price": 0.40,
+        "declared_risk_amount": 40.0,
+        "declared_risk_unit": "dollar",
+        "idempotency_key": "00000000-0000-4000-8000-000000000201",
+    })
+    assert env.ok is True, env
+
+    positions = _mcp(initialized_home, "report.open_positions", {
+        "instrument_id": instrument.data["id"],
+    })
+    assert positions.ok is True, positions
+    row = positions.data["open_positions"][0]
+    assert row["initial_risk_amount"] == 40.0
+    caveat_codes = {c["code"] for c in row.get("caveats", [])}
+    assert "missing_risk_budget" not in caveat_codes

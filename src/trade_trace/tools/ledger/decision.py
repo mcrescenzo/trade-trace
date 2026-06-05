@@ -277,6 +277,25 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
         },
         "fees": {"type": "number"},
         "slippage": {"type": "number"},
+        "declared_risk_amount": {
+            "type": "number",
+            "description": (
+                "Risk you accepted at entry, in `declared_risk_unit` (e.g. the "
+                "max-loss budget for this position). Optional on entry/add "
+                "decisions; flows to the position's initial_risk_amount and is "
+                "REQUIRED for report.risk R-multiples and report.opportunity "
+                "edge thresholds. Omit it and those reports exclude the trade "
+                "(report.open_positions flags it `missing_risk_budget`). "
+                "Must be >= 0."
+            ),
+        },
+        "declared_risk_unit": {
+            "type": "string",
+            "description": (
+                "Unit for declared_risk_amount (e.g. 'dollar'). Paired with "
+                "declared_risk_amount on entry/add decisions."
+            ),
+        },
         "reason": {"type": "string"},
         "review_by": {"type": "string"},
         "tags": {"type": "array", "items": {"type": "string"}},
@@ -324,6 +343,8 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
             "side": "yes",
             "quantity": 100,
             "price": 0.62,
+            "declared_risk_amount": 38.0,
+            "declared_risk_unit": "dollar",
             "idempotency_key": "00000000-0000-4000-8000-000000000000",
         },
         "actual_exit": {

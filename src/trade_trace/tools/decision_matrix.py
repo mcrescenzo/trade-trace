@@ -39,6 +39,7 @@ DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
     "paper_enter": {
         "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
+        "declared_risk_amount": "O", "declared_risk_unit": "O",
         "reason": "O", "review_by": "X",
     },
     "paper_exit": {
@@ -49,6 +50,7 @@ DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
     "actual_enter": {
         "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
+        "declared_risk_amount": "O", "declared_risk_unit": "O",
         "reason": "O", "review_by": "X",
     },
     "actual_exit": {
@@ -59,6 +61,7 @@ DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
     "add": {
         "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
+        "declared_risk_amount": "O", "declared_risk_unit": "O",
         "reason": "O", "review_by": "X",
     },
     "reduce": {
