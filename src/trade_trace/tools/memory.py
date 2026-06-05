@@ -277,6 +277,36 @@ _MEMORY_REFLECT_SCHEMA: dict[str, Any] = {
     ),
 }
 
+_MEMORY_LINK_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "source_kind": {"type": "string", "enum": list(VALID_MEMORY_ENDPOINTS)},
+        "source_id": {"type": "string"},
+        "target_kind": {"type": "string", "enum": list(VALID_MEMORY_ENDPOINTS)},
+        "target_id": {"type": "string"},
+        "edge_type": {"type": "string", "enum": list(EDGE_TYPES)},
+        "metadata_json": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": [
+        "source_kind",
+        "source_id",
+        "target_kind",
+        "target_id",
+        "edge_type",
+        "idempotency_key",
+    ],
+    "description": (
+        "Create an explicit typed edge between memory/ledger endpoints. "
+        "source_kind and target_kind must each be one of the endpoint kinds "
+        "(memory_node, signal, strategy, decision, thesis, forecast, outcome, "
+        "snapshot, instrument, venue, source, review, playbook_version); "
+        "edge_type must be one of about/supports/contradicts/supersedes/"
+        "derived_from/violates/follows. Both endpoint rows must already exist."
+    ),
+}
+
 ENDPOINT_TABLES: Final[dict[str, str]] = {
     "memory_node": "memory_nodes",
     "decision": "decisions",
@@ -1344,6 +1374,7 @@ def register_memory_tools(registry: ToolRegistry) -> None:
             "Validates source_kind, target_kind, and edge_type against the "
             "documented enums; verifies the rows exist."
         ),
+        json_schema=_MEMORY_LINK_SCHEMA,
     )
     registry.register(
         "memory.recall",

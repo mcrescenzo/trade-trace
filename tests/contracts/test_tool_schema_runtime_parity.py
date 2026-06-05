@@ -492,6 +492,34 @@ def test_memory_reflect_schema_advertises_canonical_and_sugar_shapes():
     assert "supports" not in properties
 
 
+def test_memory_link_schema_advertises_endpoint_and_edge_enums():
+    """memory.link validates source_kind/target_kind against
+    VALID_MEMORY_ENDPOINTS and edge_type against EDGE_TYPES at runtime, but
+    the advertised schema auto-derived from example_minimal exposed them as
+    bare strings — a bot reading the schema could not discover the allowed
+    values without triggering a VALIDATION_ERROR (AX-051). The advertised
+    enums must match the runtime allowlists exactly."""
+    from trade_trace.tools.memory import EDGE_TYPES, VALID_MEMORY_ENDPOINTS
+
+    schema = _schema_for("memory.link")
+    properties = schema.get("properties", {})
+
+    for key in (
+        "source_kind",
+        "source_id",
+        "target_kind",
+        "target_id",
+        "edge_type",
+        "idempotency_key",
+    ):
+        assert key in properties, f"memory.link schema omits {key}"
+        assert key in schema.get("required", []), f"memory.link {key} not required"
+
+    assert properties["source_kind"]["enum"] == list(VALID_MEMORY_ENDPOINTS)
+    assert properties["target_kind"]["enum"] == list(VALID_MEMORY_ENDPOINTS)
+    assert properties["edge_type"]["enum"] == list(EDGE_TYPES)
+
+
 def test_playbook_read_and_write_schemas_advertise_runtime_optional_fields():
     assert "limit" in _schema_for("playbook.list")["properties"]
     assert _schema_for("playbook.show")["required"] == ["playbook_id"]
