@@ -307,6 +307,40 @@ _MEMORY_LINK_SCHEMA: dict[str, Any] = {
     ),
 }
 
+# AX-060: memory.retain was registered with **_examples_for(...) and no
+# explicit json_schema, so its MCP schema auto-derived from example_minimal
+# advertised node_type as a bare string even though the runtime enum-validates
+# it against NODE_TYPES with a self-documenting error (the AX-051/054/055
+# auto-derived-schema class). The optional knobs the runtime accepts
+# (importance/confidence_base/decay_rate_per_day/validity/title/meta_json) were
+# also undiscoverable. This explicit schema mirrors the runtime.
+_MEMORY_RETAIN_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "node_type": {
+            "type": "string",
+            "enum": list(NODE_TYPES),
+            "description": "Typed memory node kind; one of the documented enum.",
+        },
+        "body": {"type": "string", "description": "Memory body text; free-text fields are scanned for embedded sensitive values at write time."},
+        "title": {"type": "string"},
+        "importance": {"type": "integer", "minimum": 1, "maximum": 10, "description": "Importance 1-10; defaults to 5."},
+        "confidence_base": {"type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Base confidence 0.0-1.0; defaults to 1.0."},
+        "decay_rate_per_day": {"type": "number", "description": "Optional per-day confidence decay rate."},
+        "valid_from": {"type": "string", "description": "Optional bi-temporal validity start; defaults to created_at."},
+        "valid_to": {"type": "string", "description": "Optional bi-temporal validity end."},
+        "parent_node_id": {"type": "string"},
+        "meta_json": {"type": "object", "description": "Optional structured metadata (reflections may carry policy_candidate lifecycle metadata)."},
+        "idempotency_key": {"type": "string"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "run_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["node_type", "body", "idempotency_key"],
+}
+
 ENDPOINT_TABLES: Final[dict[str, str]] = {
     "memory_node": "memory_nodes",
     "decision": "decisions",
@@ -1330,6 +1364,7 @@ def register_memory_tools(registry: ToolRegistry) -> None:
         "memory.retain",
         _memory_retain,
         is_write=True,
+        json_schema=_MEMORY_RETAIN_SCHEMA,
         **_examples_for("memory.retain"),
         description=(
             "Create a typed memory_node row. node_type ∈ "

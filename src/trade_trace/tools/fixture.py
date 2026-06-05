@@ -1019,6 +1019,24 @@ FIXTURE_PROFILES: dict[str, _FixtureBuilderProfile] = {
 }
 
 
+_FIXTURE_SEED_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "target": {
+            "type": "string",
+            "enum": list(FIXTURE_TARGETS),
+            "description": (
+                "Fixture profile to seed; one of the supported profiles. "
+                "Optional — defaults to 'mvp-eval-pm' when omitted."
+            ),
+        },
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string", "description": "Optional override for $TRADE_TRACE_HOME."},
+    },
+    "required": ["idempotency_key"],
+}
+
+
 def register_fixture_tools(registry: ToolRegistry) -> None:
     from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 
@@ -1032,6 +1050,7 @@ def register_fixture_tools(registry: ToolRegistry) -> None:
         "journal.fixture_seed",
         _journal_fixture_seed,
         is_write=False,
+        json_schema=_FIXTURE_SEED_SCHEMA,
         **_examples_for("journal.fixture_seed"),
         description=(
             "Populate the journal with a deterministic fixture for the "
