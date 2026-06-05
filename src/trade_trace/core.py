@@ -91,7 +91,15 @@ V002_FOLDED_OR_REMOVED: dict[str, str | None] = {
     "playbook.list": "playbook.upsert",
     "playbook.show": "playbook.upsert",
     "playbook.list_versions": "playbook.upsert",
-    "playbook.propose_version": "playbook.upsert",
+    # playbook.propose_version is NOT folded: it is the ONLY tool that mints a
+    # playbook_version_id, and playbook.record_adherence (catalog-visible)
+    # HARD-REQUIRES one (NOT_FOUND otherwise). Folding it to playbook.upsert
+    # left the report.playbook_adherence POPULATED path structurally
+    # unreachable from the MCP catalog — a consumer (record_adherence) shipped
+    # without its producer, and the redirect pointed at a tool (playbook.upsert
+    # → _playbook_create) that creates only a playbook row, never a version. It
+    # stays catalog-visible so the adherence chain is completable end-to-end
+    # (bead trade-trace-47tp / AX dogfood 2026-06-05-08).
     "import.validate": "import.commit",
     "journal.rescan_scoring": "journal.rebuild_projections",
     "agent.bootstrap": "report.bootstrap",

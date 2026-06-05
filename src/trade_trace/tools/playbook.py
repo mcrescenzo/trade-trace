@@ -49,6 +49,13 @@ from trade_trace.tools.errors import ToolError
 
 ADHERENCE_STATUSES = ("considered", "followed", "overridden", "not_applicable")
 
+# Lifecycle status for the playbook row itself, symmetric with
+# strategy.upsert's {active, archived} enum (trade-trace-47tp secondary).
+# The DB column is unconstrained TEXT, so the tool layer is the only
+# validation boundary; default to 'active' when omitted.
+PLAYBOOK_STATUSES = ("active", "archived")
+_DEFAULT_PLAYBOOK_STATUS = "active"
+
 
 def _require_playbook(conn: Any, playbook_id: str) -> None:
     if conn.execute(
@@ -147,6 +154,28 @@ def _schema(properties: dict[str, Any], *, required: list[str] | None = None, de
     }
 
 
+# playbook.upsert (legacy playbook.create) had no explicit json_schema, so its
+# MCP schema auto-derived from example_minimal and hid the `status` field
+# entirely (example_rich was null) — asymmetric with strategy.upsert, which
+# advertises its {active, archived} enum. This explicit schema mirrors the
+# runtime: name + idempotency_key required, status enum-validated and defaulting
+# to 'active' (trade-trace-47tp secondary).
+_PLAYBOOK_CREATE_SCHEMA = _schema(
+    {
+        "name": {"type": "string", "description": "Unique playbook name; duplicate raises VALIDATION_ERROR with details.field='name'."},
+        "description": {"type": "string", "description": "Optional free-text description; scanned for sensitive-shaped text."},
+        "status": {"type": "string", "enum": list(PLAYBOOK_STATUSES), "description": "Lifecycle status; one of the documented enum. Defaults to 'active' when omitted."},
+        "metadata_json": {"type": "object", "description": "Optional structured metadata."},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    required=["name", "idempotency_key"],
+    description=(
+        "Register a named playbook. Rules live in memory_nodes"
+        "(node_type='playbook_rule') wired via playbook.propose_version, "
+        "not on the playbook row itself."
+    ),
+)
 _PLAYBOOK_LIST_SCHEMA = _schema(
     {"limit": {"type": "integer", "minimum": 1, "maximum": 1000}},
     description="Optional limit defaults to 100 and is capped at 1000.",
@@ -209,7 +238,14 @@ def _playbook_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     # Per bead trade-trace-7j1l: scan the long-form playbook description
     # field. `name` is a short identifier and exempt.
     reject_if_contains_secrets(description, field="description")
-    status = args.get("status")
+    status = args.get("status", _DEFAULT_PLAYBOOK_STATUS)
+    if status not in PLAYBOOK_STATUSES:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"status must be one of {PLAYBOOK_STATUSES}; got {status!r}",
+            details={"field": "status", "value": status,
+                     "allowed": list(PLAYBOOK_STATUSES)},
+        )
     metadata_json = store_metadata_json(args)
     idempotency_key = args.get("idempotency_key")
 
@@ -738,11 +774,13 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
         **_examples_for("playbook.create"),
         description=(
             "Register a named playbook. `name` is unique; duplicate "
-            "raises VALIDATION_ERROR with details.field='name'. The "
-            "row carries no rules of its own — rules live in "
-            "memory_nodes(node_type='playbook_rule') and are wired to "
-            "the playbook via versions (playbook.propose_version)."
+            "raises VALIDATION_ERROR with details.field='name'. Optional "
+            "`status` is enum-validated against {active, archived} and "
+            "defaults to 'active'. The row carries no rules of its own — "
+            "rules live in memory_nodes(node_type='playbook_rule') and are "
+            "wired to the playbook via versions (playbook.propose_version)."
         ),
+        json_schema=_PLAYBOOK_CREATE_SCHEMA,
     )
     registry.register(
         "playbook.list",
