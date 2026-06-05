@@ -562,6 +562,26 @@ def _import_commit(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     return out.model_dump(mode="json")
 
 
+# AX-056: import.commit was registered with **_examples_for(...) and no
+# explicit json_schema, so the advertised MCP schema auto-derived from
+# example_minimal exposed transaction_mode as a bare string even though the
+# runtime enum-validates it against {single, per_row} with a self-documenting
+# error (the AX-051 / AX-054 class). This explicit schema mirrors the runtime;
+# the handler is unchanged.
+_IMPORT_COMMIT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "path": {"type": "string", "description": "Path to a JSONL file or directory of JSONL files to replay through core dispatch."},
+        "transaction_mode": {"type": "string", "enum": ["single", "per_row"], "description": "single = one transaction for the whole file (all-or-nothing after validation); per_row = commit each row independently. Defaults to 'single'."},
+        "max_errors": {"type": "integer", "description": "Stop collecting errors after this many (default 100)."},
+        "halt_on_error": {"type": "boolean", "description": "Stop at the first failing row (default true)."},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["path", "transaction_mode", "idempotency_key"],
+}
+
+
 def register_import_stubs(registry: ToolRegistry) -> None:
     from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 
@@ -582,5 +602,6 @@ def register_import_stubs(registry: ToolRegistry) -> None:
         _import_commit,
         description="Replay a JSONL file/directory through core dispatch.",
         is_write=True,
+        json_schema=_IMPORT_COMMIT_SCHEMA,
         **_examples_for("import.commit"),
     )

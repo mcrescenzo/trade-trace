@@ -544,6 +544,76 @@ def test_outcome_add_schema_advertises_status_enum_and_confidence():
             )
 
 
+def test_strategy_create_schema_advertises_status_enum_and_optional_fields():
+    """strategy.create (the public strategy.upsert create-mode) validates
+    status against _STATUS_VALUES at runtime with a self-documenting error and
+    accepts description/hypothesis/meta_json, but the schema auto-derived from
+    example_minimal exposed only name/slug/idempotency_key (AX-055, the
+    AX-051 / AX-054 class). The advertised status enum must match the runtime
+    allowlist and the optional fields must be discoverable."""
+    from trade_trace.tools.strategy import _STATUS_VALUES
+
+    for tool_name in ("strategy.create", "strategy.upsert"):
+        schema = _schema_for(tool_name)
+        properties = schema.get("properties", {})
+        assert properties["status"]["enum"] == list(_STATUS_VALUES), (
+            f"{tool_name} must advertise the status enum matching the runtime allowlist"
+        )
+        for optional in ("description", "hypothesis", "meta_json"):
+            assert optional in properties, (
+                f"{tool_name} must advertise the runtime-accepted {optional!r} field"
+            )
+            assert optional not in schema.get("required", [])
+        for runtime_required in ("name", "slug", "idempotency_key"):
+            assert runtime_required in schema.get("required", [])
+
+
+def test_import_commit_schema_advertises_transaction_mode_enum():
+    """import.commit validates transaction_mode against {single, per_row} at
+    runtime with a self-documenting error, but the schema auto-derived from
+    example_minimal exposed it as a bare string (AX-056, the AX-051 class).
+    The advertised enum must match the runtime allowlist."""
+    schema = _schema_for("import.commit")
+    properties = schema.get("properties", {})
+    assert properties["transaction_mode"]["enum"] == ["single", "per_row"], (
+        "import.commit must advertise the transaction_mode enum matching the runtime allowlist"
+    )
+    for runtime_required in ("path", "transaction_mode", "idempotency_key"):
+        assert runtime_required in schema.get("required", [])
+
+
+def test_review_bundle_schema_advertises_filter_and_scoping_knobs():
+    """review.bundle was registered with neither json_schema nor
+    example_minimal, so it advertised zero properties even though the runtime
+    ReviewBundleInput accepts a ReportFilter `filter` plus scoping knobs
+    (AX-057). The scoping surface must be discoverable and `filter` must be a
+    typed object so the MCP bridge passes it through as a dict."""
+    from trade_trace.tools.review_bundle import RedactionProfile
+
+    schema = _schema_for("review.bundle")
+    properties = schema.get("properties", {})
+    assert properties["filter"]["type"] == "object", (
+        "review.bundle must advertise filter as an object so it is passed through as a dict"
+    )
+    for knob in (
+        "max_records",
+        "include_sources",
+        "include_reflections",
+        "include_playbook",
+        "include_recall_receipts",
+        "include_autonomous_lifecycle",
+        "redaction_profile",
+        "max_examples_per_record",
+    ):
+        assert knob in properties, f"review.bundle must advertise the {knob!r} knob"
+        assert knob not in schema.get("required", [])
+    assert properties["redaction_profile"]["enum"] == [m.value for m in RedactionProfile], (
+        "review.bundle must advertise the redaction_profile enum matching RedactionProfile"
+    )
+    # review.bundle accepts an empty {} payload (an unscoped bounded sweep).
+    assert schema.get("required", []) == []
+
+
 def test_playbook_read_and_write_schemas_advertise_runtime_optional_fields():
     assert "limit" in _schema_for("playbook.list")["properties"]
     assert _schema_for("playbook.show")["required"] == ["playbook_id"]

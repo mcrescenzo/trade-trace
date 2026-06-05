@@ -46,6 +46,33 @@ _LIST_STATUS_VALUES = (*_STATUS_VALUES, "both", "all")
 _DEFAULT_STALE_THRESHOLD_DAYS = 14
 _HEALTH_MIN_SAMPLE = 20
 
+# AX-055: strategy.create (the public strategy.upsert create-mode) was
+# registered with **_examples_for(...) and no explicit json_schema, so the
+# advertised MCP schema auto-derived from example_minimal exposed only
+# name/slug/idempotency_key. The runtime ALSO accepts status (enum-validated
+# against _STATUS_VALUES with a self-documenting error) plus optional
+# description/hypothesis/meta_json — none of which a schema-reading bot could
+# discover without triggering a VALIDATION_ERROR (the AX-051 / AX-054 class).
+# This explicit schema mirrors the runtime; the handler is unchanged.
+_STRATEGY_CREATE_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string", "description": "Human-readable strategy name."},
+        "slug": {"type": "string", "description": "Unique lowercase-kebab identifier; duplicate raises VALIDATION_ERROR with details.field='slug'."},
+        "description": {"type": "string", "description": "Optional free-text description."},
+        "hypothesis": {"type": "string", "description": "Optional strategy hypothesis."},
+        "status": {"type": "string", "enum": list(_STATUS_VALUES), "description": "Lifecycle status; one of the documented enum. Defaults to 'active' when omitted."},
+        "meta_json": {"type": "object", "description": "Optional structured metadata."},
+        "idempotency_key": {"type": "string"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "run_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["name", "slug", "idempotency_key"],
+}
+
 
 def _parse_as_of(value: Any, *, field: str) -> str:
     if not isinstance(value, str) or not UTC_Z_TIMESTAMP_PATTERN.match(value):
@@ -601,6 +628,7 @@ def register_strategy_tools(registry: ToolRegistry) -> None:
         _strategy_create,
         is_write=True,
         **_examples_for("strategy.create"),
+        json_schema=_STRATEGY_CREATE_SCHEMA,
         description=(
             "Create a first-class strategy row (not a tag). Required: "
             "name, slug (lowercase-kebab, unique). Optional: description, "
