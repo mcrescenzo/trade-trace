@@ -101,6 +101,21 @@ def test_compare_schema_does_not_advertise_unsupported_tag_group_by():
         assert value in desc and value in allowed
 
 
+def test_compare_schema_advertises_every_runtime_group_by():
+    """AX-050: the advertised group_by description must name EVERY value the
+    runtime allowlists accept — not just a sample. The AX-049 fix enumerated the
+    allowlist into the description but missed `outcome_status` (a working alias of
+    `status` in CALIBRATION_GROUP_SQL that the rejection error itself advertises),
+    re-opening the same advertising-vs-runtime drift (trade-trace-cs0r class) on
+    one value. A bot reading the schema must learn every group_by it could pass."""
+    from trade_trace.reports.compare import CALIBRATION_GROUP_SQL, PNL_GROUP_SQL
+    from trade_trace.reports.tool_schemas import _REPORT_SCHEMAS
+
+    desc = _REPORT_SCHEMAS["report.compare"]["properties"]["group_by"]["description"]
+    for value in set(CALIBRATION_GROUP_SQL) | set(PNL_GROUP_SQL):
+        assert value in desc, f"group_by {value!r} is runtime-supported but unadvertised in the schema description"
+
+
 # -- documented group_by matches runtime (trade-trace-cs0r) -----------
 
 
