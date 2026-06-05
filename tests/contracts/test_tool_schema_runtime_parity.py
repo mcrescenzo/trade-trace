@@ -375,7 +375,7 @@ def test_memory_recall_schema_matches_runtime_required_query_and_optional_knobs(
 def test_report_schemas_advertise_defaulted_args_as_optional():
     expected_optional = {
         "report.watchlist": ("filter", "mode", "stale_threshold_days"),
-        "report.lifecycle": ("filter", "states", "status", "as_of", "stale_threshold_days"),
+        "report.lifecycle": ("filter", "states", "status", "as_of", "stale_threshold_days", "limit", "cursor"),
         "report.work_queue": ("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
         "agent.next_actions": ("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
         "report.open_positions": ("limit", "cursor", "kind", "instrument_id", "strategy_id"),
@@ -652,6 +652,42 @@ def test_memory_retain_schema_advertises_node_type_enum_and_optional_knobs():
         assert knob in properties, f"memory.retain must advertise the {knob!r} knob"
         assert knob not in schema.get("required", [])
     assert set(schema.get("required", [])) == {"node_type", "body", "idempotency_key"}
+
+
+def test_market_bind_schema_advertises_source_state_mechanism_enums():
+    """market.bind validates source/state/mechanism (required) and
+    resolution_source/ambiguity_kind (optional) against runtime allowlists with
+    self-documenting errors, but the schema auto-derived from example_minimal
+    exposed all five as bare strings (AX-064, the AX-055/059/060
+    auto-derived-schema class on the PRIMARY public entry tool). A bot reading
+    the schema could not discover the allowed values without first triggering a
+    VALIDATION_ERROR. The advertised enums must mirror the runtime allowlists
+    (sorted, matching the order the runtime error surfaces)."""
+    from trade_trace.tools.market_bind import (
+        _ALLOWED_AMBIGUITY_KINDS,
+        _ALLOWED_MECHANISMS,
+        _ALLOWED_RESOLUTION_SOURCES,
+        _ALLOWED_SOURCES,
+        _ALLOWED_STATES,
+    )
+
+    schema = _schema_for("market.bind")
+    properties = schema.get("properties", {})
+    assert properties["source"]["enum"] == sorted(_ALLOWED_SOURCES)
+    assert properties["state"]["enum"] == sorted(_ALLOWED_STATES)
+    assert properties["mechanism"]["enum"] == sorted(_ALLOWED_MECHANISMS)
+    assert properties["resolution_source"]["enum"] == sorted(_ALLOWED_RESOLUTION_SOURCES)
+    assert properties["ambiguity_kind"]["enum"] == sorted(_ALLOWED_AMBIGUITY_KINDS)
+    # The four runtime-required fields stay required...
+    for runtime_required in ("source", "external_id", "state", "mechanism"):
+        assert runtime_required in schema.get("required", []), (
+            f"market.bind runtime requires {runtime_required!r}"
+        )
+    # ...and the optional enum fields must not be falsely marked required.
+    for optional in ("resolution_source", "ambiguity_kind"):
+        assert optional not in schema.get("required", []), (
+            f"market.bind {optional!r} is optional and must not be required"
+        )
 
 
 def test_strategy_update_schema_advertises_status_enum_and_optional_fields():

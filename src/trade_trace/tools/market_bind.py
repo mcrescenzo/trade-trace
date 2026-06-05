@@ -15,6 +15,7 @@ from typing import Any
 
 from trade_trace.adapters.polymarket.config import load_config
 from trade_trace.contracts.errors import ErrorCode
+from trade_trace.contracts.json_schema_derive import derive_schema
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
@@ -381,6 +382,70 @@ def _ensure_market_bind_prerequisites(
 
 
 def register_market_bind_tool(registry: ToolRegistry) -> None:
+    example_minimal = {
+        "source": "polymarket",
+        "external_id": "example-market-1",
+        "state": "open",
+        "mechanism": "clob",
+        "bound_via": "manual",
+        "title": "Will example happen?",
+        "question": "Will example happen by 2026-12-31?",
+        "url": "https://example.invalid/market/example-market-1",
+        "resolution_source": "market_contract",
+        "ambiguity_kind": "market_rules_unclear",
+        "opened_at": "2026-01-01T00:00:00Z",
+        "close_at": "2026-12-31T00:00:00Z",
+        "closed_for_trading_at": "2026-12-31T00:00:00Z",
+        "resolving_at": "2027-01-01T00:00:00Z",
+        "resolved_at": "2027-01-02T00:00:00Z",
+        "voided_at": "2027-01-02T00:00:00Z",
+        "ambiguous_at": "2027-01-02T00:00:00Z",
+        "venue_metadata_json": {},
+        "metadata_json": {},
+        "gamma_event_id": "evt-example-1",
+        "gamma_market_id": "example-market-1",
+        "event_slug": "example-event",
+        "market_slug": "example-market-1",
+        "condition_id": "condition-example-1",
+        "outcome_ids_by_label": {"yes": "outcome-yes", "no": "outcome-no"},
+        "negative_risk": {"enabled": False},
+        "event_grouping": {"event_id": "evt-example-1", "event_slug": "example-event"},
+        "resolution_rule": {"text": "Resolve per public market rules.", "source": "market_contract", "provenance": "caller_supplied"},
+        "resolution_rule_text": "Resolve per public market rules.",
+        "tick_size": 0.01,
+        "fee_rate_bps": 0,
+        "rewards": {},
+        "rebates": {},
+        "tradable": True,
+        "accepting_orders": True,
+        "idempotency_key": "00000000-0000-4000-8000-marketbind01",
+    }
+    optional_keys = (
+        "idempotency_key", "title", "question", "url", "resolution_source", "ambiguity_kind",
+        "bound_via", "opened_at", "close_at", "closed_for_trading_at", "resolving_at",
+        "resolved_at", "voided_at", "ambiguous_at", "venue_metadata_json", "metadata_json",
+        "gamma_event_id", "gamma_market_id", "event_slug", "market_slug", "condition_id",
+        "outcome_ids_by_label", "negative_risk", "event_grouping", "resolution_rule",
+        "resolution_rule_text", "tick_size", "fee_rate_bps", "rewards", "rebates",
+        "tradable", "accepting_orders",
+    )
+    # The schema is auto-derived from example_minimal, which loses the enum
+    # constraints the runtime enforces on source/state/mechanism (required, via
+    # _required_enum) and resolution_source/ambiguity_kind (optional, via
+    # _optional_enum). A bot reading the schema could not discover the allowed
+    # values without first triggering a VALIDATION_ERROR (AX-064, the
+    # AX-055/059/060 auto-derived-schema class on the PRIMARY public entry
+    # tool). Derive then inject the enums, sorted to match the order the runtime
+    # error surfaces, so the advertised schema mirrors the runtime allowlists.
+    json_schema = derive_schema(example_minimal, optional_keys=optional_keys)
+    for field_name, allowed in (
+        ("source", _ALLOWED_SOURCES),
+        ("state", _ALLOWED_STATES),
+        ("mechanism", _ALLOWED_MECHANISMS),
+        ("resolution_source", _ALLOWED_RESOLUTION_SOURCES),
+        ("ambiguity_kind", _ALLOWED_AMBIGUITY_KINDS),
+    ):
+        json_schema["properties"][field_name]["enum"] = sorted(allowed)
     registry.register(
         "market.bind",
         _market_bind,
@@ -393,44 +458,8 @@ def register_market_bind_tool(registry: ToolRegistry) -> None:
             "Pass bound_via='manual' to force the offline path. "
             "Returns stable market_id/instrument_id prerequisites for snapshot.add, forecast.add, and decision.add."
         ),
-        example_minimal={
-            "source": "polymarket",
-            "external_id": "example-market-1",
-            "state": "open",
-            "mechanism": "clob",
-            "bound_via": "manual",
-            "title": "Will example happen?",
-            "question": "Will example happen by 2026-12-31?",
-            "url": "https://example.invalid/market/example-market-1",
-            "resolution_source": "market_contract",
-            "ambiguity_kind": "market_rules_unclear",
-            "opened_at": "2026-01-01T00:00:00Z",
-            "close_at": "2026-12-31T00:00:00Z",
-            "closed_for_trading_at": "2026-12-31T00:00:00Z",
-            "resolving_at": "2027-01-01T00:00:00Z",
-            "resolved_at": "2027-01-02T00:00:00Z",
-            "voided_at": "2027-01-02T00:00:00Z",
-            "ambiguous_at": "2027-01-02T00:00:00Z",
-            "venue_metadata_json": {},
-            "metadata_json": {},
-            "gamma_event_id": "evt-example-1",
-            "gamma_market_id": "example-market-1",
-            "event_slug": "example-event",
-            "market_slug": "example-market-1",
-            "condition_id": "condition-example-1",
-            "outcome_ids_by_label": {"yes": "outcome-yes", "no": "outcome-no"},
-            "negative_risk": {"enabled": False},
-            "event_grouping": {"event_id": "evt-example-1", "event_slug": "example-event"},
-            "resolution_rule": {"text": "Resolve per public market rules.", "source": "market_contract", "provenance": "caller_supplied"},
-            "resolution_rule_text": "Resolve per public market rules.",
-            "tick_size": 0.01,
-            "fee_rate_bps": 0,
-            "rewards": {},
-            "rebates": {},
-            "tradable": True,
-            "accepting_orders": True,
-            "idempotency_key": "00000000-0000-4000-8000-marketbind01",
-        },
+        example_minimal=example_minimal,
+        json_schema=json_schema,
         # `display_minimal` is the example surfaced by `tool.schema`; it is
         # DECOUPLED from `example_minimal` (the json_schema-derivation source)
         # per bead trade-trace-mpsu. `example_minimal` must keep every accepted
@@ -447,15 +476,7 @@ def register_market_bind_tool(registry: ToolRegistry) -> None:
             "bound_via": "manual",
             "idempotency_key": "00000000-0000-4000-8000-marketbind01",
         },
-        optional_keys=(
-            "idempotency_key", "title", "question", "url", "resolution_source", "ambiguity_kind",
-            "bound_via", "opened_at", "close_at", "closed_for_trading_at", "resolving_at",
-            "resolved_at", "voided_at", "ambiguous_at", "venue_metadata_json", "metadata_json",
-            "gamma_event_id", "gamma_market_id", "event_slug", "market_slug", "condition_id",
-            "outcome_ids_by_label", "negative_risk", "event_grouping", "resolution_rule",
-            "resolution_rule_text", "tick_size", "fee_rate_bps", "rewards", "rebates",
-            "tradable", "accepting_orders",
-        ),
+        optional_keys=optional_keys,
         example_rich={
             "source": "polymarket",
             "external_id": "example-market-1",
