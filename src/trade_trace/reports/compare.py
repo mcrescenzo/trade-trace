@@ -95,7 +95,10 @@ def report_compare(
 
 def _compare_calibration(conn: sqlite3.Connection, *, group_by: str, raw_filter: dict[str, Any] | None, min_sample: int) -> dict[str, Any]:
     if group_by not in CALIBRATION_GROUP_SQL:
-        raise ValueError(f"unsupported group_by for calibration compare: {group_by!r}")
+        raise ValueError(
+            f"unsupported group_by for calibration compare: {group_by!r}; "
+            f"allowed group_by values are {sorted(CALIBRATION_GROUP_SQL)!r}"
+        )
     rf = ReportFilter.model_validate(raw_filter or {})
     enforce_supported_filter(rf, report=CALIBRATION_REPORT_NAME)
     rows_by_group: dict[str, list[_ScoredRow]] = defaultdict(list)
@@ -146,7 +149,10 @@ def _compare_pnl(conn: sqlite3.Connection, *, group_by: str, raw_filter: dict[st
     elif group_by in PNL_GROUP_SQL:
         group_expr = PNL_GROUP_SQL[group_by]
     else:
-        raise ValueError(f"unsupported group_by for pnl compare: {group_by!r}")
+        raise ValueError(
+            f"unsupported group_by for pnl compare: {group_by!r}; "
+            f"allowed group_by values are {sorted(PNL_GROUP_SQL)!r}"
+        )
     rf = ReportFilter.model_validate(raw_filter or {})
     # report.pnl standalone accepts only empty filters today; compare adds safe
     # strategy slicing for its wrapper, handled below via parameters.

@@ -440,10 +440,11 @@
       "pattern": "src/trade_trace/reports/tool_schemas.py",
       "terms": [
         "instrument_id",
-        "meta_json"
+        "meta_json",
+        "venue_id"
       ],
       "category": "legacy_report_compatibility",
-      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs. venue_id added per AX-049: the report.compare group_by schema description enumerates the real per-base_report allowlist (which includes venue_id) so a bot picks a valid value instead of the rejected 'tag'."
     },
     {
       "pattern": "src/trade_trace/reports/unscored.py",

@@ -341,8 +341,12 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "group_by": {
                 "type": "string",
                 "description": (
-                    "Allowlisted by base_report; common values include "
-                    "strategy_id, instrument_id, tag."
+                    "Allowlisted per base_report (unsupported values are rejected "
+                    "with a VALIDATION_ERROR listing the allowed set). calibration: "
+                    "strategy_id, instrument_id, decision_type, venue_id, asset_class, "
+                    "actor_id, agent_id, model_id, run_id, environment, status. pnl: "
+                    "instrument_id, status, venue_id, asset_class. Note: tag is not a "
+                    "supported group_by for either base_report."
                 ),
             },
             "filter": _FILTER_PROP,

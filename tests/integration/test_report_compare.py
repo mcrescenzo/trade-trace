@@ -62,6 +62,45 @@ def test_compare_rejects_injected_group_by(home):
     assert env["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_unsupported_group_by_error_lists_allowed_set(home):
+    """AX-049: rejecting an unsupported group_by must name the allowed set
+    for that base_report so an MCP-only bot can recover, instead of echoing
+    only the offending value (the AX-004/005/032/035 self-documenting class).
+    `tag` is in neither allowlist, so it is the canonical no-recovery case."""
+    cal = _env(home, "report.compare", {"base_report": "calibration", "group_by": "tag"})
+    assert cal["ok"] is False
+    assert cal["error"]["code"] == "VALIDATION_ERROR"
+    msg = cal["error"]["message"]
+    # names the allowed set, not just the rejected value
+    assert "allowed group_by values are" in msg
+    assert "strategy_id" in msg and "instrument_id" in msg
+    assert "'tag'" in msg  # still echoes the offending value
+
+    pnl = _env(home, "report.compare", {"base_report": "pnl", "group_by": "tag"})
+    assert pnl["ok"] is False
+    pnl_msg = pnl["error"]["message"]
+    assert "allowed group_by values are" in pnl_msg
+    # pnl allowlist is the narrower one — must reflect the per-base set
+    assert "instrument_id" in pnl_msg and "asset_class" in pnl_msg
+
+
+def test_compare_schema_does_not_advertise_unsupported_tag_group_by():
+    """AX-049: the advertised report.compare group_by description must not
+    list `tag` as a usable value, since it is rejected for both base_reports
+    (advertising-vs-runtime drift, the trade-trace-cs0r class)."""
+    from trade_trace.reports.compare import CALIBRATION_GROUP_SQL, PNL_GROUP_SQL
+    from trade_trace.reports.tool_schemas import _REPORT_SCHEMAS
+
+    assert "tag" not in CALIBRATION_GROUP_SQL
+    assert "tag" not in PNL_GROUP_SQL
+    desc = _REPORT_SCHEMAS["report.compare"]["properties"]["group_by"]["description"]
+    # every group_by the description names as supported must actually be in an allowlist
+    allowed = set(CALIBRATION_GROUP_SQL) | set(PNL_GROUP_SQL)
+    assert "tag" in desc and "not a supported" in desc  # explicitly corrects the prior claim
+    for value in ("strategy_id", "instrument_id", "asset_class", "venue_id"):
+        assert value in desc and value in allowed
+
+
 # -- documented group_by matches runtime (trade-trace-cs0r) -----------
 
 
