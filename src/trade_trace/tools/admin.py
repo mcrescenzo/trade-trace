@@ -37,7 +37,7 @@ from typing import Any
 from trade_trace._permissions import chmod_user_only_dir, chmod_user_only_file
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
-from trade_trace.events.unit_of_work import UnitOfWork
+from trade_trace.events.unit_of_work import DRY_RUN_FLAG, UnitOfWork
 from trade_trace.models.embeddings import (
     LOCAL_EMBEDDINGS_DIM,
     LocalEmbeddingUnavailable,
@@ -80,6 +80,18 @@ def _set_preview_meta(ctx: ToolContext) -> None:
     can branch on whether the call mutated state."""
 
     ctx.meta_hints["preview_only"] = True
+
+
+def _dry_run_active() -> bool:
+    """True when the request was dispatched with `_dry_run`.
+
+    Every write tool advertises `supports_dry_run=true` via tool.schema, and
+    the dispatcher honors it generically by having UnitOfWork roll back instead
+    of commit. Admin writers that bypass UnitOfWork (raw sqlite/open_database
+    commits, filesystem copies) must branch on this flag themselves or the
+    advertised dry-run silently mutates the live store."""
+
+    return DRY_RUN_FLAG.get()
 
 
 def _model_target_dir(home: Path) -> Path:
@@ -317,7 +329,7 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "journal not initialized; nothing to back up",
             details={"home": str(home), "db_path": str(src_db)},
         )
-    if not _confirm_requested(args):
+    if not _confirm_requested(args) or _dry_run_active():
         _set_preview_meta(ctx)
         return {
             "preview_only": True,
@@ -426,7 +438,7 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         ) from exc
 
     file_count = len(manifest.get("files", []))
-    if not _confirm_requested(args):
+    if not _confirm_requested(args) or _dry_run_active():
         _set_preview_meta(ctx)
         return {
             "preview_only": True,
@@ -580,7 +592,7 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
     # other admin tool uses (operability.md §2z7). Without --confirm
     # the call returns ok=true with meta.preview_only=true describing
     # what *would* be written; with --confirm it persists.
-    if not _confirm_requested(args):
+    if not _confirm_requested(args) or _dry_run_active():
         _set_preview_meta(ctx)
         return {
             "preview_only": True,
@@ -653,7 +665,7 @@ def _model_import(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         )
     verified = _verify_model_dir(src)
     target = _model_target_dir(home)
-    if not _confirm_requested(args):
+    if not _confirm_requested(args) or _dry_run_active():
         _set_preview_meta(ctx)
         return {
             "preview_only": True,

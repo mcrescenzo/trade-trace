@@ -98,6 +98,21 @@ def test_journal_backup_writes_files_and_manifest_with_confirm(home, tmp_path):
     assert db_entry["sha256"] == actual
 
 
+def test_journal_backup_dry_run_does_not_write(home, tmp_path):
+    """journal.backup writes files outside UnitOfWork, so `_dry_run` must
+    short-circuit to the preview instead of writing the backup tree — even
+    when `_confirm` is passed. Same raw-IO admin-writer class as
+    config_set. Regression for the AX dogfood finding."""
+
+    dest = tmp_path / "bk"
+    env = _mcp(home, "journal.backup",
+               {"dest": str(dest), "_confirm": True, "_dry_run": True})
+    assert env.ok, env
+    assert env.data["preview_only"] is True
+    assert not (dest / "manifest.json").exists()
+    assert not (dest / "trade-trace.sqlite").exists()
+
+
 # -- journal.restore --------------------------------------------
 
 
@@ -115,6 +130,24 @@ def test_journal_restore_preview_does_not_write(home, tmp_path):
     assert env.ok, env
     assert env.data["preview_only"] is True
     # New home file should not exist yet.
+    assert not (new_home / "trade-trace.sqlite").exists()
+
+
+def test_journal_restore_dry_run_does_not_write(home, tmp_path):
+    """journal.restore overwrites the live home outside UnitOfWork, so
+    `_dry_run` must short-circuit to the preview rather than restore — even
+    with `_confirm`. Same raw-IO admin-writer class as config_set/backup;
+    the most destructive member since it overwrites the journal DB."""
+
+    src = tmp_path / "bk"
+    _mcp(home, "journal.backup", {"dest": str(src), "_confirm": True})
+    new_home = tmp_path / "restored"
+    env = _mcp(new_home, "journal.restore", {
+        "src": str(src), "home": str(new_home),
+        "_confirm": True, "_dry_run": True,
+    })
+    assert env.ok, env
+    assert env.data["preview_only"] is True
     assert not (new_home / "trade-trace.sqlite").exists()
 
 
@@ -204,6 +237,33 @@ def test_journal_config_set_preview_does_not_persist(home):
     assert row is None, "preview must not write any config row"
 
 
+def test_journal_config_set_dry_run_does_not_persist(home):
+    """A write tool advertises supports_dry_run=true via tool.schema, so
+    `_dry_run` must roll back even when `_confirm` is also passed. config_set
+    writes outside UnitOfWork (raw sqlite/open_database commits), so it must
+    branch on the request-scoped dry-run flag itself or the "dry-run" silently
+    mutates the live config table. Regression for the AX dogfood finding."""
+
+    env = _mcp(home, "journal.config_set", {
+        "key": "report.calibration.min_sample", "value": "30",
+        "_confirm": True, "_dry_run": True,
+    })
+    assert env.ok, env
+    assert env.data["preview_only"] is True
+
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            "SELECT value FROM config WHERE key = ?",
+            ("report.calibration.min_sample",),
+        ).fetchone()
+    finally:
+        db.close()
+    assert row is None, "dry-run must not write any config row"
+
+
 def test_journal_config_set_embeddings_provider_none_succeeds(home):
     env = _mcp(home, "journal.config_set", {
         "key": "embeddings.provider", "value": "none",
@@ -277,6 +337,22 @@ def test_model_import_air_gap_succeeds_with_sockets_patched(home, tmp_path, monk
     target = home / "models" / "bge-small-en-v1.5"
     assert (target / "config.json").read_bytes() == (src / "config.json").read_bytes()
     assert env.data["verified_files"] == ["config.json"]
+
+
+def test_model_import_dry_run_does_not_copy(home, tmp_path, monkeypatch):
+    """model.import copies a model dir outside UnitOfWork, so `_dry_run` must
+    short-circuit to the preview instead of staging the assets — even with
+    `_confirm`. Same raw-IO admin-writer class as config_set/backup."""
+
+    payload = b"deterministic tiny bge-small test fixture\n"
+    _patch_tiny_trusted_lock(monkeypatch, payload)
+    src = _write_fixture_model(tmp_path / "BAAI" / "bge-small-en-v1.5", payload=payload)
+    env = _mcp(home, "model.import",
+               {"path": str(src), "_confirm": True, "_dry_run": True})
+    assert env.ok, env
+    assert env.data["preview_only"] is True
+    target = home / "models" / "bge-small-en-v1.5"
+    assert not target.exists(), "dry-run must not stage the model dir"
 
 
 def test_model_import_rejects_malicious_self_manifest(home, tmp_path, monkeypatch):
