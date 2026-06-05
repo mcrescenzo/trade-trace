@@ -12,10 +12,32 @@ import sqlite3
 from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.projections import remark_open_positions
 from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 
 DEFAULT_PNL_MIN_SAMPLE = 5
+
+
+def _apply_open_remark(rows: list[tuple], remark: dict[str, float]) -> list[tuple]:
+    """Replace each open row's stored `unrealized_pnl` (index 5) with the live
+    read-layer re-mark when one exists (trade-trace-pr2j).
+
+    Position id is at index 0; status at index 3. The re-mark is the same
+    single source of truth `report.open_positions` / `report.current_exposure`
+    apply, so every PnL surface counts a marked open position consistently and
+    never reports null/stale unrealized P&L when a fresh mark exists.
+    """
+
+    if not remark:
+        return rows
+    patched: list[tuple] = []
+    for row in rows:
+        position_id = row[0]
+        if row[3] == "open" and position_id in remark:
+            row = (*row[:5], remark[position_id], *row[6:])
+        patched.append(row)
+    return patched
 
 
 def _pnl_metrics_for_rows(rows: list[tuple]) -> dict[str, Any]:
@@ -47,7 +69,11 @@ def report_pnl(
         "SELECT id, instrument_id, kind, status, realized_pnl, unrealized_pnl "
         "FROM positions"
     )
-    rows = cur.fetchall()
+    # Re-mark open positions from the latest snapshot before aggregating so
+    # report.pnl agrees with report.open_positions / report.current_exposure
+    # (trade-trace-pr2j). The stored projection column is only marked at
+    # rebuild time and goes stale/null when a later snapshot lands.
+    rows = _apply_open_remark(cur.fetchall(), remark_open_positions(conn))
 
     closed = [r for r in rows if r[3] == "closed"]
     open_ = [r for r in rows if r[3] == "open"]

@@ -26,6 +26,7 @@ from trade_trace.contracts.autonomous_substrate import RedactionProfile
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
+from trade_trace.projections import remark_open_positions
 from trade_trace.reports._filter_support import (
     UnsupportedFilterError,
     _placeholders,
@@ -262,6 +263,14 @@ def _related_record_rows(
             dict(zip(_POSITION_COLS, row, strict=True))
             for row in position_rows
         ]
+        # Re-mark open positions from the latest snapshot so the bundle's
+        # positions agree with report.pnl / report.open_positions
+        # (trade-trace-pr2j) instead of carrying the stale rebuild-time
+        # projection column. Single shared read-layer source of truth.
+        remark = remark_open_positions(conn)
+        for position in positions:
+            if position.get("status") == "open" and position["id"] in remark:
+                position["unrealized_pnl"] = remark[position["id"]]
 
     return {
         "decisions": decisions,

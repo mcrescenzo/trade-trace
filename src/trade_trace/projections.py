@@ -395,6 +395,68 @@ def _unrealized_pnl(
     return (snap_price - avg_entry_price) * qty
 
 
+def remark_open_positions(
+    conn: sqlite3.Connection,
+) -> dict[str, float]:
+    """Return the live read-layer re-mark of `unrealized_pnl` for every open
+    position, keyed by position_id (trade-trace-pr2j).
+
+    The `positions` projection only computes `unrealized_pnl` at rebuild time
+    (`rebuild_positions` -> `_unrealized_pnl`, against whatever snapshot was
+    latest then). A snapshot that lands AFTER the last rebuild therefore never
+    refreshes the stored column, so a position can keep `unrealized_pnl=NULL`
+    (opened before its first snapshot) or hold a value marked against an older
+    snapshot even though a fresher mark exists.
+
+    `report.open_positions` / `report.current_exposure` already reconcile this
+    in their shared row builder (`_position_row_payload`) by recomputing from
+    the latest mark. The other PnL-reading surfaces (`report.pnl`,
+    `report.compare`, `review.bundle`) read `positions.unrealized_pnl`
+    directly and so disagreed with the exposure surfaces. This function is the
+    SINGLE shared read-layer re-mark those surfaces apply so every PnL surface
+    reports the same number for the same open position.
+
+    The re-mark uses the canonical side-aware convention (`_unrealized_pnl`,
+    trade-trace-ctvb): the latest snapshot's YES-contract price is converted to
+    the position's side-native terms before being differenced against the
+    side-native `avg_entry_price`. Only open positions with a non-null
+    `avg_entry_price`, a non-zero signed `net_quantity` derived from
+    `position_events`, and at least one usable snapshot price for the
+    instrument are re-marked; positions with no mark are simply absent from the
+    returned map (the caller keeps treating them as unmarked).
+    """
+
+    rows = conn.execute(
+        """
+        WITH event_aggs AS (
+            SELECT position_id, COALESCE(SUM(quantity_delta), 0) AS net_quantity
+            FROM position_events
+            GROUP BY position_id
+        )
+        SELECT p.id, p.instrument_id, p.side, p.avg_entry_price,
+               COALESCE(ea.net_quantity, 0)
+        FROM positions p
+        LEFT JOIN event_aggs ea ON ea.position_id = p.id
+        WHERE p.status = 'open' AND p.avg_entry_price IS NOT NULL
+        """
+    ).fetchall()
+
+    marks: dict[str, float | None] = {}
+    remarked: dict[str, float] = {}
+    for position_id, instrument_id, side, avg_entry_price, net_quantity in rows:
+        if net_quantity is None or _approx_zero(float(net_quantity)):
+            continue
+        if instrument_id not in marks:
+            marks[instrument_id] = _latest_snapshot_price(conn, instrument_id)
+        snap_price = marks[instrument_id]
+        if snap_price is None:
+            continue
+        remarked[position_id] = _unrealized_pnl(
+            side, snap_price, float(avg_entry_price), float(net_quantity)
+        )
+    return remarked
+
+
 def _latest_snapshot_price(conn: sqlite3.Connection, instrument_id: str) -> float | None:
     row = conn.execute(
         """

@@ -15,6 +15,7 @@ from collections.abc import Iterable
 from typing import Any, cast
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.projections import remark_open_positions
 from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import applied_filter_view, enforce_supported_filter
 from trade_trace.reports.calibration import (
@@ -30,7 +31,11 @@ from trade_trace.reports.calibration import (
 from trade_trace.reports.calibration import (
     REPORT_NAME as CALIBRATION_REPORT_NAME,
 )
-from trade_trace.reports.pnl import DEFAULT_PNL_MIN_SAMPLE, _pnl_metrics_for_rows
+from trade_trace.reports.pnl import (
+    DEFAULT_PNL_MIN_SAMPLE,
+    _apply_open_remark,
+    _pnl_metrics_for_rows,
+)
 
 CALIBRATION_GROUP_SQL: dict[str, str] = {
     "actor_id": "f.actor_id",
@@ -180,8 +185,12 @@ def _compare_pnl(conn: sqlite3.Connection, *, group_by: str, raw_filter: dict[st
         LEFT JOIN theses t ON t.id = d.thesis_id
         {('WHERE ' + ' AND '.join(where)) if where else ''}
     """
+    # Re-mark open positions from the latest snapshot so report.compare's PnL
+    # rollups agree with report.pnl / report.open_positions (trade-trace-pr2j):
+    # the same single read-layer source of truth, applied before bucketing.
+    remark = remark_open_positions(conn)
     buckets: dict[str, list[tuple]] = defaultdict(list)
-    for row in conn.execute(sql, params).fetchall():
+    for row in _apply_open_remark(conn.execute(sql, params).fetchall(), remark):
         key = row[6] if row[6] is not None else "__none__"
         buckets[str(key)].append(row[:6])
     groups = []
