@@ -195,9 +195,11 @@ def report_calibration_advisory(
     """Decision-time recalibration for a candidate forecast probability.
 
     Returns the caller's historical resolution rate for the equal-width 0.1
-    band the candidate falls into, plus a calibration-derived adjustment hint
-    (`observed_frequency - mean_probability` in that band) and the resulting
-    `suggested_probability`. Deterministic and read-only; no trade advice."""
+    band the candidate falls into, the raw `calibration_gap`
+    (`observed_frequency - mean_probability` in that band), the resulting
+    clamped `suggested_probability`, and `suggested_adjustment` — the effective
+    post-clamp delta such that probability + suggested_adjustment ==
+    suggested_probability. Deterministic and read-only; no trade advice."""
 
     if not isinstance(probability, (int, float)) or isinstance(probability, bool):
         raise ValueError("probability must be a number in [0, 1]")
@@ -271,8 +273,17 @@ def report_calibration_advisory(
         "suggested_probability": (
             round(suggested_probability, 6) if suggested_probability is not None else None
         ),
+        # The effective adjustment to apply to the candidate probability, i.e.
+        # the post-clamp delta so that probability + suggested_adjustment ==
+        # suggested_probability always holds. This differs from calibration_gap
+        # (the raw observed_frequency - mean_probability band gap) whenever the
+        # candidate + gap would fall outside [0, 1] and is clamped (e.g. a 0.97
+        # candidate with a +0.05 gap yields suggested_probability 1.0 and a
+        # suggested_adjustment of 0.03, not the raw 0.05).
         "suggested_adjustment": (
-            round(calibration_gap, 6) if calibration_gap is not None else None
+            round(suggested_probability - probability, 6)
+            if suggested_probability is not None
+            else None
         ),
         "filter": applied_filter_view(rf, report=ADVISORY_REPORT_NAME),
         "sample_warning": sample_warning,

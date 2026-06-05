@@ -113,6 +113,33 @@ def test_advisory_reports_band_observed_rate_and_adjustment(home: Path):
     assert summary["suggested_probability"] == pytest.approx(0.47)
 
 
+def test_advisory_adjustment_is_post_clamp_effective_delta(home: Path):
+    """AX-047: when the candidate + raw gap would exceed [0, 1] and is
+    clamped, suggested_adjustment is the EFFECTIVE post-clamp delta, not the
+    raw band gap, so probability + suggested_adjustment == suggested_probability
+    always holds. Three forecasts at p=0.92 all resolve YES -> band 9 has
+    observed 1.0, mean 0.92, raw gap +0.08; a 0.97 candidate clamps to 1.0."""
+    for i in range(3):
+        _seed_resolved_forecast(home, i, probability=0.92, resolves_yes=True)
+
+    env = _advisory(home, 0.97, min_sample=1)
+    assert env["ok"], env
+    summary = env["data"]["summary"]
+    assert summary["band"]["bin_index"] == 9
+    assert summary["observed_frequency"] == pytest.approx(1.0)
+    assert summary["mean_probability"] == pytest.approx(0.92)
+    # raw band gap is still reported unchanged
+    assert summary["calibration_gap"] == pytest.approx(0.08)
+    # but suggested_probability is clamped to 1.0 ...
+    assert summary["suggested_probability"] == pytest.approx(1.0)
+    # ... and suggested_adjustment is the effective delta 1.0 - 0.97 = 0.03,
+    # NOT the raw 0.08, so applying it reproduces suggested_probability.
+    assert summary["suggested_adjustment"] == pytest.approx(0.03)
+    assert summary["suggested_probability"] == pytest.approx(
+        0.97 + summary["suggested_adjustment"]
+    )
+
+
 def test_advisory_only_counts_same_band(home: Path):
     # One forecast in band 2, one in band 7. A band-2 candidate sees only the
     # band-2 forecast.
