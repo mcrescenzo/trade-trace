@@ -520,6 +520,8 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
     ),
     "report.current_exposure": _schema(
         {
+            "limit": {"type": "integer", "minimum": 1, "description": "Maximum open-position rows per page; defaults to the positions page default. When more positions match, truncated=true and next_cursor pages the rest (mirrors report.open_positions)."},
+            "cursor": {"type": "string", "description": "Opaque pagination cursor from a previous report.current_exposure response; pages the next slice of open_positions."},
             "recent_limit": {"type": "integer", "minimum": 0, "description": "Maximum recent trade-typed decision rows to return; defaults to 10."},
             "include_watchlist": {"type": "boolean", "description": "Include watchlist bucket; defaults true. Watches are WATCH_ONLY_IDEA and never exposure."},
             "include_anomalies": {"type": "boolean", "description": "Include projection_anomalies bucket; defaults true."},

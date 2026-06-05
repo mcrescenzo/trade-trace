@@ -292,6 +292,58 @@ def test_current_exposure_filters_scope_child_buckets(home: Path) -> None:
     assert "recent_out_scope" not in kind_anomaly_decisions
 
 
+def test_current_exposure_limit_surfaces_truncation_and_cursor_pages_remainder(home: Path) -> None:
+    # Three open positions, one per instrument. A limited current_exposure call
+    # must NOT silently drop the rows beyond the page: it has to surface
+    # truncated=true + a next_cursor (mirroring report.open_positions), and that
+    # cursor must page the remaining exposure. Regression for trade-trace-lszg
+    # (AX-034): current_exposure previously discarded open_positions' truncated/
+    # next_cursor, so a bot under-read its own exposure with no signal.
+    ids = ["a", "b", "c"]
+    for tag in ids:
+        instrument_id = _instrument(home)
+        _insert_decision(
+            home,
+            decision_id=f"dec_open_{tag}",
+            instrument_id=instrument_id,
+            type_="paper_enter",
+            created_at="2026-05-20T00:00:00Z",
+        )
+        _insert_position(
+            home,
+            instrument_id=instrument_id,
+            position_id=f"pos_trunc_{tag}",
+            decision_id=f"dec_open_{tag}",
+        )
+
+    page1 = _call(home, {"limit": 2})
+    assert page1["ok"] is True, page1
+    data1 = page1["data"]
+    assert len(data1["open_positions"]) == 2
+    assert data1["truncated"] is True
+    assert data1["next_cursor"], "limited current_exposure must surface a next_cursor"
+
+    page2 = _call(home, {"limit": 2, "cursor": data1["next_cursor"]})
+    assert page2["ok"] is True, page2
+    data2 = page2["data"]
+    assert len(data2["open_positions"]) == 1
+    assert data2["truncated"] is False
+    assert data2["next_cursor"] is None
+
+    seen = {row["position_id"] for row in data1["open_positions"]} | {
+        row["position_id"] for row in data2["open_positions"]
+    }
+    assert seen == {"pos_trunc_a", "pos_trunc_b", "pos_trunc_c"}
+
+
+def test_current_exposure_schema_advertises_limit_and_cursor() -> None:
+    reg = __import__("trade_trace.core", fromlist=["default_registry"]).default_registry()
+    registration = reg.get("report.current_exposure")
+    props = registration.json_schema.get("properties", {})
+    assert "limit" in props, "current_exposure must advertise limit so pagination is discoverable"
+    assert "cursor" in props, "current_exposure must advertise cursor for safe paging"
+
+
 def test_current_exposure_schema_mentions_recommended_packet() -> None:
     reg = __import__("trade_trace.core", fromlist=["default_registry"]).default_registry()
     registration = reg.get("report.current_exposure")

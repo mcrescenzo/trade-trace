@@ -725,7 +725,7 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
     if effective_as_of is None:
         effective_as_of = to_utc_iso8601(datetime.now(UTC))
 
-    open_args = {k: v for k, v in args.items() if k in {"home", "limit", "kind", "instrument_id", "strategy_id", "stale_mark_threshold_days", "as_of"}}
+    open_args = {k: v for k, v in args.items() if k in {"home", "limit", "cursor", "kind", "instrument_id", "strategy_id", "stale_mark_threshold_days", "as_of"}}
     open_args["as_of"] = effective_as_of
     open_data = _report_open_positions(open_args, ctx)
     effective_as_of = open_data.get("summary", {}).get("filter", {}).get("as_of", effective_as_of)
@@ -781,6 +781,8 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
                 "include_anomalies": include_anomalies,
                 "stale_mark_threshold_days": args.get("stale_mark_threshold_days", 14),
                 "as_of": effective_as_of,
+                "limit": open_data.get("summary", {}).get("filter", {}).get("limit"),
+                "cursor": args.get("cursor"),
             },
             "agent_answer_hints": hints,
         },
@@ -791,6 +793,11 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
         "recent_trade_activity": recent_activity,
         "projection_anomalies": anomalies,
         "agent_answer_hints": hints,
+        # Propagate open_positions pagination so a limit-bounded exposure read
+        # signals when rows were dropped instead of silently under-reporting
+        # exposure (trade-trace-lszg / AX-034 silent-truncation hazard).
+        "truncated": open_data.get("truncated", False),
+        "next_cursor": open_data.get("next_cursor"),
         "lower_level_reports": {
             "open_positions": "report.open_positions",
             "watchlist": "report.watchlist",
