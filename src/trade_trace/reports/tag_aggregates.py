@@ -10,10 +10,14 @@ Both reports group decisions by tag and surface recurring patterns:
 A tag falls below the report's `min_sample` (default 10 per reports.md
 §3.2) is flagged via `sample_warning` but still ranked.
 
-Decisions without an attached `forecast_id` are excluded from both
-aggregates — there's no Brier to attribute. The `record_ids[decisions]`
-list still enumerates the decisions in each tag group so the agent can
-drill into the qualitative side.
+A tag with no scored forecasts is excluded from both aggregates — there's
+no Brier to attribute, so it is neither a mistake nor a strength. This
+covers both decisions without an attached `forecast_id` and decisions
+whose forecast is not yet scored (open/pending). For surfaced (scored)
+tags, the `record_ids[decisions]` list still enumerates the decisions in
+each tag group so the agent can drill into the qualitative side. Mirrors
+the scored-evidence gate that `report.mistake_tripwire` and
+`report.coach` (top_mistakes/top_strengths) already apply.
 """
 
 from __future__ import annotations
@@ -194,9 +198,18 @@ def _tag_ranked_report(
     groups: list[dict[str, Any]] = []
     for tag, items in by_tag.items():
         scored = [s for (_d, _f, s) in items if s is not None]
+        sample_size = len(scored)
+        # A tag with no scored forecasts has no Brier to attribute, so it is
+        # neither a recurring mistake nor a recurring strength — surfacing it
+        # under either label is a false signal (and the same null-Brier tag
+        # would otherwise appear identically in BOTH reports). Exclude it, in
+        # line with this module's stated "there's no Brier to attribute"
+        # exclusion and the sibling report.mistake_tripwire / report.coach
+        # top_mistakes/top_strengths, which both gate on scored evidence.
+        if sample_size == 0:
+            continue
         decision_ids = sorted({d for (d, _f, _s) in items})
         forecast_ids = sorted({f for (_d, f, _s) in items if f is not None})
-        sample_size = len(scored)
         mean_brier = sum(scored) / sample_size if sample_size else None
         sample_warning = (
             f"only {sample_size} scored forecasts on tag {tag!r}; "
@@ -238,7 +251,7 @@ def _tag_ranked_report(
         "sample_size": len(rows),
         "sample_warning": None,
         "filter": filter_view,
-        "metrics": {"tag_count": len(by_tag), "ordering": order, "label": label},
+        "metrics": {"tag_count": len(groups), "ordering": order, "label": label},
         "caveats": [],
     }
     return standard_report_result(summary=summary, groups=groups)
