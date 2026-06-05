@@ -375,7 +375,7 @@ def test_memory_recall_schema_matches_runtime_required_query_and_optional_knobs(
 def test_report_schemas_advertise_defaulted_args_as_optional():
     expected_optional = {
         "report.watchlist": ("filter", "mode", "stale_threshold_days"),
-        "report.lifecycle": ("filter", "states", "status", "as_of", "stale_threshold_days", "limit", "cursor"),
+        "report.lifecycle": ("filter", "states", "status", "as_of", "stale_threshold_days"),
         "report.work_queue": ("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
         "agent.next_actions": ("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
         "report.open_positions": ("limit", "cursor", "kind", "instrument_id", "strategy_id"),
