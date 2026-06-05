@@ -112,6 +112,20 @@ def test_missing_metadata_and_forecast_required_fail(tmp_path):
     assert data["summary"]["overall_status"] == "fail"
 
 
+def test_candidate_metadata_alias_accepted(tmp_path):
+    # AX-053: a caller supplying metadata under `candidate_metadata` (mirroring
+    # the bundle's `candidate_metadata_required` field) must pass, not report
+    # every field missing. There is no published candidate_output schema, so the
+    # checker accepts both `metadata` and `candidate_metadata`.
+    home = _init_home(tmp_path)
+    bundle = _labeled_bundle(home)
+    candidate = _valid_candidate(bundle)
+    candidate["candidate_metadata"] = candidate.pop("metadata")
+
+    data = _evaluate(home, bundle, candidate)["data"]
+    assert _criterion(data, "candidate_metadata")["status"] == "pass"
+
+
 def test_invalid_decision_type_fails(tmp_path):
     home = _init_home(tmp_path)
     bundle = _labeled_bundle(home)
