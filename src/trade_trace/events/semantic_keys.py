@@ -100,6 +100,26 @@ SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
             }
         ),
     ),
+    # market.refresh re-syncs a bound market row from Gamma on a cache miss
+    # and emits this event with the same payload shape as market.bound
+    # (adapter_polymarket._upsert_market). It must be registered or the
+    # default-deny guard hard-fails every cache-miss refresh (AX-068).
+    "market.refreshed": SemanticKeySpec(
+        structural_fields=frozenset(
+            {"source", "external_id", "state", "mechanism", "bound_via"}
+        ),
+        free_text_fields=frozenset(
+            {
+                "title",
+                "question",
+                "url",
+                "resolution_source",
+                "ambiguity_kind",
+                "venue_metadata_json",
+                "metadata_json",
+            }
+        ),
+    ),
     "instrument.created": SemanticKeySpec(
         structural_fields=frozenset(
             {

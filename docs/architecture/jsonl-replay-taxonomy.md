@@ -71,6 +71,9 @@ The `events` table currently emits these `event_type` values
   control-plane behavior or remediation).
 - Signal: `signal.emitted` (lazy-emitted by `signal.scan` /
   `report.coach`).
+- Market re-sync: `market.refreshed` (emitted by `market.refresh` when it
+  re-syncs a bound market row from live Gamma on a cache miss; diagnostic
+  venue-truth re-read, not a caller mutation).
 
 ## Taxonomy
 
@@ -214,6 +217,12 @@ for restore — restores want the *original* observation timestamp.
 - `signal.emitted`: lazy-emitted by `signal.scan` / `report.coach`;
   the importer re-runs scan on the imported journal if signals are
   desired. Skip with a logged note.
+- `market.refreshed`: emitted by `market.refresh` when it re-syncs a
+  bound market row from live Gamma on a cache miss. Records venue truth
+  at fetch time, not a caller mutation; `market.refresh` is not
+  import-ready (replay would re-fetch live), so the importer skips it
+  and a restored journal regenerates it on demand by re-running
+  `market.refresh`. (The initial `market.bound` write IS bucket A.)
 
 **Replay policy:** importer recognizes these in the manifest, increments
 a `diagnostic_skipped` counter, does not call `dispatch()`. A future

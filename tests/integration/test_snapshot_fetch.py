@@ -297,6 +297,76 @@ def test_snapshot_fetch_series_enabled_writes_each_fixture_point(tmp_path: Path,
     assert [item["captured_at"] for item in env.data["items"]] == ["2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z"]
 
 
+# -- market.refresh emits market.refreshed, which must be registered (AX-068) --
+# market.refresh re-syncs a bound market row from Gamma and emits a
+# `market.refreshed` event. The events log is default-deny: an unregistered
+# event type hard-errors ("event_type 'market.refreshed' is not registered in
+# events_semantic_keys"). Before AX-068 the event type was never added to
+# SEMANTIC_KEYS, so EVERY market.refresh call failed and the tool was wholly
+# non-functional. This pins the round-trip.
+
+
+def test_market_refresh_succeeds_and_emits_registered_event(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="540844")
+    _enable_adapter(home)
+
+    # Force a cache MISS so refresh actually re-fetches and emits
+    # market.refreshed. A freshly bound row is inside the open-market TTL
+    # (1h) and would short-circuit as cache_hit without touching the
+    # event path — that is exactly why the unregistered-event drift went
+    # unnoticed until a stale market was refreshed live (AX-068).
+    conn = sqlite3.connect(db_path(Path(home)))
+    try:
+        conn.execute(
+            "UPDATE markets SET created_at='2020-01-01T00:00:00Z', metadata_json='{}' WHERE id=?",
+            (market_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    def fake_gamma_get(self: PolymarketClient, path: str):
+        return {
+            "id": "540844",
+            "question": "Refreshable market?",
+            "outcomes": '["Yes","No"]',
+            "clobTokenIds": '["token-yes","token-no"]',
+            "bestBid": "0.41",
+            "bestAsk": "0.43",
+            "lastTradePrice": "0.42",
+            "closed": False,
+        }
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", fake_gamma_get)
+
+    env = _legacy_call("market.refresh", {"home": home, "market_id": market_id})
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["id"] == market_id
+    # The market.refreshed event must have been written (default-deny would
+    # have raised KeyError -> ErrorEnvelope otherwise).
+    conn = sqlite3.connect(db_path(Path(home)))
+    try:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM events WHERE event_type='market.refreshed'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert count == 1
+
+
+def test_market_refreshed_is_registered_in_semantic_keys():
+    """Guard the specific drift class: a tool emits an event type the
+    default-deny registry rejects. market.refresh emits market.refreshed."""
+
+    from trade_trace.events.semantic_keys import SEMANTIC_KEYS
+
+    assert "market.refreshed" in SEMANTIC_KEYS
+
+
 # -- _gamma_request_id: prefer gamma_market_id over external_id (AX-009) --
 # snapshot.fetch / snapshot.fetch_series / market.refresh build the Gamma
 # /markets/{id} URL from the bound market row. Gamma expects the bare numeric

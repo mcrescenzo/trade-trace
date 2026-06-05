@@ -129,6 +129,12 @@ _DIAGNOSTIC_EVENT_TOOLS = {
     # an operability.md §7 note documents the policy).
     "memory_node.invalidated",
     "signal.emitted",
+    # market.refresh re-syncs a bound market row from live Gamma on a cache
+    # miss; the event records venue truth at fetch time, not a caller
+    # mutation, and market.refresh is not import-ready (it would re-fetch
+    # live). On restore, regenerate on demand by re-running market.refresh.
+    # Bucket D per jsonl-replay-taxonomy.md (AX-068).
+    "market.refreshed",
 }
 
 _LEGACY_HARD_BREAK_CONTRACT_VERSIONS = {"0.0.1", "0.0.1rc3", "0.0.1-rc3"}
