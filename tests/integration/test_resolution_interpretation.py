@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -148,3 +149,64 @@ def test_interpret_rejects_unknown_forecast(home: Path):
     env = _interpret(home, "fc_missing")
     assert env["ok"] is False
     assert env["error"]["code"] == "NOT_FOUND"
+
+
+def test_misread_surfaces_manual_source_provenance(home: Path):
+    # AX-067: every misread group now reports actual_source_provenance (the
+    # market's bound_via) so a consumer can tell whether the "actual" resolution
+    # source it is being scored against was caller-asserted (manual) or stamped
+    # by a venue adapter. A manually-bound market is high-confidence ground truth.
+    inst = _market(home, 0, resolution_source="market_contract", resolved=True)
+    fc = _forecast(home, inst)
+    _interpret(home, fc, interpreted_resolution_source="oracle_feed")
+    _resolve(home, inst)
+    env = _misreads(home)
+    assert env["data"]["summary"]["contract_misread_count"] == 1
+    assert env["data"]["summary"]["contract_misread_adapter_bound_count"] == 0
+    assert env["data"]["groups"][0]["metrics"]["actual_source_provenance"] == "manual"
+
+
+def test_misread_against_adapter_default_source_is_flagged_low_confidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # AX-067: report.resolution_misreads scores the agent against
+    # markets.resolution_source, but the Polymarket adapter stamps a coarse
+    # default ("market_contract" unless disputed) because Gamma exposes no
+    # enum-mappable resolution category. So a defensible oracle_feed reading of a
+    # UMA-over-Binance crypto strike is hard-classified contract_misread against
+    # an adapter default, not a faithfully-recorded mechanism. The fix does not
+    # silence the classification (that ground-truth-quality half is filed), but
+    # surfaces provenance + a dedicated count so a consumer can discount it.
+    from trade_trace.adapters.polymarket.client import PolymarketClient
+
+    fixtures = Path(__file__).parent / "fixtures" / "polymarket"
+    home = tmp_path / "home"
+    home_s = str(home)
+    assert mcp_call("journal.init", {"home": home_s}).ok
+    assert mcp_call(
+        "journal.config_set",
+        {"home": home_s, "key": "network.polymarket.enabled", "value": "true",
+         "confirm": True, "idempotency_key": "test:cfg-pm-enabled"},
+    ).ok
+    raw = json.loads((fixtures / "market_binary_resolved_yes.json").read_text(encoding="utf-8"))
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: raw)
+
+    bind = mcp_call("market.bind", {"home": home_s, "source": "polymarket", "external_id": "pm-res-yes"})
+    assert bind.ok, bind
+    inst = bind.data["id"]
+    # The adapter stamped the coarse default rather than a mapped mechanism.
+    assert bind.data["resolution_source"] == "market_contract"
+    assert bind.data["bound_via"] == "adapter"
+
+    fc = _forecast(home, inst)
+    _interpret(home, fc, interpreted_resolution_source="oracle_feed")
+    _resolve(home, inst)
+
+    env = _misreads(home)
+    summary = env["data"]["summary"]
+    assert summary["contract_misread_count"] == 1
+    assert summary["contract_misread_adapter_bound_count"] == 1
+    grp = env["data"]["groups"][0]["metrics"]
+    assert grp["classification"] == "contract_misread"
+    assert grp["actual_source_provenance"] == "adapter"
+    assert any("provenance='adapter'" in c for c in summary["caveats"])

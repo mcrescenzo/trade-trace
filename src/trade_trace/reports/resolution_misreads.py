@@ -33,7 +33,7 @@ def report_resolution_misreads(
         f"""
         SELECT ri.forecast_id, ri.instrument_id, ri.interpreted_resolution_source,
                ri.expected_outcome_label,
-               m.resolution_source,
+               m.resolution_source, m.bound_via,
                o.outcome_label, o.status
         FROM resolution_interpretations ri
         LEFT JOIN markets m ON m.id = ri.instrument_id
@@ -48,7 +48,13 @@ def report_resolution_misreads(
 
     groups: list[dict[str, Any]] = []
     counts = {"contract_misread": 0, "aligned": 0, "unresolved": 0}
-    for forecast_id, inst_id, interp_source, expected_label, actual_source, outcome_label, status in rows:
+    # A contract_misread against an *adapter*-bound market is lower-confidence:
+    # the venue adapter stamps a coarse default resolution_source (e.g.
+    # Polymarket -> "market_contract" unless disputed) rather than a per-market
+    # mechanism mapping, so the mismatch can reflect taxonomy coarseness, not a
+    # true agent misread. Surface provenance + a count so a consumer can discount.
+    contract_misread_adapter_bound = 0
+    for forecast_id, inst_id, interp_source, expected_label, actual_source, bound_via, outcome_label, status in rows:
         resolved = status == "resolved_final"
         interp_n = _norm(interp_source)
         actual_n = _norm(actual_source)
@@ -64,6 +70,9 @@ def report_resolution_misreads(
         else:
             classification = "aligned"
         counts[classification] += 1
+        actual_source_provenance = _norm(bound_via)
+        if classification == "contract_misread" and actual_source_provenance == "adapter":
+            contract_misread_adapter_bound += 1
         groups.append({
             "key": forecast_id,
             "label": f"Resolution interpretation for forecast {forecast_id}",
@@ -71,6 +80,7 @@ def report_resolution_misreads(
                 "classification": classification,
                 "interpreted_resolution_source": interp_source,
                 "actual_resolution_source": actual_source,
+                "actual_source_provenance": actual_source_provenance,
                 "expected_outcome_label": expected_label,
                 "actual_outcome_label": outcome_label,
                 "outcome_label_mismatch": label_mismatch,
@@ -90,6 +100,7 @@ def report_resolution_misreads(
         "sample_size": len(groups),
         "instrument_id": instrument_id,
         "contract_misread_count": counts["contract_misread"],
+        "contract_misread_adapter_bound_count": contract_misread_adapter_bound,
         "aligned_count": counts["aligned"],
         "unresolved_count": counts["unresolved"],
         "sample_warning": None if groups else "no resolution interpretations recorded",
@@ -99,6 +110,13 @@ def report_resolution_misreads(
             "differs from the market's actual resolution source — a distinct error "
             "class from calibration error (right about the world, wrong about the "
             "contract). This is diagnostic, not trade advice.",
+            "actual_resolution_source is the resolution_source recorded on the "
+            "market at bind time; per-group actual_source_provenance reports its "
+            "origin. For adapter-bound markets (provenance='adapter', e.g. "
+            "Polymarket) it is a coarse venue default (market_contract unless "
+            "disputed), not a per-market mechanism mapping — so a contract_misread "
+            "with provenance='adapter' (see contract_misread_adapter_bound_count) "
+            "may reflect taxonomy coarseness rather than a true agent misread.",
         ],
     }
     return standard_report_result(summary=summary, groups=groups)
