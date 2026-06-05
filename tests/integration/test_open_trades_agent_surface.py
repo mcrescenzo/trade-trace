@@ -226,6 +226,27 @@ def test_cli_open_paper_position_with_fresh_mark_supports_llm_summary(home: Path
     assert open_positions["data"]["open_positions"][0]["position_id"] == "pos_paper_open"
 
 
+def test_exposure_reports_groups_reference_event_exposure_sets_not_reembedded(home: Path) -> None:
+    """report.open_positions and report.current_exposure must not double-serialize the
+    same event_exposure_sets list under BOTH 'groups' and 'event_exposure_sets'
+    (trade-trace-lszg / AX-034). 'groups' is a lightweight reference so the envelope
+    stays under the MCP token cap as open positions accumulate; the full sets live only
+    under 'event_exposure_sets'."""
+    instrument_id = _instrument(home, "groups-ref")
+    _insert_decision(home, decision_id="dec_groups_ref", instrument_id=instrument_id, type_="paper_enter")
+    _insert_position(home, position_id="pos_groups_ref", instrument_id=instrument_id, decision_id="dec_groups_ref")
+
+    for report_name in ("open_positions", "current_exposure"):
+        body = _cli(home, "report", report_name, "--as-of", AS_OF)
+        data = body["data"]
+        event_sets = data["event_exposure_sets"]
+        assert isinstance(event_sets, list), f"{report_name}: event_exposure_sets should be a list"
+        assert data["groups"] == {"ref": "event_exposure_sets", "count": len(event_sets)}, (
+            f"{report_name}: groups should be a reference to event_exposure_sets, "
+            f"not a re-embedded copy; got {data['groups']!r}"
+        )
+
+
 def test_cli_actual_recorded_open_position_has_broker_truth_caveat(home: Path) -> None:
     instrument_id = _instrument(home, "actual-open")
     _insert_decision(home, decision_id="dec_actual_open", instrument_id=instrument_id, type_="actual_enter")
