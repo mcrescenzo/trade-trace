@@ -47,6 +47,19 @@ def _report_lifecycle(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     as_of_raw = args.get("as_of")
     if as_of_raw is not None and not isinstance(as_of_raw, str):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "as_of must be an ISO timestamp string", details={"field": "as_of", "value": as_of_raw})
+    limit = args.get("limit")
+    if limit is not None and (not isinstance(limit, int) or limit < 1):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "limit must be a positive integer", details={"field": "limit", "value": limit})
+    cursor = args.get("cursor")
+    if cursor is not None and not isinstance(cursor, str):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "cursor must be a string", details={"field": "cursor", "value": cursor})
+    # The transport-facing surface is always bounded: absent an explicit limit,
+    # default to the standard report page size so report.lifecycle can never
+    # overflow the MCP token cap on a populated journal (trade-trace-hv19).
+    if limit is None:
+        from trade_trace.reporting.pagination import DEFAULT_LIMIT
+
+        limit = DEFAULT_LIMIT
     try:
         home = resolve_home(args.get("home"))
         path = db_path(home)
@@ -60,6 +73,8 @@ def _report_lifecycle(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 states=states,
                 as_of=as_of_raw,
                 stale_threshold_days=stale_threshold_days,
+                limit=limit,
+                cursor=cursor,
             )
         finally:
             connection.close()

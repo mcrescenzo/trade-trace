@@ -276,6 +276,61 @@ def test_report_lifecycle_surface_filters_and_links_without_writes(home):
     assert after == before
 
 
+def test_report_lifecycle_paginates_with_limit_and_stable_cursor(home):
+    """trade-trace-hv19: report.lifecycle must page (limit + cursor + next_cursor,
+    mirroring report.open_positions) so a populated journal stays under the MCP
+    token cap, while summary metrics report full-set totals."""
+    with _conn(home) as conn:
+        _seed_base(conn)
+        for i in range(5):
+            _insert_decision(conn, f"d-{i}", "hold", f"2026-01-01T00:0{i}:00Z")
+
+    # Six total cases: 5 decisions + the seeded forecast `fc`.
+    first = _report(home, {"as_of": "2026-01-20T00:00:00Z", "limit": 2})
+    assert first["summary"]["metrics"]["case_count"] == 6  # full-set total, not page
+    assert first["summary"]["metrics"]["returned_count"] == 2
+    assert len(first["lifecycle_cases"]) == 2
+    assert len(first["groups"]) == 2
+    assert first["truncated"] is True
+    assert first["next_cursor"]
+
+    # groups no longer echoes the full per-group filter (the double-serialization
+    # bloat hv19 flagged); the normalized filter lives once in summary.filter.
+    assert "filter" not in first["groups"][0]
+    assert "filter" in first["summary"]
+
+    # Walk the cursor: each page is disjoint and stable; the union covers all.
+    seen = [c["case_id"] for c in first["lifecycle_cases"]]
+    cursor = first["next_cursor"]
+    pages = 1
+    while cursor:
+        nxt = _report(home, {"as_of": "2026-01-20T00:00:00Z", "limit": 2, "cursor": cursor})
+        page_ids = [c["case_id"] for c in nxt["lifecycle_cases"]]
+        assert not set(page_ids) & set(seen)  # no overlap across pages
+        seen.extend(page_ids)
+        cursor = nxt["next_cursor"]
+        pages += 1
+        assert pages <= 6  # guard against cursor non-advance
+    assert len(seen) == 6
+    # The cursor walk reproduces the report's own stable emission order exactly
+    # (a single large-limit pull returns the same sequence the pages concatenate
+    # to), i.e. paging is order-stable and lossless.
+    whole = _report(home, {"as_of": "2026-01-20T00:00:00Z", "limit": 500})
+    assert [c["case_id"] for c in whole["lifecycle_cases"]] == seen
+
+
+def test_report_lifecycle_rejects_invalid_limit_and_cursor(home):
+    with _conn(home) as conn:
+        _seed_base(conn)
+
+    bad_limit = dispatch("report.lifecycle", {"home": str(home), "limit": 0}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
+    assert bad_limit["ok"] is False
+    assert "limit" in bad_limit["error"]["message"]
+
+    bad_cursor = dispatch("report.lifecycle", {"home": str(home), "cursor": "!!not-base64!!"}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
+    assert bad_cursor["ok"] is False
+
+
 def test_report_lifecycle_status_alias_and_schema(home):
     with _conn(home) as conn:
         _seed_base(conn)
@@ -287,7 +342,7 @@ def test_report_lifecycle_status_alias_and_schema(home):
     schema_env = dispatch("tool.schema", {"tool": "report.lifecycle"}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
     assert schema_env["ok"], schema_env
     props = schema_env["data"]["json_schema"]["properties"]
-    for key in ("filter", "states", "status", "as_of", "stale_threshold_days"):
+    for key in ("filter", "states", "status", "as_of", "stale_threshold_days", "limit", "cursor"):
         assert key in props
 
 

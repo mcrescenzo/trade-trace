@@ -15,6 +15,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, get_args
 
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
+from trade_trace.reporting.pagination import (
+    MAX_LIMIT,
+    PaginationError,
+    _decode_cursor,
+    _encode_cursor,
+)
 from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 from trade_trace.reports.watchlist import DEFAULT_STALE_THRESHOLD_DAYS
@@ -164,11 +170,32 @@ def report_lifecycle(
     states: list[str] | None = None,
     as_of: str | None = None,
     stale_threshold_days: int = DEFAULT_STALE_THRESHOLD_DAYS,
+    limit: int | None = None,
+    cursor: str | None = None,
 ) -> dict[str, Any]:
-    """Return public derived lifecycle gaps/cases without persisting state."""
+    """Return public derived lifecycle gaps/cases without persisting state.
+
+    The case list is paginated (``limit`` + opaque ``cursor`` keyset, mirroring
+    ``report.open_positions``). Summary metrics (``case_count``, ``state_counts``,
+    ``due_count``, ``material_non_action_count``) are computed over the FULL
+    filtered set so a bot sees true backlog totals, while ``groups`` and
+    ``lifecycle_cases`` carry only the current page; ``truncated``/``next_cursor``
+    signal more pages. Previously the whole filtered set was returned with each
+    case serialized twice (once per ``groups`` entry with an echoed per-group
+    filter, again in full under ``lifecycle_cases``), so a populated journal
+    overflowed the MCP token cap with no way to narrow (trade-trace-hv19).
+
+    ``limit=None`` disables paging and returns the full filtered set (the
+    in-process bootstrap composer relies on this to feed active-ideas off the
+    whole case list); the MCP/CLI surface supplies a default page size so the
+    transport-facing path is always bounded.
+    """
 
     if not isinstance(stale_threshold_days, int) or stale_threshold_days < 0:
         raise ValueError("stale_threshold_days must be a non-negative integer")
+    if limit is not None and (not isinstance(limit, int) or limit < 1):
+        raise ValueError("limit must be a positive integer")
+    page_limit = min(int(limit), MAX_LIMIT) if limit is not None else None
     allowed_states = set(get_args(LifecycleState))
     state_filter = sorted(set(states or []))
     unknown = [state for state in state_filter if state not in allowed_states]
@@ -192,9 +219,38 @@ def report_lifecycle(
     ]
     cases = [case for case in cases if _case_matches_filter(case, rf, state_filter)]
 
+    # Aggregate metrics are computed over the full filtered set (true totals),
+    # not the page, so backlog counts stay honest under pagination.
+    total_count = len(cases)
     state_counts = {state: 0 for state in sorted(allowed_states)}
     for case in cases:
         state_counts[case["state"]] += 1
+    due_count = sum(1 for case in cases if _review_overdue(case.get("due_at"), as_of_dt))
+    material_count = sum(1 for case in cases if case.get("material_non_action") is not None)
+
+    # Keyset page over the stable (created_at, case_id) sort that
+    # derive_lifecycle_cases already guarantees. The cursor encodes that full
+    # composite key (not case_id alone), so paging follows the same order the
+    # rows are emitted in and the anchor does not drift between requests.
+    def _anchor(case: dict[str, Any]) -> tuple[str, str]:
+        return (case["timestamps"].get("created_at") or "", case["case_id"])
+
+    if cursor is not None:
+        after = _decode_cursor(cursor)
+        if not (isinstance(after, list) and len(after) == 2 and all(isinstance(part, str) for part in after)):
+            raise PaginationError("lifecycle cursor payload must be [created_at, case_id]")
+        after_key = (after[0], after[1])
+        start = next((i for i, case in enumerate(cases) if _anchor(case) > after_key), len(cases))
+    else:
+        start = 0
+    if page_limit is None:
+        page = cases[start:]
+        next_cursor = None
+    else:
+        page = cases[start : start + page_limit]
+        has_more = start + page_limit < total_count
+        next_cursor = _encode_cursor(list(_anchor(page[-1]))) if (page and has_more) else None
+
     groups = [
         {
             "key": case["case_id"],
@@ -206,31 +262,35 @@ def report_lifecycle(
                 "created_at": case["timestamps"].get("created_at"),
                 "material_non_action": case.get("material_non_action") is not None,
             },
-            "filter": {**filter_view, "states": state_filter},
             "record_ids": case["record_ids"],
             "examples": [{"kind": "lifecycle_case", "id": case["case_id"], "summary": ",".join(case["reason_codes"])}],
             "sample_size": 1,
             "sample_warning": None,
             "truncated": False,
         }
-        for case in cases
+        for case in page
     ]
     return standard_report_result(
         summary={
-            "sample_size": len(cases),
+            "sample_size": total_count,
+            "returned_count": len(page),
             "sample_warning": None,
             "filter": {**filter_view, "states": state_filter},
             "metrics": {
-                "case_count": len(cases),
+                "case_count": total_count,
+                "returned_count": len(page),
                 "state_counts": state_counts,
-                "due_count": sum(1 for case in cases if _review_overdue(case.get("due_at"), as_of_dt)),
-                "material_non_action_count": sum(1 for case in cases if case.get("material_non_action") is not None),
+                "due_count": due_count,
+                "material_non_action_count": material_count,
                 "stale_threshold_days": stale_threshold_days,
+                "limit": page_limit,
             },
             "caveats": [],
         },
         groups=groups,
-        extra={"as_of": resolved_as_of, "lifecycle_cases": cases},
+        truncated=next_cursor is not None,
+        next_cursor=next_cursor,
+        extra={"as_of": resolved_as_of, "lifecycle_cases": page},
     )
 
 

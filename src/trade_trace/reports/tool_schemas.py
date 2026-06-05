@@ -382,8 +382,26 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "status": {"type": "string"},
             "as_of": {"type": "string", "format": "date-time"},
             "stale_threshold_days": {"type": "integer", "minimum": 0},
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "Maximum lifecycle cases per page; defaults to the report page "
+                    "default. When more cases match, truncated=true and next_cursor "
+                    "pages the next slice (mirrors report.open_positions)."
+                ),
+            },
+            "cursor": {
+                "type": "string",
+                "description": "Opaque pagination cursor from a previous report.lifecycle response.",
+            },
         },
-        description="Read-only derived lifecycle cases; filter by ReportFilter plus states/status, as_of, and stale threshold.",
+        description=(
+            "Read-only derived lifecycle cases; filter by ReportFilter plus states/status, "
+            "as_of, and stale threshold. Paginated via limit + cursor + top-level "
+            "truncated + next_cursor; summary.metrics carry full-set totals while groups/"
+            "lifecycle_cases carry the current page."
+        ),
     ),
     "report.recall_receipts": _schema(
         {
