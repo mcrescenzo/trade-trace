@@ -520,6 +520,30 @@ def test_memory_link_schema_advertises_endpoint_and_edge_enums():
     assert properties["edge_type"]["enum"] == list(EDGE_TYPES)
 
 
+def test_outcome_add_schema_advertises_status_enum_and_confidence():
+    """outcome.add (and its resolve.record / resolution.add aliases) validates
+    status against _OUTCOME_STATUSES at runtime with a self-documenting error,
+    but the schema auto-derived from example_minimal exposed status as a bare
+    string and omitted the auto-score-gating confidence field from properties
+    (AX-054, the AX-051 / AX-030 class). The advertised enum must match the
+    runtime allowlist and confidence must be discoverable."""
+    from trade_trace.tools.ledger.outcome import _OUTCOME_STATUSES
+
+    for tool_name in ("outcome.add", "resolve.record", "resolution.add"):
+        schema = _schema_for(tool_name)
+        properties = schema.get("properties", {})
+        assert properties["status"]["enum"] == sorted(_OUTCOME_STATUSES), (
+            f"{tool_name} must advertise the status enum matching the runtime allowlist"
+        )
+        assert "confidence" in properties, (
+            f"{tool_name} must advertise the auto-score-gating confidence field"
+        )
+        for runtime_required in ("instrument_id", "resolved_at", "outcome_label", "status", "idempotency_key"):
+            assert runtime_required in schema.get("required", []), (
+                f"{tool_name} runtime requires {runtime_required!r}"
+            )
+
+
 def test_playbook_read_and_write_schemas_advertise_runtime_optional_fields():
     assert "limit" in _schema_for("playbook.list")["properties"]
     assert _schema_for("playbook.show")["required"] == ["playbook_id"]

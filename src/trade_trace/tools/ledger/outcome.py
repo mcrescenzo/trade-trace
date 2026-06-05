@@ -46,6 +46,37 @@ _OUTCOME_STATUSES = {
     "disputed", "ambiguous", "void", "cancelled",
     "imported_redeemed", "imported_settled",
 }
+
+# Advertise the status enum (and the auto-score-gating confidence field) in the
+# MCP tool.schema. Without an explicit schema the registration auto-derives from
+# example_minimal, exposing status as a bare string even though the runtime
+# rejects out-of-enum values with a self-documenting error — the AX-051 class
+# (cf. memory.link). Also surfaces confidence in properties, not just
+# example_rich, closing the AX-030 discoverability residual. AX-054.
+_OUTCOME_ADD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "instrument_id": {"type": "string"},
+        "resolved_at": {"type": "string"},
+        "outcome_label": {"type": "string", "description": "Resolved outcome label; a binary label (yes/no/true/false) is required for a resolved_final outcome to auto-score a pending binary forecast."},
+        "status": {"type": "string", "enum": sorted(_OUTCOME_STATUSES), "description": "Resolution status; must be one of the documented enum. Only resolved_final auto-scores pending forecasts."},
+        "outcome_value": {"type": "number"},
+        "confidence": {"type": "number", "description": "Caller's certainty in the outcome (0..1). REQUIRED >= 0.9 (with a binary outcome_label and status=resolved_final) for a resolved outcome to auto-score a pending binary forecast; omit it and the write succeeds but scores nothing (see auto_score_skipped_reason on the result)."},
+        "settlement_price": {"type": "number"},
+        "resolution_source_url": {"type": "string"},
+        "source": {"type": "string"},
+        "metadata_json": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "run_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["instrument_id", "resolved_at", "outcome_label", "status", "idempotency_key"],
+}
+
+
 def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     instrument_id = require(args, "instrument_id")
     resolved_at = normalize_timestamp(args, "resolved_at", required=True)
@@ -211,11 +242,13 @@ def _resolve_pending(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 def register_outcome_tools(registry: ToolRegistry) -> None:
     registry.register(
         "outcome.add", _outcome_add, is_write=True,
+        json_schema=_OUTCOME_ADD_SCHEMA,
         **examples_for("outcome.add"),
     )
     # resolve.record is an alias for outcome.add (PRD §4.4).
     registry.register(
         "resolve.record", _outcome_add, is_write=True,
+        json_schema=_OUTCOME_ADD_SCHEMA,
         **examples_for("outcome.add"),
     )
     registry.register("resolve.pending", _resolve_pending)
