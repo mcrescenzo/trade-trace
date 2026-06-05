@@ -117,6 +117,12 @@ def test_interpretation_is_idempotent_one_per_forecast(home: Path):
     second = _interpret(home, fc, interpreted_resolution_source="manual_review")
     assert first["data"]["id"] == second["data"]["id"]
     assert second["data"]["interpreted_resolution_source"] == "oracle_feed"  # first wins
+    # AX-052: the one-per-forecast collision must be self-documenting, not a
+    # silent no-op false-success. A divergent revision is flagged + told plainly
+    # that the supplied values were not applied.
+    assert second["data"]["already_interpreted"] is True
+    assert "already_interpreted" not in first["data"]
+    assert "NOT applied" in second["data"]["caveat"]
 
 
 def test_interpretation_is_append_only(home: Path):
