@@ -52,6 +52,15 @@ _ALLOWED_BY_KIND: dict[WorkQueueKind, list[str]] = {
         "inspect_forecast_and_resolution_rule",
         "review_caller_supplied_outcome_evidence",
         "record_outcome_or_resolution_when_caller_supplies_evidence",
+        # outcome.fetch ingests on-chain resolution and needs
+        # network.polymarket.polygon_rpc_url (fails closed CONFIG_REQUIRED when
+        # unset). With no RPC, the no-RPC evidence route is the Gamma read path:
+        # snapshot.fetch / market.refresh carry winningOutcome/outcomePrices
+        # without an RPC endpoint, then resolution.add records it. Signposting
+        # this here keeps an automated resolution feeder from dead-ending so
+        # forecasts can progress toward the calibration N>=20 floor
+        # (bead trade-trace-isqo).
+        "fetch_gamma_resolution_evidence_via_snapshot_fetch_when_no_polygon_rpc",
         "document_missing_external_input",
     ],
     "review_due_watch": [

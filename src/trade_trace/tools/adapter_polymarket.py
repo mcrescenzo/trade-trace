@@ -35,6 +35,38 @@ def _tool_error(exc: AdapterError) -> ToolError:
     return ToolError(exc.code, exc.message, details=exc.details)
 
 
+def _outcome_fetch_error(exc: AdapterError) -> ToolError:
+    """Surface a no-RPC resolution-evidence signpost on outcome.fetch failures.
+
+    outcome.fetch ingests on-chain resolution and so requires
+    network.polymarket.polygon_rpc_url; when that is unset it fails closed with
+    CONFIG_REQUIRED. The Gamma read path (snapshot.fetch) does NOT need an RPC
+    endpoint and already carries Gamma's resolution-evidence fields
+    (winningOutcome / outcomePrices, surfaced into markets.venue_metadata_json
+    by market.bind/market.refresh). Without this nudge an automated resolution
+    feeder dead-ends here and leaves forecasts perpetually pending, never
+    reaching the calibration N>=20 floor (bead trade-trace-isqo). We do NOT
+    auto-fall back to the Gamma value (that would weaken on-chain resolution
+    finality, a resolution-contract change); we only point the caller to the
+    documented no-RPC evidence route. The point-of-failure hint mirrors the
+    market.search search_hint pattern.
+    """
+
+    if exc.code is ErrorCode.CONFIG_REQUIRED and (exc.details or {}).get("config_key") == "network.polymarket.polygon_rpc_url":
+        details = dict(exc.details or {})
+        details["no_rpc_resolution_evidence_route"] = "snapshot.fetch"
+        details["hint"] = (
+            "outcome.fetch ingests on-chain resolution and needs "
+            "network.polymarket.polygon_rpc_url. With no RPC configured, use the "
+            "Gamma read path instead: snapshot.fetch (or market.refresh) carries "
+            "Gamma resolution evidence (winningOutcome / outcomePrices) without an "
+            "RPC endpoint, then record it via resolution.add. resolution.add is "
+            "always available regardless of adapter config."
+        )
+        return ToolError(exc.code, exc.message, details=details)
+    return _tool_error(exc)
+
+
 def _json(value: Any) -> str:
     return json.dumps(value if value is not None else {}, sort_keys=True, separators=(",", ":"))
 
@@ -687,7 +719,7 @@ def _outcome_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             tx_hash = out.get("tx_hash") or meta.get("resolution_tx")
             rpc = client.polygon_rpc("eth_getTransactionReceipt", [tx_hash]) if tx_hash else client.check_resolution_available()
         except AdapterError as exc:
-            raise _tool_error(exc) from exc
+            raise _outcome_fetch_error(exc) from exc
         status = out.get("status") or ("void" if meta.get("voided") else "resolved_final")
         label = out.get("label") or meta.get("winningOutcome") or meta.get("winning_outcome") or "unknown"
     with db_for_args(args) as db:
