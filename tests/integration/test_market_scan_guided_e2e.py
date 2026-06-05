@@ -2,10 +2,22 @@ from __future__ import annotations
 
 import socket
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from trade_trace.core import dispatch
+
+# Recent, run-relative timestamps so the snapshot/source never age past the
+# journal.bundle.status stale_source_days (default 14d) threshold that
+# market.scan.promote's final_check applies with a wall clock. Hardcoded past
+# dates made this e2e a time-bomb: once the fixed source captured_at crossed
+# 14 days old, source_attached flipped to "weak" and the "== ok" assertions
+# failed on a clock tick rather than a code change. Computed once at import so
+# it is stable across the dry_run + double-promote replay within a run.
+_NOW = datetime.now(UTC)
+_SNAPSHOT_AT = (_NOW - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+_SOURCE_AT = (_NOW - timedelta(minutes=55)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _bundle(action: str, key: str) -> dict[str, Any]:
@@ -33,7 +45,7 @@ def _bundle(action: str, key: str) -> dict[str, Any]:
             "resolution_criteria_text": "Caller-supplied resolution criteria; no fetching required.",
         },
         "snapshot": {
-            "captured_at": "2026-05-21T12:00:00Z",
+            "captured_at": _SNAPSHOT_AT,
             "source": "manual",
             "source_url": f"https://example.invalid/market/{action}",
             "price": 0.52,
@@ -48,7 +60,7 @@ def _bundle(action: str, key: str) -> dict[str, Any]:
                 "uri": f"https://example.invalid/research/{action}",
                 "title": f"Caller supplied evidence for {action}",
                 "summary": "Stored as provenance only; tests forbid network access.",
-                "captured_at": "2026-05-21T12:05:00Z",
+                "captured_at": _SOURCE_AT,
             }
         ],
         "thesis": {
