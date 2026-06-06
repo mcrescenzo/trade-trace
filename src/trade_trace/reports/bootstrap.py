@@ -186,7 +186,11 @@ def compose_bootstrap_packet(
     # connection is already in a transaction here.
     with read_snapshot(conn):
         source_tools: list[str] = []
-        work = report_work_queue(conn, raw_filter=report_filter, as_of=resolved_as_of)
+        # limit=None: the composer derives obligations off the WHOLE queue, so
+        # it must not be paginated here (trade-trace-1y9s); the transport-facing
+        # report.work_queue / agent.next_actions surfaces default to a bounded
+        # page size instead.
+        work = report_work_queue(conn, raw_filter=report_filter, as_of=resolved_as_of, limit=None)
         source_tools.append("report.work_queue")
         lifecycle = report_lifecycle(conn, raw_filter=report_filter, as_of=resolved_as_of)
         source_tools.append("report.lifecycle")
@@ -208,7 +212,8 @@ def compose_bootstrap_packet(
     active_ideas = _active_ideas(lifecycle)
     strategy_context = _strategy_context(strategy)
     memory_context = _memory_context(recall, memory, include_body=effective_budgets["include_memory_body"])
-    suggested = _suggested_calls(obligations)
+    cold_start = _is_cold_start(obligations, lifecycle, strategy_context, memory_context)
+    suggested = _suggested_calls(obligations, cold_start=cold_start)
     caveats = _caveats(broadening, work, strategy, recall, memory, forecast)
 
     sections_data: dict[str, Any] = {
@@ -437,7 +442,38 @@ def _memory_context(recall: dict[str, Any], memory: dict[str, Any], *, include_b
     return {"included": True, "recall_queries": [{"source": "report.recall_receipts", "telemetry_persisted": False}], "memory_nodes": nodes, "recall_receipts": recall.get("recall_receipts", []), "memory_diagnostics": memory.get("memory_diagnostics", []), "omitted_memory": {}, "memory_caveats": sorted(set(recall.get("summary", {}).get("caveat_codes", []) + memory.get("summary", {}).get("caveat_codes", []) + (["memory_body_omitted"] if not include_body else [])))}
 
 
-def _suggested_calls(obligations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _is_cold_start(
+    obligations: list[dict[str, Any]],
+    lifecycle: dict[str, Any],
+    strategy_context: dict[str, Any],
+    memory_context: dict[str, Any],
+) -> bool:
+    """A journal is a *cold start* when it holds nothing to orient on: no
+    derived process obligations, no lifecycle cases (forecasts, positions,
+    watches, reviews), no strategies, and no recalled memory nodes. On such a
+    truly empty journal the continuity/read suggested_process_calls all return
+    empty, so there is no discoverable forward action; bootstrap surfaces a
+    first-run breadcrumb pointing at the entry sequence instead (trade-trace-xqjv).
+
+    Emptiness is read off the already-composed sub-reports — never a fresh fetch
+    or DB probe — so it stays inside the read-only/no-fetch contract. The
+    lifecycle total is taken from ``summary.metrics.case_count`` (the WHOLE
+    filtered set), not the page, so a paginated-but-non-empty journal is never
+    misread as cold."""
+
+    if obligations:
+        return False
+    lifecycle_total = lifecycle.get("summary", {}).get("metrics", {}).get("case_count", 0)
+    if lifecycle_total:
+        return False
+    if strategy_context.get("active_strategies") or strategy_context.get("relevant_archived_strategies"):
+        return False
+    if memory_context.get("memory_nodes"):
+        return False
+    return True
+
+
+def _suggested_calls(obligations: list[dict[str, Any]], *, cold_start: bool = False) -> list[dict[str, Any]]:
     base = [
         ("report.work_queue", "Inspect derived local process obligations."),
         ("agent.next_actions", "Inspect the safe alias projection of local process obligations."),
@@ -447,7 +483,44 @@ def _suggested_calls(obligations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     calls = [{"call_id": f"call_{i:03d}", "tool": tool, "reason": reason, "preconditions": ["local_read_only"], "args_template": {}, "source_refs": [{"kind": "report", "id": tool}], "caveat_codes": ["not_trade_advice", "not_executed", "no_fetch_performed"]} for i, (tool, reason) in enumerate(base, 1)]
     for i, obl in enumerate(obligations[:3], len(calls) + 1):
         calls.append({"call_id": f"call_{i:03d}", "tool": "decision.add", "reason": "Record a caller-supplied review/non-action decision if the caller has evidence.", "preconditions": ["caller_supplied_evidence"], "args_template": {"type": "review"}, "source_refs": obl["source_refs"], "caveat_codes": ["requires_caller_supplied_data", "not_trade_advice", "not_executed"]})
+    if cold_start:
+        # First-run onboarding breadcrumb: on a truly empty journal every
+        # read/continuity call above returns empty, so a cold agent has no
+        # discoverable forward action. Point it at the entry sequence
+        # (market.search -> market.bind -> snapshot.fetch -> forecast.add) so
+        # the loop can BEGIN (trade-trace-xqjv). This is a process-call HINT,
+        # not advice or a fetch: the tools are listed (not invoked), no market
+        # is named or ranked, and the caveat codes mark it as such — preserving
+        # the no-market-data-fetch / no-financial-advice contract. Distinct
+        # from trade-trace-663l, which added the market.search surface itself.
+        calls.extend(_first_run_onboarding_calls(len(calls) + 1))
     return calls
+
+
+# Ordered entry sequence a brand-new agent follows to begin the forecasting
+# loop. market.search/bind/snapshot.fetch are listed as the discovery + binding
+# steps; forecast.add is the first journal write. None are invoked here.
+_FIRST_RUN_ENTRY_SEQUENCE: Final[tuple[tuple[str, str, list[str], dict[str, Any]], ...]] = (
+    ("market.search", "First-run entry point: discover bindable live binary markets (read-only adapter scan). No market is named, ranked, or recommended here.", ["local_read_only", "adapter_enabled"], {}),
+    ("market.bind", "Bind a caller-chosen discovered market into the local journal so it can be referenced.", ["caller_selected_market"], {"external_id": "<from market.search>"}),
+    ("snapshot.fetch", "Record a caller-triggered local price/liquidity snapshot for the bound market.", ["bound_market", "adapter_enabled"], {"market_id": "<from market.bind>"}),
+    ("forecast.add", "Record the agent's own first forecast (probability + resolution rule) for the bound market's thesis; inspect tool.schema for the required fields.", ["caller_supplied_thesis_and_probability"], {}),
+)
+
+
+def _first_run_onboarding_calls(start_index: int) -> list[dict[str, Any]]:
+    return [
+        {
+            "call_id": f"call_{start_index + offset:03d}",
+            "tool": tool,
+            "reason": reason,
+            "preconditions": preconditions,
+            "args_template": args_template,
+            "source_refs": [{"kind": "doc", "id": "docs/AGENT_GUIDE.md"}],
+            "caveat_codes": ["not_trade_advice", "not_executed", "no_fetch_performed"],
+        }
+        for offset, (tool, reason, preconditions, args_template) in enumerate(_FIRST_RUN_ENTRY_SEQUENCE)
+    ]
 
 
 def _caveats(broadening: list[str], *reports: dict[str, Any]) -> dict[str, Any]:

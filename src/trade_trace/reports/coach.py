@@ -214,13 +214,21 @@ def report_coach(
                 )
             continue
         if diagnostic_key == "abstention_coverage":
-            share = diag["abstention_share_pct"]
-            if share is not None and diag["count"] > 0:
+            # Two pass-surfaces (trade-trace-s7nn): first-class
+            # abstention.record rows AND forecast-less decision.add(type=skip)
+            # rows. Report the de-duplicated union so a bot that diligently
+            # records skips is not shown 0% coverage.
+            skip_count = diag.get("skip_coverage", {}).get("count", 0)
+            considered = diag.get("considered_passes_dedup", diag["count"])
+            considered_total = diag.get("considered_total_dedup", diag["total"])
+            share = diag.get("considered_share_pct", diag["abstention_share_pct"])
+            if share is not None and considered > 0:
                 callouts.append(
-                    f"abstention_coverage: {diag['count']} of {diag['total']} "
-                    f"considered markets were recorded as no-bet ({share:.1f}%) "
-                    "— calibration excludes these by construction; review for "
-                    "survivorship context."
+                    f"abstention_coverage: {considered} of {considered_total} "
+                    f"considered markets were recorded as no-bet "
+                    f"({diag['count']} abstention.record + {skip_count} "
+                    f"forecast-less skip; {share:.1f}%) — calibration excludes "
+                    "these by construction; review for survivorship context."
                 )
             continue
         rate = diag["rate_pct"]

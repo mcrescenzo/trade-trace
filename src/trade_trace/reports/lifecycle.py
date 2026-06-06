@@ -446,12 +446,27 @@ def _derive_forecast_case(
     elif _review_overdue(forecast["resolution_at"], as_of_dt):
         state = "pending_review"
         reason_codes.append("resolution_at_due_without_score")
-    elif not forecast["resolution_at"]:
+    elif not forecast["resolution_at"] and not _market_demonstrably_live(
+        conn, forecast["instrument_id"], as_of_dt
+    ):
         # An open forecast with no resolution_at can never become due by clock,
         # so it would otherwise stay silently "open" and never surface in
         # report.work_queue as a resolve obligation (trade-trace-ptyi). Treat the
         # missing horizon itself as a review obligation so the agent loop is
         # prompted to record an outcome or set a resolution horizon.
+        #
+        # BUT: when the linked market is demonstrably still live (latest market
+        # row has state='open' AND a close_at strictly in the future), forcing
+        # pending_review here produced a false 'resolve_due_forecast' obligation
+        # at 'due' urgency on a long-dated open market — a bot would go looking
+        # for an outcome that does not exist yet (trade-trace-fe2f, the inverse
+        # over-correction of trade-trace-ptyi). In that case we keep the forecast
+        # 'open' below: it still surfaces in bootstrap's unresolved_forecasts
+        # bucket, just without the spurious go-fetch-an-outcome urgency. The
+        # resolve obligation now gates on an actually-resolvable / horizon-absent
+        # market, not on resolution_at IS NULL alone. Forecasts with no linked
+        # market row (manual instruments, unbound markets) still surface, so the
+        # trade-trace-ptyi visibility guarantee holds.
         state = "pending_review"
         reason_codes.append("resolution_at_missing")
     else:
@@ -578,6 +593,38 @@ def _outcome_id_for_forecast(conn: sqlite3.Connection, forecast: dict[str, Any])
         (forecast["instrument_id"],),
     ).fetchone()
     return row[0] if row else None
+
+
+def _market_demonstrably_live(
+    conn: sqlite3.Connection, instrument_id: str | None, as_of_dt: datetime
+) -> bool:
+    """True only when a linked market row proves the market is still trading.
+
+    ``markets.id`` is the instrument_id (snapshots/decisions/outcomes all key on
+    ``instrument_id = markets.id``). A market is treated as demonstrably live
+    when its persisted ``state`` is ``open`` AND it carries a ``close_at`` that
+    is strictly in the future relative to ``as_of``. Any other shape — no market
+    row, a NULL/past ``close_at``, or a non-``open`` state such as
+    ``resolving``/``resolved``/``voided``/``ambiguous``/``closed_for_trading`` —
+    returns False so the missing-resolution_at review obligation is preserved
+    (trade-trace-ptyi). Only the live-open case suppresses it (trade-trace-fe2f).
+    """
+
+    if not instrument_id:
+        return False
+    row = conn.execute(
+        "SELECT state, close_at FROM markets WHERE id = ?",
+        (instrument_id,),
+    ).fetchone()
+    if row is None:
+        return False
+    state, close_at = row
+    if state != "open" or not close_at:
+        return False
+    try:
+        return _parse_ts(close_at) > as_of_dt
+    except (ValueError, TypeError):
+        return False
 
 
 def _has_later_resolved_decision(conn: sqlite3.Connection, decision: dict[str, Any]) -> bool:

@@ -18,6 +18,8 @@ For a fresh/stateless run, start with the local bootstrap packet before creating
 4. Before any new write, make targeted local read calls such as `report.lifecycle`, `report.work_queue`, `report.recall_receipts`, `review.bundle`, or another specific report/drilldown suggested by the packet.
 5. Only then write new thesis/decision/outcome/reflection rows, and only when supported by local evidence or caller-supplied evidence that you can cite with source IDs.
 
+On a **truly empty journal** (zero forecasts, positions, and obligations — e.g. the very first run after `journal init`), the continuity/read `suggested_process_calls` (`report.work_queue`, `agent.next_actions`, `report.recall_receipts`, `strategy.show`) all return empty, so there is nothing yet to orient on. In that cold-start case only, `report.bootstrap` additionally surfaces a first-run onboarding breadcrumb in `suggested_process_calls` pointing at the entry sequence that *begins* the loop: `market.search` → `market.bind` → `snapshot.fetch` → `forecast.add`. These are process-call hints, not advice or fetches — `market.search` is read-only adapter discovery (it names/ranks no market), nothing is invoked for you, and the `no_market_data_fetch` / `no_financial_advice` hard constraints are unchanged. As soon as the journal has any obligation, position, forecast, strategy, or recalled memory, the breadcrumb disappears and the packet is unchanged. Acting on the breadcrumb still requires caller-supplied thesis/probability when you reach `forecast.add`.
+
 Safe CLI examples:
 
 ```bash

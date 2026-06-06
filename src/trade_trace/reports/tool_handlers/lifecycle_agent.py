@@ -168,6 +168,21 @@ def _work_queue_common(args: dict[str, Any], ctx: ToolContext, *, surface: str) 
     as_of_raw = args.get("as_of")
     if as_of_raw is not None and not isinstance(as_of_raw, str):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "as_of must be an ISO timestamp string", details={"field": "as_of", "value": as_of_raw})
+    limit = args.get("limit")
+    if limit is not None and (not isinstance(limit, int) or limit < 1):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "limit must be a positive integer", details={"field": "limit", "value": limit})
+    cursor = args.get("cursor")
+    if cursor is not None and not isinstance(cursor, str):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "cursor must be a string", details={"field": "cursor", "value": cursor})
+    # The transport-facing surface is always bounded: absent an explicit limit,
+    # default to a small page so report.work_queue / agent.next_actions can never
+    # overflow the MCP token cap on a populated journal. Obligations are heavy
+    # rows, so the generic report DEFAULT_LIMIT (50) is still too large here; use
+    # the work-queue-specific transport default (trade-trace-1y9s).
+    if limit is None:
+        from trade_trace.reports.work_queue import WORK_QUEUE_TRANSPORT_DEFAULT_LIMIT
+
+        limit = WORK_QUEUE_TRANSPORT_DEFAULT_LIMIT
     try:
         home = resolve_home(args.get("home"))
         path = db_path(home)
@@ -176,7 +191,7 @@ def _work_queue_common(args: dict[str, Any], ctx: ToolContext, *, surface: str) 
         connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
         try:
             fn = agent_next_actions if surface == "agent.next_actions" else report_work_queue
-            data = fn(connection, raw_filter=args.get("filter"), as_of=as_of_raw, stale_threshold_days=stale_threshold_days, kinds=kinds)
+            data = fn(connection, raw_filter=args.get("filter"), as_of=as_of_raw, stale_threshold_days=stale_threshold_days, kinds=kinds, limit=limit, cursor=cursor)
         finally:
             connection.close()
         _propagate_report_meta(ctx, data)

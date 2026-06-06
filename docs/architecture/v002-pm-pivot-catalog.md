@@ -383,6 +383,57 @@ or interpolate `resolution_rule_text`,
 manual binds honest about provenance and prevents agents from
 inventing market semantics by omission.
 
+### 3.4a Polymarket `resolution_source` mechanism mapping
+
+**Decision (bead trade-trace-v5va, design half of AX-067):** the
+Polymarket adapter maps a bound market to the venue-agnostic
+`resolution_source` taxonomy
+(`market_contract` / `oracle_feed` / `manual_review` / `arbitration`,
+enforced by the `markets` CHECK in migration `m012`) by **mechanism**,
+not by a coarse catch-all default.
+
+**Why this changed.** The faithful Polymarket resolution mechanism is
+the **UMA optimistic oracle**: a proposer asserts the outcome by
+reading the market's stated resolution prose, anyone may dispute, and
+disputes escalate to the UMA DVM token-holder vote. There is no
+purely on-chain, deterministic `market_contract` resolution on
+Polymarket — UMA always sits in the loop. The previous adapter
+default (`out.get("resolution_source") or ("arbitration" if disputed
+else "market_contract")`) therefore stamped the **least faithful**
+value on every non-disputed market. Because `report.resolution_misreads`
+scores an agent's `interpreted_resolution_source` against
+`markets.resolution_source`, the report could **never** record
+`aligned` for a defensible `oracle_feed` reading of a UMA-over-Binance
+crypto strike on the live venue, and hard-classified it
+`contract_misread` against a constant default — making the diagnostic
+unreliable exactly where it is used.
+
+**The mapping** (`adapter_polymarket._resolution_source`):
+
+- **Venue-supplied enum value wins.** If
+  `outcome.resolution_source` is already one of the four enum values
+  (the path synthetic fixtures and any future faithful Gamma field
+  take), it is honored verbatim.
+- **`arbitration`** — the market is disputed (the UMA assertion was
+  challenged and escalated to the DVM vote).
+- **`manual_review`** — ambiguous / unresolvable-by-rule outcomes
+  (state `ambiguous`, `raw.ambiguous`, or `outcome.status ==
+  "ambiguous"`).
+- **`oracle_feed`** — every other (non-disputed, non-ambiguous)
+  Polymarket market. This is the faithful default: the UMA optimistic
+  oracle is the resolver.
+
+**Consequence.** An agent that reads an undisputed Polymarket market
+as `oracle_feed` now scores `aligned`. The provenance/caveat surfacing
+shipped in commit 81345c8 (`actual_source_provenance=bound_via`,
+`contract_misread_adapter_bound_count`, the adapter caveat) stays in
+place; it now fires only when an agent's reading genuinely disagrees
+with the faithfully-mapped mechanism (e.g. reading a disputed
+`arbitration` market as `oracle_feed`), where it correctly remains a
+lower-confidence misread. `market_contract` is retained in the enum
+(other venues / explicit venue values may use it) but is no longer the
+Polymarket catch-all.
+
 ### 3.5 Legacy 0.0.1rc3 import behavior
 
 **Decision:** `import.commit` against a 0.0.1rc3-shaped JSONL bundle

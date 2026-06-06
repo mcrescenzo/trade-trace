@@ -170,6 +170,52 @@ Sometimes-present fields:
   transaction rolls back; no events are appended and no projections are
   updated. Per bead trade-trace-268.
 
+### 3.3 Considered-and-passed survivorship surfaces (trade-trace-s7nn)
+
+The calibration integrity control `abstention_coverage`
+(`report.calibration_integrity.diagnostics.abstention_coverage`, also
+embedded in `report.calibration.data.integrity_diagnostics` and
+`report.coach.integrity_diagnostics`) exists to make the calibration
+denominator honest about survivorship bias: it surfaces the markets the
+agent *considered and passed on*, which never enter the Brier/log-score
+numbers.
+
+There are **two** documented ways an agent records "I considered this
+market and passed", and the control counts **both**:
+
+1. **`abstention.record`** → a first-class `abstentions` row. This is the
+   primary survivorship surface. Reported under `count` /
+   `abstention_share_pct` (unchanged shape for existing consumers;
+   `abstention_share_pct = abstentions / (forecasts + abstentions)`).
+2. **`decision.add(type='skip')` with no linked forecast** → the
+   material-non-action path advertised by the decision matrix
+   (`x-material-non-action-taxonomy`). A skip that carries
+   `forecast_id IS NULL` is a considered-and-passed-without-forecasting
+   event that never enters calibration. Reported under the
+   `skip_coverage` sub-block (`{count, sample_ids.decisions, truncated}`).
+
+A skip that **does** link a forecast is intentionally *not* re-counted as
+a pass here: the forecast already carries it into the calibration
+denominator and into `forecast_coverage`. Such skips remain visible via
+`report.forecast_diagnostics.decision_coverage` (which also carries a
+`skip_survivorship_surface` signpost back to `abstention_coverage`).
+
+**No double-counting.** A single market may carry both a skip *and* an
+`abstention.record`. The two lines above stay distinct, and the
+de-duplicated union is reported separately:
+
+- `considered_passes_dedup` — abstentions plus forecast-less-skip
+  *instruments* that are not already represented by an abstention (each
+  passed market counted once).
+- `considered_total_dedup` — `total_forecasts + considered_passes_dedup`.
+- `considered_share_pct` — `considered_passes_dedup /
+  considered_total_dedup`, the honest pass-surface share.
+
+`report.coach` renders the de-duplicated union in its callout, breaking
+out the abstention vs forecast-less-skip contributions, so a bot that
+diligently records skips is never shown 0% coverage when it has in fact
+documented its passes.
+
 ## 4. Error Envelope
 
 ```json

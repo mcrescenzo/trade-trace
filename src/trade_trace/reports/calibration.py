@@ -199,7 +199,22 @@ def report_calibration_advisory(
     (`observed_frequency - mean_probability` in that band), the resulting
     clamped `suggested_probability`, and `suggested_adjustment` — the effective
     post-clamp delta such that probability + suggested_adjustment ==
-    suggested_probability. Deterministic and read-only; no trade advice."""
+    suggested_probability. Deterministic and read-only; no trade advice.
+
+    Contract — `recalibration_reliable` (trade-trace-suit). The field shape of
+    `suggested_probability` is asymmetric across the sub-threshold band: it is
+    `null` when N=0 (no prior forecasts) but a fully-populated, precise-looking
+    low-N artifact when N is in `1..min_sample-1` (alongside a `sample_warning`
+    string). A naive feeder reading only `suggested_probability` cannot
+    distinguish "reliable" from "unreliable" by null-checking that field.
+    `summary.recalibration_reliable` is the unambiguous single gate: it is
+    `True` iff `sample_size >= min_sample`, so both sub-threshold cases collapse
+    to `False`. Autonomous consumers MUST gate on this boolean rather than
+    parsing `sample_warning` free-text or null-checking `suggested_probability`.
+    The transparency fields (`observed_frequency`, `calibration_gap`,
+    `suggested_probability`) remain populated at low N so an operator can still
+    inspect the raw band gap; they are simply not safe to apply when
+    `recalibration_reliable` is `False`."""
 
     if not isinstance(probability, (int, float)) or isinstance(probability, bool):
         raise ValueError("probability must be a number in [0, 1]")
@@ -236,6 +251,16 @@ def report_calibration_advisory(
     calibration_gap: float | None
     suggested_probability: float | None
     sample_warning: str | None
+    # Single explicit gate for autonomous feeders (trade-trace-suit). The
+    # advisory is asymmetric by field shape — `suggested_probability` is null
+    # at N=0 but a confidently-precise low-N artifact at 1..min_sample-1 — so a
+    # consumer cannot tell "trustworthy" from "unreliable" by null-checking that
+    # field. `recalibration_reliable` collapses both sub-threshold cases (N=0 and
+    # 1..min_sample-1) to a single boolean a feeder gates on without parsing the
+    # `sample_warning` free-text. We deliberately keep the transparency fields
+    # populated at low N (option (a) + (c) in the bead) rather than nulling them
+    # (option (b)), so an operator can still inspect the raw band gap.
+    recalibration_reliable = sample_size >= min_sample
     if sample_size == 0:
         observed_frequency = None
         mean_probability = None
@@ -261,6 +286,11 @@ def report_calibration_advisory(
         "probability": probability,
         "band": band,
         "sample_size": sample_size,
+        # True only when sample_size >= min_sample. Autonomous feeders MUST gate
+        # on this single field rather than null-checking suggested_probability or
+        # parsing sample_warning (trade-trace-suit). When False, suggested_*
+        # values (if present) are low-N artifacts and should not be applied.
+        "recalibration_reliable": recalibration_reliable,
         "observed_frequency": (
             round(observed_frequency, 6) if observed_frequency is not None else None
         ),
@@ -304,6 +334,7 @@ def report_calibration_advisory(
             ),
             "metrics": {
                 "sample_size": sample_size,
+                "recalibration_reliable": recalibration_reliable,
                 "observed_frequency": summary["observed_frequency"],
                 "mean_probability": summary["mean_probability"],
                 "calibration_gap": summary["calibration_gap"],

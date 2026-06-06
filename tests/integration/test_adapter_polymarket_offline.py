@@ -222,22 +222,25 @@ def test_snapshot_price_falls_back_to_last_trade_without_two_sided_book():
     assert snap["price"] == pytest.approx(0.33)
 
 
-def test_adapter_market_payload_has_null_rule_text_for_description_only_market():
-    """ax-dogfood AX-037 (root cause): Polymarket carries the resolution prose
-    in `description`, not the `resolutionCriteria`/`rules` keys the adapter
-    reads, so the Gamma-derived `resolution_rule.text` is null — which is why a
-    caller-supplied rule text would otherwise be the only available source."""
+def test_adapter_market_payload_maps_description_to_rule_text():
+    """trade-trace-n33z (was AX-037 root cause): Polymarket carries the
+    resolution prose in `description`, not the `resolutionCriteria`/`rules` keys.
+    The adapter now reads `description` into the structured
+    `resolution_rule.text` so the criterion an agent needs to forecast travels
+    in the structured field instead of being null while the rule sits unreadable
+    in venue_metadata_json.description."""
+    rule_text = "Resolves YES per some venue page; full rule lives here."
     market = _market_payload(
         {
             "id": "m1",
             "question": "Will X happen?",
             "outcomes": '["Yes","No"]',
-            "description": "Resolves YES per some venue page; full rule lives here.",
+            "description": rule_text,
         },
         "m1",
     )
     metadata = json.loads(market["metadata_json"])
-    assert metadata["resolution_rule"]["text"] is None
+    assert metadata["resolution_rule"]["text"] == rule_text
     assert metadata["resolution_rule"]["provenance"] == "polymarket_gamma_payload"
 
 

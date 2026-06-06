@@ -207,6 +207,34 @@ def test_market_search_respects_limit_after_binary_filtering(
     assert [c["external_id"] for c in env.data["candidates"]] == ["0", "1", "2"]
 
 
+def test_market_search_candidate_exposes_resolution_description(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # trade-trace-n33z: a bot must be able to read what YES actually resolves on
+    # at discovery time — e.g. to tell a literal-event market from one whose
+    # price reflects release-timing mechanics — without binding first. Gamma
+    # carries that prose in `description`, so the search candidate echoes it.
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+
+    rule_text = "Resolves YES if the event is officially confirmed before the deadline."
+    market = _binary_market("777", question="Will it?", slug="will-it", close_at="2027-01-01T00:00:00Z")
+    market["description"] = rule_text
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"events": [{"id": "e", "markets": [market]}]},
+    )
+
+    env = mcp_call("market.search", {"home": home, "query": "will", "limit": 20})
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    candidate = env.data["candidates"][0]
+    assert candidate["external_id"] == "777"
+    assert candidate["description"] == rule_text
+
+
 def test_market_search_rejects_out_of_range_limit(tmp_path: Path):
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok

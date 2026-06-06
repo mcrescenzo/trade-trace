@@ -29,6 +29,18 @@ from .common import (
     to_utc_iso8601,
 )
 
+# Transport-facing default page size for report.open_positions and the
+# report.current_exposure packet that composes it. Each open-position row is a
+# HEAVY payload: it embeds the full public_market_identity including TWO
+# 78-digit CLOB outcome_token_ids, so a row serializes ~6-7KB. The documented
+# default (no-limit) call previously paged 100 rows, which overflowed the MCP
+# token cap once positions accumulated (trade-trace-lszg / AX-034 observed
+# ~61KB at N=9 for open_positions and ~69KB for current_exposure). A small
+# default keeps the documented default exposure call bounded under the cap;
+# callers walk the rest via next_cursor (truncated=true signals more rows).
+# Mirrors work_queue.WORK_QUEUE_TRANSPORT_DEFAULT_LIMIT.
+OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT = 5
+
 
 def _report_watchlist(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`report.watchlist` — list open watch decisions. `mode='stale'` opts in
@@ -265,7 +277,7 @@ def _report_open_positions(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
         page = list_positions(
             db.connection,
             cursor=args.get("cursor"),
-            limit=limit if limit is not None else 100,
+            limit=limit if limit is not None else OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT,
             status=("open", "partial"),
             kind=kind,
             instrument_id=args.get("instrument_id"),
@@ -407,6 +419,48 @@ def _report_exposure_anomalies(args: dict[str, Any], ctx: ToolContext) -> dict[s
                 {"instrument_id": row[0], "type": row[1], "side": row[2] or None,
                  "quantity": row[3] or None, "price": row[4] or None, "run_id": row[5] or None,
                  "count": row[6], "first_created_at": row[8], "last_created_at": row[9]},
+            ))
+
+        # FRAGMENTED_SAME_SIDE_EXPOSURE (trade-trace-scx8): the
+        # DUPLICATE_DECISIONS query above only catches EXACT-REPLAY duplicates
+        # (same instrument+type+side+quantity+price+run_id) — by design, since
+        # that is a write/replay smell. It deliberately does NOT catch
+        # fragmentation: paper_enter ALWAYS opens a fresh independent position,
+        # so an autonomous feeder re-entering the same market across runs
+        # accumulates several open same-side rows that differ in quantity/price/
+        # run_id and so land in separate DUPLICATE_DECISIONS buckets. We detect
+        # fragmentation from the PROJECTION (the positions table), not from
+        # decisions, so it is keyed on actual open exposure rather than journal
+        # replay — that also means there is no double-count overlap with
+        # DUPLICATE_DECISIONS: this fires per fragmented instrument+side
+        # (>1 open/partial row), the other fires per exact-replay decision
+        # bucket. Threshold is the natural one (more than one open position on
+        # the same instrument+side); the decision-time `already_exposed`
+        # advisory on decision.add(paper_enter) is the prospective mirror.
+        fragmented = connection.execute(
+            """
+            SELECT instrument_id, COALESCE(side,''), kind,
+                   COUNT(*) AS n, GROUP_CONCAT(id), MIN(opened_at), MAX(updated_at)
+            FROM positions
+            WHERE status IN ('open','partial')
+            GROUP BY instrument_id, COALESCE(side,'')
+            HAVING COUNT(*) > 1
+            ORDER BY instrument_id, COALESCE(side,'')
+            """
+        ).fetchall()
+        for row in fragmented:
+            position_ids = row[4].split(",") if row[4] else []
+            anomalies.append(_exposure_anomaly(
+                "FRAGMENTED_SAME_SIDE_EXPOSURE",
+                "Instrument has more than one open position on the same side "
+                "(fragmented same-side exposure); paper_enter opens an "
+                "independent position each call rather than increasing an "
+                "existing one. Exposure nets in canonical position reports, but "
+                "the fragmentation may be unintended accumulation across runs.",
+                {"positions": position_ids, "instruments": [row[0]]},
+                {"instrument_id": row[0], "side": row[1] or None, "kind": row[2],
+                 "open_position_count": row[3], "first_opened_at": row[5],
+                 "last_updated_at": row[6]},
             ))
 
         open_positions = connection.execute(

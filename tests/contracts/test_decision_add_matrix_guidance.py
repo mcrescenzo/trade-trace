@@ -238,6 +238,113 @@ def test_declared_risk_fields_are_optional_on_entry_types_and_self_documenting(i
     assert "declared_risk_unit" in actual_enter_example
 
 
+def test_paper_enter_returns_already_exposed_advisory_on_fragmenting_same_side(initialized_home):
+    """trade-trace-scx8: paper_enter ALWAYS opens an independent position; it
+    does not increase an existing open paper position on the same
+    instrument+side. The FIRST entry on a fresh market opens cleanly with no
+    advisory. A SECOND same-side entry (the cross-run fragmentation hazard an
+    autonomous feeder hits) still succeeds but now carries an advisory
+    `already_exposed` caveat naming the existing open position, so the bot can
+    choose to skip instead of silently fragmenting exposure."""
+
+    venue = _mcp(initialized_home, "venue.add", {
+        "name": "Already Exposed PM", "kind": "prediction_market",
+    })
+    assert venue.ok is True
+    instrument = _mcp(initialized_home, "instrument.add", {
+        "venue_id": venue.data["id"],
+        "asset_class": "prediction_market",
+        "title": "Already-exposed market",
+    })
+    assert instrument.ok is True
+    thesis = _mcp(initialized_home, "thesis.add", {
+        "instrument_id": instrument.data["id"], "side": "yes", "body": "...",
+    })
+    assert thesis.ok is True
+
+    first = _mcp(initialized_home, "decision.add", {
+        "type": "paper_enter",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "side": "yes",
+        "quantity": 100,
+        "price": 0.54,
+        "idempotency_key": "00000000-0000-4000-8000-000000000301",
+    })
+    assert first.ok is True, first
+    # Fresh market: no prior open position, so no already_exposed advisory.
+    assert not first.data.get("advisories"), first.data
+    first_position_id = first.data["position_id"]
+
+    # A different size + price + (default) run — would NOT trip the exact-replay
+    # DUPLICATE_DECISIONS bucket, but DOES fragment same-side exposure.
+    second = _mcp(initialized_home, "decision.add", {
+        "type": "paper_enter",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "side": "yes",
+        "quantity": 20,
+        "price": 0.37,
+        "idempotency_key": "00000000-0000-4000-8000-000000000302",
+    })
+    assert second.ok is True, second
+    advisories = second.data.get("advisories")
+    assert advisories, second.data
+    advisory = next(a for a in advisories if a["code"] == "already_exposed")
+    assert advisory["severity"] == "advisory"
+    assert advisory["instrument_id"] == instrument.data["id"]
+    assert advisory["side"] == "yes"
+    assert first_position_id in advisory["existing_open_position_ids"]
+    # The advisory must NOT name the just-opened position as "existing".
+    assert second.data["position_id"] not in advisory["existing_open_position_ids"]
+    assert advisory["existing_open_position_count"] == 1
+    assert "already_exposed" in advisory["message"]
+
+
+def test_paper_enter_opposite_side_does_not_trigger_already_exposed(initialized_home):
+    """An open YES position must not raise already_exposed for a NEW NO entry —
+    the advisory is same-instrument+SAME-side only (opposite sides are a
+    deliberate hedge/reversal, not fragmentation)."""
+
+    venue = _mcp(initialized_home, "venue.add", {
+        "name": "Opposite Side PM", "kind": "prediction_market",
+    })
+    assert venue.ok is True
+    instrument = _mcp(initialized_home, "instrument.add", {
+        "venue_id": venue.data["id"],
+        "asset_class": "prediction_market",
+        "title": "Opposite-side market",
+    })
+    assert instrument.ok is True
+    thesis = _mcp(initialized_home, "thesis.add", {
+        "instrument_id": instrument.data["id"], "side": "yes", "body": "...",
+    })
+    assert thesis.ok is True
+
+    yes_entry = _mcp(initialized_home, "decision.add", {
+        "type": "paper_enter",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "side": "yes",
+        "quantity": 100,
+        "price": 0.54,
+        "idempotency_key": "00000000-0000-4000-8000-000000000311",
+    })
+    assert yes_entry.ok is True, yes_entry
+
+    no_entry = _mcp(initialized_home, "decision.add", {
+        "type": "paper_enter",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "side": "no",
+        "quantity": 50,
+        "price": 0.46,
+        "idempotency_key": "00000000-0000-4000-8000-000000000312",
+    })
+    assert no_entry.ok is True, no_entry
+    assert not no_entry.data.get("advisories"), no_entry.data
+
+
 def test_paper_enter_declared_risk_flows_to_position_initial_risk(initialized_home):
     """A paper_enter carrying declared_risk_amount populates the position's
     initial_risk_amount and clears the missing_risk_budget caveat that

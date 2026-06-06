@@ -122,7 +122,18 @@ def _polymarket_identity_metadata(raw: dict[str, Any], external_id: str) -> dict
             "event_title": _first_present(raw, "eventTitle", "event_title", "eventName"),
         },
         "resolution_rule": {
-            "text": _first_present(raw, "resolutionCriteria", "resolution_rule_text", "rules"),
+            # Polymarket's Gamma payload carries the resolution prose in
+            # ``description`` (the consequential multi-clause "resolve per …"
+            # text), not ``resolutionCriteria``/``rules`` — those keys are almost
+            # always absent, so the structured ``resolution_rule.text`` was null
+            # while the criterion sat unreadable in venue_metadata_json.description
+            # (trade-trace-n33z, AX-017). Read ``description`` as the primary
+            # source so the criterion an agent needs to forecast travels in the
+            # structured field, falling back to the legacy keys if a deployment
+            # ever populates them.
+            "text": _first_present(
+                raw, "resolutionCriteria", "resolution_rule_text", "rules", "description"
+            ),
             "source": _first_present(raw, "resolutionSource", "resolutionSourceUrl", "resolution_source_url", "rulesSource"),
             "provenance": "polymarket_gamma_payload",
         },
@@ -224,6 +235,50 @@ def _market_cache_hit(state: str | None, metadata_json: str | None, created_at: 
     return (now_dt - cached_at).total_seconds() < ttl
 
 
+def _resolution_source(raw: dict[str, Any], out: dict[str, Any], state: str) -> str:
+    """Map a Polymarket market to the venue-agnostic resolution_source taxonomy.
+
+    Taxonomy (markets CHECK, m012): market_contract / oracle_feed / manual_review
+    / arbitration. The faithful Polymarket mechanism is the UMA *optimistic
+    oracle*: a proposer asserts the outcome by reading the market's stated
+    resolution prose, anyone can dispute, and disputes escalate to the UMA DVM
+    token-holder vote. There is no purely on-chain, deterministic
+    ``market_contract`` resolution on Polymarket — UMA always sits in the loop —
+    so ``market_contract`` is the *least* faithful default and was wrong as the
+    catch-all (adapter_polymarket.py default pre-trade-trace-v5va).
+
+    Mapping (trade-trace-v5va):
+
+    * ``arbitration`` — the market is disputed: the UMA assertion was challenged
+      and escalated to the DVM vote (genuine arbitration), or the venue supplied
+      an explicit ``arbitration`` source.
+    * ``manual_review`` — ambiguous / unresolvable-by-rule outcomes (the human
+      judgement / market-rules-unclear path), or an explicit venue value.
+    * ``oracle_feed`` — every other (non-disputed, non-ambiguous) Polymarket
+      market: the UMA optimistic oracle is the resolver. This is the faithful
+      default and lets ``report.resolution_misreads`` record ``aligned`` for an
+      agent that reads a UMA-over-Binance crypto strike as ``oracle_feed``.
+
+    A venue-supplied ``out["resolution_source"]`` that is already a valid enum
+    value always wins, so a future Gamma field (or a faithful test fixture)
+    overrides the heuristic. Anything else falls through to the mechanism map.
+    """
+
+    venue = out.get("resolution_source")
+    if isinstance(venue, str) and venue in _RESOLUTION_SOURCE_ENUM:
+        return venue
+    if raw.get("disputed"):
+        return "arbitration"
+    if state == "ambiguous" or raw.get("ambiguous") or out.get("status") == "ambiguous":
+        return "manual_review"
+    return "oracle_feed"
+
+
+_RESOLUTION_SOURCE_ENUM = frozenset(
+    {"market_contract", "oracle_feed", "manual_review", "arbitration"}
+)
+
+
 def _market_payload(raw: dict[str, Any], external_id: str) -> dict[str, Any]:
     raw = _normalize_gamma_market(raw, external_id)
     outcomes = raw.get("outcomes") or raw.get("tokens") or []
@@ -249,7 +304,7 @@ def _market_payload(raw: dict[str, Any], external_id: str) -> dict[str, Any]:
         "source": "polymarket", "external_id": external_id,
         "title": raw.get("title") or raw.get("question"), "question": raw.get("question") or raw.get("title"),
         "url": raw.get("url") or raw.get("marketUrl"), "state": state, "mechanism": mechanism,
-        "resolution_source": out.get("resolution_source") or ("arbitration" if raw.get("disputed") else "market_contract"),
+        "resolution_source": _resolution_source(raw, out, state),
         "ambiguity_kind": out.get("ambiguity_kind"), "bound_via": "adapter",
         "opened_at": raw.get("startDate") or raw.get("opened_at"), "close_at": raw.get("endDate") or raw.get("close_at"),
         "closed_for_trading_at": raw.get("closed_for_trading_at"), "resolving_at": raw.get("resolving_at"),
@@ -286,6 +341,30 @@ def _apply_caller_resolution_rule(payload_meta: dict[str, Any], args: dict[str, 
     rule["provenance"] = "caller_supplied"
     payload_meta["resolution_rule"] = rule
     return payload_meta
+
+
+def _resolution_rule_text_from_metadata(metadata_json: str | None) -> str | None:
+    """Pull the stored ``resolution_rule.text`` out of a market's metadata_json.
+
+    The adapter maps the Gamma ``description`` prose into
+    ``metadata_json.resolution_rule.text`` (and the caller-supplied workaround
+    fills the same field). This reads it back so the compatibility instrument's
+    ``resolution_criteria_text`` carries the venue criterion instead of only the
+    question (trade-trace-n33z). Returns ``None`` for absent/blank text so the
+    caller can fall back to the question.
+    """
+
+    if not metadata_json:
+        return None
+    try:
+        meta = json.loads(metadata_json)
+    except (TypeError, ValueError):
+        return None
+    rule = meta.get("resolution_rule") if isinstance(meta, dict) else None
+    text = rule.get("text") if isinstance(rule, dict) else None
+    if isinstance(text, str) and text.strip():
+        return text.strip()
+    return None
 
 
 def _fetch_market(client: PolymarketClient, external_id: str) -> dict[str, Any]:
@@ -384,6 +463,12 @@ def _ensure_market_instrument(uow: UnitOfWork, market_id: str, *, actor_id: str)
         raise ToolError(ErrorCode.NOT_FOUND, "market_id not found", details={"market_id": market_id})
     source, external_id, title, question, close_at, metadata_json = row
     created_at = now_iso()
+    # Carry the venue resolution prose (description -> resolution_rule.text,
+    # set in _polymarket_identity_metadata) into the compatibility instrument's
+    # resolution_criteria_text so the criterion travels with the bound market and
+    # report surfaces can echo it. Fall back to the question only when no rule
+    # text was captured (trade-trace-n33z).
+    resolution_criteria_text = _resolution_rule_text_from_metadata(metadata_json) or question
     venue_id = f"venue_{source}"
     uow.execute(
         "INSERT OR IGNORE INTO venues(id,name,kind,metadata_json,created_at,actor_id) VALUES (?,?,?,?,?,?)",
@@ -400,7 +485,7 @@ def _ensure_market_instrument(uow: UnitOfWork, market_id: str, *, actor_id: str)
             "prediction_market",
             "USDC",
             close_at,
-            question,
+            resolution_criteria_text,
             1.0,
             metadata_json or "{}",
             created_at,
@@ -563,6 +648,14 @@ def _market_search_candidate(raw: dict[str, Any]) -> dict[str, Any] | None:
         "gamma_market_id": external_id,
         "slug": _first_present(raw, "slug", "marketSlug"),
         "question": raw.get("question") or raw.get("title"),
+        # Surface the venue resolution prose at discovery time so a bot can tell
+        # what YES actually resolves on before binding — e.g. distinguishing a
+        # literal P(event) market from one whose price reflects release-timing
+        # mechanics — instead of having to bind first to read it
+        # (trade-trace-n33z). Falls back to the legacy keys if present.
+        "description": _first_present(
+            raw, "description", "resolutionCriteria", "rules"
+        ),
         "outcomes": labels,
         "close_at": _candidate_close_at(raw),
         "event_slug": _first_present(raw, "eventSlug", "event_slug"),

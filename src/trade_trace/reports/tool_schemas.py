@@ -445,8 +445,26 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "stale_threshold_days": {"type": "integer", "minimum": 0},
             "kinds": {"type": "array", "items": {"type": "string"}},
             "kind": {"type": "string"},
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "Maximum obligations per page; defaults to the report page "
+                    "default. When more obligations match, truncated=true and "
+                    "next_cursor pages the next slice (mirrors report.lifecycle)."
+                ),
+            },
+            "cursor": {
+                "type": "string",
+                "description": "Opaque pagination cursor from a previous report.work_queue response.",
+            },
         },
-        description="Read-only derived process-obligation queue; not a scheduler, assignment, broker, execution, fetch, or advice path.",
+        description=(
+            "Read-only derived process-obligation queue; not a scheduler, assignment, broker, "
+            "execution, fetch, or advice path. Paginated via limit + cursor + top-level "
+            "truncated + next_cursor; summary.metrics carry full-set totals while groups/"
+            "work_queue/next_actions carry the current page."
+        ),
     ),
     "agent.next_actions": _schema(
         {
@@ -455,8 +473,24 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "stale_threshold_days": {"type": "integer", "minimum": 0},
             "kinds": {"type": "array", "items": {"type": "string"}},
             "kind": {"type": "string"},
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "Maximum obligations per page; defaults to the report page "
+                    "default. When more obligations match, truncated=true and "
+                    "next_cursor pages the next slice (mirrors report.work_queue)."
+                ),
+            },
+            "cursor": {
+                "type": "string",
+                "description": "Opaque pagination cursor from a previous agent.next_actions response.",
+            },
         },
-        description="Safe projection/alias over report.work_queue; process actions only, no planner or execution semantics.",
+        description=(
+            "Safe projection/alias over report.work_queue; process actions only, no planner or "
+            "execution semantics. Paginated via limit + cursor + top-level truncated + next_cursor."
+        ),
     ),
     "report.open_positions": _schema(
         {
@@ -512,7 +546,10 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
         description=(
             "Read-only current-exposure ambiguity/data-quality caveat report. "
             "Returns projection_anomalies with stable codes including "
-            "ENTRY_DECISION_WITHOUT_POSITION_EVENT, DUPLICATE_DECISIONS, "
+            "ENTRY_DECISION_WITHOUT_POSITION_EVENT, DUPLICATE_DECISIONS "
+            "(exact-replay entry decisions), FRAGMENTED_SAME_SIDE_EXPOSURE "
+            "(>1 open position on one instrument+side — fragmented exposure from "
+            "paper_enter always opening an independent position), "
             "RECORD_ONLY_ACTUAL, MISSING_MARK, STALE_MARK, PROJECTION_MISSING, "
             "and PROJECTION_STALE. This reports local journal/projection data quality, "
             "not market risk or broker truth."

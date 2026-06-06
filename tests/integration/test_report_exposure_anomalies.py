@@ -179,6 +179,44 @@ def test_exposure_anomalies_temporal_validation_errors_are_stable(
     assert body["error"]["details"] == details
 
 
+def test_exposure_anomalies_flags_fragmented_same_side_exposure(home: Path) -> None:
+    # trade-trace-scx8: paper_enter ALWAYS opens an independent position, so an
+    # autonomous feeder re-entering the same market across runs accumulates
+    # several open same-side rows. These differ in quantity/price/run_id and so
+    # never trip the exact-replay DUPLICATE_DECISIONS query — the detector must
+    # flag the fragmentation from the PROJECTION (positions table) instead.
+    instrument_id = _instrument(home)
+    # Two open positions on the SAME instrument+side (_insert_position fixes
+    # side='yes' and status='open') — the fragmentation signature.
+    _insert_position(home, instrument_id=instrument_id, position_id="pos_frag_a", unrealized_pnl=1.0)
+    _insert_position(home, instrument_id=instrument_id, position_id="pos_frag_b", unrealized_pnl=2.0)
+
+    body = _call(home)
+
+    codes = _codes(body)
+    assert "FRAGMENTED_SAME_SIDE_EXPOSURE" in codes
+    frag = [r for r in body["data"]["projection_anomalies"] if r["code"] == "FRAGMENTED_SAME_SIDE_EXPOSURE"]
+    assert len(frag) == 1, frag
+    row = frag[0]
+    assert row["evidence"]["instrument_id"] == instrument_id
+    assert row["evidence"]["side"] == "yes"
+    assert row["evidence"]["open_position_count"] == 2
+    assert set(row["affected_ids"]["positions"]) == {"pos_frag_a", "pos_frag_b"}
+    assert row["affected_ids"]["instruments"] == [instrument_id]
+    assert body["data"]["summary"]["severity_counts"]["market_risk"] == 0
+
+
+def test_exposure_anomalies_single_open_position_is_not_fragmented(home: Path) -> None:
+    # One open position on an instrument+side is normal exposure, not
+    # fragmentation — the anomaly must require MORE THAN ONE open same-side row.
+    instrument_id = _instrument(home)
+    _insert_position(home, instrument_id=instrument_id, position_id="pos_solo", unrealized_pnl=1.0)
+
+    body = _call(home)
+
+    assert "FRAGMENTED_SAME_SIDE_EXPOSURE" not in _codes(body)
+
+
 def test_exposure_anomalies_flags_projection_missing_and_stale(home: Path) -> None:
     instrument_id = _instrument(home)
     _insert_position(home, instrument_id=instrument_id, position_id="pos_stale_projection", updated_at="2026-05-01T00:00:00Z")
@@ -200,4 +238,5 @@ def test_exposure_anomalies_schema_mentions_projection_anomalies_and_stable_code
     assert "projection_anomalies" in text
     assert "entry_decision_without_position_event" in text
     assert "record_only_actual" in text
+    assert "fragmented_same_side_exposure" in text
     assert "not market risk" in text

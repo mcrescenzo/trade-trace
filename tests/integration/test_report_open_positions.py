@@ -88,6 +88,66 @@ def _insert_latest_snapshot(home: Path, *, instrument_id: str, captured_at: str,
         db.close()
 
 
+def _insert_open_paper_position(home: Path, *, idx: int) -> None:
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        venue_id = db.connection.execute(
+            "INSERT INTO venues(id, name, kind, created_at, actor_id) "
+            "VALUES (?, ?, 'prediction_market', '2026-05-19T00:00:00Z', 'agent:test') RETURNING id",
+            (f"venue_default_{idx}", f"Venue {idx}"),
+        ).fetchone()[0]
+        instrument_id = f"inst_default_{idx}"
+        db.connection.execute(
+            "INSERT INTO instruments(id, venue_id, asset_class, title, created_at, actor_id) "
+            "VALUES (?, ?, 'prediction_market', ?, '2026-05-19T00:00:00Z', 'agent:test')",
+            (instrument_id, venue_id, f"Will event {idx} happen?"),
+        )
+        db.connection.execute(
+            """
+            INSERT INTO positions(id, instrument_id, kind, side, status, opened_at, closed_at,
+                                  resolved_at, realized_pnl, unrealized_pnl, avg_entry_price,
+                                  updated_at, initial_risk_amount)
+            VALUES (?, ?, 'paper', 'yes', 'open', '2026-05-20T00:00:00Z', NULL,
+                    NULL, NULL, NULL, 0.42, '2026-05-20T00:00:00Z', 10.0)
+            """,
+            (f"pos_default_{idx}", instrument_id),
+        )
+        db.connection.execute(
+            """
+            INSERT INTO position_events(id, position_id, instrument_id, decision_id, event_type,
+                                        quantity_delta, price, fees, slippage, metadata_json, created_at, actor_id)
+            VALUES (?, ?, ?, NULL, 'open', 1.0, 0.42, 0.0, 0.0, '{}', '2026-05-20T00:00:00Z', 'agent:test')
+            """,
+            (f"pe_default_{idx}", f"pos_default_{idx}", instrument_id),
+        )
+        db.connection.commit()
+    finally:
+        db.close()
+
+
+def test_report_open_positions_default_no_limit_call_is_bounded_by_transport_default(home: Path) -> None:
+    # The documented default call (`tt report open_positions`, no limit) must
+    # NOT page the full set: open-position rows are heavy (each embeds two
+    # 78-digit CLOB token IDs), so the old 100-row default overflowed the MCP
+    # token cap once positions accumulated (trade-trace-lszg / AX-034 observed
+    # ~61KB at N=9). The default call is now bounded to the small transport
+    # default and signals truncated=true + a next_cursor.
+    from trade_trace.reports.tool_handlers.portfolio_exposure import (
+        OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT,
+    )
+
+    for idx in range(OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT + 1):
+        _insert_open_paper_position(home, idx=idx)
+
+    body = _call(home)
+    assert body["ok"] is True, body
+    data = body["data"]
+    assert len(data["open_positions"]) == OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT
+    assert data["summary"]["filter"]["limit"] == OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT
+    assert data["truncated"] is True
+    assert data["next_cursor"], "bounded default call must page the rest via next_cursor"
+
+
 def test_report_open_positions_no_positions_returns_positive_empty(home: Path) -> None:
     body = _call(home)
 

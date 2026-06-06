@@ -11,12 +11,28 @@ import sqlite3
 from typing import Any, Literal
 
 from trade_trace.contracts.report_filter import ReportFilter
+from trade_trace.reporting.pagination import (
+    MAX_LIMIT,
+    PaginationError,
+    _decode_cursor,
+    _encode_cursor,
+)
 from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 from trade_trace.reports.lifecycle import derive_lifecycle_cases
 from trade_trace.reports.watchlist import DEFAULT_STALE_THRESHOLD_DAYS
 from trade_trace.timestamps import to_utc_iso8601
 from trade_trace.tools._helpers import now_iso
+
+# Transport-facing default page size for report.work_queue / agent.next_actions.
+# Each obligation is a HEAVY row (~3.5KB serialized: allowed_actions,
+# forbidden_actions x10, closure_condition, trigger_evidence, source_refs,
+# record_ids, reason, caveats). The generic report DEFAULT_LIMIT (50) still
+# overflows the MCP token cap on a journal with a dozen obligations (the
+# trade-trace-1y9s failure was ~60.5KB at N=13). A smaller default keeps the
+# default-args call (bootstrap's suggested call_001/call_002, args_template {})
+# bounded; callers walk the rest via next_cursor (trade-trace-1y9s).
+WORK_QUEUE_TRANSPORT_DEFAULT_LIMIT = 5
 
 WorkQueueKind = Literal[
     "resolve_due_forecast",
@@ -101,17 +117,41 @@ def report_work_queue(
     as_of: str | None = None,
     stale_threshold_days: int = DEFAULT_STALE_THRESHOLD_DAYS,
     kinds: list[str] | None = None,
+    limit: int | None = None,
+    cursor: str | None = None,
 ) -> dict[str, Any]:
     """Return deterministic derived process-obligation items.
 
     The output is a report over caller-supplied local rows only. Queue items are
     transient projections with closure conditions, not durable tasks.
+
+    The obligation list is paginated (``limit`` + opaque ``cursor`` keyset,
+    mirroring ``report.lifecycle`` / ``report.open_positions``). Summary metrics
+    (``item_count``, ``kind_counts``, ``priority_counts``) are computed over the
+    FULL filtered set so a bot sees true backlog totals, while ``groups``,
+    ``extra.work_queue`` and ``extra.next_actions`` carry only the current page;
+    top-level ``truncated``/``next_cursor`` signal more pages. Previously every
+    obligation was serialized three times — once per ``groups`` entry (each
+    re-echoing the full normalized ``filter_view``), again in full under
+    ``extra.work_queue``, and a third near-full copy under ``extra.next_actions``
+    — and there was no pagination at all, so a populated journal overflowed the
+    MCP token cap with no way to narrow (trade-trace-1y9s, mirroring AX-029 /
+    AX-034). The per-group filter echo is now dropped (the normalized filter
+    lives once in ``summary.filter``) and the three item carriers page together.
+
+    ``limit=None`` disables paging and returns the full filtered set; the
+    in-process bootstrap composer relies on this to derive obligations off the
+    whole queue. The MCP/CLI surface supplies a default page size so the
+    transport-facing path is always bounded.
     """
 
     if not isinstance(stale_threshold_days, int) or stale_threshold_days < 0:
         raise ValueError("stale_threshold_days must be a non-negative integer")
     if kinds is not None and (not isinstance(kinds, list) or not all(isinstance(item, str) for item in kinds)):
         raise ValueError("kinds must be a list of strings")
+    if limit is not None and (not isinstance(limit, int) or limit < 1):
+        raise ValueError("limit must be a positive integer")
+    page_limit = min(int(limit), MAX_LIMIT) if limit is not None else None
     allowed_kinds = set(WorkQueueKind.__args__)  # type: ignore[attr-defined]
     kind_filter = sorted(set(kinds or []))
     unknown = [kind for kind in kind_filter if kind not in allowed_kinds]
@@ -133,11 +173,34 @@ def report_work_queue(
         items = [item for item in items if item["kind"] in kind_filter]
     items = sorted(items, key=_item_sort_key)
 
+    # Aggregate metrics are computed over the full filtered set (true totals),
+    # not the page, so backlog counts stay honest under pagination.
+    total_count = len(items)
     kind_counts = {kind: 0 for kind in sorted(allowed_kinds)}
     priority_counts: dict[str, int] = {}
     for item in items:
         kind_counts[item["kind"]] += 1
         priority_counts[item["priority"]] = priority_counts.get(item["priority"], 0) + 1
+
+    # Keyset page over the stable sort key (_item_sort_key) the items are already
+    # ordered by. The cursor encodes that full composite key so paging follows
+    # the same order the rows are emitted in and the anchor does not drift
+    # between requests.
+    if cursor is not None:
+        after = _decode_cursor(cursor)
+        if not (isinstance(after, list) and len(after) == 3 and all(isinstance(part, str) for part in after)):
+            raise PaginationError("work_queue cursor payload must be [priority_rank, due_at, item_id]")
+        after_key = (after[0], after[1], after[2])
+        start = next((i for i, item in enumerate(items) if _item_sort_key(item) > after_key), len(items))
+    else:
+        start = 0
+    if page_limit is None:
+        page = items[start:]
+        next_cursor = None
+    else:
+        page = items[start : start + page_limit]
+        has_more = start + page_limit < total_count
+        next_cursor = _encode_cursor([str(part) for part in _item_sort_key(page[-1])]) if (page and has_more) else None
 
     groups = [
         {
@@ -149,31 +212,35 @@ def report_work_queue(
                 "due_at": item.get("due_at"),
                 "required_external_input": item["required_external_input"],
             },
-            "filter": {**filter_view, "kinds": kind_filter},
             "record_ids": item["record_ids"],
             "examples": [{"kind": "work_queue_item", "id": item["item_id"], "summary": item["reason"]}],
             "sample_size": 1,
             "sample_warning": None,
             "truncated": False,
         }
-        for item in items
+        for item in page
     ]
     return standard_report_result(
         summary={
-            "sample_size": len(items),
+            "sample_size": total_count,
+            "returned_count": len(page),
             "sample_warning": None,
             "filter": {**filter_view, "kinds": kind_filter},
             "metrics": {
-                "item_count": len(items),
+                "item_count": total_count,
+                "returned_count": len(page),
                 "kind_counts": kind_counts,
                 "priority_counts": dict(sorted(priority_counts.items())),
                 "stale_threshold_days": stale_threshold_days,
+                "limit": page_limit,
             },
             "caveats": _BOUNDARY_CAVEATS,
             "boundary": "Derived process-obligation report only; not a scheduler, daemon, assignment system, broker, execution, or advice path.",
         },
         groups=groups,
-        extra={"as_of": resolved_as_of, "work_queue": items, "next_actions": _next_actions_projection(items)},
+        truncated=next_cursor is not None,
+        next_cursor=next_cursor,
+        extra={"as_of": resolved_as_of, "work_queue": page, "next_actions": _next_actions_projection(page)},
     )
 
 

@@ -225,25 +225,69 @@ def _suspicious_late_rate(
 def _abstention_coverage(
     conn: sqlite3.Connection, *, total_forecasts: int,
 ) -> dict[str, Any]:
-    """Abstention coverage (trade-trace-4kec.8): how many considered-and-passed
-    records exist alongside committed forecasts. Calibration metrics exclude
-    abstentions by construction (they are not forecasts); surfacing the count
-    here lets the agent see the full considered set and judge survivorship bias.
-    `abstention_share_pct` is abstentions / (forecasts + abstentions)."""
+    """Abstention + skip coverage (trade-trace-4kec.8, trade-trace-s7nn): how
+    many considered-and-passed records exist alongside committed forecasts.
+    Calibration metrics exclude both abstentions and skips by construction
+    (neither is a scored forecast); surfacing them here lets the agent see the
+    full considered set and judge survivorship bias.
+
+    Two pass-surfaces, reconciled (trade-trace-s7nn). There are TWO documented
+    ways an agent records "I considered this market and passed":
+
+      * `abstention.record` -> a first-class `abstentions` row. This is the
+        primary survivorship surface (migration m027).
+      * `decision.add(type='skip')` -> a `decisions` row, the
+        material-non-action path advertised by the decision matrix
+        (x-material-non-action-taxonomy). A skip that carries NO linked
+        forecast (`forecast_id IS NULL`) is unambiguously a considered-and-
+        passed-without-forecasting event that never enters calibration —
+        exactly the survivorship hazard this control exists to surface. (A
+        skip that DOES link a forecast is already represented through the
+        forecast denominator and through forecast_coverage, so it is not
+        re-counted here.)
+
+    To avoid double-counting markets that carry BOTH a skip and an
+    abstention.record, the two surfaces are reported as DISTINCT lines:
+      * `count` / `abstention_share_pct` describe abstentions only (the
+        primary surface; unchanged shape for existing consumers).
+      * `skip_coverage` describes forecast-less skip decisions only.
+      * `considered_total_dedup` is the de-duplicated union denominator:
+        forecasts + abstention instruments + forecast-less-skip instruments
+        that are not already counted via an abstention, so a market with both
+        surfaces contributes once.
+
+    `abstention_share_pct` remains abstentions / (forecasts + abstentions) for
+    backward compatibility; `considered_share_pct` is the honest pass-surface
+    share over the de-duplicated union."""
 
     if not _table_exists(conn, "abstentions"):
         abstentions = 0
         sample_ids: list[str] = []
+        abstention_instruments: set[str] = set()
     else:
         rows = conn.execute(
-            "SELECT id FROM abstentions ORDER BY created_at, id"
+            "SELECT id, instrument_id FROM abstentions ORDER BY created_at, id"
         ).fetchall()
         sample_ids = [row[0] for row in rows]
+        abstention_instruments = {row[1] for row in rows if row[1] is not None}
         abstentions = len(sample_ids)
     truncated = abstentions > MAX_SAMPLE_IDS
     if truncated:
         sample_ids = sample_ids[:MAX_SAMPLE_IDS]
+
+    skip_coverage = _skip_coverage(conn)
+
     considered_total = total_forecasts + abstentions
+
+    # De-duplicated union denominator: count each pass surface once. A
+    # forecast-less skip on an instrument that ALSO has an abstention.record is
+    # the same "I passed on this market" event recorded twice across surfaces;
+    # count it once (under the abstention) so the share is not inflated.
+    skip_only_instruments = skip_coverage["_instruments"] - abstention_instruments
+    considered_passes_dedup = abstentions + len(skip_only_instruments)
+    considered_total_dedup = total_forecasts + considered_passes_dedup
+    skip_coverage = {k: v for k, v in skip_coverage.items() if k != "_instruments"}
+
     return {
         "diagnostic": "abstention_coverage",
         "count": abstentions,
@@ -251,6 +295,39 @@ def _abstention_coverage(
         "abstention_share_pct": _rate_pct(abstentions, considered_total),
         "sample_ids": {"abstentions": sample_ids},
         "truncated": truncated,
+        "skip_coverage": skip_coverage,
+        "considered_passes_dedup": considered_passes_dedup,
+        "considered_total_dedup": considered_total_dedup,
+        "considered_share_pct": _rate_pct(
+            considered_passes_dedup, considered_total_dedup
+        ),
+    }
+
+
+def _skip_coverage(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Forecast-less `decision.add(type='skip')` rows — the second
+    considered-and-passed surface (trade-trace-s7nn). A skip without a linked
+    forecast never enters calibration, so it is a survivorship-relevant pass
+    that `abstention.record` alone misses. Skips WITH a linked forecast are
+    excluded here (the forecast already carries them into the calibration
+    denominator and forecast_coverage)."""
+
+    rows = conn.execute(
+        "SELECT id, instrument_id FROM decisions "
+        "WHERE type = 'skip' AND forecast_id IS NULL "
+        "ORDER BY created_at, id"
+    ).fetchall()
+    decision_ids = [row[0] for row in rows]
+    instruments = {row[1] for row in rows if row[1] is not None}
+    count = len(decision_ids)
+    truncated = count > MAX_SAMPLE_IDS
+    sample_ids = decision_ids[:MAX_SAMPLE_IDS] if truncated else decision_ids
+    return {
+        "diagnostic": "skip_coverage",
+        "count": count,
+        "sample_ids": {"decisions": sample_ids},
+        "truncated": truncated,
+        "_instruments": instruments,
     }
 
 

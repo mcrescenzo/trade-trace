@@ -225,6 +225,73 @@ def test_material_non_action_marker_and_missing_source_caveat(home):
     assert "missing_source_ref" not in case["caveat_codes"]
 
 
+def _insert_market(conn: sqlite3.Connection, market_id: str, close_at: str | None, state: str) -> None:
+    # markets.id is the instrument_id.
+    conn.execute(
+        """
+        INSERT INTO markets (id, source, external_id, title, question, url, state, mechanism,
+                             bound_via, opened_at, close_at, venue_metadata_json, metadata_json,
+                             created_at, actor_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (market_id, "polymarket", market_id, "m", "m?", "http://x", state, "clob", "adapter",
+         "2026-01-01T00:00:00Z", close_at, "{}", "{}", "2026-01-01T00:00:00Z", "test"),
+    )
+
+
+def _insert_null_resolution_forecast(conn: sqlite3.Connection, forecast_id: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO forecasts (id, thesis_id, kind, resolution_at, yes_label, resolution_rule_text,
+                               scoring_support, scoring_state, metadata_json, created_at, actor_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (forecast_id, "th", "binary", None, "yes", "caller supplies outcome", "supported", "pending", "{}", "2026-01-01T00:03:00Z", "test"),
+    )
+
+
+def test_null_resolution_at_forecast_stays_open_on_demonstrably_live_market(home):
+    # trade-trace-fe2f: resolution_at IS NULL alone must not force pending_review
+    # when the linked market is still trading (state='open', close_at in the
+    # future). The forecast stays 'open' so no spurious resolve obligation fires.
+    with _conn(home) as conn:
+        _seed_base(conn)
+        _insert_market(conn, "inst", close_at="2026-07-31T00:00:00Z", state="open")
+        _insert_null_resolution_forecast(conn, "fc-live")
+        cases = derive_lifecycle_cases(conn, as_of="2026-01-20T00:00:00Z")
+
+    case = _case(cases, "derived:forecast:fc-live:lifecycle")
+    assert case["state"] == "open"
+    assert "resolution_at_missing" not in case["reason_codes"]
+
+
+def test_null_resolution_at_forecast_is_pending_review_when_market_not_live(home):
+    # Boundary cases that MUST keep the missing-horizon review obligation
+    # (preserving trade-trace-ptyi): no market row, a past close_at, and a
+    # non-open state each leave resolution_at_missing -> pending_review intact.
+    with _conn(home) as conn:
+        _seed_base(conn)
+        _insert_null_resolution_forecast(conn, "fc-no-market")  # inst has no market row here
+
+        # Separate instruments/theses for the other two boundary forecasts.
+        conn.execute("INSERT INTO instruments (id, venue_id, title, asset_class, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", ("inst-past", "ven", "I", "equity", "{}", "2026-01-01T00:00:00Z", "test"))
+        conn.execute("INSERT INTO theses (id, instrument_id, side, body, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", ("th-past", "inst-past", "long", "b", "{}", "2026-01-01T00:01:00Z", "test"))
+        _insert_market(conn, "inst-past", close_at="2026-01-05T00:00:00Z", state="open")  # close_at in the past
+        conn.execute("INSERT INTO forecasts (id, thesis_id, kind, resolution_at, yes_label, resolution_rule_text, scoring_support, scoring_state, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)", ("fc-past", "th-past", "binary", None, "yes", "r", "supported", "pending", "{}", "2026-01-01T00:03:00Z", "test"))
+
+        conn.execute("INSERT INTO instruments (id, venue_id, title, asset_class, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", ("inst-res", "ven", "I", "equity", "{}", "2026-01-01T00:00:00Z", "test"))
+        conn.execute("INSERT INTO theses (id, instrument_id, side, body, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", ("th-res", "inst-res", "long", "b", "{}", "2026-01-01T00:01:00Z", "test"))
+        _insert_market(conn, "inst-res", close_at="2026-07-31T00:00:00Z", state="resolving")  # not open
+        conn.execute("INSERT INTO forecasts (id, thesis_id, kind, resolution_at, yes_label, resolution_rule_text, scoring_support, scoring_state, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)", ("fc-res", "th-res", "binary", None, "yes", "r", "supported", "pending", "{}", "2026-01-01T00:03:00Z", "test"))
+
+        cases = derive_lifecycle_cases(conn, as_of="2026-01-20T00:00:00Z")
+
+    for fid in ("fc-no-market", "fc-past", "fc-res"):
+        case = _case(cases, f"derived:forecast:{fid}:lifecycle")
+        assert case["state"] == "pending_review", fid
+        assert "resolution_at_missing" in case["reason_codes"], fid
+
+
 def _report(home, args):
     env = dispatch("report.lifecycle", {"home": str(home), **args}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
     assert env["ok"], env

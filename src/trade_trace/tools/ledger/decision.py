@@ -123,13 +123,66 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             return {}
         return {"position_event_id": row[0], "position_id": row[1]}
 
+    def _already_exposed_advisory(conn, this_position_id: str | None) -> dict[str, Any] | None:
+        """Advisory-only `already_exposed` caveat for paper_enter.
+
+        Position lifecycle is intentional (trade-trace-scx8): paper_enter
+        ALWAYS opens a fresh, independent position row — it never increases
+        an existing open paper position, and exposure nets correctly at
+        report.open_positions, so this is NOT a marking bug. The hazard is
+        decision-time ergonomics for autonomous feeders: an hourly loop that
+        re-enters the same market each run silently fragments/accumulates
+        parallel same-side rows with no signal at entry. This caveat surfaces
+        that the projection ALREADY shows an open/partial position on the same
+        instrument+side at entry time so a bot can choose to skip
+        (material_non_action category=skip, materiality_reason=already_exposed,
+        the matrix reason this maps to) instead of fragmenting. It is purely
+        advisory: the entry still succeeds and the new position is still
+        opened. The detection-side mirror is report.exposure_anomalies
+        FRAGMENTED_SAME_SIDE_EXPOSURE.
+        """
+
+        instrument_id = args.get("instrument_id")
+        side = args.get("side")
+        if instrument_id is None or side is None or this_position_id is None:
+            return None
+        rows = conn.execute(
+            "SELECT id FROM positions "
+            "WHERE instrument_id = ? AND side = ? AND status IN ('open','partial') "
+            "AND id != ? ORDER BY opened_at, id",
+            (instrument_id, side, this_position_id),
+        ).fetchall()
+        existing = [row[0] for row in rows]
+        if not existing:
+            return None
+        return {
+            "code": "already_exposed",
+            "severity": "advisory",
+            "instrument_id": instrument_id,
+            "side": side,
+            "existing_open_position_ids": existing,
+            "existing_open_position_count": len(existing),
+            "message": (
+                "An open paper position already exists on this instrument+side; "
+                "paper_enter opens an independent NEW position (it does not "
+                "increase the existing one). Exposure nets in report.open_positions. "
+                "To avoid fragmenting same-side exposure, consider decision.add "
+                "type=skip with metadata_json.material_non_action="
+                "{category:'skip', materiality_reason:'already_exposed'}."
+            ),
+        }
+
     def _response(conn, decision_id: str, created_at_value: str, review_by_value: str | None) -> dict[str, Any]:
         data = {"id": decision_id, "type": decision_type,
                 "instrument_id": args.get("instrument_id"),
                 "snapshot_id": args.get("snapshot_id"), "tags": tags,
                 "created_at": created_at_value, "review_by": review_by_value}
         if decision_type == "paper_enter":
-            data.update(_linked_position_ids(conn, decision_id))
+            linked = _linked_position_ids(conn, decision_id)
+            data.update(linked)
+            advisory = _already_exposed_advisory(conn, linked.get("position_id"))
+            if advisory is not None:
+                data.setdefault("advisories", []).append(advisory)
         return data
 
     def _payload(did: str) -> dict[str, Any]:
@@ -317,7 +370,18 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
         "for per-type required/optional/forbidden fields. For `paper_enter`, "
         "the tool appends one linked position_events.open row, refreshes "
         "positions, and returns position_id/position_event_id; actual_* and "
-        "paper_exit remain journal records only for projection purposes."
+        "paper_exit remain journal records only for projection purposes. "
+        "paper_enter ALWAYS opens a fresh, independent position — it never "
+        "increases an existing open paper position on the same instrument+side "
+        "(there is no paper `add` to a paper position). Exposure nets correctly "
+        "at report.open_positions. When the projection already shows an "
+        "open/partial position on the same instrument+side, the response "
+        "carries an advisory `already_exposed` caveat under `advisories` so an "
+        "autonomous feeder can skip (material_non_action category=skip, "
+        "materiality_reason=already_exposed) instead of fragmenting same-side "
+        "exposure; the entry still succeeds. report.exposure_anomalies "
+        "FRAGMENTED_SAME_SIDE_EXPOSURE is the post-hoc detector for the same "
+        "hazard."
     ),
     "x-decision-matrix": _DECISION_MATRIX_CONTRACT,
     "x-price-convention": price_convention(),

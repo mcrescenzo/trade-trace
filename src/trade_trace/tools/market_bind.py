@@ -306,6 +306,23 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             return payload
 
 
+def _resolution_rule_text_from_args(args: dict[str, Any]) -> str | None:
+    """Extract a caller-supplied resolution rule text from market.bind args.
+
+    Accepts either the flat ``resolution_rule_text`` field or the nested
+    ``resolution_rule.text`` object. Returns ``None`` for absent/blank text so
+    the caller can fall back to the question (trade-trace-n33z).
+    """
+
+    text = args.get("resolution_rule_text")
+    if not (isinstance(text, str) and text.strip()):
+        rule = args.get("resolution_rule")
+        text = rule.get("text") if isinstance(rule, dict) else None
+    if isinstance(text, str) and text.strip():
+        return text.strip()
+    return None
+
+
 def _ensure_market_bind_prerequisites(
     uow: UnitOfWork,
     *,
@@ -351,6 +368,12 @@ def _ensure_market_bind_prerequisites(
             sort_keys=True,
             separators=(",", ":"),
         )
+        # Carry a caller-supplied resolution rule into the instrument's
+        # resolution_criteria_text so the criterion travels with the bound
+        # market; fall back to the question only when no rule text was supplied
+        # (trade-trace-n33z). Previously this was hard-wired to the question, so
+        # the auditable resolution criterion was never stored on the instrument.
+        resolution_criteria_text = _resolution_rule_text_from_args(args) or question
         instrument_payload = {
             "id": instrument_id,
             "venue_id": venue_id,
@@ -360,7 +383,7 @@ def _ensure_market_bind_prerequisites(
             "asset_class": "prediction_market",
             "currency_or_collateral": None,
             "expiration_or_resolution_at": args.get("close_at") or args.get("resolved_at"),
-            "resolution_criteria_text": question,
+            "resolution_criteria_text": resolution_criteria_text,
             "contract_multiplier": None,
             "metadata_json": metadata_json,
         }
@@ -369,7 +392,7 @@ def _ensure_market_bind_prerequisites(
             (
                 instrument_id, venue_id, external_id, external_id, instrument_title,
                 "prediction_market", None, instrument_payload["expiration_or_resolution_at"],
-                question, None, metadata_json, created_at, ctx.actor_id,
+                resolution_criteria_text, None, metadata_json, created_at, ctx.actor_id,
             ),
         )
         emit_event(

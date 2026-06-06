@@ -266,7 +266,21 @@ def _decision_coverage(conn: sqlite3.Connection, rf: ReportFilter) -> dict[str, 
         else:
             without_forecast.append(did)
     non_action_types = {"watch", "skip", "hold", "review"}
-    return {"by_decision_type": by_type, "decisions_without_forecast": without_forecast, "non_action_decision_types_counted": sorted(non_action_types)}
+    return {
+        "by_decision_type": by_type,
+        "decisions_without_forecast": without_forecast,
+        "non_action_decision_types_counted": sorted(non_action_types),
+        # Signpost the survivorship control (trade-trace-s7nn): forecast-less
+        # decision.add(type=skip) rows are also counted by
+        # report.calibration_integrity.diagnostics.abstention_coverage.skip_coverage,
+        # so a considered-and-passed skip is NOT survivorship-excluded from the
+        # integrity denominator even though it never enters the calibration
+        # (Brier/log-score) numbers.
+        "skip_survivorship_surface": (
+            "report.calibration_integrity.diagnostics.abstention_coverage"
+            ".skip_coverage"
+        ),
+    }
 
 
 def _dedupe_scored_rows(rows: list[dict[str, Any]]) -> list[Any]:

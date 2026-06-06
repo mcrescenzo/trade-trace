@@ -174,6 +174,41 @@ def test_advisory_low_sample_warns(home: Path):
     assert "unreliable below 20" in summary["sample_warning"]
 
 
+def test_advisory_recalibration_reliable_gate(home: Path):
+    """trade-trace-suit: `recalibration_reliable` is the single boolean an
+    autonomous feeder gates on. It is False for BOTH sub-threshold cases —
+    N=0 (suggested_probability null) and 1..min_sample-1 (suggested_probability
+    a populated low-N artifact) — resolving the field-shape asymmetry, and True
+    only at N >= min_sample."""
+
+    # N=0 (empty band): null suggestion, but reliability flag is explicit.
+    env0 = _advisory(home, 0.15, min_sample=1)
+    s0 = env0["data"]["summary"]
+    assert s0["sample_size"] == 0
+    assert s0["suggested_probability"] is None
+    assert s0["recalibration_reliable"] is False
+    # Group metrics carry the same flag.
+    assert env0["data"]["groups"][0]["metrics"]["recalibration_reliable"] is False
+
+    # N=1 with min_sample=20: suggested_probability is populated (the foot-gun
+    # artifact) yet recalibration_reliable is still False — the asymmetry is
+    # resolved by a single field, not by parsing sample_warning text.
+    _seed_resolved_forecast(home, 0, probability=0.85, resolves_yes=False)
+    env1 = _advisory(home, 0.88, min_sample=20)
+    s1 = env1["data"]["summary"]
+    assert s1["sample_size"] == 1
+    assert s1["suggested_probability"] is not None
+    assert s1["recalibration_reliable"] is False
+    assert s1["sample_warning"] is not None
+
+    # At N >= min_sample the flag flips True (low min_sample to reach threshold).
+    env_ok = _advisory(home, 0.88, min_sample=1)
+    s_ok = env_ok["data"]["summary"]
+    assert s_ok["sample_size"] == 1
+    assert s_ok["recalibration_reliable"] is True
+    assert s_ok["sample_warning"] is None
+
+
 def test_advisory_top_band_is_closed_on_right(home: Path):
     _seed_resolved_forecast(home, 0, probability=0.95, resolves_yes=True)
     env = _advisory(home, 1.0, min_sample=1)
