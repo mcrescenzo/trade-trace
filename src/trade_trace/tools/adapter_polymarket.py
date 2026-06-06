@@ -734,14 +734,15 @@ def _outcome_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 
 def register_adapter_polymarket_tools(registry: ToolRegistry) -> None:
-    registry.register("market.refresh", _market_refresh, is_write=True, example_minimal={"market_id":"mkt_..."})
-    # snapshot.fetch / outcome.fetch are retryable writes whose semantic
-    # identity is NOT in the auto-derivation registry (TOOL_PRIMARY_EVENT_TYPE),
-    # so the dispatcher cannot synthesize an idempotency_key for them — a call
-    # that omits it returns MISSING_IDEMPOTENCY_KEY. The advertised schema must
-    # therefore mark idempotency_key REQUIRED, not optional, so schema text and
-    # dispatcher enforcement agree (bead trade-trace-2cmb). `at` stays optional
-    # because the handler defaults it ("now").
+    # market.refresh / snapshot.fetch / outcome.fetch are retryable writes whose
+    # semantic identity is NOT in the auto-derivation registry
+    # (TOOL_PRIMARY_EVENT_TYPE), so the dispatcher cannot synthesize an
+    # idempotency_key for them — a call that omits it returns
+    # MISSING_IDEMPOTENCY_KEY. The advertised schema must therefore mark
+    # idempotency_key REQUIRED, not optional, so schema text and dispatcher
+    # enforcement agree (bead trade-trace-2cmb). `at` stays optional because the
+    # handler defaults it ("now").
+    registry.register("market.refresh", _market_refresh, is_write=True, example_minimal={"market_id":"mkt_...","idempotency_key":"00000000-0000-4000-8000-marketrefresh01"})
     registry.register("snapshot.fetch", _snapshot_fetch, is_write=True, example_minimal={"market_id":"mkt_...","at":"now","idempotency_key":"00000000-0000-4000-8000-snapshotfetch01"}, optional_keys=("at",))
     registry.register("snapshot.fetch_series", _snapshot_fetch_series, is_write=True, example_minimal={"market_id":"mkt_...","from":"2026-01-01T00:00:00Z","to":"2026-01-02T00:00:00Z"})
     registry.register("outcome.fetch", _outcome_fetch, is_write=True, example_minimal={"market_id":"mkt_...","idempotency_key":"00000000-0000-4000-8000-outcomefetch001"})

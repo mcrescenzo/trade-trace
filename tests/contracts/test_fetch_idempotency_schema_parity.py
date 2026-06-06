@@ -1,18 +1,20 @@
-"""Schema-vs-runtime parity for the adapter fetch writes (bead
+"""Schema-vs-runtime parity for the adapter fetch/refresh writes (bead
 trade-trace-2cmb).
 
-`snapshot.fetch` and `outcome.fetch` are retryable writes whose semantic
-identity is NOT covered by the auto-derivation registry
-(`TOOL_PRIMARY_EVENT_TYPE`), so the dispatcher cannot synthesize an
-`idempotency_key` for them — a call that omits it is rejected with a
+`market.refresh`, `snapshot.fetch`, and `outcome.fetch` are retryable
+writes whose semantic identity is NOT covered by the auto-derivation
+registry (`TOOL_PRIMARY_EVENT_TYPE`), so the dispatcher cannot synthesize
+an `idempotency_key` for them — a call that omits it is rejected with a
 VALIDATION error whose `details.field == "idempotency_key"`.
 
 Previously `snapshot.fetch` advertised `idempotency_key` as an *optional*
 runtime-defaulted key ("Runtime-defaulted keys are optional: at,
 idempotency_key.") and `outcome.fetch` did not advertise it at all, so a
 schema-trusting bot calling with only `market_id` got a confusing
-MISSING_IDEMPOTENCY_KEY rejection. These tests pin the advertised schema
-so it agrees with dispatcher enforcement: `idempotency_key` is REQUIRED.
+MISSING_IDEMPOTENCY_KEY rejection. `market.refresh` had the same gap (its
+auto-derived schema advertised only `market_id`; AX dogfood 2026-06-06).
+These tests pin the advertised schema so it agrees with dispatcher
+enforcement: `idempotency_key` is REQUIRED.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from trade_trace.core import default_registry
 from trade_trace.events.semantic_keys import TOOL_PRIMARY_EVENT_TYPE
 from trade_trace.mcp_server import mcp_call
 
-_FETCH_WRITE_TOOLS = ("snapshot.fetch", "outcome.fetch")
+_FETCH_WRITE_TOOLS = ("market.refresh", "snapshot.fetch", "outcome.fetch")
 
 
 def _schema_for(tool_name: str) -> dict:
