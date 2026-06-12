@@ -154,7 +154,8 @@ Read [`SECURITY.md`](./SECURITY.md) for vulnerability reporting and supported-ve
 | [`docs/AI_AGENT_MCP_GETTING_STARTED.md`](./docs/AI_AGENT_MCP_GETTING_STARTED.md) | First MCP connection and safe write loop. |
 | [`docs/AGENT_GUIDE.md`](./docs/AGENT_GUIDE.md) | Full agent journal loop, continuity surfaces, patterns, and pitfalls. |
 | [`docs/CLAUDE_CODE.md`](./docs/CLAUDE_CODE.md), [`docs/CLAUDE_DESKTOP.md`](./docs/CLAUDE_DESKTOP.md), [`docs/IDE_MCP_SETUP.md`](./docs/IDE_MCP_SETUP.md) | Client setup recipes. |
-| [`docs/VISION.md`](./docs/VISION.md) | Product north star and non-goals. |
+| [`VISION.md`](./VISION.md) | Product north star — where Trade Trace is ultimately headed. |
+| [`docs/architecture/product-scope-v002.md`](./docs/architecture/product-scope-v002.md) | Current-phase (v0.0.2) scope, principles, and non-goals. |
 | [`docs/PRD.md`](./docs/PRD.md) | Working product requirements and milestone scope. |
 | [`docs/architecture/contracts.md`](./docs/architecture/contracts.md) | CLI/MCP JSON envelope, parity, error codes, and schemas. |
 | [`docs/architecture/persistence.md`](./docs/architecture/persistence.md) | SQLite, events, outbox, idempotency, and append-only invariants. |

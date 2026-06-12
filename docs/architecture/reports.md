@@ -33,7 +33,7 @@ forecast Brier ranking, not the broader decision+review tag
 count/co-occurrence contract. See §4.3 for the exact shipped behavior and
 the deferred target.
 
-Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [product-scope-v002.md](product-scope-v002.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md), [memory-layer.md](memory-layer.md),
 [policy-evidence-bundles.md](policy-evidence-bundles.md), and

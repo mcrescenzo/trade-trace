@@ -9,7 +9,7 @@ deterministic-replay meta fields, CLI/MCP parity tests. The only
 known additive extension is `meta.preview_only` (bead trade-trace-2z7)
 and `meta.dry_run` (bead 268), both backward-compatible.
 
-Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [product-scope-v002.md](product-scope-v002.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [memory-layer.md](memory-layer.md),
 [current-exposure-agent-contract.md](current-exposure-agent-contract.md),

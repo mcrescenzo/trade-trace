@@ -13,7 +13,7 @@ pending categorical/scalar forecasts against the current non-superseded
 diagnostics (bead trade-trace-jzn) are embedded under
 `report.calibration.data.integrity_diagnostics`.
 
-Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [product-scope-v002.md](product-scope-v002.md),
 [memory-layer.md](memory-layer.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md).
 

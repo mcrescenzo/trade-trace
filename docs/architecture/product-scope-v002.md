@@ -1,9 +1,15 @@
-# Trade Trace — Vision
+# Trade Trace — v0.0.2 product scope and principles
 
-**Date:** 2026-05-18
-**Status:** Refined draft
+> Status: **shipped** — scope, principles, and non-goals governing the
+> current journal-phase product. Formerly `docs/VISION.md` (the product
+> vision until 2026-06-12); superseded as the north star by the root
+> [`VISION.md`](../../VISION.md). The "not a trader" boundaries below
+> remain binding for the current phase; the root vision frames them as
+> the first stage of an earned-autonomy arc, not the end-state.
+
+**Date:** 2026-05-18 (demoted from vision 2026-06-12)
 **Audience:** Project maintainers and contributors
-**Companion doc:** [`PRD.md`](./PRD.md)
+**Companion doc:** [`PRD.md`](../PRD.md)
 
 ## What this is
 
