@@ -674,6 +674,87 @@ def test_supersession_discount_applies_to_superseded_nodes(home):
     assert ids.index(new) < ids.index(old)
 
 
+# -- 6b. bm25 multi-word OR fallback (trade-trace-95ry) ----------
+
+
+def test_bm25_multiword_query_surfaces_partial_match_via_or_fallback(home):
+    """Per trade-trace-95ry: FTS5 MATCH is implicit-AND, so a natural-language
+    multi-word query whose tokens do NOT all co-occur in one node previously
+    returned zero bm25 rows and silently degraded to temporal/graph. The OR
+    token fallback must surface the best lexical match WITH bm25 provenance."""
+
+    target = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "instrument snapshot reading trap: mid sampled before bid populated",
+        "idempotency_key": "00000000-0000-4000-8000-bm25or00000001",
+    }).data["id"]
+    # Distractor so the index isn't single-node trivial.
+    _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "Unrelated liquidity note about expiration spreads",
+        "idempotency_key": "00000000-0000-4000-8000-bm25or00000002",
+    })
+
+    # 'ordering' is absent from the target -> strict implicit-AND yields zero.
+    env = _mcp(home, "memory.recall", {
+        "query": "instrument snapshot ordering trap",
+        "strategies": ["bm25"],
+        "k": 5,
+    })
+    assert env.ok, env
+    ids = [it["id"] for it in env.data["items"]]
+    assert target in ids, f"OR fallback should surface partial match; got {ids}"
+    item = next(it for it in env.data["items"] if it["id"] == target)
+    assert 1 in item["strategy_provenance"].get("bm25", []) or item["strategy_provenance"].get("bm25"), item
+
+
+def test_bm25_multiword_query_with_dotted_and_snake_tokens(home):
+    """Dotted (forecast.add) and snake_case (instrument_id) identifiers plus a
+    word that only indexes joined (not_found) — implicit-AND fails; OR fallback
+    surfaces the node because forecast.add/instrument_id/market.bind each hit."""
+
+    target = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "forecast.add failed: instrument_id NOT_FOUND, call market.bind first",
+        "idempotency_key": "00000000-0000-4000-8000-bm25or00000003",
+    }).data["id"]
+
+    env = _mcp(home, "memory.recall", {
+        "query": "forecast.add instrument_id not found market.bind",
+        "strategies": ["bm25"],
+        "k": 5,
+    })
+    assert env.ok, env
+    ids = [it["id"] for it in env.data["items"]]
+    assert target in ids, f"OR fallback should surface dotted/snake match; got {ids}"
+
+
+def test_bm25_strict_and_still_wins_when_all_tokens_co_occur(home):
+    """Regression: when every token co-occurs in one node, the precise
+    implicit-AND path returns it and the OR fallback never fires — precision
+    is preserved for queries that already worked."""
+
+    both = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "compression near resolution mispriced on prediction markets",
+        "idempotency_key": "00000000-0000-4000-8000-bm25and0000001",
+    }).data["id"]
+    _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "compression alone without the other keyword",
+        "idempotency_key": "00000000-0000-4000-8000-bm25and0000002",
+    })
+
+    env = _mcp(home, "memory.recall", {
+        "query": "compression resolution",
+        "strategies": ["bm25"],
+        "k": 5,
+    })
+    assert env.ok, env
+    assert env.data["items"], "expected the conjunctive match"
+    assert env.data["items"][0]["id"] == both
+
+
 # -- 7. recall validation ----------------------------------------
 
 

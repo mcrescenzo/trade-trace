@@ -26,6 +26,7 @@ embeddings opt-in path is the subject of bead ubp.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import struct
 from dataclasses import dataclass
@@ -1078,6 +1079,38 @@ def _bm25_rank(
     # FTS5 MATCH with bm25() rank. Empty queries fall back to no-op.
     if not query.strip():
         return []
+    rows = _fts_match(conn, query)
+    if not rows:
+        # Two ways the raw MATCH yields nothing usable, both common for
+        # natural-language recall (trade-trace-95ry):
+        #   * rows == []  : syntactically valid but FTS5's implicit-AND means
+        #                   no single node holds EVERY token (e.g. a phrase
+        #                   where one word is absent), so bm25 silently
+        #                   contributes nothing and recall degrades to
+        #                   temporal/graph.
+        #   * rows is None: the expression was malformed — a bare dotted or
+        #                   hyphenated identifier (forecast.add, BTC-USD) is an
+        #                   FTS5 syntax error, not a literal.
+        # In both cases retry with an OR-combined, quoted-token query so the
+        # best partial lexical match still surfaces (ranked by bm25) before
+        # giving up. Quoting neutralizes operators/punctuation and makes
+        # dotted/hyphenated tokens match the way they were indexed.
+        or_query = _or_token_query(query)
+        or_rows = _fts_match(conn, or_query) if or_query is not None else None
+        if or_rows:
+            rows = or_rows
+        elif rows is None:
+            # Raw expression malformed and OR retry didn't recover — LIKE net.
+            rows = _like_fallback(conn, query)
+        else:
+            rows = []
+    return [r for r in rows if r in in_scope]
+
+
+def _fts_match(conn: sqlite3.Connection, query: str) -> list[str] | None:
+    """Run an FTS5 MATCH ranked by bm25(); return ranked ids, or None when the
+    expression is malformed (caller decides the fallback)."""
+
     try:
         cur = conn.execute(
             "SELECT id FROM memory_node_fts "
@@ -1085,17 +1118,32 @@ def _bm25_rank(
             "ORDER BY bm25(memory_node_fts) LIMIT 500",
             (query,),
         )
-        rows = [r[0] for r in cur.fetchall()]
+        return [r[0] for r in cur.fetchall()]
     except sqlite3.OperationalError:
-        # Malformed MATCH expression — fall back to LIKE.
-        like_q = f"%{query}%"
-        cur = conn.execute(
-            "SELECT id FROM memory_nodes WHERE body LIKE ? OR title LIKE ? "
-            "LIMIT 500",
-            (like_q, like_q),
-        )
-        rows = [r[0] for r in cur.fetchall()]
-    return [r for r in rows if r in in_scope]
+        return None
+
+
+def _like_fallback(conn: sqlite3.Connection, query: str) -> list[str]:
+    like_q = f"%{query}%"
+    cur = conn.execute(
+        "SELECT id FROM memory_nodes WHERE body LIKE ? OR title LIKE ? LIMIT 500",
+        (like_q, like_q),
+    )
+    return [r[0] for r in cur.fetchall()]
+
+
+def _or_token_query(query: str) -> str | None:
+    """Build an OR-combined FTS5 query from a multi-word natural-language
+    string. Each token is wrapped as a quoted phrase so FTS operators and
+    punctuation are inert and dotted/hyphenated identifiers tokenize the same
+    way they were indexed. Returns None when fewer than two indexable tokens
+    exist (single-token queries gain nothing — OR equals the original)."""
+
+    tokens = [t for t in query.split() if re.search(r"\w", t)]
+    if len(tokens) < 2:
+        return None
+    quoted = ['"' + t.replace('"', '""') + '"' for t in tokens]
+    return " OR ".join(quoted)
 
 
 def _temporal_rank(
