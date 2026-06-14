@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tests._mcp_helpers import mcp_default as _mcp
 
 
@@ -107,6 +109,40 @@ def test_audit_readiness_ignores_non_prediction_market_entered_decisions(home: P
     assert env.data["summary"]["sample_size"] == 0
     assert env.data["summary"]["sample_warning"] == "no_data"
     assert env.data["issues"] == []
+
+
+@pytest.mark.parametrize(
+    "args,expected_field",
+    [
+        ({"stale_snapshot_threshold_days": -1}, "stale_snapshot_threshold_days"),
+        ({"stale_source_threshold_days": -1}, "stale_source_threshold_days"),
+        # Both out of range: the handler validates stale_snapshot first, so it
+        # is the field surfaced on the typed error.
+        (
+            {"stale_snapshot_threshold_days": -1, "stale_source_threshold_days": -1},
+            "stale_snapshot_threshold_days",
+        ),
+        # bool is not a meaningful day count even though isinstance(True, int).
+        ({"stale_snapshot_threshold_days": True}, "stale_snapshot_threshold_days"),
+        ({"stale_source_threshold_days": True}, "stale_source_threshold_days"),
+    ],
+)
+def test_audit_readiness_rejects_out_of_range_stale_thresholds(
+    home: Path, args: dict, expected_field: str,
+):
+    """Per bead trade-trace-zuyj: `_report_audit_readiness` rejects a
+    non-negative-integer stale threshold at the tool layer.
+
+    The schema's `minimum: 0` constraint only fires at the stdio boundary;
+    the in-process dispatch path used here reaches the handler guard, so
+    these cases exercise the previously test-dead branches and assert the
+    typed VALIDATION_ERROR names the failing param."""
+
+    env = _mcp(home, "report.audit_readiness", args)
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == expected_field
+    assert env.error.details["value"] == args[expected_field]
 
 
 def test_audit_readiness_registered_read_only_schema(home: Path):

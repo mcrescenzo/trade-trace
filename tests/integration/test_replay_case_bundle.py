@@ -7,6 +7,8 @@ import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
@@ -273,3 +275,57 @@ def test_recall_event_source_ref_must_exist_and_be_pre_as_of(tmp_path):
     data = _bundle(home, case_selection={"source_refs": [{"kind": "recall_event", "id": "rec_past"}], "max_cases": 1})["data"]
     assert data["case_index"][0]["source_id"] == "rec_past"
     assert data["cases"][0]["eligibility_status"] == "needs_caveat"
+
+
+def _seed_n_distinct_forecasts(home: Path, n: int) -> None:
+    """Seed `n` forecasts each on its own instrument so case selection can
+    return more than one case (forecast.add folds repeated forecasts on the
+    same instrument, so distinct instruments are required to grow the count)."""
+    token = CLOCK_OVERRIDE.set(datetime(2026, 5, 18, 14, 0, 0, tzinfo=UTC))
+    try:
+        venue = _envelope(home, "venue.add", {"name": "Trunc Venue", "kind": "prediction_market"})
+        for i in range(n):
+            inst = _envelope(home, "instrument.add", {"venue_id": venue["data"]["id"], "asset_class": "prediction_market", "title": f"Trunc {i}", "symbol": f"TRUNC{i}"})
+            thesis = _envelope(home, "thesis.add", {"instrument_id": inst["data"]["id"], "side": "yes", "body": f"trunc thesis {i}"})
+            _envelope(home, "forecast.add", {"thesis_id": thesis["data"]["id"], "kind": "binary", "resolution_at": "2026-06-01T00:00:00Z", "yes_label": "yes", "resolution_rule_text": "rule", "outcomes": [{"outcome_label": "yes", "probability": 0.6}, {"outcome_label": "no", "probability": 0.4}]})
+    finally:
+        CLOCK_OVERRIDE.reset(token)
+
+
+def test_bundle_meta_truncated_mirrors_bundle_truncation_flag(tmp_path):
+    """trade-trace-5eh3 / nyix(10): the replay.case_bundle handler propagates
+    the bundle's `truncation.is_partial` onto the envelope `meta.truncated`
+    (tool_handlers/replay.py:37). This pins that propagation contract: whatever
+    the bundle reports as its partial flag is exactly what surfaces on the
+    envelope meta — they must never diverge."""
+    home = _init_home(tmp_path)
+    _seed_n_distinct_forecasts(home, 4)
+
+    # Selecting fewer than the available cases physically clips the result set.
+    env = _bundle(home, case_selection={"max_cases": 2})
+    assert env["ok"] is True, env
+    assert len(env["data"]["cases"]) == 2, "case set is physically clipped to max_cases"
+    # The propagation contract: meta.truncated == bundle truncation.is_partial.
+    assert env["meta"].get("truncated") == bool(env["data"]["truncation"]["is_partial"])
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "DEFERRED (trade-trace-5eh3 / nyix item 10): meta.truncated can only "
+        "surface True if the bundle sets truncation.is_partial=True when the "
+        "selection exceeds max_cases. The source (src/trade_trace/reports/"
+        "replay.py:399) hardcodes is_partial=False and _rows_for_selection "
+        "clips via LIMIT/[:max_cases] without recording that extra rows "
+        "existed, so over-limit truncation is silently undetected. Surfacing "
+        "truncated=True requires a change to that replay module, which is "
+        "OUTSIDE this bead's in-scope files. This xfail(strict) documents the "
+        "intended behavior and will fail loudly (prompting promotion) once the "
+        "source learns to detect and report over-limit truncation."
+    ),
+)
+def test_bundle_meta_truncated_surfaces_true_when_over_max_cases(tmp_path):
+    home = _init_home(tmp_path)
+    _seed_n_distinct_forecasts(home, 4)
+    env = _bundle(home, case_selection={"max_cases": 2})
+    assert env["meta"].get("truncated") is True

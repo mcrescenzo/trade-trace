@@ -22,6 +22,7 @@ from trade_trace.reports._filter_support import (
 )
 from trade_trace.reports.calibration import (
     DEFAULT_MIN_SAMPLE,
+    _bulk_fetch_forecast_outcomes,
     _compute_metrics,
     _empty_metrics,
     _resolve_p_yes_and_y,
@@ -147,12 +148,15 @@ def _base_where(conn: sqlite3.Connection, rf: ReportFilter) -> tuple[list[str], 
 
 def _load_rows(conn: sqlite3.Connection, rf: ReportFilter) -> dict[str, list[dict[str, Any]]]:
     where, params = _base_where(conn, rf)
+    # trade-trace-u7j3: `f.probability` (the canonical-probability fast path) is
+    # added to the SELECT so the per-row p_yes/y resolution needs zero extra
+    # queries.
     sql = f"""
         SELECT f.id, f.kind, f.scoring_support, f.yes_label, f.thesis_id,
                t.strategy_id, d.id, d.type, d.snapshot_id,
                s.implied_probability, s.spread, s.volume, s.open_interest,
                s.liquidity_depth_json, fs.id, fs.outcome_id, fs.metric,
-               fs.score, fs.metadata_json, o.outcome_label
+               fs.score, fs.metadata_json, o.outcome_label, f.probability
         FROM forecasts f
         JOIN theses t ON t.id = f.thesis_id
         JOIN instruments i ON i.id = t.instrument_id
@@ -163,18 +167,30 @@ def _load_rows(conn: sqlite3.Connection, rf: ReportFilter) -> dict[str, list[dic
         WHERE {' AND '.join(where)}
         ORDER BY f.created_at, f.id, d.created_at, d.id
     """
+    fetched = conn.execute(sql, params).fetchall()
+    # trade-trace-u7j3: bulk-fetch every forecast's `forecast_outcomes` rows in
+    # one IN-list query before the loop, replacing the per-row SELECT inside
+    # `_resolve_p_yes_and_y`.
+    outcomes_by_forecast = _bulk_fetch_forecast_outcomes(
+        conn, {row[0] for row in fetched},
+    )
     included: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
-    for row in conn.execute(sql, params).fetchall():
+    for row in fetched:
         (fid, kind, support, yes_label, thesis_id, strategy_id, did, dtype, sid, implied, spread,
-         volume, oi, depth, score_id, outcome_id, metric, score, score_meta, outcome_label) = row
+         volume, oi, depth, score_id, outcome_id, metric, score, score_meta, outcome_label,
+         canonical_probability) = row
         if kind != "binary":
             excluded.append({"forecast_id": fid, "reason": "unsupported_non_binary", "kind": kind})
             continue
         p_yes = None
         y = None
         if score_id and score is not None and outcome_label is not None:
-            p_yes, y = _resolve_p_yes_and_y(conn, forecast_id=fid, yes_label=yes_label, outcome_label=outcome_label)
+            p_yes, y = _resolve_p_yes_and_y(
+                conn, forecast_id=fid, yes_label=yes_label, outcome_label=outcome_label,
+                canonical_probability=canonical_probability,
+                outcome_rows=outcomes_by_forecast.get(fid, []),
+            )
         if p_yes is None:
             # Still include binary rows for market/reference coverage, but not scored metrics.
             p_yes, _ = _resolve_binary_probability(conn, fid, yes_label)
@@ -298,16 +314,38 @@ def _dedupe_scored_rows(rows: list[dict[str, Any]]) -> list[Any]:
     return scored
 
 
-def _has_source_reference(conn: sqlite3.Connection, kind: str, record_id: str) -> bool:
-    return conn.execute(
-        """
-        SELECT 1 FROM edges e
-        WHERE ((e.source_kind = ? AND e.source_id = ?) OR (e.target_kind = ? AND e.target_id = ?))
-          AND (e.source_kind = 'source' OR e.target_kind = 'source')
-        LIMIT 1
+def _ids_with_source_reference(
+    conn: sqlite3.Connection, kind: str, record_ids: set[str],
+) -> set[str]:
+    """Return the subset of ``record_ids`` that have a stored source edge.
+
+    trade-trace-u4po: replaces the per-id ``_has_source_reference`` SELECT 1
+    that fired one round-trip per unique id with a single bulk IN-list query
+    per ``kind``. An id is covered when any edge touches it on either side AND
+    that edge has a 'source' endpoint on the other side, matching the original
+    symmetric predicate exactly (source-on-source edges and self-edges are
+    impossible under the schema CHECK constraints, but the membership test
+    below keeps the same coverage set regardless)."""
+
+    if not record_ids:
+        return set()
+    ids = list(record_ids)
+    placeholders = _placeholders(len(ids))
+    covered: set[str] = set()
+    for source_kind, source_id, target_kind, target_id in conn.execute(
+        f"""
+        SELECT e.source_kind, e.source_id, e.target_kind, e.target_id FROM edges e
+        WHERE (e.source_kind = 'source' OR e.target_kind = 'source')
+          AND ((e.source_kind = ? AND e.source_id IN ({placeholders}))
+               OR (e.target_kind = ? AND e.target_id IN ({placeholders})))
         """,
-        (kind, record_id, kind, record_id),
-    ).fetchone() is not None
+        [kind, *ids, kind, *ids],
+    ).fetchall():
+        if source_kind == kind and source_id in record_ids:
+            covered.add(source_id)
+        if target_kind == kind and target_id in record_ids:
+            covered.add(target_id)
+    return covered
 
 
 def _source_reference_coverage(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -322,13 +360,11 @@ def _source_reference_coverage(conn: sqlite3.Connection, rows: list[dict[str, An
     covered_count = 0
     total_count = 0
     for plural, kind in (("forecasts", "forecast"), ("theses", "thesis"), ("decisions", "decision")):
-        missing_ids: list[str] = []
-        for record_id in sorted(records[plural]):
-            total_count += 1
-            if _has_source_reference(conn, kind, record_id):
-                covered_count += 1
-            else:
-                missing_ids.append(record_id)
+        ids = records[plural]
+        covered_ids = _ids_with_source_reference(conn, kind, ids)
+        missing_ids = [record_id for record_id in sorted(ids) if record_id not in covered_ids]
+        total_count += len(ids)
+        covered_count += len(ids) - len(missing_ids)
         missing[plural] = missing_ids[:50]
     return {
         "status": "complete" if covered_count == total_count else "missing_source_reference",

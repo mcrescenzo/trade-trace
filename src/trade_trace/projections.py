@@ -127,13 +127,20 @@ def rebuild_positions(conn: sqlite3.Connection) -> RebuildResult:
     ).fetchall()
 
     by_position: dict[str, list[PositionEventRow]] = {}
+    all_events: list[PositionEventRow] = []
     for row in groups:
         event = PositionEventRow(*row)
         by_position.setdefault(event.position_id, []).append(event)
+        all_events.append(event)
+
+    # Batch-fetch every referenced decision's (type, side) in ONE query
+    # (trade-trace-6046) instead of one SELECT per position group inside
+    # the loop below.
+    decisions = _fetch_decision_kinds_and_sides(conn, all_events)
 
     rebuilt = 0
     for position_id, events in by_position.items():
-        projection = _accumulate_position(conn, position_id, events)
+        projection = _accumulate_position(conn, position_id, events, decisions)
         if projection is None:
             continue
         conn.execute(
@@ -174,10 +181,44 @@ _ACTUAL_DECISION_TYPES = frozenset(
 )
 
 
-def _derive_kind_and_side(
+def _fetch_decision_kinds_and_sides(
     conn: sqlite3.Connection, events: list[PositionEventRow]
+) -> dict[str, tuple[str | None, str | None]]:
+    """Batch-fetch the `(type, side)` for every distinct `decision_id`
+    referenced by `events` in a single `SELECT ... WHERE id IN (...)`.
+
+    Resolves the N+1 (trade-trace-6046): `_derive_kind_and_side` previously
+    issued one `SELECT type, side FROM decisions WHERE id = ?` per position
+    group. This collects the unique decision ids across ALL already-fetched
+    `position_events` and runs one query, returning a `dict[id, (type, side)]`
+    that `_derive_kind_and_side` consults in memory. Decision ids with no
+    matching row are simply absent from the map (the caller falls through to
+    the next event / the defaults), matching the prior per-row
+    `fetchone() is None` skip."""
+
+    decision_ids = sorted(
+        {row.decision_id for row in events if row.decision_id is not None}
+    )
+    if not decision_ids:
+        return {}
+
+    placeholders = ",".join("?" for _ in decision_ids)
+    rows = conn.execute(
+        f"SELECT id, type, side FROM decisions WHERE id IN ({placeholders})",
+        decision_ids,
+    ).fetchall()
+    return {row[0]: (row[1], row[2]) for row in rows}
+
+
+def _derive_kind_and_side(
+    events: list[PositionEventRow],
+    decisions: dict[str, tuple[str | None, str | None]],
 ) -> tuple[str, str]:
     """Pull kind/side from the opening event's decision when present.
+
+    `decisions` is the pre-fetched `dict[decision_id, (type, side)]` built
+    once per rebuild by `_fetch_decision_kinds_and_sides` (trade-trace-6046),
+    so this function does no per-position SQL.
 
     Defaults to `simulation` / `long` so a direct position_events fixture
     that doesn't reference a decision still produces a deterministic
@@ -189,9 +230,7 @@ def _derive_kind_and_side(
         decision_id = row.decision_id
         if decision_id is None:
             continue
-        decision = conn.execute(
-            "SELECT type, side FROM decisions WHERE id = ?", (decision_id,)
-        ).fetchone()
+        decision = decisions.get(decision_id)
         if decision is None:
             continue
         dtype, dside = decision
@@ -209,6 +248,7 @@ def _accumulate_position(
     conn: sqlite3.Connection,
     position_id: str,
     events: list[PositionEventRow],
+    decisions: dict[str, tuple[str | None, str | None]],
 ) -> dict[str, Any] | None:
     """Walk one position_id's event sequence and return the projection
     row. Returns None when the sequence is empty (defensive — the SQL
@@ -310,7 +350,7 @@ def _accumulate_position(
 
     status = "closed" if _approx_zero(qty) else "open"
 
-    kind, side = _derive_kind_and_side(conn, events)
+    kind, side = _derive_kind_and_side(events, decisions)
 
     unrealized_pnl: float | None = None
     if status == "open" and avg_entry_price is not None:

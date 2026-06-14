@@ -82,11 +82,10 @@ def test_pm_native_report_tools_registered():
     registry = default_registry()
     public = set(registry.public_names())
     assert "report.time_decay_sharpening" in public
-    # market_lifecycle / resolution_quality are frozen experimental
-    # (trade-trace-4kec.5): hidden from the default catalog but dispatchable.
-    experimental = set(registry.public_names(include_experimental=True))
-    assert {"report.market_lifecycle", "report.resolution_quality"}.issubset(experimental)
-    assert {"report.market_lifecycle", "report.resolution_quality"}.isdisjoint(public)
+    # market_lifecycle / resolution_quality were unfrozen into the Phase-1
+    # public catalog (trade-trace-y0cr): both read only Phase-1 tables and
+    # carry no Phase-2 dependency, so they ship in the default catalog view.
+    assert {"report.market_lifecycle", "report.resolution_quality"}.issubset(public)
 
 
 def test_market_lifecycle_reports_state_durations(home: Path):

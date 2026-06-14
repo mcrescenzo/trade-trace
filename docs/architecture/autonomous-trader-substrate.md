@@ -102,6 +102,40 @@ A pre-trade check record must include:
 
 `missing_data` is not a soft pass. Reports must distinguish missing account truth, stale market data, stale exposure projections, unavailable liquidity/depth, and absent source/forecast/thesis links with stable reason codes.
 
+#### Deterministic evaluator (shipped — trade-trace-g629)
+
+The "evaluate" half of this contract is implemented as a pure, credential-blind,
+non-executing evaluator in `src/trade_trace/tools/risk.py`
+(`evaluate_risk_policy`), surfaced as the **read-only** tool `risk.evaluate`. It
+takes a proposed `pretrade_intent` (by `proposed_intent_id` or an inline
+`proposed_intent`) plus a `risk_policy_version` row and caller-supplied input
+`snapshots` (exposure projection, market/quote/book, imported account state),
+and RETURNS per-rule results plus an aggregate `pass`/`warn`/`fail`/`missing_data`
+status with the matching receipt `outcome`. It writes no rows and never blocks,
+signs, places, or routes an order; its verdict drops straight into
+`risk.check_record` so a recorded receipt is no longer a hand-crafted,
+caller-trusted verdict.
+
+Policy `rules_json` entries are data, not prose. Each rule carries a
+`limit_class`, a `severity` (`warning` or `hard_block`), a `threshold`, and an
+optional `waiver` class. Covered §3.1 limit classes: `notional`,
+`market_exposure`, `category_exposure`, `total_exposure`, `daily_loss`,
+`weekly_loss`, `spread`, `slippage`, `time_to_resolution` (a minimum-runway
+check), `allowed_categories`, `blocked_categories`, `required_links` (required
+forecast/thesis/decision links), `approval_threshold`, `paper_only`, and
+`close_only`. Reason codes are stable: `within_limit`, `limit_exceeded`,
+`category_blocked`, `category_not_allowed`, `required_link_missing`,
+`approval_threshold_exceeded`, `paper_only_violation`, `close_only_violation`,
+`missing_input_data`, `stale_input_data`, `unknown_limit_class`,
+`malformed_rule`.
+
+The aggregate is a deterministic fold over per-rule severities
+(`hard_block` > `missing_data` > `warning` > `info`). `missing_data` is never a
+soft pass: a rule the evaluator cannot apply (missing input, malformed rule, or
+an `unknown_limit_class` the evaluator refuses to guess at) raises the aggregate
+to at least `missing_data`, and a `hard_block` violation still outranks
+`missing_data`.
+
 ### 3.2 Execution intents
 
 An execution intent is an immutable local pre-trade ticket. It is not an order and carries no authority to execute.
@@ -186,6 +220,8 @@ Reconciliation compares Trade Trace's local projection against imported executio
 - ambiguous resolution or insufficient data to choose a projection;
 - unreviewed policy violation or waiver-boundary breach.
 
+The mismatch-code set a reconciliation record reports is **deterministically derived** from append-only local + imported rows and must be byte-reproducible for a given `as_of`. Caller-supplied mismatch codes are never unioned into that derived set; they are recorded on a distinct `manually_flagged` operator-annotation channel (surfaced alongside, but separate from, the derived `mismatch_codes`) so the derived set stays reproducible and a caller can never silently mutate or escalate the derivation (including `diff_severity`, which is derived from the derived set alone). Downstream cleanliness gates (`reconciliation_cleanliness`) treat a record as an open critical breach when its derived severity/codes are critical **or** it carries an operator-flagged critical code, so operator-flagged breaches still gate.
+
 The output is evidence for an external operator/executor. Trade Trace does not cancel, halt, or remediate external orders.
 
 ## 6. Audit bundles, replay cases, and due work
@@ -223,7 +259,7 @@ Adapter constraints:
 ## 8. Implementation order
 
 1. **Shared substrate contracts:** append-only lifecycle/event rows, idempotency, provenance/as-of fields, redaction conventions, and schema gates.
-2. **Versioned risk policy and pre-trade checks:** deterministic policy data, rule results, reason codes, stale/missing-data handling, and waiver requirements.
+2. **Versioned risk policy and pre-trade checks:** deterministic policy data, rule results, reason codes, stale/missing-data handling, and waiver requirements. The deterministic evaluator (`risk.evaluate` / `evaluate_risk_policy`) is shipped (trade-trace-g629); see §3.1 "Deterministic evaluator".
 3. **Execution intents and approval/waiver records:** immutable intent rows plus lifecycle views derived from checks and approvals.
 4. **Paper trading ledger:** conservative fill model, paper positions/P&L/exposure, and paper reconciliation fixtures.
 5. **Execution-event and account-snapshot imports:** validation, quarantine, corrections, source precedence, confidence, and staleness.
@@ -237,8 +273,8 @@ Future work is not complete until fixtures and tests cover at least:
 
 - paper full fill, partial fill, no fill, stale/missing book, slippage cap, and duplicate paper fill idempotency;
 - live-intent pre-trade pass, warning, fail, missing-data, waiver-required, warning waiver, expired waiver, and hard-block violation;
-- rejected external order, partial fill, duplicate fill, orphan external order/fill, stale account snapshot, and imported correction;
-- reconciliation match, mismatch, ambiguous resolution, stale source precedence, and local projection vs imported account-truth disagreement;
+- rejected external order, partial fill, duplicate fill, orphan external order/fill, stale account snapshot, and imported correction — the external execution-receipt import cluster (`external_receipt.import/get/list/report`) is shipped and public (trade-trace-g776); each receipt is sanitized, append-only, credential-blind imported evidence (never TT-fetched), and malformed/secret-bearing/credential-shaped/impossible payloads are quarantined at the import boundary. Gates: `tests/integration/test_external_receipts.py` (boundary quarantine, secret/credential rejection, imported-correction labelling) and `tests/integration/test_reconciliation_records.py` §9 gates (`test_recon_gate_rejected_external_order_for_approved_intent`, `test_recon_gate_orphan_external_order_no_intent`, `test_recon_gate_mismatch_orphan_and_duplicate`, `test_recon_gate_partial_fill_remaining_mismatch`, `test_recon_gate_imported_correction_is_consumed_not_orphaned`) pin that `reconciliation._build_derived` consumes these rows into `REJECTED_APPROVED_INTENT` / `ORPHAN_EXTERNAL_ORDER` / `ORPHAN_EXTERNAL_FILL` / `DUPLICATE_FILL` / `PARTIAL_FILL_REMAINING_MISMATCH`;
+- reconciliation match, mismatch, ambiguous resolution, stale source precedence, and local projection vs imported account-truth disagreement — the account-snapshot import cluster (`account_snapshot.import/get/list/report`) is shipped and public (trade-trace-qfn8); each snapshot is sanitized, append-only, credential-blind imported evidence (never TT-fetched), labelled `record_kind=sanitized_imported_account_snapshot` with provenance and source-precedence/confidence/staleness semantics, and malformed/secret-bearing/credential-shaped/impossible (negative, available>total) payloads are quarantined at the import boundary. Gates: `tests/integration/test_account_snapshots.py` (boundary quarantine, secret/credential rejection, imported-evidence-with-provenance labelling, freeze-state regression) and `tests/integration/test_reconciliation_records.py` §9 gates (`test_recon_gate_stale_source_precedence`, `test_recon_gate_local_vs_imported_position_disagreement`, `test_recon_gate_local_vs_imported_balance_disagreement`, `test_recon_gate_missing_snapshot_derives_balance_and_position_mismatch`) pin that `reconciliation._latest_snapshot` reads these rows by source-precedence ordering and `_build_derived` consumes them into `STALE_SNAPSHOT` / `POSITION_MISMATCH` / `BALANCE_MISMATCH`;
 - audit bundle redaction and replay anti-leakage, including evaluator-only labels hidden from candidate-visible inputs;
 - schema/log/export scans proving no credentials, private payloads, execution verbs, or Trade Trace-owned order actions leak into the public surface;
 - opt-in Polymarket metadata disabled by default, no scheduler behavior, no secrets, no private payload leakage, and correct provenance/staleness fields when enabled.

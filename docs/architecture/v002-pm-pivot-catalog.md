@@ -40,7 +40,7 @@ behind the experimental tier (`public_names(include_experimental=True)` /
 the reconciliation/execution-truth cluster, and the anchored-calibration unit
 plus speculative viewers:
 
-`account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `approval.get`, `approval.list`, `approval.record`, `approval.report`, `autonomous_incident.record`, `autonomous_incident.report`, `autonomous_run.get`, `autonomous_run.record`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.anchor_to_snapshot`, `journal.restore`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `report.calibration_anchored`, `report.calibration_terminal`, `report.decision_velocity`, `report.execution_quality`, `report.market_lifecycle`, `report.memory_usefulness`, `report.operational_health`, `report.paper_exposure`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.resolution_quality`, `risk.check_record`, `risk.policy_version_add`, `snapshot.fetch_series`.
+`account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `approval.get`, `approval.list`, `approval.record`, `approval.report`, `autonomous_incident.record`, `autonomous_incident.report`, `autonomous_run.get`, `autonomous_run.record`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.anchor_to_snapshot`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `report.calibration_anchored`, `report.calibration_terminal`, `report.decision_velocity`, `report.execution_quality`, `report.market_lifecycle`, `report.memory_usefulness`, `report.operational_health`, `report.paper_exposure`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.resolution_quality`, `risk.check_record`, `risk.policy_version_add`, `snapshot.fetch_series`.
 
 The 3 removed redundant report tools (`report.calibration_trajectory`,
 `report.strategy_performance`, `report.amm_slippage`) are gone from the
@@ -251,7 +251,7 @@ omits them. They count against the v0.0.2 total of 45.
 | `market.refresh(market_id)`                  | re-fetch state for a bound market | adapter-only; disabled by default |
 | `snapshot.fetch(market_id, at=now)`          | capture live implied probability | adapter-only; falls back to `snapshot.add` (manual) when disabled |
 | `snapshot.fetch_series(market_id, from, to)` | capture trajectory series for `report.time_decay_sharpening` and `report.calibration_anchored` baselines | adapter-only; **no background scheduler** (see §3.3); falls back to manual `snapshot.add` loop when disabled |
-| `outcome.fetch(market_id)`                   | ingest on-chain resolution | adapter-only; **no background scheduler**; manual `resolution.add` is always available |
+| `outcome.fetch(market_id)`                   | ingest on-chain resolution | adapter-only; **no background scheduler**; requires `network.polymarket.polygon_rpc_url` for the on-chain confirmation step (fails closed `CONFIG_REQUIRED` when unset, with a `no_rpc_resolution_evidence_route` / `hint` pointing at the Gamma read path — see §3.6); manual `resolution.add` is always available |
 | `forecast.anchor_to_snapshot(forecast_id, snapshot_id)` | post-hoc anchor for `report.calibration_anchored`; idempotent; corrections via `supersedes_forecast_id` | local-only |
 
 ### 2.7 Report consolidation (28 → 13)
@@ -446,6 +446,47 @@ its own bead. Users with 0.0.1rc3 bundles re-import from their
 upstream source (the producing agent's logs / broker exports), which
 they generally still have because there is no 0.0.1 stable cut.
 
+### 3.6 No-RPC resolution-evidence route (`outcome.fetch` vs Gamma read path)
+
+**Decision (bead trade-trace-isqo):** `outcome.fetch` ingests
+*on-chain* resolution and therefore requires
+`network.polymarket.polygon_rpc_url`; with that key unset it fails
+closed with `CONFIG_REQUIRED`
+(`details.config_key = "network.polymarket.polygon_rpc_url"`). We do
+**not** auto-fall back to the Gamma-reported outcome, because doing so
+would silently substitute a venue read for on-chain confirmation and
+weaken the finality guarantee of an `outcome`/`resolution` row — a
+resolution-contract change that is out of scope for a no-RPC
+deployment to make implicitly.
+
+Instead, the no-RPC deployment (Gamma enabled, `polygon_rpc_url`
+unset) has a **signposted** alternative: the Gamma read path
+(`snapshot.fetch` / `market.refresh`) needs no RPC endpoint and
+already surfaces Gamma's resolution-evidence fields
+(`winningOutcome` / `outcomePrices`, normalized into
+`markets.venue_metadata_json`). A caller reads that evidence and
+records the resolution with `resolution.add`, which is always
+available regardless of adapter config.
+
+To stop an automated resolution feeder from dead-ending here (which
+would leave forecasts perpetually pending and never reach the
+calibration `N>=20` floor), two non-contract-changing signposts were
+added:
+
+- `outcome.fetch`'s `CONFIG_REQUIRED` error now carries
+  `details.no_rpc_resolution_evidence_route = "snapshot.fetch"` and a
+  human-readable `details.hint` naming the Gamma read path +
+  `resolution.add`.
+- The `resolve_due_forecast` work-queue obligation
+  (`report.work_queue` / `report.bootstrap`) lists
+  `fetch_gamma_resolution_evidence_via_snapshot_fetch_when_no_polygon_rpc`
+  in its `allowed_actions`, so the no-RPC route is discoverable from
+  the obligation itself, not only from the failed call.
+
+The forbidden-action and read-only boundary of `report.work_queue`
+is unchanged: this is a pointer to an existing adapter read tool, not
+a new fetch/scheduler/broker capability.
+
 ---
 
 ## 4. Transport contract for the catalog/transport gate
@@ -524,7 +565,7 @@ update those pins and docs together.
 PYTHONPATH=src python -c \
   "from trade_trace.core import default_registry; \
    print(len(default_registry().public_names()))"
-# Expected: 69
+# Expected: 70
 
 # 1b. Frozen experimental Product-B surface (epic trade-trace-4kec)
 PYTHONPATH=src python -c \

@@ -297,6 +297,86 @@ def test_snapshot_fetch_series_enabled_writes_each_fixture_point(tmp_path: Path,
     assert [item["captured_at"] for item in env.data["items"]] == ["2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z"]
 
 
+# -- snapshot.fetch_series unfrozen into the Phase-1 public catalog (xtdo) --
+# It was frozen in EXPERIMENTAL_ANCHORED_VIEWERS alongside the anchored-
+# calibration readers; bead trade-trace-xtdo unfroze the three readers (the
+# anchor WRITER forecast.anchor_to_snapshot stays frozen, superseded by 4kec.9).
+
+
+def test_snapshot_fetch_series_is_in_default_public_catalog():
+    from trade_trace.core import default_registry
+
+    registry = default_registry()
+    assert "snapshot.fetch_series" in set(registry.public_names())
+    assert registry.get("snapshot.fetch_series").metadata()["catalog_visibility"] == "public"
+
+
+def test_snapshot_fetch_series_derives_per_point_idempotency_keys_from_base_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Each stored point's snapshot.added event carries a per-point key derived
+    from the caller's base key (`<base>:<idx>`), NOT a constant literal default.
+    Two series calls with DISTINCT base keys therefore record DISTINCT per-point
+    event keys — the pre-xtdo constant-literal default (`snapshot.fetch_series:
+    <idx>`) would have collided distinct calls onto the same keys. Asserted on
+    the events ledger, where idempotency_key is the canonical recorded value."""
+
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-series-idem")
+    _enable_adapter(home)
+
+    points = [
+        _fixture("snapshot_thin_book.json") | {"captured_at": "2026-02-01T00:00:00Z"},
+        _fixture("snapshot_amm_curve.json") | {"captured_at": "2026-02-01T01:00:00Z"},
+    ]
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path: {"points": points})
+
+    args = {"home": home, "market_id": market_id, "from": "2026-02-01T00:00:00Z", "to": "2026-02-01T02:00:00Z"}
+
+    first = mcp_call("snapshot.fetch_series", {**args, "idempotency_key": "series-key-A"})
+    assert first.ok, first
+    assert isinstance(first, SuccessEnvelope)
+    assert first.data["count"] == 2
+
+    distinct = mcp_call("snapshot.fetch_series", {**args, "idempotency_key": "series-key-B"})
+    assert distinct.ok, distinct
+
+    with sqlite3.connect(db_path(Path(home))) as conn:
+        keys = {
+            row[0]
+            for row in conn.execute(
+                "SELECT idempotency_key FROM events WHERE event_type='snapshot.added'"
+            ).fetchall()
+        }
+    # Per-point keys derive from BOTH base keys, two points each — and the old
+    # constant-literal default is absent.
+    assert {"series-key-A:0", "series-key-A:1", "series-key-B:0", "series-key-B:1"} <= keys
+    assert "snapshot.fetch_series:0" not in keys
+
+
+def test_snapshot_fetch_series_rejects_missing_idempotency_key_like_snapshot_fetch(
+    tmp_path: Path,
+):
+    """snapshot.fetch_series shares snapshot.fetch's contract: a retryable write
+    outside TOOL_PRIMARY_EVENT_TYPE, so a call omitting idempotency_key is
+    rejected with VALIDATION_ERROR (field=idempotency_key) BEFORE the adapter is
+    touched. Pins schema-vs-runtime parity for the unfrozen tool (bead xtdo)."""
+
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-series-noidem")
+
+    env = mcp_call(
+        "snapshot.fetch_series",
+        {"home": home, "market_id": market_id, "from": "2026-01-01T00:00:00Z", "to": "2026-01-02T00:00:00Z"},
+    )
+    assert not env.ok
+    assert isinstance(env, ErrorEnvelope)
+    assert env.error.code == "VALIDATION_ERROR"
+    assert env.error.details.get("field") == "idempotency_key"
+
+
 # -- market.refresh emits market.refreshed, which must be registered (AX-068) --
 # market.refresh re-syncs a bound market row from Gamma and emits a
 # `market.refreshed` event. The events log is default-deny: an unregistered
@@ -346,16 +426,52 @@ def test_market_refresh_succeeds_and_emits_registered_event(tmp_path: Path, monk
     assert env.ok, env
     assert isinstance(env, SuccessEnvelope)
     assert env.data["id"] == market_id
-    # The market.refreshed event must have been written (default-deny would
-    # have raised KeyError -> ErrorEnvelope otherwise).
+
+    # INV-4 co-commit contract (trade-trace-td0i). The markets table is the
+    # one mutable, non-append-only table the adapter writes: market.refresh
+    # OVERWRITES the row in place. Unlike the append-only tables, there is no
+    # DB-level trigger that aborts the mutation if the audit-event write fails
+    # — atomicity is enforced ONLY by the Python UnitOfWork in
+    # _upsert_market, which wraps the UPDATE markets ... and the
+    # emit_event("market.refreshed") in a single transaction. A future
+    # refactor that hoists the UPDATE out of the UoW would silently drop the
+    # audit guarantee with no test catching it. So pin BOTH halves of the
+    # co-commit in ONE assertion block: (a) the markets row holds the
+    # post-refresh state AND (b) the events table has a market.refreshed event
+    # whose subject_id is that same market row. Reading both inside one block
+    # asserts they landed together.
     conn = sqlite3.connect(db_path(Path(home)))
     try:
-        count = conn.execute(
-            "SELECT COUNT(*) FROM events WHERE event_type='market.refreshed'"
-        ).fetchone()[0]
+        market_row = conn.execute(
+            "SELECT title, question, state, bound_via FROM markets WHERE id=?",
+            (market_id,),
+        ).fetchone()
+        event_rows = conn.execute(
+            "SELECT subject_id, subject_kind FROM events "
+            "WHERE event_type='market.refreshed'"
+        ).fetchall()
     finally:
         conn.close()
-    assert count == 1
+
+    # (a) The mutable markets row carries the new venue state from the fake
+    # Gamma payload — proving the UPDATE landed. bound_via flipped manual ->
+    # adapter and title/question/state were all overwritten in place.
+    assert market_row is not None
+    title, question, state, bound_via = market_row
+    assert title == "Refreshable market?"
+    assert question == "Refreshable market?"
+    assert state == "open"
+    assert bound_via == "adapter"
+
+    # (b) Exactly one market.refreshed audit event was co-committed, and its
+    # subject_id points at the very row we just verified. If the UoW ever
+    # stopped enforcing atomicity (e.g. the UPDATE moved outside the
+    # transaction), this block would catch a mutated row with no matching
+    # event (or vice versa).
+    assert len(event_rows) == 1
+    event_subject_id, event_subject_kind = event_rows[0]
+    assert event_subject_id == market_id
+    assert event_subject_kind == "market"
 
 
 def test_market_refreshed_is_registered_in_semantic_keys():

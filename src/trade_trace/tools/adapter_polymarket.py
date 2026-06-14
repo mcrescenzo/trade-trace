@@ -498,7 +498,12 @@ def _ensure_market_instrument(uow: UnitOfWork, market_id: str, *, actor_id: str)
 def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
     bid = raw.get("bestBid") or raw.get("bid")
     ask = raw.get("bestAsk") or raw.get("ask")
-    price = raw.get("price") or raw.get("lastTradePrice") or raw.get("last") or raw.get("mid")
+    # Sentinel-aware: a legitimate 0.0 price (resolved-NO / dead contract) is
+    # falsy, so the old `raw.get("price") or raw.get("lastTradePrice") or ...`
+    # chain skipped past a real 0.0 to a later, non-zero field. `_first_present`
+    # returns the first key whose value is not None/"" — preserving 0.0
+    # (trade-trace-ph4n).
+    price = _first_present(raw, "price", "lastTradePrice", "last", "mid")
     bidf = _optional_float(bid, "bestBid")
     askf = _optional_float(ask, "bestAsk")
     pricef = _optional_float(price, "price")
@@ -531,7 +536,14 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
         "freshness": {"as_of": _first_present(raw, "asOf", "updatedAt", "timestamp"), "provenance": "polymarket_gamma_payload"},
         "depth_provenance": "caller_or_polymarket_gamma_payload",
     }
-    return {"price": mid, "bid": bidf, "ask": askf, "mid": mid, "spread": (askf-bidf) if bidf is not None and askf is not None else None, "volume": raw.get("volume"), "open_interest": raw.get("openInterest"), "implied_probability": raw.get("impliedProbability") or mid, "liquidity_depth_json": depth, "metadata_json": metadata}
+    # Sentinel-aware: `impliedProbability` of 0.0 is a real value (resolved-NO /
+    # dead YES contract worth $0), but 0.0 is falsy, so the old
+    # `raw.get("impliedProbability") or mid` overwrote it with the book mid
+    # (e.g. 0.01), misrepresenting the market in calibration/PnL reports. Only
+    # fall back to mid when the field is actually absent (trade-trace-ph4n).
+    implied = raw.get("impliedProbability")
+    implied_probability = implied if implied is not None else mid
+    return {"price": mid, "bid": bidf, "ask": askf, "mid": mid, "spread": (askf-bidf) if bidf is not None and askf is not None else None, "volume": raw.get("volume"), "open_interest": raw.get("openInterest"), "implied_probability": implied_probability, "liquidity_depth_json": depth, "metadata_json": metadata}
 
 
 def _insert_snapshot(args: dict[str, Any], ctx: ToolContext, market_id: str, snap: dict[str, Any], captured_at: str) -> dict[str, Any]:
@@ -594,9 +606,20 @@ def _snapshot_fetch_series(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
             raise _tool_error(exc) from exc
     points = raw.get("points", raw) if isinstance(raw, dict) else raw
     items = []
+    # snapshot.fetch_series is a retryable write whose semantic identity is not
+    # in TOOL_PRIMARY_EVENT_TYPE, so — exactly like snapshot.fetch — the
+    # dispatcher requires a caller-supplied idempotency_key (MISSING_IDEMPOTENCY
+    # otherwise) unless the caller opts into at-least-once via
+    # _allow_no_idempotency. Derive a per-point key from the REAL base key so
+    # each stored snapshot row is independently idempotent and two distinct
+    # series calls do NOT collide on a constant literal default. When no base
+    # key is present (the _allow_no_idempotency opt-out path), pass None
+    # through per point — matching snapshot.fetch, which forwards
+    # args.get("idempotency_key") verbatim (trade-trace-xtdo).
+    base_key = args.get("idempotency_key")
     for idx, point in enumerate(points or []):
         item_args = dict(args)
-        item_args["idempotency_key"] = f"{args.get('idempotency_key', 'snapshot.fetch_series')}:{idx}"
+        item_args["idempotency_key"] = f"{base_key}:{idx}" if base_key else None
         items.append(
             _insert_snapshot(
                 item_args,
@@ -796,16 +819,53 @@ def _market_search(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     }
 
 
+def _outcome_fetch_existing(conn: Any, market_id: str) -> Any:
+    """Return an existing polymarket outcome id for ``market_id``, or None.
+
+    The (instrument_id, 'polymarket') pair is the de-facto uniqueness key for
+    an outcome.fetch ingestion; this helper centralises the lookup so the
+    pre-lock fast path and the inside-transaction re-check stay identical.
+    """
+
+    return conn.execute(
+        "SELECT id FROM outcomes WHERE instrument_id=? AND source='polymarket'",
+        (market_id,),
+    ).fetchone()
+
+
 def _outcome_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    # trade-trace-4kbk: the existence check and the INSERT formerly ran in two
+    # separate db_for_args connections (and two separate UnitOfWork
+    # transactions). Between the pre-RPC SELECT and the post-RPC INSERT, a
+    # concurrent outcome.fetch for the same market could insert a polymarket
+    # outcome row, so the second caller's INSERT produced a DUPLICATE row for
+    # the (instrument_id, 'polymarket') pair (the outcomes table has no UNIQUE
+    # constraint on that pair), yielding ambiguous outcome state that
+    # signal.scan / resolved_final NOT EXISTS checks read incorrectly.
+    #
+    # Fix: keep a single db connection for the whole handler, and re-check
+    # existence *inside* the same UnitOfWork that performs the INSERT. The
+    # UnitOfWork opens with BEGIN IMMEDIATE, which acquires the SQLite writer
+    # lock up front, so two concurrent writers are serialized: the second one
+    # blocks at BEGIN IMMEDIATE until the first commits, then its
+    # inside-transaction re-check sees the now-existing row and returns the
+    # idempotent replay instead of inserting a duplicate. The slow RPC fetch
+    # stays OUTSIDE the writer lock so it does not serialize unrelated writers.
     with db_for_args(args) as db:
-        client = PolymarketClient(load_config(db.connection))
-        market_id=require(args,"market_id")
-        row = db.connection.execute("SELECT venue_metadata_json FROM markets WHERE id=?", (market_id,)).fetchone()
+        conn = db.connection
+        client = PolymarketClient(load_config(conn))
+        market_id = require(args, "market_id")
+        row = conn.execute(
+            "SELECT venue_metadata_json FROM markets WHERE id=?", (market_id,)
+        ).fetchone()
         if not row:
-            raise ToolError(ErrorCode.NOT_FOUND,"market_id not found",details={"market_id":market_id})
+            raise ToolError(ErrorCode.NOT_FOUND, "market_id not found", details={"market_id": market_id})
         meta = json.loads(row[0] or "{}")
         out = meta.get("outcome") or {}
-        existing = db.connection.execute("SELECT id FROM outcomes WHERE instrument_id=? AND source='polymarket'", (market_id,)).fetchone()
+        # Fast path: if the outcome already exists, skip the RPC round-trip
+        # entirely. This is an optimization, not the correctness guarantee —
+        # the authoritative re-check happens inside the UnitOfWork below.
+        existing = _outcome_fetch_existing(conn, market_id)
         if existing:
             return {"id": existing[0], "instrument_id": market_id, "idempotent_replay": True, "cache_hit": True}
         try:
@@ -815,12 +875,18 @@ def _outcome_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             raise _outcome_fetch_error(exc) from exc
         status = out.get("status") or ("void" if meta.get("voided") else "resolved_final")
         label = out.get("label") or meta.get("winningOutcome") or meta.get("winning_outcome") or "unknown"
-    with db_for_args(args) as db:
-        with UnitOfWork(db.connection) as uow:
+        with UnitOfWork(conn) as uow:
+            # Authoritative TOCTOU-safe re-check: BEGIN IMMEDIATE serialized us
+            # against any concurrent writer, so a row that appeared while we
+            # were doing the RPC fetch is visible here. Return the idempotent
+            # replay instead of inserting a second polymarket outcome row.
+            existing = _outcome_fetch_existing(conn, market_id)
+            if existing:
+                return {"id": existing[0], "instrument_id": market_id, "idempotent_replay": True, "cache_hit": True}
             _ensure_market_instrument(uow, market_id, actor_id=ctx.actor_id)
-            oid=args.get("id") or new_id("out")
-            created_at=now_iso()
-            metadata=_json({"polygon_rpc": rpc, "tx_hash": tx_hash})
+            oid = args.get("id") or new_id("out")
+            created_at = now_iso()
+            metadata = _json({"polygon_rpc": rpc, "tx_hash": tx_hash})
             uow.execute("INSERT INTO outcomes(id,instrument_id,resolved_at,outcome_label,outcome_value,status,source,confidence,agent_id,model_id,environment,run_id,metadata_json,created_at,actor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (oid,market_id,out.get("resolved_at") or now_iso(),label,out.get("value"),status,"polymarket",out.get("confidence"),None,None,None,None,metadata,created_at,ctx.actor_id))
             emit_event(uow,event_type="outcome.recorded",subject_kind="outcome",subject_id=oid,payload={"id":oid,"instrument_id":market_id,"status":status,"outcome_label":label},actor_id=ctx.actor_id,idempotency_key=args.get("idempotency_key"),ctx=ctx)
             return {"id":oid,"instrument_id":market_id,"status":status,"outcome_label":label,"metadata_json":metadata}
@@ -837,7 +903,14 @@ def register_adapter_polymarket_tools(registry: ToolRegistry) -> None:
     # handler defaults it ("now").
     registry.register("market.refresh", _market_refresh, is_write=True, example_minimal={"market_id":"mkt_...","idempotency_key":"00000000-0000-4000-8000-marketrefresh01"})
     registry.register("snapshot.fetch", _snapshot_fetch, is_write=True, example_minimal={"market_id":"mkt_...","at":"now","idempotency_key":"00000000-0000-4000-8000-snapshotfetch01"}, optional_keys=("at",))
-    registry.register("snapshot.fetch_series", _snapshot_fetch_series, is_write=True, example_minimal={"market_id":"mkt_...","from":"2026-01-01T00:00:00Z","to":"2026-01-02T00:00:00Z"})
+    # snapshot.fetch_series has the SAME retryable-write idempotency contract as
+    # snapshot.fetch above: it is is_write=True and absent from
+    # TOOL_PRIMARY_EVENT_TYPE, so the dispatcher rejects calls without an
+    # explicit idempotency_key (MISSING_IDEMPOTENCY_KEY). Advertise the key in
+    # the derived schema (via example_minimal) so the schema matches enforcement
+    # — otherwise a schema-trusting bot omits it and gets a confusing rejection
+    # (bead trade-trace-xtdo; same gap snapshot.fetch closed in trade-trace-2cmb).
+    registry.register("snapshot.fetch_series", _snapshot_fetch_series, is_write=True, example_minimal={"market_id":"mkt_...","from":"2026-01-01T00:00:00Z","to":"2026-01-02T00:00:00Z","idempotency_key":"00000000-0000-4000-8000-snapfetchseries1"})
     registry.register("outcome.fetch", _outcome_fetch, is_write=True, example_minimal={"market_id":"mkt_...","idempotency_key":"00000000-0000-4000-8000-outcomefetch001"})
     # Live read-only discovery: find bindable binary markets WITHOUT a pre-known
     # external_id or an already-bound market (bead trade-trace-663l). Adapter-only;

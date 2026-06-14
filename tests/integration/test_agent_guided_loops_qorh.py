@@ -172,34 +172,54 @@ def test_decision_memory_reflect_loop_rejects_unknown_enum_and_stale_docs_then_r
     assert rc == 0
     props = reflect_schema["data"]["json_schema"]["properties"]
     assert "target" in props and "insight" in props
-    assert "derived_from" not in props  # stale/deferred docs examples must not be advertised.
+    # The §10 edge-sugar fields are now implemented and advertised
+    # (bead trade-trace-qikt); they take memory-node id strings, not
+    # {kind,id} objects, so an object-shaped value is a VALIDATION_ERROR
+    # (not the old UNSUPPORTED_CAPABILITY deferral).
+    assert "derived_from" in props
 
-    stale_docs = _mcp(home, "memory.reflect", {
+    malformed = _mcp(home, "memory.reflect", {
         "target": {"kind": "decision", "id": decision_id},
-        "insight": "This stale-doc edge shortcut should be rejected.",
+        "insight": "Object-shaped derived_from is the wrong shape.",
         "derived_from": [{"kind": "source", "id": "src_missing"}],
     })
-    assert stale_docs.ok is False
-    assert stale_docs.error.code.value == "UNSUPPORTED_CAPABILITY"
-    assert stale_docs.error.details["field"] == "derived_from"
+    assert malformed.ok is False
+    assert malformed.error.code.value == "VALIDATION_ERROR"
+    assert malformed.error.details["field"] == "derived_from"
+
+    # A valid memory-node id wires the derived_from edge in the same call.
+    prior = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "Prior observation the skip reflection builds on.",
+        "idempotency_key": "00000000-0000-4000-8000-qorh00000009",
+    })
+    assert prior.ok, prior
 
     reflection = _mcp(home, "memory.reflect", {
         "target": {"kind": "decision", "id": decision_id},
-        "insight": "The schema-guided skip preserved discipline when edge was absent.",
+        "insight": "The schema-guided skip preserved discipline; built on a prior note.",
         "strength_tags": ["skip-discipline"],
+        "derived_from": [prior.data["id"]],
         "idempotency_key": "00000000-0000-4000-8000-qorh00000008",
     })
     assert reflection.ok, reflection
+    assert {
+        (e["edge_type"], e["target_id"]) for e in reflection.data["edges"]
+    } == {("derived_from", prior.data["id"])}
 
     db = open_database(db_path(home), create_parent=False)
     try:
-        edge = db.connection.execute(
-            "SELECT target_kind, target_id, edge_type FROM edges WHERE source_id = ?",
+        edges = db.connection.execute(
+            "SELECT target_kind, target_id, edge_type FROM edges "
+            "WHERE source_id = ? ORDER BY edge_type",
             (reflection.data["id"],),
-        ).fetchone()
+        ).fetchall()
     finally:
         db.close()
-    assert edge == ("decision", decision_id, "about")
+    assert {tuple(r) for r in edges} == {
+        ("decision", decision_id, "about"),
+        ("memory_node", prior.data["id"], "derived_from"),
+    }
 
 
 def test_low_sample_reports_and_playbook_adherence_expose_caveats_not_skill_claims(home):

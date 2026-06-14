@@ -34,7 +34,7 @@ def _report_lifecycle(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`report.lifecycle` — derived lifecycle gaps/cases, read-only."""
 
     stale_threshold_days = args.get("stale_threshold_days", 14)
-    if not isinstance(stale_threshold_days, int) or stale_threshold_days < 0:
+    if not isinstance(stale_threshold_days, int) or isinstance(stale_threshold_days, bool) or stale_threshold_days < 0:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "stale_threshold_days must be a non-negative integer", details={"field": "stale_threshold_days", "value": stale_threshold_days})
     states = args.get("states")
     status = args.get("status")
@@ -155,7 +155,7 @@ def _report_policy_candidates(args: dict[str, Any], ctx: ToolContext) -> dict[st
 
 def _work_queue_common(args: dict[str, Any], ctx: ToolContext, *, surface: str) -> dict[str, Any]:
     stale_threshold_days = args.get("stale_threshold_days", 14)
-    if not isinstance(stale_threshold_days, int) or stale_threshold_days < 0:
+    if not isinstance(stale_threshold_days, int) or isinstance(stale_threshold_days, bool) or stale_threshold_days < 0:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "stale_threshold_days must be a non-negative integer", details={"field": "stale_threshold_days", "value": stale_threshold_days})
     kinds = args.get("kinds")
     kind = args.get("kind")

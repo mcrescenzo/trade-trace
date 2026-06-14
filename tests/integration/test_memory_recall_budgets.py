@@ -14,6 +14,15 @@ from pathlib import Path
 from tests._mcp_helpers import mcp_default as _mcp
 from trade_trace.storage.paths import db_path
 
+# A valid graph entrypoint (kind+id) that no seeded node is linked to.
+# Per bead trade-trace-2iug the graph strategy abstains (returns []) when
+# given no context, but with a context that has zero connected nodes it
+# falls through to `rest = sorted(in_scope)` — i.e. the full in-scope
+# corpus in deterministic id order. The budget/shaping tests below use this
+# as a stable full-corpus fixture without depending on the no-context
+# abstain path (trade-trace-2auq).
+_GRAPH_CTX_NO_LINKS: dict[str, str] = {"kind": "instrument", "id": "ins_pz23_unlinked"}
+
 
 def _seed_node(home: Path, node_id: str, body: str, *, confidence: float = 1.0) -> str:
     return _mcp(home, "memory.retain", {
@@ -235,7 +244,8 @@ def test_compact_applies_before_max_chars(home):
     _seed_node(home, "mem_pz23_compact_b", "B" * 10)
 
     env = _mcp(home, "memory.recall", {
-        "query": "", "strategies": ["graph"], "k": 2, "compact": True, "max_chars": 120,
+        "query": "", "strategies": ["graph"], "context": _GRAPH_CTX_NO_LINKS,
+        "k": 2, "compact": True, "max_chars": 120,
     })
 
     assert env.ok
@@ -249,7 +259,8 @@ def test_max_chars_stops_at_first_overflow_without_skipping_later_smaller_items(
     _seed_node(home, "mem_pz23_overflow_c", "C" * 10)
 
     env = _mcp(home, "memory.recall", {
-        "query": "", "strategies": ["graph"], "k": 3, "max_chars": 20,
+        "query": "", "strategies": ["graph"], "context": _GRAPH_CTX_NO_LINKS,
+        "k": 3, "max_chars": 20,
     })
 
     assert env.ok
@@ -274,7 +285,8 @@ def test_per_strategy_lists_are_raw_and_not_confidence_or_budget_filtered(home):
     high = _seed_node(home, "mem_pz23_raw_b", "B" * 10, confidence=0.9)
 
     env = _mcp(home, "memory.recall", {
-        "query": "", "strategies": ["graph"], "k": 2, "mode": "per_strategy",
+        "query": "", "strategies": ["graph"], "context": _GRAPH_CTX_NO_LINKS,
+        "k": 2, "mode": "per_strategy",
         "min_confidence": 0.5, "max_chars": 5,
     })
 
@@ -289,10 +301,191 @@ def test_recall_events_and_stats_count_only_emitted_item_ids_after_filters(home)
     _seed_node(home, "mem_pz23_stats_c", "C" * 10, confidence=0.9)
 
     env = _mcp(home, "memory.recall", {
-        "query": "", "strategies": ["graph"], "k": 3, "max_chars": 20,
+        "query": "", "strategies": ["graph"], "context": _GRAPH_CTX_NO_LINKS,
+        "k": 3, "max_chars": 20,
     })
 
     assert env.ok
     assert [it["id"] for it in env.data["items"]] == [kept]
     assert _last_recall_node_ids(home) == [kept]
     assert _stats_counts(home) == {kept: 1}
+
+
+# -- batched source_refs (trade-trace-jd0x) -------------------------
+#
+# `_shape_recall_items` previously issued one `_source_refs_for` query
+# per returned item (N+1, up to k=100 round-trips). It now collects the
+# final node_ids and fetches every edge in a single `IN (...)` query via
+# `_source_refs_batch`. These tests pin the batched helper's behavior
+# (empty set, duplicate ids, no-edge nodes, byte-identical ordering vs.
+# the per-node path) and assert the recall response is unchanged.
+
+
+def _insert_edge(conn, *, edge_id, source_id, target_kind, target_id, edge_type, created_at):
+    conn.execute(
+        "INSERT INTO edges (id, source_kind, source_id, target_kind, target_id, "
+        "edge_type, weight, metadata_json, created_at, actor_id) "
+        "VALUES (?, 'memory_node', ?, ?, ?, ?, NULL, '{}', ?, 'actor')",
+        (edge_id, source_id, target_kind, target_id, edge_type, created_at),
+    )
+
+
+def test_source_refs_batch_empty_input_returns_empty_dict(home):
+    from trade_trace.tools.memory import _source_refs_batch
+
+    with sqlite3.connect(db_path(home)) as conn:
+        assert _source_refs_batch(conn, []) == {}
+
+
+def test_source_refs_batch_seeds_every_id_even_with_no_edges(home):
+    from trade_trace.tools.memory import _source_refs_batch
+
+    with sqlite3.connect(db_path(home)) as conn:
+        # No edges exist for these ids; every requested id must still map
+        # to an empty list (so the recall item gets `source_refs: []`).
+        assert _source_refs_batch(conn, ["mem_a", "mem_b"]) == {
+            "mem_a": [],
+            "mem_b": [],
+        }
+
+
+def test_source_refs_batch_dedupes_duplicate_node_ids(home):
+    from trade_trace.tools.memory import _source_refs_batch
+
+    with sqlite3.connect(db_path(home)) as conn:
+        _insert_edge(
+            conn, edge_id="e1", source_id="mem_dup", target_kind="source",
+            target_id="src_1", edge_type="about", created_at="2026-01-01T00:00:00Z",
+        )
+        out = _source_refs_batch(conn, ["mem_dup", "mem_dup", "mem_dup"])
+
+    # Duplicates collapse to a single key with a single (un-duplicated)
+    # edge list — the IN-list params are de-duped before the query.
+    assert out == {
+        "mem_dup": [{"target_kind": "source", "target_id": "src_1", "edge_type": "about"}],
+    }
+
+
+def test_source_refs_batch_matches_per_node_helper_byte_for_byte(home):
+    from trade_trace.tools.memory import _source_refs_batch, _source_refs_for
+
+    with sqlite3.connect(db_path(home)) as conn:
+        # Insert edges out of the final sort order to prove the batched
+        # query's `ORDER BY source_id, edge_type, target_kind, target_id`
+        # reproduces the per-node `edge_type, target_kind, target_id` order.
+        _insert_edge(conn, edge_id="e1", source_id="mem_x", target_kind="thesis",
+                     target_id="th_2", edge_type="supports", created_at="2026-01-01T00:00:03Z")
+        _insert_edge(conn, edge_id="e2", source_id="mem_x", target_kind="source",
+                     target_id="src_9", edge_type="about", created_at="2026-01-01T00:00:02Z")
+        _insert_edge(conn, edge_id="e3", source_id="mem_x", target_kind="source",
+                     target_id="src_1", edge_type="about", created_at="2026-01-01T00:00:01Z")
+        _insert_edge(conn, edge_id="e4", source_id="mem_y", target_kind="decision",
+                     target_id="dec_1", edge_type="violates", created_at="2026-01-01T00:00:04Z")
+
+        node_ids = ["mem_x", "mem_y", "mem_empty"]
+        batched = _source_refs_batch(conn, node_ids)
+        per_node = {nid: _source_refs_for(conn, nid) for nid in node_ids}
+
+    assert batched == per_node
+    # Spell out the expected per-node ordering explicitly so a future
+    # ORDER BY regression is caught here, not just by the equivalence.
+    assert batched["mem_x"] == [
+        {"target_kind": "source", "target_id": "src_1", "edge_type": "about"},
+        {"target_kind": "source", "target_id": "src_9", "edge_type": "about"},
+        {"target_kind": "thesis", "target_id": "th_2", "edge_type": "supports"},
+    ]
+    assert batched["mem_empty"] == []
+
+
+def test_recall_source_refs_match_per_node_helper(home):
+    """End-to-end: the recall response's per-item `source_refs` is
+    byte-identical to what the per-node `_source_refs_for` helper would
+    produce for each returned node (batched path equivalence)."""
+
+    from trade_trace.tools.memory import _source_refs_for
+
+    nid = _seed_node(home, "mem_pz23_refs_a", "earnings refs body")
+    with sqlite3.connect(db_path(home)) as conn:
+        _insert_edge(conn, edge_id="er1", source_id=nid, target_kind="source",
+                     target_id="src_b", edge_type="about", created_at="2026-01-01T00:00:02Z")
+        _insert_edge(conn, edge_id="er2", source_id=nid, target_kind="source",
+                     target_id="src_a", edge_type="about", created_at="2026-01-01T00:00:01Z")
+        conn.commit()
+        expected = _source_refs_for(conn, nid)
+
+    env = _mcp(home, "memory.recall", {"query": "earnings refs", "k": 5})
+    assert env.ok
+    item = next((it for it in env.data["items"] if it["id"] == nid), None)
+    assert item is not None, env.data
+    assert item["source_refs"] == expected
+    # The edge_type/target ordering must be the deterministic batched order.
+    assert item["source_refs"] == [
+        {"target_kind": "source", "target_id": "src_a", "edge_type": "about"},
+        {"target_kind": "source", "target_id": "src_b", "edge_type": "about"},
+    ]
+
+
+def test_shape_recall_items_issues_one_edges_query_regardless_of_k(home):
+    """trade-trace-jb3q: `_shape_recall_items` must batch the per-item
+    source_refs fetch into a SINGLE edges query, not one round-trip per
+    returned node. The byte-for-byte parity tests above would still pass
+    under the old N+1 loop (correctness is unchanged); this test is the
+    regression guard that pins the *query count* so re-introducing the
+    per-item `_source_refs_for` call inside the loop fails CI.
+
+    We shape three items (each carrying its own provenance edges) against
+    a trace-instrumented connection and assert exactly one `FROM edges`
+    SELECT is issued. The old path would have fired three."""
+
+    from trade_trace.tools.memory import (
+        RecallOptions,
+        _load_in_scope_nodes,
+        _shape_recall_items,
+    )
+
+    node_ids = [
+        _seed_node(home, "mem_pz23_qc_a", "earnings qc body a"),
+        _seed_node(home, "mem_pz23_qc_b", "earnings qc body b"),
+        _seed_node(home, "mem_pz23_qc_c", "earnings qc body c"),
+    ]
+    with sqlite3.connect(db_path(home)) as conn:
+        # Every returned node has at least one outgoing edge, so the old
+        # per-item path would issue one edges query per node (an N+1).
+        for i, nid in enumerate(node_ids):
+            _insert_edge(
+                conn, edge_id=f"qce{i}", source_id=nid, target_kind="source",
+                target_id=f"src_qc_{i}", edge_type="about",
+                created_at=f"2026-01-01T00:00:0{i}Z",
+            )
+        conn.commit()
+
+    options = RecallOptions(
+        query="earnings qc", limit_k=10, max_chars=None, compact=False,
+        include_body=True, include_provenance=True, min_confidence=None,
+        node_types=None, mode="fused", as_of=None,
+        requested_strategies=["bm25", "temporal", "graph"], context={},
+    )
+
+    edges_query_count = 0
+
+    def _trace(sql: str) -> None:
+        nonlocal edges_query_count
+        if "from edges" in sql.lower():
+            edges_query_count += 1
+
+    with sqlite3.connect(db_path(home)) as conn:
+        in_scope_rows = _load_in_scope_nodes(conn, as_of=options.as_of)
+        scored_top = [(nid, 1.0 - idx * 0.01, {}) for idx, nid in enumerate(node_ids)]
+        conn.set_trace_callback(_trace)
+        items, _chars = _shape_recall_items(conn, scored_top, in_scope_rows, options)
+        conn.set_trace_callback(None)
+
+    # All three nodes shaped (sanity) and exactly ONE edges query for the
+    # whole batch — a per-item path would have issued three.
+    assert [it["id"] for it in items] == node_ids, items
+    assert edges_query_count == 1, edges_query_count
+    # The batched refs landed on each item (shape preserved).
+    for i, it in enumerate(items):
+        assert it["source_refs"] == [
+            {"target_kind": "source", "target_id": f"src_qc_{i}", "edge_type": "about"},
+        ], it

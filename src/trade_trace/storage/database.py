@@ -121,7 +121,13 @@ def read_snapshot(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
     conn.execute("BEGIN DEFERRED")
     try:
         yield conn
-    finally:
+    except Exception:
+        # If a caller writes inside the snapshot and then raises, those
+        # writes must be discarded — not silently committed. Mirrors
+        # Database.transaction() (trade-trace-7wvp).
+        conn.rollback()
+        raise
+    else:
         conn.commit()
 
 
@@ -233,7 +239,6 @@ def open_database(path: Path, *, create_parent: bool = True) -> Database:
     conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
     try:
         conn.execute("PRAGMA journal_mode = WAL")
-        conn.execute("PRAGMA synchronous = NORMAL")
     except sqlite3.OperationalError as exc:
         if "database is locked" not in str(exc).lower():
             raise
@@ -242,6 +247,17 @@ def open_database(path: Path, *, create_parent: bool = True) -> Database:
         # let the actual write statement honor busy_timeout and surface the
         # documented single_writer_lock envelope instead of failing during
         # connection setup.
+    # synchronous=NORMAL is a connection-scoped pragma that does not touch the
+    # WAL write lock, so it must run even when the journal_mode negotiation
+    # above hit a transient lock — otherwise a contended open silently leaves
+    # the connection at the SQLite default (FULL), changing durability/fsync
+    # behavior for the rest of its lifetime. Its own try/except keeps it
+    # resilient to the same transient lock without skipping it.
+    try:
+        conn.execute("PRAGMA synchronous = NORMAL")
+    except sqlite3.OperationalError as exc:
+        if "database is locked" not in str(exc).lower():
+            raise
     conn.execute("PRAGMA foreign_keys = ON")
     return Database(path=path, connection=conn)
 

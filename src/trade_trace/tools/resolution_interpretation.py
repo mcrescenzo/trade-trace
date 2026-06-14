@@ -22,6 +22,7 @@ from trade_trace.tools._helpers import (
     new_id,
     normalize_timestamp,
     now_iso,
+    reject_if_contains_secrets,
     require,
     store_metadata_json,
 )
@@ -84,6 +85,10 @@ def _interpret_resolution(args: dict[str, Any], ctx: ToolContext) -> dict[str, A
     interpreted_yes_condition = require(args, "interpreted_yes_condition")
     if not isinstance(interpreted_yes_condition, str) or not interpreted_yes_condition.strip():
         raise ToolError(ErrorCode.VALIDATION_ERROR, "interpreted_yes_condition must be a non-empty string", details={"field": "interpreted_yes_condition"})
+    # interpreted_yes_condition is long-form free text (the agent's reading
+    # of the YES contract); scan it for credential-shaped substrings before
+    # it is persisted (bead trade-trace-jm14 / INV-6).
+    reject_if_contains_secrets(interpreted_yes_condition, field="interpreted_yes_condition")
     as_of = normalize_timestamp(args, "as_of", required=True)
     if as_of is None:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "as_of is required", details={"field": "as_of"})

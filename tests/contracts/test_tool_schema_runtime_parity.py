@@ -486,10 +486,14 @@ def test_memory_reflect_schema_advertises_canonical_and_sugar_shapes():
         "strength_tags",
         "weakness_tags",
         "meta_json",
+        # memory-layer.md §10 edge-sugar fields are now implemented
+        # (bead trade-trace-qikt) and advertised on the schema.
+        "derived_from",
+        "supports",
+        "contradicts",
+        "supersedes",
     ):
         assert key in properties
-    assert "derived_from" not in properties
-    assert "supports" not in properties
 
 
 def test_memory_link_schema_advertises_endpoint_and_edge_enums():
@@ -723,7 +727,7 @@ def test_playbook_read_and_write_schemas_advertise_runtime_optional_fields():
         assert key in propose["properties"]
         assert key not in propose["required"]
 
-    adherence = _schema_for("decision.record_adherence")
+    adherence = _schema_for("playbook.record_adherence")
     assert adherence["properties"]["status"]["enum"] == [
         "considered",
         "followed",

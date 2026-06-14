@@ -23,7 +23,7 @@ MVP vertical slice:
 9. Token-budgeted recall of prior observations, reflections, and playbook rules in the next decision
 10. Source/evidence capture attached to theses, decisions, and forecasts
 
-The post-MVP pre-release track has since landed stdio MCP, tool-schema introspection, optional local ONNX embeddings/model import/reindex surfaces, JSONL/CSV import implementations, and comparison/review-bundle/risk/opportunity reports. Still deferred or unsupported in v0.0.2: remote/API embeddings, keyring-backed embedding credentials, multi-class/scalar scoring, exact ForecastBench submission compatibility, sync, HTTP/SSE transport, and websockets.
+The post-MVP pre-release track has since landed stdio MCP, tool-schema introspection, optional local ONNX embeddings/model import/reindex surfaces, JSONL/CSV import implementations, comparison/review-bundle/risk/opportunity reports, and — in the P1 scoring upgrade — categorical and normalized scalar auto-scoring (see [`scoring.md`](./architecture/scoring.md)). Still deferred or unsupported in v0.0.2: remote/API embeddings, keyring-backed embedding credentials, the `forecasts.distribution_json` scalar/distribution schema, exact ForecastBench submission compatibility, sync, HTTP/SSE transport, and websockets.
 
 Trade Trace does not fetch trading data, broker data, market prices, or outcomes from external services by default. The agent supplies market data through structured ingestion APIs, except for the explicitly opt-in Polymarket adapter path documented for v0.0.2. Semantic embeddings use pre-staged local model assets and never send journal text outward.
 
@@ -63,12 +63,12 @@ Remote/API embedding providers are unsupported in v0.0.2. There is no telemetry,
 
 ### 2.5 Forecast model
 
-MVP scoring is binary only. See [`scoring.md`](./architecture/scoring.md) for invariants, the exact Brier formula (single-probability form), the resolution status enum, and the lifecycle of a forecast row.
+The initial MVP shipped binary scoring; categorical and normalized scalar auto-scoring were added in the P1 scoring upgrade (see [`scoring.md`](./architecture/scoring.md) for the full shipped scorer matrix). See [`scoring.md`](./architecture/scoring.md) for invariants, the exact Brier formula (single-probability form), the resolution status enum, and the lifecycle of a forecast row.
 
 - Binary prediction markets: score directly against resolved YES/NO outcome.
 - Equity/crypto directional forecasts: may be expressed as binary derived events, e.g. `AAPL closes above 200 at horizon` or `BTC return > 0 by horizon`.
 - Scalar, options, futures, numeric, and multi-outcome forecasts may be stored as record-only data with `scoring_support = 'unsupported'` until P1.
-- P1 may add `forecasts.distribution_json` and multi-class/scalar scoring; it is not an MVP schema field.
+- Multi-class/categorical and normalized scalar scoring shipped in the P1 scoring upgrade (see [`scoring.md`](./architecture/scoring.md)). The `forecasts.distribution_json` scalar/distribution schema field remains a deferred follow-up; it is not an MVP schema field.
 
 The `forecasts` table splits status into two columns: `scoring_support` (capability) and `scoring_state` (lifecycle). Auto-scoring only fires when the linked `outcomes` row has `status = 'resolved_final'`.
 
@@ -530,11 +530,11 @@ The current pre-release implementation includes the import-ready write schema pl
 - `review.bundle` implementation
 - `report.strategy_performance` — per-strategy P&L, calibration trend, mistake-tag frequency, playbook adherence summary
 - The former local read-only Console UI was removed before release; current reporting/review surfaces are MCP/CLI tools, `review.bundle`, and Python/library report APIs.
-- Guided market-scan dry-run/promote journal bundle flow per [`market-scan-contract.md`](./architecture/market-scan-contract.md)
+- Guided market-scan journal bundle flow (originally `market.scan.dry_run` / `market.scan.promote`, now consolidated into `market.bind` per trade-trace-4kec; see [`market-scan-contract.md`](./architecture/market-scan-contract.md))
 
 ### P1
-- Multi-class/categorical scoring and ranked probability score
-- Scalar/distribution schema including `distribution_json`
+- Multi-class/categorical scoring and ranked probability score — **shipped** in the P1 scoring upgrade (see [`scoring.md`](./architecture/scoring.md)); normalized scalar auto-scoring shipped alongside it
+- Scalar/distribution schema including `distribution_json` (still deferred follow-up)
 - Broader trading-native reports: calibration-by-liquidity-bucket, skipped-positive-edge review
 - ForecastBench schema verification and compatible export if feasible
 - HTTP/SSE transport, re-embedding tools

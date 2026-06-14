@@ -46,19 +46,6 @@ def test_top_level_help_remains_global_only(capsys):
     assert "--instrument-id" not in help_text
 
 
-def test_keyring_revoke_help_uses_global_confirm_without_private_schema_flag(capsys):
-    rc = cli_main(["keyring", "revoke", "--help"])
-
-    out = capsys.readouterr()
-    help_text = out.out + out.err
-    assert rc == 0
-    assert "Tool: keyring.revoke" in help_text
-    assert "--confirm  required by mutating admin tools" in help_text
-    assert "--idempotency-key <string>  required" in help_text
-    assert "---confirm" not in help_text
-    assert "_confirm" not in help_text
-
-
 def test_report_playbook_adherence_help_advertises_scoping_args(capsys):
     rc = cli_main(["report", "playbook_adherence", "--help"])
 

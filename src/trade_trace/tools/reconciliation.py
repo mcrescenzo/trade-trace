@@ -122,11 +122,16 @@ def _num_from_obj(obj: Any, *keys: str) -> Decimal | None:
 
 
 def _row(row: Any) -> dict[str, Any]:
+    diff = json.loads(row[9])
     return {
         "id": row[0], "schema_version": row[1], "semantic_key": row[2], "material_hash": row[3],
         "as_of": row[4], "source": row[5], "source_precedence": json.loads(row[6]),
         "expected_state": json.loads(row[7]), "observed_imported_state": json.loads(row[8]),
-        "diff": json.loads(row[9]), "diff_severity": row[10], "mismatch_codes": json.loads(row[11]),
+        "diff": diff, "diff_severity": row[10], "mismatch_codes": json.loads(row[11]),
+        # `mismatch_codes` is the deterministically derived set; `manually_flagged`
+        # is the caller-supplied operator annotation channel, kept distinct so the
+        # derived set stays reproducible (bead trade-trace-opoc).
+        "manually_flagged": diff.get("manually_flagged", []) if isinstance(diff, dict) else [],
         "resolution_status": row[12], "contributing_ids": json.loads(row[13]), "caveats": json.loads(row[14]),
         "provenance": json.loads(row[15]), "imported_at": row[16], "recorded_at": row[17],
         "idempotency_key": row[18], "actor_id": row[19], "record_kind": "local_reconciliation_result",
@@ -191,7 +196,17 @@ def _build_derived(conn: Any, *, as_of: str, stale_snapshot_statuses: set[str]) 
         facts = json.loads(facts_json)
         observed["external_receipts"].append({"id": rid, "lifecycle_state": state, "external_event_type": etype, "pretrade_intent_id": intent_id, "approval_ref_id": approval_id, "external_order_ref": order_ref, "external_fill_ref": fill_ref, "sanitized_facts": facts})
         if not intent_id:
-            codes.add("ORPHAN_EXTERNAL_FILL" if etype == "fill" else "ORPHAN_EXTERNAL_ORDER")
+            # Only `fill`/`order` receipts map to the ORPHAN_EXTERNAL_FILL /
+            # ORPHAN_EXTERNAL_ORDER codes. An unlinked cancel/error/correction/
+            # status receipt is not an orphaned order — classifying it as one
+            # was a misclassification; it is a generic MISSING_EXTERNAL_EVENT
+            # (no local pretrade_intent to attribute it to) (trade-trace-1k5d).
+            if etype == "fill":
+                codes.add("ORPHAN_EXTERNAL_FILL")
+            elif etype == "order":
+                codes.add("ORPHAN_EXTERNAL_ORDER")
+            else:
+                codes.add("MISSING_EXTERNAL_EVENT")
         else:
             ids["pretrade_intents"].append(intent_id)
             intent = conn.execute("SELECT approval_state, risk_check_receipt_id, approval_ref_id FROM pretrade_intents WHERE id = ?", (intent_id,)).fetchone()
@@ -215,7 +230,13 @@ def _build_derived(conn: Any, *, as_of: str, stale_snapshot_statuses: set[str]) 
             requested = _num_from_obj(facts, "requested_quantity", "quantity")
             filled = _num_from_obj(facts, "filled_quantity", "fill_quantity")
             remaining = _num_from_obj(facts, "remaining_quantity")
-            if requested is not None and filled is not None and remaining is not None and requested - filled != remaining:
+            if requested is not None and filled is not None and remaining is not None and abs((requested - filled) - remaining) > Decimal("0.000001"):
+                # Tolerance comparison (not exact !=): sanitized_facts originate as
+                # caller JSON parsed to Python floats then re-stringified, so e.g.
+                # requested=139.8, filled=86.45 yields Decimal("53.35") while the
+                # consistent remaining 139.8-86.45 serializes as 53.35000000000001
+                # -> Decimal("53.35000000000001"). A 1e-6 tolerance absorbs this
+                # float-serialization noise while genuine mismatches (>=1e-6) still fire.
                 codes.add("PARTIAL_FILL_REMAINING_MISMATCH")
         if _num_from_obj(facts, "average_fill_price", "price") is None and etype == "fill":
             codes.add("PRICE_MISMATCH")
@@ -259,7 +280,19 @@ def _event_metadata_available(conn: Any, instrument_ids: list[str]) -> bool:
 
 
 def _policy_waiver_breach(conn: Any) -> bool:
-    row = conn.execute("SELECT 1 FROM approval_waiver_records WHERE decision IN ('rejected','denied') OR hard_block_policy_permitted = 1 OR violation_visible = 1 LIMIT 1").fetchone()
+    # POLICY_WAIVER_BREACH derivation (revisited under bead trade-trace-opoc).
+    # The approval-cluster CUT finding proposes dropping the approval.* tools, but
+    # the approval_waiver_records TABLE (migration m019) is non-destructive and
+    # remains the durable ledger of approval/waiver lifecycle rows — external
+    # operators still import waiver decisions even while the write tools sit behind
+    # the experimental shelf. So the derivation stays anchored to that table: a
+    # genuine breach is an explicitly recorded rejected/denied decision OR a
+    # visible hard-block violation. It NEVER fires for a permitted approval with no
+    # visible violation (pinned by
+    # test_policy_waiver_breach_not_injected_for_permitted_approval_without_violation).
+    # If the approval ledger is ever physically dropped, this predicate must be
+    # re-derived from whatever replaces it rather than silently returning False.
+    row = conn.execute("SELECT 1 FROM approval_waiver_records WHERE decision IN ('rejected','denied') OR violation_visible = 1 LIMIT 1").fetchone()
     return row is not None
 
 
@@ -289,12 +322,22 @@ def _reconciliation_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
     with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
             expected, observed, ids, codes, caveats, imported_at = _build_derived(uow.conn, as_of=as_of, stale_snapshot_statuses={"stale", "missing", "unknown"})
-            caller_codes = [str(code) for code in _list_arg(args, "mismatch_codes")]
-            invalid = [code for code in caller_codes if code not in _MISMATCH_CODES]
+            # Determinism guard (bead trade-trace-opoc): caller-supplied
+            # mismatch_codes are NOT unioned into the deterministically derived
+            # set. They are validated against the stable vocabulary and recorded
+            # on a distinct `manually_flagged` channel so the derived `codes`
+            # stay byte-reproducible from append-only rows alone. A caller can
+            # annotate a record with operator-flagged codes, but they can never
+            # mutate what the derivation produced.
+            manual_codes = sorted({str(code) for code in _list_arg(args, "mismatch_codes")})
+            invalid = [code for code in manual_codes if code not in _MISMATCH_CODES]
             if invalid:
                 raise ToolError(ErrorCode.VALIDATION_ERROR, "mismatch_codes contains unknown code", details={"field": "mismatch_codes", "invalid": invalid})
-            codes = sorted(set(codes).union(caller_codes))
             diff = _dict_arg(args, "diff") if args.get("diff") else {"mismatch_code_count": len(codes), "codes": codes}
+            # Keep the manual channel inside the canonical material (round-trips
+            # via diff_json without a schema change) but always separate from the
+            # derived `codes`/`mismatch_code_count`.
+            diff["manually_flagged"] = manual_codes
             diff_severity = str(args.get("diff_severity") or _severity(codes))
             if diff_severity not in _SEVERITIES:
                 raise ToolError(ErrorCode.VALIDATION_ERROR, "unknown reconciliation diff_severity", details={"field": "diff_severity"})
@@ -353,7 +396,8 @@ def _reconciliation_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
     with db_for_args(args) as db:
         records = [_row(row) for row in db.connection.execute(sql, (*params, limit)).fetchall()]
     codes = sorted({code for record in records for code in record["mismatch_codes"]})
-    return {"summary": {"bucket": "reconciliation_mismatches", "count": len(records), "mismatch_codes": codes, "source_precedence": list(_SOURCE_PRECEDENCE), "local_evidence_only": True, "non_executing": True}, "groups": records, "reconciliation_records": records, "report_kind": "local_reconciliation_mismatch_report", "agent_answer_hints": ["Use reconciliation rows as evidence for external operators; Trade Trace does not cancel, halt, remediate, fetch private state, or move funds.", "Current exposure remains caveated as local projected positions versus imported-observed positions when account snapshots are present."], "non_executing": True, "credential_blind": True}
+    manually_flagged = sorted({code for record in records for code in record["manually_flagged"]})
+    return {"summary": {"bucket": "reconciliation_mismatches", "count": len(records), "mismatch_codes": codes, "manually_flagged_codes": manually_flagged, "source_precedence": list(_SOURCE_PRECEDENCE), "local_evidence_only": True, "non_executing": True}, "groups": records, "reconciliation_records": records, "report_kind": "local_reconciliation_mismatch_report", "agent_answer_hints": ["Use reconciliation rows as evidence for external operators; Trade Trace does not cancel, halt, remediate, fetch private state, or move funds.", "mismatch_codes are deterministically derived from append-only rows; manually_flagged are caller-supplied operator annotations kept distinct so the derived set stays reproducible.", "Current exposure remains caveated as local projected positions versus imported-observed positions when account snapshots are present."], "non_executing": True, "credential_blind": True}
 
 
 def register_reconciliation_tools(registry: ToolRegistry) -> None:

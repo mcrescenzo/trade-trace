@@ -478,3 +478,136 @@ def test_memory_recall_context_strategy_improves_on_strat_rank(home):
         f"context=strategy should not demote on-strat node; "
         f"scoped={scoped_rank} unscoped={unscoped_rank}"
     )
+
+
+def test_memory_recall_context_strategy_scopes_via_decision_and_thesis(home):
+    """memory.recall(context={kind:'strategy'}) surfaces nodes reachable
+    *indirectly* — a memory_node with NO direct edge to the strategy row,
+    but an edge to a decision OR thesis that carries that strategy_id.
+
+    This exercises the indirect branch of `_graph_rank` (the
+    `decisions WHERE strategy_id = ?` and `theses WHERE strategy_id = ?`
+    subqueries), which is distinct from the direct strategy-edge branch
+    covered by the test above. Neither linked node ever points at the
+    strategy row directly: the only path to them runs through the
+    row-backed decision/thesis scopes.
+
+    To attribute the result *specifically* to the indirect branch (and not
+    to incidental bm25/temporal lift), recall is driven by the graph
+    strategy alone and asserted on `strategy_provenance`: under
+    context=strategy, `_graph_rank` sorts connected nodes to the front, so
+    the two indirectly-linked nodes must occupy graph ranks 1 and 2 —
+    strictly ahead of an equally query-matching control node that has no
+    strategy linkage. If the decision/thesis subqueries matched nothing,
+    the connected set would be empty and the linked nodes would fall back
+    into bare id-order with everything else, failing this assertion.
+    """
+
+    sid = _mcp(home, "strategy.create", {
+        "name": "Indirect scope", "slug": "indirect-scope",
+        "idempotency_key": "00000000-0000-4000-8000-strat-ix-01",
+    }).data["id"]
+
+    # Seed a venue/instrument plus a decision AND a thesis that each carry
+    # the strategy_id. memory.link verifies the target row exists, so these
+    # rows must be present before we attach memory_nodes to them.
+    db = sqlite3.connect(db_path(home))
+    try:
+        db.execute("PRAGMA foreign_keys = ON")
+        db.execute(
+            "INSERT INTO venues(id, name, kind, created_at, actor_id) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("venue_ix", "Manual", "manual", "2026-01-01T00:00:00Z", "tester"),
+        )
+        db.execute(
+            "INSERT INTO instruments(id, venue_id, symbol, title, asset_class, "
+            "created_at, actor_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("inst_ix", "venue_ix", "IXSC", "Indirect", "equity",
+             "2026-01-01T00:00:00Z", "tester"),
+        )
+        db.execute(
+            "INSERT INTO theses(id, instrument_id, side, body, strategy_id, "
+            "created_at, actor_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("th_ix", "inst_ix", "long", "body", sid,
+             "2026-01-01T00:00:00Z", "tester"),
+        )
+        db.execute(
+            "INSERT INTO decisions(id, instrument_id, type, strategy_id, "
+            "created_at, actor_id) VALUES (?, ?, ?, ?, ?, ?)",
+            ("dec_ix", "inst_ix", "watch", sid,
+             "2026-01-01T00:00:00Z", "tester"),
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    # Node reachable only via the decision (no direct strategy edge).
+    via_decision = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "Earnings momentum pattern surfaced through a decision",
+        "idempotency_key": "00000000-0000-4000-8000-strat-ix-02",
+    }).data["id"]
+    # Node reachable only via the thesis (no direct strategy edge).
+    via_thesis = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "Earnings momentum pattern surfaced through a thesis",
+        "idempotency_key": "00000000-0000-4000-8000-strat-ix-03",
+    }).data["id"]
+    # Control nodes: equally query-matching, but with NO strategy linkage
+    # (not via the strategy row, nor via any decision/thesis).
+    control_ids = []
+    for i in range(3):
+        control_ids.append(_mcp(home, "memory.retain", {
+            "node_type": "observation",
+            "body": f"earnings momentum pattern variant {i}",
+            "idempotency_key": f"00000000-0000-4000-8000-strat-ix-{20+i:02d}",
+        }).data["id"])
+
+    _mcp(home, "memory.link", {
+        "source_kind": "memory_node", "source_id": via_decision,
+        "target_kind": "decision", "target_id": "dec_ix",
+        "edge_type": "about",
+        "idempotency_key": "00000000-0000-4000-8000-strat-ix-04",
+    })
+    _mcp(home, "memory.link", {
+        "source_kind": "memory_node", "source_id": via_thesis,
+        "target_kind": "thesis", "target_id": "th_ix",
+        "edge_type": "about",
+        "idempotency_key": "00000000-0000-4000-8000-strat-ix-05",
+    })
+
+    # Graph-only recall so the assertion isolates the strategy-scoping
+    # branch rather than incidental lexical/temporal lift.
+    scoped = _mcp(home, "memory.recall", {
+        "query": "earnings momentum",
+        "context": {"kind": "strategy", "id": sid},
+        "strategies": ["graph"],
+        "include_provenance": True,
+        "k": 10,
+    })
+    assert scoped.ok, scoped
+
+    items = scoped.data["items"]
+    scoped_ids = [it["id"] for it in items]
+    # Both indirectly-linked nodes must be surfaced by the scoped recall —
+    # the only path to them runs through the decision/thesis strategy_id.
+    assert via_decision in scoped_ids, scoped_ids
+    assert via_thesis in scoped_ids, scoped_ids
+
+    # _graph_rank ranks connected nodes first (1-indexed); the two
+    # indirectly-linked nodes are the ONLY connected nodes, so they hold
+    # graph ranks {1, 2}. Control nodes — connected to neither the strategy
+    # row nor a strategy-tagged decision/thesis — must rank strictly behind.
+    graph_rank = {
+        it["id"]: it["strategy_provenance"]["graph"][0] for it in items
+    }
+    linked_ranks = {graph_rank[via_decision], graph_rank[via_thesis]}
+    assert linked_ranks == {1, 2}, (
+        f"indirect strategy scope should place both linked nodes at graph "
+        f"ranks 1 and 2; got {linked_ranks} (full: {graph_rank})"
+    )
+    for control in control_ids:
+        assert graph_rank[control] > 2, (
+            f"unlinked control {control} must rank behind the indirectly "
+            f"scoped nodes; got graph rank {graph_rank[control]}"
+        )

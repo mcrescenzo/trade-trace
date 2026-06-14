@@ -248,6 +248,35 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "Shows caveated candidate policy statements, support/contradiction, scope, missing evidence, replay refs, and reasons not promoted. No writes, promotion, fetching, model advice, or performance claims."
         ),
     ),
+    "report.rule_lineage": _schema(
+        {
+            "rule_node_id": {
+                "type": "string",
+                "description": (
+                    "A playbook_rule memory-node id to anchor the chain. "
+                    "Bridged to its playbook_versions via decision_playbook_rules "
+                    "(rule-node provenance edges are not auto-written today)."
+                ),
+            },
+            "playbook_version_id": {
+                "type": "string",
+                "description": (
+                    "A playbook_version id to anchor the chain directly. "
+                    "Exactly one of rule_node_id or playbook_version_id is "
+                    "required."
+                ),
+            },
+        },
+        description=(
+            "Read-only local rule-lineage chain: walks a playbook_rule (or "
+            "playbook_version) -> playbook_versions.provenance_reflection_node_id "
+            "-> the reflection -> its typed edges to decisions/theses/forecasts/"
+            "outcomes + consumer->memory use edges + decision_playbook_rules "
+            "adherence rows, with contributing record_ids at each hop and "
+            "explicit gaps where a link is missing. No writes, fetch, execution, "
+            "or advice."
+        ),
+    ),
     "report.source_quality": _schema(
         {
             "stale_threshold_days": {
@@ -273,6 +302,77 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "stale_source_threshold_days": {"type": "integer", "minimum": 0},
         },
         description="Read-only local prediction/event-market audit-readiness diagnostics; no network, no advice.",
+    ),
+    "report.phase_gate_readiness": _schema(
+        {
+            "thresholds": {
+                "type": "object",
+                "description": (
+                    "OWNER-supplied numeric bar per criterion. Any unset "
+                    "criterion reports pass=null and the gate is NEVER 'ready'. "
+                    "The agent must not pick the bar that grants itself a "
+                    "wallet (VISION 'autonomy is earned')."
+                ),
+                "properties": {
+                    "resolved_n": {"type": "integer", "minimum": 0},
+                    "brier": {"type": "number", "minimum": 0},
+                    "skill_vs_market": {"type": "number"},
+                    "reconciliation_cleanliness": {"type": "integer", "minimum": 0},
+                    "audit_readiness": {"type": "boolean"},
+                    "paper_fill_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+                },
+                "additionalProperties": False,
+            },
+            "min_sample": {"type": "integer", "minimum": 1},
+        },
+        description=(
+            "Measurable VISION Phase-2 -> Phase-3 gate criteria computed from "
+            "the journal against owner-supplied numeric thresholds. Read-only, "
+            "deterministic, local-only; no network, no advice, no execution."
+        ),
+    ),
+    "report.autonomy_readiness": _schema(
+        {
+            "thresholds": {
+                "type": "object",
+                "description": (
+                    "OWNER-supplied numeric bar per gate criterion, passed "
+                    "through to report.phase_gate_readiness. Any unset criterion "
+                    "yields state='insufficient_data' and the gate is NEVER "
+                    "'ready' (the agent must not self-grant a wallet)."
+                ),
+                "properties": {
+                    "resolved_n": {"type": "integer", "minimum": 0},
+                    "brier": {"type": "number", "minimum": 0},
+                    "skill_vs_market": {"type": "number"},
+                    "reconciliation_cleanliness": {"type": "integer", "minimum": 0},
+                    "audit_readiness": {"type": "boolean"},
+                    "paper_fill_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+                },
+                "additionalProperties": False,
+            },
+            "min_sample": {"type": "integer", "minimum": 1},
+            "window_days": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Longitudinal-window width for the calibration trend and expectancy series; defaults 30.",
+            },
+            "max_windows": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Trailing-window cap for the trend/expectancy series; defaults 12.",
+            },
+        },
+        description=(
+            "Earned-autonomy readiness EVIDENCE BUNDLE. Composes the "
+            "owner-thresholded report.phase_gate_readiness verdict with a "
+            "longitudinal calibration trend, an expectancy series, and "
+            "audit/hygiene diagnostics, keyed to the gate criteria with "
+            "per-criterion pass/fail/insufficient_data and contributing "
+            "record_ids. Evidence-only: it renders no verdict of its own and "
+            "can never turn a not-ready gate ready. Read-only, deterministic, "
+            "local-only; no network, no advice, no execution."
+        ),
     ),
     "report.calibration_integrity": _schema(
         # min_sample is accepted but currently unused by the integrity
@@ -337,7 +437,7 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
     ),
     "report.compare": _schema(
         {
-            "base_report": {"type": "string", "enum": ["calibration", "pnl"]},
+            "base_report": {"type": "string", "enum": ["calibration", "pnl", "risk"]},
             "group_by": {
                 "type": "string",
                 "description": (
@@ -346,9 +446,14 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
                     "strategy_id, instrument_id, decision_type, venue_id, asset_class, "
                     "actor_id, agent_id, model_id, run_id, environment, status, "
                     "outcome_status (status and outcome_status are aliases for the "
-                    "outcome resolution status). pnl: instrument_id, status, venue_id, "
-                    "asset_class. Note: tag is not a supported group_by for either "
-                    "base_report."
+                    "outcome resolution status), resolution_month (YYYY-MM) and "
+                    "resolution_week (YYYY-Www) — the longitudinal calibration-over-"
+                    "time trend, bucketed by the outcome's resolved_at; per-period N "
+                    "is often below the N=20 floor, so each thin period self-caveats "
+                    "with sample_warning and insufficient:true. pnl: instrument_id, "
+                    "status, venue_id, asset_class. risk: period (YYYY-MM month bucket "
+                    "— the over-time expectancy series), strategy_id, decision_type. "
+                    "Note: tag is not a supported group_by for any base_report."
                 ),
             },
             "filter": _FILTER_PROP,

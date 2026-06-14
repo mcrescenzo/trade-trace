@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,31 @@ import pytest
 from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
+from trade_trace.reports.tag_aggregates import (
+    load_mistakes_and_strengths,
+    report_mistakes,
+    report_strengths,
+)
+from trade_trace.storage.paths import db_path
+
+
+class _QueryTrace:
+    """Capture every SQL statement a connection executes via the sqlite
+    trace callback so a test can count how many times a query ran."""
+
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+
+    def __call__(self, sql: str) -> None:
+        self.statements.append(" ".join(sql.split()))
+
+    def count_substr(self, needle: str) -> int:
+        return sum(1 for s in self.statements if needle in s)
+
+
+# The distinguishing prefix of the decision_tags→decisions→forecast_scores
+# join shared by report.mistakes / report.strengths (and report.coach).
+_TAG_BRIER_JOIN = "FROM decision_tags dt JOIN decisions d"
 
 
 @pytest.fixture
@@ -151,3 +177,75 @@ def test_unscored_tag_excluded_from_both_reports(home):
         for g in env["data"]["groups"]:
             assert g["metrics"]["mean_brier"] is not None
             assert g["metrics"]["scored_forecast_count"] >= 1
+
+
+# -- sample_size basis (trade-trace-1k5d) ---------------------------
+
+
+def test_group_sample_size_counts_scored_forecasts_not_decisions(home):
+    # trade-trace-1k5d: group.sample_size and sample_warning must share the
+    # same basis (scored forecasts). Seed two scored decisions under one tag;
+    # the group must report sample_size == scored_forecast_count, and the
+    # report summary sample_size must count unique scored forecasts (2), not
+    # the raw join-row count.
+    _seed_tagged_decision_with_scored_forecast(home, tag="shared-tag", p_yes=0.3)
+    _seed_tagged_decision_with_scored_forecast(home, tag="shared-tag", p_yes=0.7)
+    env = _envelope(home, "report.mistakes", {})
+    groups = env["data"]["groups"]
+    assert len(groups) == 1
+    g = groups[0]
+    assert g["sample_size"] == g["metrics"]["scored_forecast_count"]
+    assert g["sample_size"] == 2
+    assert env["data"]["summary"]["sample_size"] == 2
+
+
+# -- single-execution (trade-trace-bg12) ----------------------------
+
+
+def test_each_ranked_report_runs_the_join_exactly_once(home):
+    """report.mistakes and report.strengths each execute the tag→Brier
+    join exactly once per call (the public single-report path is
+    unchanged by the bg12 refactor)."""
+
+    _seed_tagged_decision_with_scored_forecast(home, tag="a", p_yes=0.2)
+    _seed_tagged_decision_with_scored_forecast(home, tag="b", p_yes=0.8)
+
+    for fn in (report_mistakes, report_strengths):
+        with sqlite3.connect(db_path(home)) as conn:
+            trace = _QueryTrace()
+            conn.set_trace_callback(trace)
+            fn(conn)
+            conn.set_trace_callback(None)
+        assert trace.count_substr(_TAG_BRIER_JOIN) == 1, (
+            fn.__name__, trace.statements,
+        )
+
+
+def test_load_mistakes_and_strengths_runs_join_once_for_both_views(home):
+    """`load_mistakes_and_strengths` builds BOTH ranked reports from a
+    single execution of the tag→Brier join (trade-trace-bg12), and each
+    returned report is byte-for-byte identical to the separate calls."""
+
+    _seed_tagged_decision_with_scored_forecast(home, tag="bad", p_yes=0.1)
+    _seed_tagged_decision_with_scored_forecast(home, tag="good", p_yes=0.9)
+
+    with sqlite3.connect(db_path(home)) as conn:
+        trace = _QueryTrace()
+        conn.set_trace_callback(trace)
+        mistakes, strengths = load_mistakes_and_strengths(conn)
+        conn.set_trace_callback(None)
+
+        # The join must run exactly once for the combined load even though
+        # two ranked views (desc + asc) are produced from it.
+        assert trace.count_substr(_TAG_BRIER_JOIN) == 1, trace.statements
+
+        # Equivalence: the combined results match the separate public calls
+        # byte-for-byte.
+        ref_mistakes = report_mistakes(conn)
+        ref_strengths = report_strengths(conn)
+
+    assert mistakes == ref_mistakes
+    assert strengths == ref_strengths
+    # Sanity: desc vs asc orderings really are distinct.
+    assert [g["key"] for g in mistakes["groups"]] == ["bad", "good"]
+    assert [g["key"] for g in strengths["groups"]] == ["good", "bad"]

@@ -203,6 +203,44 @@ SHIPPED_PUBLIC_TOOLS = {
     "abstention.record",
     "decision.add",
     "export.drain",
+    # Unfrozen into the public Phase-2 catalog (bead trade-trace-g776): the
+    # external execution-receipt import cluster. external_receipt.import ingests
+    # one sanitized, caller-supplied execution-event claim as append-only LOCAL
+    # EVIDENCE only (labelled non_executing / credential_blind, never TT-fetched);
+    # the module has no venue client, private-auth fetch, signing, placement,
+    # cancellation, custody movement, or remediation. Malformed / secret-bearing /
+    # credential-shaped / impossible payloads are quarantined at the import
+    # boundary. These rows are what reconciliation._build_derived consumes to
+    # derive ORPHAN_EXTERNAL_*, DUPLICATE_FILL, and REJECTED_APPROVED_INTENT.
+    # external_receipt.report (a report-shaped tool under the external_receipt
+    # namespace, not a report.* tool, so it lives here rather than in
+    # SHIPPED_REPORTS) reads append-only external_execution_receipts and surfaces
+    # caveat codes as evidence only; it never remediates or fetches private state.
+    "external_receipt.import",
+    "external_receipt.get",
+    "external_receipt.list",
+    "external_receipt.report",
+    # Unfrozen into the public Phase-2 catalog (bead trade-trace-qfn8): the
+    # account-snapshot import cluster — the account-truth sibling of the external
+    # execution-receipt importer. account_snapshot.import ingests one sanitized,
+    # caller-supplied account-state claim (balances, collateral, open orders,
+    # positions, fills/trades, unsettled claims, public allowance facts) as
+    # append-only LOCAL EVIDENCE only (labelled
+    # record_kind=sanitized_imported_account_snapshot with provenance and
+    # source-precedence/confidence/staleness, never TT-fetched); the module has no
+    # venue client, private-auth fetch, signing, placement, cancellation, custody
+    # movement, or remediation. Malformed / secret-bearing / credential-shaped /
+    # impossible (negative, available>total) payloads are quarantined at the
+    # boundary. These rows are what reconciliation._latest_snapshot reads (by
+    # source-precedence ordering) and _build_derived consumes to derive
+    # STALE_SNAPSHOT / POSITION_MISMATCH / BALANCE_MISMATCH. account_snapshot.report
+    # (a report-shaped tool under the account_snapshot namespace, not a report.*
+    # tool, so it lives here rather than in SHIPPED_REPORTS) reads append-only
+    # account_snapshots and surfaces stale/missing caveat codes as evidence only.
+    "account_snapshot.import",
+    "account_snapshot.get",
+    "account_snapshot.list",
+    "account_snapshot.report",
     "forecast.add",
     "forecast.commit_blind",
     "forecast.independence",
@@ -210,8 +248,6 @@ SHIPPED_PUBLIC_TOOLS = {
     "forecast.resolution_interpretation",
     "forecast.reveal_snapshot",
     "import.commit",
-    "journal.backup",
-    "journal.config_set",
     "journal.fixture_seed",
     "journal.init",
     "journal.schema",
@@ -225,9 +261,37 @@ SHIPPED_PUBLIC_TOOLS = {
     "memory.reflect",
     "memory.retain",
     "outcome.fetch",
+    # Unfrozen into the public Phase-2 catalog (bead trade-trace-xwox): the
+    # paper-fill ledger write/read surface. paper_fill.record runs a
+    # deterministic conservative limit/depth fill engine over caller-supplied
+    # book/snapshot facts (full/partial/no-fill, freshness + slippage rejection)
+    # and persists an immutable, append-only, idempotent paper_only record; it
+    # never places/signs/routes/cancels an order or touches a live account.
+    "paper_fill.record",
+    "paper_fill.get",
+    "paper_fill.list",
     "playbook.propose_version",
     "playbook.record_adherence",
     "playbook.upsert",
+    # Unfrozen into the public Phase-2 catalog (bead trade-trace-2g47): the
+    # pre-trade intent cluster is the write side of VISION Phase 2 "the agent
+    # proposes trades". Each tool records/reads an immutable, hashed,
+    # non-executing local audit packet and never places/signs/routes/approves an
+    # order; the packet's risk_check_receipt_id links to an immutable
+    # risk.check_record receipt so an evaluated intent surfaces its verdict.
+    "pretrade_intent.record",
+    "pretrade_intent.get",
+    "pretrade_intent.list",
+    # Unfrozen into the public Phase-2 catalog (bead trade-trace-opoc): the
+    # reconciliation result cluster. reconciliation.record runs a DETERMINISTIC
+    # derivation over positions / account_snapshots / external_execution_receipts /
+    # paper_fill_records / pretrade_intents / approval_waiver_records and emits a
+    # reproducible set of stable mismatch codes; caller-supplied codes are routed
+    # to a distinct `manually_flagged` channel and never unioned into the derived
+    # set, so the derived set stays byte-reproducible. It is local-evidence-only,
+    # credential-blind, and non-executing (no fetch/sign/place/cancel/settle/move).
+    "reconciliation.record",
+    "reconciliation.get",
     "replay_artifact.get",
     "replay_artifact.list",
     "replay_artifact.record",
@@ -235,8 +299,23 @@ SHIPPED_PUBLIC_TOOLS = {
     "replay.evaluate_output",
     "resolution.add",
     "review.bundle",
+    # Unfrozen into the public Phase-2 catalog (bead trade-trace-ur8w) now that
+    # the deterministic evaluator ships (trade-trace-g629). The cluster is one
+    # audit-only, credential-blind loop — store an immutable policy version,
+    # deterministically evaluate a non-executing intent (read-only), and persist
+    # that verdict as an immutable receipt (with an evaluator consistency guard).
+    # None of them block/sign/place/route an order, so they are safe in the
+    # default public catalog.
+    "risk.check_record",
+    "risk.evaluate",
+    "risk.policy_version_add",
     "snapshot.add",
     "snapshot.fetch",
+    # Unfrozen into the Phase-1 public catalog (bead trade-trace-xtdo): the
+    # time-series snapshot fetcher that feeds the anchored/terminal calibration
+    # readers; markets-table backed, no Phase-2 dependency, same idempotency
+    # contract as snapshot.fetch.
+    "snapshot.fetch_series",
     "strategy.upsert",
     "tool.schema",
 }
@@ -250,6 +329,8 @@ SHIPPED_REPORTS = {
     "report.time_decay_sharpening",
     "report.source_quality",
     "report.audit_readiness",
+    "report.phase_gate_readiness",
+    "report.autonomy_readiness",
     "report.mistakes",
     "report.mistake_tripwire",
     "report.strengths",
@@ -262,6 +343,7 @@ SHIPPED_REPORTS = {
     "report.unscored_forecasts",
     "report.playbook_adherence",
     "report.policy_candidates",
+    "report.rule_lineage",
     "report.coach",
     "report.compare",
     "report.current_exposure",
@@ -271,8 +353,39 @@ SHIPPED_REPORTS = {
     "report.lifecycle",
     "report.work_queue",
     "report.open_positions",
+    # Unfrozen into the public Phase-2 catalog (bead trade-trace-xwox): the
+    # paper-only exposure/P&L report. It aggregates ONLY filled paper_fill rows
+    # into a cost-basis/exposure view carrying mark_source + as_of and explicitly
+    # excludes imported/live account truth and any live-execution claim.
+    "report.paper_exposure",
+    # Unfrozen into the public Phase-2 catalog (bead trade-trace-opoc): the
+    # reconciliation mismatch report. It reads append-only reconciliation_records
+    # and surfaces the deterministically derived mismatch codes plus a separate
+    # manually_flagged aggregate as evidence for external operators; it never
+    # cancels, halts, remediates, fetches private state, or moves funds.
+    "report.reconciliation_mismatches",
     "report.resolution_misreads",
     "report.strategy_health",
+    # Unfrozen into the Phase-1 public catalog (bead trade-trace-y0cr): both
+    # read only Phase-1 tables and carry no Phase-2 dependency.
+    "report.market_lifecycle",
+    "report.resolution_quality",
+    # Unfrozen into the Phase-1 public catalog (bead trade-trace-8g7t):
+    # read-only diagnostics over Phase-1 tables (recall telemetry, memory
+    # nodes, typed edges, decisions) with no Phase-2 dependency.
+    # decision_velocity is the sole producer of the per-day/week decision
+    # cadence series, so it was unfrozen rather than cut as redundant.
+    "report.recall_receipts",
+    "report.memory_usefulness",
+    "report.decision_velocity",
+    # Unfrozen into the Phase-1 public catalog (bead trade-trace-xtdo):
+    # market-baseline calibration panels (Brier skill vs the market) over only
+    # Phase-1 tables (forecast_snapshot_anchor / forecast_scores / forecasts /
+    # outcomes / snapshots), no Phase-2 dependency. The after-the-fact anchor
+    # WRITER forecast.anchor_to_snapshot stays frozen (superseded by
+    # forecast.commit_blind / forecast.reveal_snapshot, bead trade-trace-4kec.9).
+    "report.calibration_anchored",
+    "report.calibration_terminal",
 }
 
 
@@ -327,7 +440,6 @@ LEGACY_HIDDEN_TOOLS = {
     "memory.reindex",
     "model.import",
     "model.warm",
-    "keyring.revoke",
 }
 
 
@@ -349,15 +461,16 @@ def test_legacy_catalog_tools_are_hidden_but_metadata_explains_transition():
 
 
 EXPERIMENTAL_AUTONOMOUS_OPS = {
-    "pretrade_intent.record",
-    "pretrade_intent.get",
-    "pretrade_intent.list",
+    # pretrade_intent.record/get/list were UNFROZEN into the public catalog
+    # (bead trade-trace-2g47) and moved to SHIPPED_PUBLIC_TOOLS above; they are
+    # no longer part of the frozen cluster.
     "approval.record",
     "approval.get",
     "approval.list",
     "approval.report",
-    "risk.check_record",
-    "risk.policy_version_add",
+    # risk.check_record / risk.policy_version_add / risk.evaluate were UNFROZEN
+    # into the public catalog (bead trade-trace-ur8w) and moved to
+    # SHIPPED_PUBLIC_TOOLS above; they are no longer part of the frozen cluster.
     "autonomous_run.record",
     "autonomous_run.get",
     "autonomous_incident.record",
@@ -385,21 +498,29 @@ def test_frozen_autonomous_ops_cluster_is_experimental_but_dispatchable():
 
 
 EXPERIMENTAL_RECONCILIATION = {
-    "paper_fill.record",
-    "paper_fill.get",
-    "paper_fill.list",
-    "report.paper_exposure",
-    "external_receipt.import",
-    "external_receipt.get",
-    "external_receipt.list",
-    "external_receipt.report",
-    "account_snapshot.import",
-    "account_snapshot.get",
-    "account_snapshot.list",
-    "account_snapshot.report",
-    "reconciliation.record",
-    "reconciliation.get",
-    "report.reconciliation_mismatches",
+    # paper_fill.record/get/list and report.paper_exposure were UNFROZEN into
+    # the public Phase-2 catalog (bead trade-trace-xwox) and moved to
+    # SHIPPED_PUBLIC_TOOLS / SHIPPED_REPORTS above; they are no longer part of
+    # the frozen reconciliation cluster. Their public-catalog membership is
+    # pinned by test_unfrozen_paper_fill_ledger_is_public below.
+    #
+    # reconciliation.record/get and report.reconciliation_mismatches were
+    # UNFROZEN into the public Phase-2 catalog (bead trade-trace-opoc) and moved
+    # to SHIPPED_PUBLIC_TOOLS / SHIPPED_REPORTS above; their public-catalog
+    # membership is pinned by test_unfrozen_reconciliation_cluster_is_public
+    # below.
+    #
+    # external_receipt.import/get/list/report were UNFROZEN into the public
+    # Phase-2 catalog (bead trade-trace-g776) and moved to SHIPPED_PUBLIC_TOOLS /
+    # SHIPPED_REPORTS above; their public-catalog membership is pinned by
+    # test_unfrozen_external_receipt_cluster_is_public below.
+    #
+    # account_snapshot.import/get/list/report were UNFROZEN into the public
+    # Phase-2 catalog (bead trade-trace-qfn8) and moved to SHIPPED_PUBLIC_TOOLS
+    # above; their public-catalog membership is pinned by
+    # test_unfrozen_account_snapshot_cluster_is_public below. Only
+    # report.execution_quality and report.operational_health stay frozen behind
+    # the experimental shelf.
     "report.execution_quality",
     "report.operational_health",
 }
@@ -424,17 +545,170 @@ def test_frozen_reconciliation_cluster_is_experimental_but_dispatchable():
         assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
 
 
+# paper_fill.record/get/list and report.paper_exposure were UNFROZEN out of
+# EXPERIMENTAL_RECONCILIATION into the public Phase-2 catalog (bead
+# trade-trace-xwox). They are the local paper-fill ledger: a deterministic
+# conservative limit/depth fill engine plus an aggregating exposure report, all
+# local-evidence-only and credential-blind (no venue client, no account fetch,
+# no signing/placement/cancellation/fund movement). The rest of the
+# reconciliation/execution-truth cluster (report.execution_quality/
+# operational_health) stays frozen; external_receipt.*, account_snapshot.*, and
+# reconciliation.* have since been unfrozen (see the dedicated unfrozen-cluster
+# tests below).
+UNFROZEN_PAPER_FILL_LEDGER = {
+    "paper_fill.record",
+    "paper_fill.get",
+    "paper_fill.list",
+    "report.paper_exposure",
+}
+
+
+def test_unfrozen_paper_fill_ledger_is_public():
+    """Bead trade-trace-xwox: the paper-fill ledger cluster ships in the default
+    Phase-2 public catalog — visible without any opt-in, and no longer in the
+    frozen experimental reconciliation cluster. Pin that non-experimental state
+    so a future accidental re-freeze (re-adding paper_fill.* /
+    report.paper_exposure to EXPERIMENTAL_RECONCILIATION) is caught here."""
+
+    registry = default_registry()
+    public = set(registry.public_names())
+    assert UNFROZEN_PAPER_FILL_LEDGER.issubset(public)
+    # No longer frozen behind the experimental shelf.
+    assert UNFROZEN_PAPER_FILL_LEDGER.isdisjoint(EXPERIMENTAL_RECONCILIATION)
+    for tool in UNFROZEN_PAPER_FILL_LEDGER:
+        assert registry.get(tool).metadata()["catalog_visibility"] == "public"
+
+
+# reconciliation.record/get and report.reconciliation_mismatches were UNFROZEN
+# out of EXPERIMENTAL_RECONCILIATION into the public Phase-2 catalog (bead
+# trade-trace-opoc). reconciliation.record runs a deterministic derivation over
+# append-only local + imported tables and emits a reproducible mismatch-code set;
+# caller-supplied codes are confined to a separate `manually_flagged` channel.
+# The cluster is local-evidence-only, credential-blind, and non-executing (no
+# fetch/sign/place/cancel/settle/fund-move/remediate). The remaining
+# reconciliation/execution-truth cluster (report.execution_quality/
+# operational_health) stays frozen; external_receipt.* and account_snapshot.*
+# have since been unfrozen (see the dedicated unfrozen-cluster tests below).
+UNFROZEN_RECONCILIATION_CLUSTER = {
+    "reconciliation.record",
+    "reconciliation.get",
+    "report.reconciliation_mismatches",
+}
+
+
+def test_unfrozen_reconciliation_cluster_is_public():
+    """Bead trade-trace-opoc: the reconciliation result cluster ships in the
+    default Phase-2 public catalog — visible without any opt-in, and no longer in
+    the frozen experimental reconciliation cluster. Pin that non-experimental
+    state so a future accidental re-freeze (re-adding reconciliation.* /
+    report.reconciliation_mismatches to EXPERIMENTAL_RECONCILIATION) is caught
+    here."""
+
+    registry = default_registry()
+    public = set(registry.public_names())
+    assert UNFROZEN_RECONCILIATION_CLUSTER.issubset(public)
+    # No longer frozen behind the experimental shelf.
+    assert UNFROZEN_RECONCILIATION_CLUSTER.isdisjoint(EXPERIMENTAL_RECONCILIATION)
+    for tool in UNFROZEN_RECONCILIATION_CLUSTER:
+        assert registry.get(tool).metadata()["catalog_visibility"] == "public"
+
+
+# external_receipt.import/get/list/report were UNFROZEN out of
+# EXPERIMENTAL_RECONCILIATION into the public Phase-2 catalog (bead
+# trade-trace-g776). They ingest/read sanitized, caller-supplied execution-event
+# claims as append-only LOCAL EVIDENCE only — labelled non_executing /
+# credential_blind, never TT-fetched. The module has no venue client,
+# private-auth fetch, signing, placement, cancellation, custody movement, or
+# remediation; malformed / secret-bearing / credential-shaped / impossible
+# payloads are quarantined at the boundary. These rows feed
+# reconciliation._build_derived's ORPHAN_EXTERNAL_* / DUPLICATE_FILL /
+# REJECTED_APPROVED_INTENT derivation. Only report.execution_quality and
+# report.operational_health stay frozen.
+UNFROZEN_EXTERNAL_RECEIPT_CLUSTER = {
+    "external_receipt.import",
+    "external_receipt.get",
+    "external_receipt.list",
+    "external_receipt.report",
+}
+
+
+def test_unfrozen_external_receipt_cluster_is_public():
+    """Bead trade-trace-g776: the external execution-receipt import cluster ships
+    in the default Phase-2 public catalog — visible without any opt-in, and no
+    longer in the frozen experimental reconciliation cluster. Pin that
+    non-experimental state so a future accidental re-freeze (re-adding
+    external_receipt.* to EXPERIMENTAL_RECONCILIATION) is caught here."""
+
+    registry = default_registry()
+    public = set(registry.public_names())
+    assert UNFROZEN_EXTERNAL_RECEIPT_CLUSTER.issubset(public)
+    # No longer frozen behind the experimental shelf.
+    assert UNFROZEN_EXTERNAL_RECEIPT_CLUSTER.isdisjoint(EXPERIMENTAL_RECONCILIATION)
+    for tool in UNFROZEN_EXTERNAL_RECEIPT_CLUSTER:
+        assert registry.get(tool).metadata()["catalog_visibility"] == "public"
+
+
+# account_snapshot.import/get/list/report were UNFROZEN out of
+# EXPERIMENTAL_RECONCILIATION into the public Phase-2 catalog (bead
+# trade-trace-qfn8). They ingest/read sanitized, caller-supplied account-state
+# claims (balances, collateral, open orders, positions, fills/trades, unsettled
+# claims, public allowance facts) as append-only LOCAL EVIDENCE only — labelled
+# record_kind=sanitized_imported_account_snapshot with provenance and
+# source-precedence/confidence/staleness, never TT-fetched. The module has no
+# venue client, private-auth fetch, signing, placement, cancellation, custody
+# movement, or remediation; malformed / secret-bearing / credential-shaped /
+# impossible payloads are quarantined at the boundary. These rows feed
+# reconciliation._latest_snapshot / _build_derived's STALE_SNAPSHOT /
+# POSITION_MISMATCH / BALANCE_MISMATCH derivation. Only report.execution_quality
+# and report.operational_health stay frozen.
+UNFROZEN_ACCOUNT_SNAPSHOT_CLUSTER = {
+    "account_snapshot.import",
+    "account_snapshot.get",
+    "account_snapshot.list",
+    "account_snapshot.report",
+}
+
+
+def test_unfrozen_account_snapshot_cluster_is_public():
+    """Bead trade-trace-qfn8: the account-snapshot import cluster ships in the
+    default Phase-2 public catalog — visible without any opt-in, and no longer in
+    the frozen experimental reconciliation cluster. Pin that non-experimental
+    state so a future accidental re-freeze (re-adding account_snapshot.* to
+    EXPERIMENTAL_RECONCILIATION) is caught here."""
+
+    registry = default_registry()
+    public = set(registry.public_names())
+    assert UNFROZEN_ACCOUNT_SNAPSHOT_CLUSTER.issubset(public)
+    # No longer frozen behind the experimental shelf.
+    assert UNFROZEN_ACCOUNT_SNAPSHOT_CLUSTER.isdisjoint(EXPERIMENTAL_RECONCILIATION)
+    for tool in UNFROZEN_ACCOUNT_SNAPSHOT_CLUSTER:
+        assert registry.get(tool).metadata()["catalog_visibility"] == "public"
+
+
 EXPERIMENTAL_ANCHORED_VIEWERS = {
+    # forecast.anchor_to_snapshot stays frozen: bead trade-trace-4kec.9
+    # (forecast.commit_blind / forecast.reveal_snapshot) was built as its
+    # explicit semantic replacement, so the after-the-fact anchor WRITER must
+    # not ship in the public Phase-1 catalog. Its anchor write is already
+    # folded into forecast.add. Its three READERS
+    # (report.calibration_anchored / report.calibration_terminal /
+    # snapshot.fetch_series) were UNFROZEN into the public Phase-1 catalog
+    # (bead trade-trace-xtdo); their public-catalog membership is pinned by
+    # test_unfrozen_anchored_calibration_readers_are_public below.
     "forecast.anchor_to_snapshot",
-    "report.calibration_anchored",
-    "report.calibration_terminal",
-    "snapshot.fetch_series",
-    "report.decision_velocity",
-    "report.memory_usefulness",
-    "report.recall_receipts",
-    "report.market_lifecycle",
-    "report.resolution_quality",
-    "journal.restore",
+    # report.decision_velocity, report.memory_usefulness, and
+    # report.recall_receipts were unfrozen into the Phase-1 public catalog
+    # (bead trade-trace-8g7t); their public-catalog membership is pinned by
+    # test_unfrozen_memory_process_reports_are_public below.
+    # report.market_lifecycle and report.resolution_quality were unfrozen into
+    # the Phase-1 public catalog (bead trade-trace-y0cr); their public-catalog
+    # membership is pinned by test_pm_native_report_tools_registered.
+    # journal.restore was grouped here as a speculative viewer, but it is a
+    # destructive operator tool now admin-gated by bead trade-trace-6rnk; its
+    # gating is pinned by ADMIN_GATED_OPERATOR_TOOLS /
+    # test_admin_tools_are_not_in_default_catalog instead. It stays
+    # catalog_visibility='experimental' AND is_admin=True, so it is absent from
+    # public_names(include_experimental=True) (which does not opt into admin).
 }
 
 
@@ -457,13 +731,103 @@ def test_frozen_anchored_viewers_cluster_is_experimental_but_dispatchable():
         assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
 
 
+# report.decision_velocity, report.memory_usefulness, and
+# report.recall_receipts were UNFROZEN out of EXPERIMENTAL_ANCHORED_VIEWERS into
+# the Phase-1 public catalog (bead trade-trace-8g7t). They are read-only
+# diagnostics over Phase-1 tables with no Phase-2 dependency.
+UNFROZEN_MEMORY_PROCESS_REPORTS = {
+    "report.decision_velocity",
+    "report.memory_usefulness",
+    "report.recall_receipts",
+}
+
+
+def test_unfrozen_memory_process_reports_are_public():
+    """Bead trade-trace-8g7t: the memory/process diagnostics ship in the
+    default Phase-1 public catalog — visible without any opt-in, and
+    explicitly no longer in the frozen experimental cluster."""
+
+    registry = default_registry()
+    public = set(registry.public_names())
+    assert UNFROZEN_MEMORY_PROCESS_REPORTS.issubset(public)
+    # No longer frozen behind the experimental shelf.
+    assert UNFROZEN_MEMORY_PROCESS_REPORTS.isdisjoint(EXPERIMENTAL_ANCHORED_VIEWERS)
+    for tool in UNFROZEN_MEMORY_PROCESS_REPORTS:
+        assert registry.get(tool).metadata()["catalog_visibility"] == "public"
+
+
+# report.calibration_anchored, report.calibration_terminal, and
+# snapshot.fetch_series were UNFROZEN out of EXPERIMENTAL_ANCHORED_VIEWERS into
+# the Phase-1 public catalog (bead trade-trace-xtdo). They are read-only
+# market-baseline calibration diagnostics (plus the time-series snapshot fetcher
+# that feeds them) over only Phase-1 tables, with no Phase-2 dependency. The
+# anchor WRITER forecast.anchor_to_snapshot stays frozen because bead
+# trade-trace-4kec.9 (forecast.commit_blind / forecast.reveal_snapshot)
+# superseded it.
+UNFROZEN_ANCHORED_CALIBRATION_READERS = {
+    "report.calibration_anchored",
+    "report.calibration_terminal",
+    "snapshot.fetch_series",
+}
+
+
+def test_unfrozen_anchored_calibration_readers_are_public():
+    """Bead trade-trace-xtdo: the anchored/terminal market-baseline calibration
+    readers and the series snapshot fetcher ship in the default Phase-1 public
+    catalog — visible without any opt-in, and no longer in the frozen
+    experimental cluster. The anchor WRITER stays frozen (superseded by
+    forecast.commit_blind / forecast.reveal_snapshot)."""
+
+    registry = default_registry()
+    public = set(registry.public_names())
+    assert UNFROZEN_ANCHORED_CALIBRATION_READERS.issubset(public)
+    # No longer frozen behind the experimental shelf.
+    assert UNFROZEN_ANCHORED_CALIBRATION_READERS.isdisjoint(EXPERIMENTAL_ANCHORED_VIEWERS)
+    for tool in UNFROZEN_ANCHORED_CALIBRATION_READERS:
+        assert registry.get(tool).metadata()["catalog_visibility"] == "public"
+    # The after-the-fact anchor writer remains frozen (superseded by 4kec.9).
+    assert "forecast.anchor_to_snapshot" in EXPERIMENTAL_ANCHORED_VIEWERS
+    assert "forecast.anchor_to_snapshot" not in public
+    assert (
+        registry.get("forecast.anchor_to_snapshot").metadata()["catalog_visibility"]
+        == "experimental"
+    )
+
+
+# Destructive operator-only tools admin-gated by bead trade-trace-6rnk.
+# journal.backup/config_set were catalog_visibility='public' and journal.restore
+# was 'experimental', but none carried is_admin=True — so the default catalog
+# (and, for backup/config_set, every non-admin agent) saw them with no admin
+# signal. model.import/memory.reindex are 'legacy' but added for defense in
+# depth so include_legacy=True cannot re-surface them to non-admin callers.
+ADMIN_GATED_OPERATOR_TOOLS = {
+    "journal.rebuild_projections",
+    "journal.repair",
+    "signal.scan",
+    "journal.backup",
+    "journal.restore",
+    "journal.config_set",
+    "model.import",
+    "memory.reindex",
+}
+
+
 def test_admin_tools_are_not_in_default_catalog():
     registry = default_registry()
-    assert {"journal.rebuild_projections", "journal.repair", "signal.scan"}.isdisjoint(
-        registry.public_names()
+    # No non-admin listing surface — default, include_legacy, or
+    # include_experimental — may expose an admin-gated operator tool.
+    assert ADMIN_GATED_OPERATOR_TOOLS.isdisjoint(registry.public_names())
+    assert ADMIN_GATED_OPERATOR_TOOLS.isdisjoint(
+        registry.public_names(include_legacy=True)
     )
-    assert {"journal.rebuild_projections", "journal.repair", "signal.scan"}.issubset(
-        registry.public_names(include_admin=True)
+    assert ADMIN_GATED_OPERATOR_TOOLS.isdisjoint(
+        registry.public_names(include_experimental=True)
+    )
+    # They reappear only when the operator explicitly opts into admin tools.
+    assert ADMIN_GATED_OPERATOR_TOOLS.issubset(
+        registry.public_names(
+            include_admin=True, include_legacy=True, include_experimental=True
+        )
     )
 
 

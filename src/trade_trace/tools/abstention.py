@@ -21,6 +21,7 @@ from trade_trace.tools._helpers import (
     new_id,
     normalize_timestamp,
     now_iso,
+    reject_if_contains_secrets,
     require,
     store_metadata_json,
 )
@@ -65,6 +66,10 @@ def _abstention_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]
     reason = require(args, "reason")
     if not isinstance(reason, str) or not reason.strip():
         raise ToolError(ErrorCode.VALIDATION_ERROR, "reason must be a non-empty string", details={"field": "reason"})
+    # abstention.reason is long-form free text (the considered-and-passed
+    # justification); scan it for credential-shaped substrings before it
+    # is persisted (bead trade-trace-jm14 / INV-6).
+    reject_if_contains_secrets(reason, field="reason")
     considered_probability = args.get("considered_probability")
     if considered_probability is not None:
         if isinstance(considered_probability, bool) or not isinstance(considered_probability, (int, float)):

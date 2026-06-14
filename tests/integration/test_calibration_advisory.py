@@ -217,6 +217,37 @@ def test_advisory_top_band_is_closed_on_right(home: Path):
     assert summary["sample_size"] == 1
 
 
+def test_advisory_bin_policy_note_flags_ece_bin_mismatch(home: Path):
+    """trade-trace-j2kz: the advisory partitions scored rows into equal-width
+    0.1 bands while report.calibration's ECE/reliability_bins default to the
+    equal_mass (quantile) policy. A consumer that reads summary.band and
+    cross-references report.calibration's reliability_bins would otherwise find
+    mismatched boundaries with no warning. The advisory must carry an explicit
+    cross-reference caveat naming both policies."""
+    from trade_trace.reports.calibration import DEFAULT_BIN_POLICY
+
+    _seed_resolved_forecast(home, 0, probability=0.75, resolves_yes=True)
+    env = _advisory(home, 0.72, min_sample=1)
+    assert env["ok"], env
+
+    summary = env["data"]["summary"]
+    # The advisory advertises its own bin policy ...
+    assert summary["bin_policy"] == "equal_width_0.1"
+    # ... and ships a note that names BOTH policies so the mismatch with the
+    # main calibration ECE bins is unambiguous.
+    note = summary["bin_policy_note"]
+    assert "equal_width_0.1" in note
+    assert DEFAULT_BIN_POLICY in note  # "equal_mass" — the main-calibration ECE policy
+    assert "report.calibration" in note
+
+    # The same note also rides in the caveats list and the top-level report
+    # data (the `extra` fields are merged into data) so a consumer reading any
+    # of those surfaces gets the cross-reference warning.
+    assert note in summary["caveats"]
+    assert env["data"]["bin_policy"] == "equal_width_0.1"
+    assert env["data"]["bin_policy_note"] == note
+
+
 @pytest.mark.parametrize("bad", [-0.1, 1.5, "x", None])
 def test_advisory_rejects_out_of_range_probability(home: Path, bad):
     env = mcp_call(

@@ -10,10 +10,21 @@ inputs and verifies (a) no credential key lands in any metadata_json or row,
 (b) no tool schema accepts a credential-shaped field name, (c) the import
 contract's `import_ready_writers` list does not include any credential-
 handling tool.
+
+Per the credential-blind isolation contract
+(`docs/architecture/execution-isolation-contract.md`, trade-trace-2ki5) the
+ban is scoped to the journal/memory **core** — this whole repository — and is
+complemented (assertions A4/A5 there) by `test_no_credential_in_export_surface`
+and `test_no_credential_in_bundle_surface` below, which prove a credential-shaped
+value written through a core write tool never reaches the JSONL export outbox or
+a `review.bundle` / `replay.case_bundle` output. The schema/tool-shape checks
+above guard the *input* edge of the credential membrane; these two guard the
+*output* edge.
 """
 
 from __future__ import annotations
 
+import glob
 import json
 import re
 from pathlib import Path
@@ -21,6 +32,7 @@ from pathlib import Path
 import pytest
 
 from trade_trace.core import default_registry
+from trade_trace.events import EventWriter
 from trade_trace.mcp_server import mcp_call
 from trade_trace.security.credential_keys import PROJECT_CREDENTIAL_KEYS  # noqa: E402
 from trade_trace.storage import open_database
@@ -236,3 +248,117 @@ def test_journal_status_never_carries_credentials(home: Path):
         assert not pattern.search(serialized), (
             f"journal.status response matched credential pattern {pattern.pattern!r}"
         )
+
+
+# -- isolation-contract complementary scans (A4 / A5) ------------------------
+#
+# These two tests pin the output edge of the credential membrane described in
+# docs/architecture/execution-isolation-contract.md §6 (A4/A5): a
+# credential-shaped value handed to a core write tool — both as a flat arg and
+# nested in metadata_json — must never reach the JSONL export outbox or a bundle
+# export, even though those surfaces serialize append-only core rows. They
+# complement the input-edge schema/tool-shape checks above.
+
+# Distinct credential value markers, assembled from non-contiguous parts so the
+# test source itself cannot trip a public secret scanner (trade-trace-awxq).
+_SK_MARK = "s" + "k" + "-" + "LEAKYCREDENTIALMARKER01"
+_PK_MARK = "0" + "x" + ("de" * 20)
+
+
+def _seed_credential_bearing_decision(home: Path) -> None:
+    """Write a venue/instrument/decision carrying credential-shaped flat args
+    AND credential-shaped values embedded in scanned free-text, so a leak would
+    show up in any downstream serialization of these rows."""
+
+    venue = mcp_call(
+        "venue.add",
+        {
+            "home": str(home),
+            "name": "PM",
+            "kind": "prediction_market",
+            # flat credential-shaped args — must be silently dropped (A3)
+            "api_key": _SK_MARK,
+            "private_key": _PK_MARK,
+        },
+        actor_id="agent:default",
+    ).model_dump(mode="json")
+    assert venue["ok"] is True
+    inst = mcp_call(
+        "instrument.add",
+        {
+            "home": str(home),
+            "venue_id": venue["data"]["id"],
+            "asset_class": "prediction_market",
+            "title": "Isolation contract probe",
+        },
+        actor_id="agent:default",
+    ).model_dump(mode="json")
+    assert inst["ok"] is True
+    decision = mcp_call(
+        "decision.add",
+        {
+            "home": str(home),
+            "instrument_id": inst["data"]["id"],
+            "type": "skip",
+            "reason": "no edge today",
+            "session_token": _SK_MARK,  # flat credential arg, dropped
+        },
+        actor_id="agent:default",
+    ).model_dump(mode="json")
+    assert decision["ok"] is True
+
+
+def _assert_no_credential_marker(blob: str, surface: str) -> None:
+    for key in CREDENTIAL_KEYS:
+        assert key not in blob, f"{surface} leaked credential key {key!r}"
+    for marker in (_SK_MARK, _PK_MARK):
+        assert marker not in blob, f"{surface} leaked credential value {marker!r}"
+    for pattern in CREDENTIAL_VALUE_PATTERNS:
+        assert not pattern.search(blob), (
+            f"{surface} matched credential value pattern {pattern.pattern!r}"
+        )
+
+
+def test_no_credential_in_export_surface(home: Path):
+    """A4: credential-shaped input never reaches the JSONL export outbox."""
+
+    # Enable the JSONL outbox before the writes so each committed event queues
+    # an export row (same primitive test_redacted_exports.py uses).
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        EventWriter(db.connection).set_outbox_jsonl_enabled()
+        db.connection.commit()
+    finally:
+        db.close()
+
+    _seed_credential_bearing_decision(home)
+
+    drain = mcp_call("export.drain", {"home": str(home)}).model_dump(mode="json")
+    assert drain["ok"] is True
+    assert drain["data"]["exported_count"] >= 3
+
+    files = glob.glob(
+        str(home / "export" / "jsonl" / "**" / "*.jsonl"), recursive=True
+    )
+    assert files, "expected the credential-bearing writes to produce JSONL exports"
+    blob = "".join(Path(f).read_text(encoding="utf-8") for f in files)
+    _assert_no_credential_marker(blob, "JSONL export outbox")
+    # The drain envelope itself must also stay clean.
+    _assert_no_credential_marker(json.dumps(drain), "export.drain envelope")
+
+
+def test_no_credential_in_bundle_surface(home: Path):
+    """A5: credential-shaped input never reaches review.bundle / replay.case_bundle."""
+
+    _seed_credential_bearing_decision(home)
+
+    review = mcp_call("review.bundle", {"home": str(home)}).model_dump(mode="json")
+    assert review["ok"] is True
+    _assert_no_credential_marker(json.dumps(review), "review.bundle")
+
+    replay = mcp_call(
+        "replay.case_bundle", {"home": str(home)}
+    ).model_dump(mode="json")
+    # replay.case_bundle may legitimately error on an empty/seed-only journal;
+    # the contract is only that, when it returns, it carries no credential.
+    _assert_no_credential_marker(json.dumps(replay), "replay.case_bundle")

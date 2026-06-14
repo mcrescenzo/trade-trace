@@ -523,11 +523,15 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 )
             # Late-forecast trigger #2 per scoring.md §6.
             if head_outcome is not None:
-                head_id, head_label, _head_created = head_outcome
+                head_id, head_label, head_created = head_outcome
                 forecast_row = (
                     forecast_id, kind, scoring_support, yes_label, resolution_at,
                     created_at,
                 )
+                # Pass the head outcome's TRUE created_at so the score row's
+                # late_recorded_by_seconds reflects the real recording lag
+                # (bead trade-trace-d6rc); scored_at==created_at here, which
+                # would otherwise collapse the lag to 0.
                 auto_scored = _score_one_forecast(
                     uow.conn,
                     forecast_row=forecast_row,
@@ -535,6 +539,7 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     outcome_label=head_label,
                     actor_id=ctx.actor_id,
                     scored_at=created_at,
+                    outcome_created_at=head_created,
                 )
                 _emit_forecast_scored(uow, auto_scored, actor_id=ctx.actor_id, ctx=ctx,
                                       scored_at=created_at)
@@ -717,11 +722,15 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                     uow.conn, instrument_id=instrument_id,
                 )
                 if head_outcome is not None:
-                    head_id, head_label, _head_created = head_outcome
+                    head_id, head_label, head_created = head_outcome
                     forecast_row = (
                         new_forecast_id, kind, scoring_support, yes_label,
                         resolution_at, created_at,
                     )
+                    # Pass the head outcome's TRUE created_at so the score
+                    # row's late_recorded_by_seconds reflects the real
+                    # recording lag (bead trade-trace-d6rc); scored_at==
+                    # created_at here, which would otherwise collapse it to 0.
                     auto_scored = _score_one_forecast(
                         uow.conn,
                         forecast_row=forecast_row,
@@ -729,6 +738,7 @@ def _forecast_supersede(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                         outcome_label=head_label,
                         actor_id=ctx.actor_id,
                         scored_at=created_at,
+                        outcome_created_at=head_created,
                     )
                     _emit_forecast_scored(
                         uow, auto_scored, actor_id=ctx.actor_id, ctx=ctx,

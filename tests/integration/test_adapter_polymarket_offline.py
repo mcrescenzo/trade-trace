@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +14,10 @@ from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.adapters.polymarket.config import PolymarketConfig
 from trade_trace.adapters.polymarket.errors import AdapterError
 from trade_trace.adapters.polymarket.retry import retry_policy_kwargs
+from trade_trace.contracts.envelope import SuccessEnvelope
 from trade_trace.mcp_server import mcp_call
+from trade_trace.storage import open_database
+from trade_trace.storage.paths import db_path
 from trade_trace.tools._market_rows import adapter_cache_hit_row_dict
 from trade_trace.tools.adapter_polymarket import (
     _apply_caller_resolution_rule,
@@ -21,6 +26,12 @@ from trade_trace.tools.adapter_polymarket import (
     _normalize_gamma_market,
     _snapshot_from_raw,
 )
+
+FIXTURES = Path(__file__).parent / "fixtures" / "polymarket"
+
+
+def _fixture(name: str) -> dict:
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
 def test_journal_status_adapter_state_default_offline(tmp_path: Path):
@@ -426,3 +437,102 @@ def test_polygon_rpc_fails_closed_on_non_retryable_http_4xx():
         assert exc.details["endpoint"] == "polygon-rpc.com/rpc/secret-token"
     else:  # pragma: no cover
         raise AssertionError("expected polygon RPC 4xx adapter error")
+
+
+def test_concurrent_outcome_fetch_inserts_exactly_one_outcome_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Regression for trade-trace-4kbk (outcome.fetch TOCTOU).
+
+    Two concurrent outcome.fetch calls for the same market formerly each ran
+    their existence check and their INSERT in *separate* db connections /
+    UnitOfWork transactions. With both callers passing the pre-RPC existence
+    check before either inserted, both INSERTs landed, producing two rows for
+    the (instrument_id, 'polymarket') pair (the outcomes table has no UNIQUE
+    constraint there). The fix re-checks existence inside the same UnitOfWork
+    that performs the INSERT; BEGIN IMMEDIATE serializes the two writers so
+    exactly one row is written and the loser returns an idempotent replay.
+
+    The deterministic race window is created with a threading.Barrier that the
+    patched polygon_rpc waits on: both threads pass the fast-path existence
+    check and reach the RPC together, guaranteeing the overlap that the old
+    code mishandled.
+    """
+
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+
+    # Enable the adapter with a polygon_rpc_url so outcome.fetch ingests on-chain
+    # resolution rather than failing closed with CONFIG_REQUIRED.
+    for key, value in (
+        ("network.polymarket.enabled", "true"),
+        ("network.polymarket.polygon_rpc_url", "https://polygon.example/rpc/secret-token"),
+    ):
+        assert mcp_call(
+            "journal.config_set",
+            with_legacy_idempotency_key(
+                "journal.config_set",
+                {"home": home, "key": key, "value": value, "confirm": True},
+            ),
+        ).ok
+
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: _fixture("market_binary_resolved_yes.json"),
+    )
+
+    # Both fetch threads must arrive at the RPC before either can proceed to its
+    # INSERT. The barrier releases both only once two callers are waiting,
+    # forcing the concurrent window the old two-connection code mishandled.
+    rpc_barrier = threading.Barrier(2, timeout=10)
+
+    def _patched_polygon_rpc(self, method, params=None):
+        rpc_barrier.wait()
+        return _fixture("polygon_resolution_tx.json")
+
+    monkeypatch.setattr(PolymarketClient, "polygon_rpc", _patched_polygon_rpc)
+
+    market = mcp_call(
+        "market.bind",
+        {"home": home, "source": "polymarket", "external_id": "pm-toctou-fetch"},
+    )
+    assert market.ok, market
+    assert isinstance(market, SuccessEnvelope)
+    instrument_id = market.data["id"]
+
+    def _fetch() -> Any:
+        return mcp_call(
+            "outcome.fetch",
+            with_legacy_idempotency_key(
+                "outcome.fetch", {"home": home, "market_id": instrument_id}
+            ),
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        envelopes = [f.result(timeout=30) for f in [pool.submit(_fetch), pool.submit(_fetch)]]
+
+    # Both calls succeed (no duplicate-key error, no race failure).
+    for env in envelopes:
+        assert env.ok, env
+        assert isinstance(env, SuccessEnvelope)
+
+    # Exactly one of them inserted; the other returned the idempotent replay.
+    inserted = [e for e in envelopes if not e.data.get("idempotent_replay")]
+    replayed = [e for e in envelopes if e.data.get("idempotent_replay")]
+    assert len(inserted) == 1, [e.data for e in envelopes]
+    assert len(replayed) == 1, [e.data for e in envelopes]
+    assert inserted[0].data["id"] == replayed[0].data["id"]
+
+    # The invariant under test: exactly ONE outcome row exists for the
+    # (instrument_id, 'polymarket') pair.
+    db = open_database(db_path(Path(home)))
+    try:
+        rows = db.connection.execute(
+            "SELECT id FROM outcomes WHERE instrument_id=? AND source='polymarket'",
+            (instrument_id,),
+        ).fetchall()
+    finally:
+        db.close()
+    assert len(rows) == 1, rows
+    assert rows[0][0] == inserted[0].data["id"]

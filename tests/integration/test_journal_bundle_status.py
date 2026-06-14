@@ -484,6 +484,30 @@ def test_journal_bundle_status_playbook_adherence_guidance_uses_registered_tool(
         "asset_class": "prediction_market",
     })
     assert isinstance(instrument, SuccessEnvelope)
+    # The decision references a real playbook_version (FK-enforced at
+    # insert time by migration 030) but records NO adherence rows — that
+    # missing-rows condition is exactly what the "weak" guidance below
+    # asserts on.
+    db = open_database(db_path(home))
+    try:
+        conn = db.connection
+        now = "2026-05-20T14:00:00.000Z"
+        conn.execute(
+            "INSERT INTO playbooks (id, name, created_at, actor_id) VALUES ('pb_missing_rows_fixture', 'Playbook', ?, 'agent:default')",
+            (now,),
+        )
+        conn.execute(
+            "INSERT INTO memory_nodes (id, node_type, body, valid_from, created_at, actor_id) VALUES ('refl_missing_rows_fixture', 'reflection', 'lineage', ?, ?, 'agent:default')",
+            (now, now),
+        )
+        conn.execute(
+            "INSERT INTO playbook_versions (id, playbook_id, version, provenance_reflection_node_id, created_at, actor_id) "
+            "VALUES ('pbv_missing_rows_fixture', 'pb_missing_rows_fixture', 1, 'refl_missing_rows_fixture', ?, 'agent:default')",
+            (now,),
+        )
+        conn.commit()
+    finally:
+        db.close()
     decision = _mcp(home, "decision.add", {
         "type": "watch",
         "instrument_id": instrument.data["id"],

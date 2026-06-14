@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from trade_trace.clock import FixedClock, SystemClock
+from tests.clock import FixedClock, SystemClock
 from trade_trace.timestamps import (
     TimestampValidationError,
     is_canonical_utc_iso8601,

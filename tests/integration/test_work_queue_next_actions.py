@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import sqlite3
 
+import pytest
+
 from trade_trace.core import default_registry, dispatch
 from trade_trace.storage.paths import db_path
 
@@ -338,6 +340,55 @@ def test_agent_next_actions_alias_paginates_with_cursor(home):
     assert first["truncated"] is True
     second = _call("agent.next_actions", home, {"as_of": "2026-01-20T00:00:00Z", "limit": 2, "cursor": first["next_cursor"]})
     assert not {i["item_id"] for i in second["work_queue"]} & {i["item_id"] for i in first["work_queue"]}
+
+
+@pytest.mark.parametrize("tool", ["report.work_queue", "agent.next_actions"])
+@pytest.mark.parametrize("bad_value", [-1, True, 1.5])
+def test_work_queue_rejects_invalid_stale_threshold(home, tool, bad_value):
+    """trade-trace-upl2: both surfaces over _work_queue_common must reject a
+    stale_threshold_days that is not a non-negative integer. A negative int
+    (-1), a bool (True — `isinstance(True, int)` is True in Python, so the guard
+    must exclude bool explicitly or it silently coerces to 1), and a non-integer
+    float (1.5) must each raise VALIDATION_ERROR with details.field set, so an
+    agent passing a malformed threshold gets a clear error rather than a
+    silently wrong staleness window."""
+    with _conn(home) as conn:
+        _seed_base(conn)
+
+    env = dispatch(
+        tool,
+        {"home": str(home), "stale_threshold_days": bad_value},
+        actor_id="agent:test",
+        registry=default_registry(),
+    ).model_dump(mode="json")
+
+    assert env["ok"] is False, env
+    assert env["error"]["code"] == "VALIDATION_ERROR", env["error"]
+    assert env["error"]["details"]["field"] == "stale_threshold_days", env["error"]
+
+
+@pytest.mark.parametrize("tool", ["report.work_queue", "agent.next_actions"])
+def test_work_queue_rejects_non_string_kind(home, tool):
+    """trade-trace-5eh3 / nyix(9): _work_queue_common guards `kind` to be a
+    string (lifecycle_agent.py:162-165) — only `stale_threshold_days` was
+    guard-tested before. A non-string `kind` (here `123`) must raise
+    VALIDATION_ERROR with details.field='kind' on BOTH surfaces over the
+    shared common path, so an agent passing a malformed kind gets a clear
+    error rather than the value being silently appended to the kinds list and
+    matching nothing."""
+    with _conn(home) as conn:
+        _seed_base(conn)
+
+    env = dispatch(
+        tool,
+        {"home": str(home), "kind": 123},
+        actor_id="agent:test",
+        registry=default_registry(),
+    ).model_dump(mode="json")
+
+    assert env["ok"] is False, env
+    assert env["error"]["code"] == "VALIDATION_ERROR", env["error"]
+    assert env["error"]["details"]["field"] == "kind", env["error"]
 
 
 def test_work_queue_boundary_language_has_no_scheduler_daemon_broker_execution_path(home):

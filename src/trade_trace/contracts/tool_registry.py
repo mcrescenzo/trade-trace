@@ -14,7 +14,24 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+import jsonschema
+
 from trade_trace.contracts.json_schema_derive import derive_schema
+
+
+def _compile_validator(schema: dict[str, Any] | None) -> Any | None:
+    """Build a draft-specific jsonschema validator instance for ``schema``.
+
+    Built once at registration time so per-dispatch validation skips the
+    ``jsonschema.validate`` overhead of re-detecting the draft, re-checking the
+    schema, and re-instantiating a validator (see trade-trace-u5l3). Returns
+    ``None`` when there is no schema to validate against.
+    """
+
+    if schema is None:
+        return None
+    cls = jsonschema.validators.validator_for(schema)
+    return cls(schema)
 
 
 class CLINameCollisionError(RuntimeError):
@@ -109,6 +126,7 @@ class ToolRegistration:
     example_rich: dict[str, Any] | None = None
     display_minimal: dict[str, Any] | None = None
     json_schema: dict[str, Any] | None = None
+    compiled_validator: Any | None = None
     usage_summary: str = ""
     examples: list[str] = field(default_factory=list)
     enum_notes: dict[str, str] = field(default_factory=dict)
@@ -175,6 +193,12 @@ class ToolRegistry:
 
     by_name: dict[str, ToolRegistration] = field(default_factory=dict)
     by_cli: dict[tuple[str, ...], str] = field(default_factory=dict)
+    # Cache of `sorted(self.by_name)`. `names()` is called on every
+    # NOT_FOUND error and known-tools build (journal.py:326), but the
+    # tool table is frozen after process-startup registration. Rebuilt
+    # only by the three methods that mutate `by_name`: register(),
+    # alias() (via register()), and mark() (trade-trace-ukwy).
+    _sorted_names: list[str] | None = field(default=None, repr=False)
 
     def register(
         self,
@@ -225,6 +249,7 @@ class ToolRegistry:
             example_rich=example_rich,
             display_minimal=display_minimal,
             json_schema=effective_json_schema,
+            compiled_validator=_compile_validator(effective_json_schema),
             usage_summary=usage_summary,
             examples=list(examples or ()),
             enum_notes=dict(enum_notes or {}),
@@ -238,12 +263,15 @@ class ToolRegistry:
             redirect=redirect,
         )
         self.by_cli[invocation] = name
+        self._sorted_names = None
 
     def get(self, name: str) -> ToolRegistration:
         return self.by_name[name]
 
     def names(self) -> list[str]:
-        return sorted(self.by_name)
+        if self._sorted_names is None:
+            self._sorted_names = sorted(self.by_name)
+        return self._sorted_names
 
     def cli_invocations(self) -> list[tuple[str, ...]]:
         return sorted(self.by_cli)
@@ -311,6 +339,10 @@ class ToolRegistry:
             removed_in=(removed_in if removed_in is not None else reg.removed_in),
             redirect=(redirect if redirect is not None else reg.redirect),
         )
+        # mark() never adds/removes a key, so the sorted-name set is
+        # unchanged today; invalidate anyway so the cache stays correct if
+        # mark() ever rekeys an entry (trade-trace-ukwy).
+        self._sorted_names = None
 
     def alias(
         self,

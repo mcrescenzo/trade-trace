@@ -318,3 +318,31 @@ def test_semantic_keys_registry_covers_each_expected_event_type():
     }
     missing = required - set(SEMANTIC_KEYS)
     assert missing == set(), f"semantic_keys registry missing: {missing}"
+
+
+def test_open_enum_events_event_type_covers_registered_event_types():
+    """trade-trace-1k5d: every event type registered in SEMANTIC_KEYS must
+    also be mirrored in OPEN_ENUMS['events.event_type'] so the migration-policy
+    open-enum guard sees the full emitted surface. Previously 18 audit/finality/
+    risk/reconciliation/market-bind event types were registered as writable but
+    absent from this mirror.
+    """
+
+    from trade_trace.storage.policy import OPEN_ENUMS
+
+    registered = set(SEMANTIC_KEYS)
+    enum = set(OPEN_ENUMS["events.event_type"])
+    missing = registered - enum
+    assert missing == set(), (
+        "events.event_type open enum is missing registered event types: "
+        f"{sorted(missing)}"
+    )
+    # Spot-check several of the formerly-missing values are now present.
+    for value in (
+        "market.bound",
+        "reconciliation.recorded",
+        "risk_check_receipt.recorded",
+        "abstention.recorded",
+        "forecast.resolution_interpreted",
+    ):
+        assert value in enum, value

@@ -31,7 +31,9 @@ STALE_SNIPPETS = [
     "tt model import --src",
     "model import --src",
     "model import <path>",
-    "memory.reflect(target, body, *, importance?, derived_from?",
+    # The `derived_from?` reflect signature is no longer stale: bead
+    # trade-trace-qikt implemented the §10 edge-sugar fields, so the doc
+    # now truthfully advertises them on memory.reflect.
 ]
 
 

@@ -64,6 +64,16 @@ def test_memory_usefulness_negative_controls_are_caveated_and_read_only(home):
     assert "citation_use:used" in group_keys
 
 
+def test_memory_usefulness_is_in_default_public_catalog():
+    """Bead trade-trace-8g7t: report.memory_usefulness was unfrozen out of the
+    experimental anchored-viewers cluster into the Phase-1 public catalog. It
+    must be visible in the default catalog (no opt-in) and tagged public."""
+
+    registry = default_registry()
+    assert "report.memory_usefulness" in set(registry.public_names())
+    assert registry.get("report.memory_usefulness").metadata()["catalog_visibility"] == "public"
+
+
 def test_memory_usefulness_tool_filters_memory_kind_and_context(home):
     with _conn(home) as conn:
         _seed(conn)

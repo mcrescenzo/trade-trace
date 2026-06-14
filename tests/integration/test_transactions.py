@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from trade_trace.events import EventWriter, UnitOfWork
-from trade_trace.events.unit_of_work import transaction
+from trade_trace.events.unit_of_work import DRY_RUN_FLAG, transaction
 from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
 
@@ -187,5 +187,85 @@ def test_replay_inside_uow_is_idempotent(tmp_path):
         assert replay.id == first.id
         assert replay.idempotent_replay is True
         assert db.connection.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 1
+    finally:
+        db.close()
+
+
+def test_uow_dry_run_rolls_back_all_writes(tmp_path):
+    """Under the request-scoped DRY_RUN_FLAG, a UoW that exits normally (no
+    exception) must still issue ROLLBACK — guarding the
+    `DRY_RUN_FLAG.get()` → ROLLBACK branch in UnitOfWork._commit. If that
+    check were removed (or the rollback replaced by a no-op commit), the
+    `decision.created` event below would persist and this assertion would
+    catch it at the unit level instead of only via the slow MCP path."""
+
+    db = _db(tmp_path)
+    try:
+        EventWriter(db.connection).set_outbox_jsonl_enabled()
+
+        tok = DRY_RUN_FLAG.set(True)
+        try:
+            with UnitOfWork(db.connection) as uow:
+                # Handlers still observe dry-run via the convenience property.
+                assert uow.dry_run is True
+                uow.event_writer.write(
+                    event_type="decision.created",
+                    subject_kind="decision",
+                    subject_id="d_1",
+                    payload=_decision_payload(),
+                    actor_id="agent:default",
+                    idempotency_key="dry-run-key",
+                )
+            # The `with` exited normally — no exception — yet the dry-run
+            # branch rolled everything back instead of committing.
+        finally:
+            DRY_RUN_FLAG.reset(tok)
+
+        assert db.connection.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0
+        assert db.connection.execute("SELECT COUNT(*) FROM outbox").fetchone()[0] == 0
+    finally:
+        db.close()
+
+
+def test_uow_dry_run_projection_runs_but_side_effects_roll_back(tmp_path):
+    """Under dry-run the spec is 'handlers run normally, projections compute,
+    then ROLLBACK'. So a registered projection updater MUST still be invoked
+    (we assert via a call counter), but any DB write it performs is discarded
+    by the rollback — proving projections compute but their side effects do
+    not persist."""
+
+    db = _db(tmp_path)
+    try:
+        db.connection.execute("CREATE TABLE side_effect (x INTEGER)")
+        db.connection.commit()
+
+        calls = {"n": 0}
+
+        tok = DRY_RUN_FLAG.set(True)
+        try:
+            with UnitOfWork(db.connection) as uow:
+                uow.event_writer.write(
+                    event_type="decision.created",
+                    subject_kind="decision",
+                    subject_id="d_1",
+                    payload=_decision_payload(),
+                    actor_id="agent:default",
+                    idempotency_key="dry-run-projection",
+                )
+
+                def _update(conn):
+                    calls["n"] += 1
+                    conn.execute("INSERT INTO side_effect(x) VALUES (1)")
+
+                uow.register_projection(_update)
+            # Normal exit under dry-run → projection computed, then ROLLBACK.
+        finally:
+            DRY_RUN_FLAG.reset(tok)
+
+        # The projection callable WAS invoked (it computed inside the txn)...
+        assert calls["n"] == 1
+        # ...but its write was rolled back along with the event row.
+        assert db.connection.execute("SELECT COUNT(*) FROM side_effect").fetchone()[0] == 0
+        assert db.connection.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0
     finally:
         db.close()

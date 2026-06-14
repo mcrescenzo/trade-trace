@@ -62,15 +62,23 @@ rate manageable on domain-style strings like `a.b.c`."""
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 # Coarse ReDoS structural guard: reject groups that contain a quantifier
-# and are themselves quantified (e.g. (a+)+) or backreferences (\1).
+# and are themselves quantified (e.g. (a+)+, (a{2,})+, (a+){3}) or
+# backreferences (\1). BOTH the inner and outer quantifier alternations
+# cover the symbolic forms (*, +, ?) AND curly-brace counts
+# ({n}, {n,}, {n,m}). Covering the inner form rejects a nested
+# bounded-repeat like (a{2,})+ (bead trade-trace-9o2t); covering the
+# OUTER form rejects a group quantified by a curly count like (a+){3}
+# or (a{2,}){2,} (bead trade-trace-rpcj). A benign curly-quantified
+# group with no inner quantifier (e.g. (abc){3}) still passes, because
+# the inner-quantifier branch is required first.
 _REDOS_STRUCTURE_RE = re.compile(
-    r"\("                 # literal opening group
-    r"[^()]*"            # contents without nested groups
-    r"[*+?]"             # a quantifier inside
-    r"[^()]*"            # more contents
-    r"\)"                # literal closing group
-    r"[*+?]"             # the group itself is quantified
-    r"|\\[1-9]\d*"       # OR backreference
+    r"\("                       # literal opening group
+    r"[^()]*"                  # contents without nested groups
+    r"(?:[*+?]|\{\d+,?\d*\})"  # a quantifier inside: *, +, ? OR {n}/{n,}/{n,m}
+    r"[^()]*"                  # more contents
+    r"\)"                      # literal closing group
+    r"(?:[*+?]|\{\d+,?\d*\})"  # the group itself is quantified: *, +, ? OR {n}/{n,}/{n,m}
+    r"|\\[1-9]\d*"             # OR backreference
 )
 
 

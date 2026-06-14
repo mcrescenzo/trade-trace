@@ -160,13 +160,38 @@ def _strategy_health_summary(
         "SELECT id FROM theses WHERE strategy_id = ? ORDER BY created_at, id",
         (strategy_id,),
     ).fetchall()]
+    # NOTE: forecasts.scoring_state is append-only (m003/m014 trigger
+    # forbids UPDATE), so it is always 'pending' on disk; the logical
+    # state is projected at read time by derive_scoring_state(). A
+    # `WHERE f.scoring_state IN ('pending','failed')` clause is therefore
+    # a no-op that returns ALL non-invalidated forecasts — including
+    # logically scored/superseded ones — inflating the "open" count
+    # (trade-trace-2b0z). We reproduce the intended pending-or-failed set
+    # with accurate predicates: exclude forecasts that are logically
+    # 'scored' (a non-NULL score against a non-superseded outcome) and
+    # those that are logically 'superseded' (an incoming forecast->
+    # forecast supersedes edge), matching derive_scoring_state().
     forecast_ids = [r[0] for r in conn.execute(
         """
         SELECT f.id FROM forecasts f
         JOIN theses t ON t.id = f.thesis_id
         WHERE t.strategy_id = ?
-          AND f.scoring_state IN ('pending', 'failed')
           AND f.invalidated_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM forecast_scores fs
+            WHERE fs.forecast_id = f.id
+              AND fs.score IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM edges eo
+                WHERE eo.source_kind = 'outcome' AND eo.target_kind = 'outcome'
+                  AND eo.edge_type = 'supersedes' AND eo.target_id = fs.outcome_id
+              )
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM edges ef
+            WHERE ef.source_kind = 'forecast' AND ef.target_kind = 'forecast'
+              AND ef.edge_type = 'supersedes' AND ef.target_id = f.id
+          )
         ORDER BY f.created_at, f.id
         """,
         (strategy_id,),

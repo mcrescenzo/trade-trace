@@ -113,3 +113,38 @@ def test_error_codes_match_contract_list():
         "MARKET_STATE_CONFLICT",
     }
     assert {code.value for code in ErrorCode} == expected
+
+
+def test_classify_integrity_error_maps_real_constraint_messages():
+    """trade-trace-1k5d: the IntegrityError classifier must key off SQLite's
+    full constraint-violation phrases, not bare keywords, so a table/column
+    name containing the word UNIQUE/FOREIGN KEY cannot misclassify an unrelated
+    storage error as VALIDATION_ERROR."""
+
+    from trade_trace.core import _classify_integrity_error
+
+    # Real SQLite messages classify as validation errors.
+    assert _classify_integrity_error(
+        "UNIQUE constraint failed: outcomes.id"
+    ) == ErrorCode.VALIDATION_ERROR
+    assert _classify_integrity_error(
+        "FOREIGN KEY constraint failed"
+    ) == ErrorCode.VALIDATION_ERROR
+    assert _classify_integrity_error(
+        "CHECK constraint failed: status"
+    ) == ErrorCode.VALIDATION_ERROR
+    # Append-only trigger and migration-004 validation messages keep their codes.
+    assert _classify_integrity_error(
+        "append-only invariant: UPDATE on outcomes is forbidden"
+    ) == ErrorCode.INVARIANT_VIOLATION
+    assert _classify_integrity_error(
+        "VALIDATION_ERROR: bad value"
+    ) == ErrorCode.VALIDATION_ERROR
+    # The bare keyword embedded in a table/column name must NOT be mistaken for
+    # a constraint violation — it falls through to STORAGE_ERROR.
+    assert _classify_integrity_error(
+        "no such column: unique_external_id"
+    ) == ErrorCode.STORAGE_ERROR
+    assert _classify_integrity_error(
+        "near \"FOREIGN\": syntax error in foreign_key_audit"
+    ) == ErrorCode.STORAGE_ERROR

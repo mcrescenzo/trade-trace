@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import sqlite3
 
+import pytest
+
 from trade_trace.core import default_registry, dispatch
 from trade_trace.reports.lifecycle import derive_lifecycle_cases
 from trade_trace.storage.paths import db_path
@@ -144,6 +146,26 @@ def test_lifecycle_derives_outcome_score_reflection_and_adherence_states(home):
                 "test",
             ),
         )
+        # The playbook_version chain referenced by the adherence decisions
+        # must exist before those decisions are inserted (a non-NULL
+        # decisions.playbook_version_id is FK-enforced at insert time by
+        # migration 030 / trg_decisions_playbook_version_id_exists).
+        conn.execute(
+            "INSERT INTO playbooks VALUES (?,?,?,?,?,?,?)",
+            ("pb", "pb", None, None, "{}", "2026-01-01T00:00:00Z", "test"),
+        )
+        conn.execute(
+            "INSERT INTO memory_nodes (id,node_type,body,meta_json,valid_from,created_at,actor_id) VALUES (?,?,?,?,?,?,?)",
+            ("rule", "playbook_rule", "rule", "{}", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "test"),
+        )
+        conn.execute(
+            "INSERT INTO memory_nodes (id,node_type,body,meta_json,valid_from,created_at,actor_id) VALUES (?,?,?,?,?,?,?)",
+            ("refl", "reflection", "reflected", "{}", "2026-01-12T00:00:00Z", "2026-01-12T00:00:00Z", "test"),
+        )
+        conn.execute(
+            "INSERT INTO playbook_versions VALUES (?,?,?,?,?,?,?,?,?)",
+            ("pv", "pb", 1, None, "refl", None, "{}", "2026-01-01T00:00:00Z", "test"),
+        )
         _insert_decision(conn, "d-outcome", "watch", "2026-01-02T00:00:00Z")
         _insert_decision(conn, "d-score", "watch", "2026-01-02T00:01:00Z", forecast_id="fc")
         _insert_decision(conn, "d-reflected", "hold", "2026-01-02T00:02:00Z")
@@ -155,23 +177,7 @@ def test_lifecycle_derives_outcome_score_reflection_and_adherence_states(home):
             ("out", "inst", "2026-01-11T00:00:00Z", "yes", "resolved_final", "{}", "2026-01-11T00:01:00Z", "test"),
         )
         conn.execute("INSERT INTO forecast_scores VALUES (?,?,?,?,?,?,?,?)", ("score", "fc", "out", "brier", 0.1, "2026-01-11T00:02:00Z", "test", "{}"))
-        conn.execute(
-            "INSERT INTO memory_nodes (id,node_type,body,meta_json,valid_from,created_at,actor_id) VALUES (?,?,?,?,?,?,?)",
-            ("refl", "reflection", "reflected", "{}", "2026-01-12T00:00:00Z", "2026-01-12T00:00:00Z", "test"),
-        )
         conn.execute("INSERT INTO edges VALUES (?,?,?,?,?,?,?,?,?,?)", ("e-refl", "memory_node", "refl", "decision", "d-reflected", "about", None, "{}", "2026-01-12T00:01:00Z", "test"))
-        conn.execute(
-            "INSERT INTO playbooks VALUES (?,?,?,?,?,?,?)",
-            ("pb", "pb", None, None, "{}", "2026-01-01T00:00:00Z", "test"),
-        )
-        conn.execute(
-            "INSERT INTO memory_nodes (id,node_type,body,meta_json,valid_from,created_at,actor_id) VALUES (?,?,?,?,?,?,?)",
-            ("rule", "playbook_rule", "rule", "{}", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "test"),
-        )
-        conn.execute(
-            "INSERT INTO playbook_versions VALUES (?,?,?,?,?,?,?,?,?)",
-            ("pv", "pb", 1, None, "refl", None, "{}", "2026-01-01T00:00:00Z", "test"),
-        )
         conn.execute(
             "INSERT INTO decision_playbook_rules VALUES (?,?,?,?,?,?,?,?,?)",
             ("dpr", "d-adh-recorded", "pv", "rule", "followed", "ok", "{}", "2026-01-02T00:05:00Z", "test"),
@@ -396,6 +402,29 @@ def test_report_lifecycle_rejects_invalid_limit_and_cursor(home):
 
     bad_cursor = dispatch("report.lifecycle", {"home": str(home), "cursor": "!!not-base64!!"}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
     assert bad_cursor["ok"] is False
+
+
+@pytest.mark.parametrize("bad_value", [-1, True, 1.5])
+def test_report_lifecycle_rejects_invalid_stale_threshold(home, bad_value):
+    """trade-trace-upl2: stale_threshold_days must be a non-negative *integer*.
+    A negative int (-1), a bool (True — `isinstance(True, int)` is True in
+    Python, so the guard must exclude bool explicitly or it silently coerces to
+    1), and a non-integer float (1.5) must each raise VALIDATION_ERROR rather
+    than being accepted, so an agent passing a malformed threshold gets a clear
+    error instead of a silently wrong staleness window."""
+    with _conn(home) as conn:
+        _seed_base(conn)
+
+    env = dispatch(
+        "report.lifecycle",
+        {"home": str(home), "stale_threshold_days": bad_value},
+        actor_id="agent:test",
+        registry=default_registry(),
+    ).model_dump(mode="json")
+
+    assert env["ok"] is False, env
+    assert env["error"]["code"] == "VALIDATION_ERROR", env["error"]
+    assert env["error"]["details"]["field"] == "stale_threshold_days", env["error"]
 
 
 def test_report_lifecycle_status_alias_and_schema(home):

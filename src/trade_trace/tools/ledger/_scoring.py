@@ -108,6 +108,12 @@ def _autoscore_pending_forecasts(
     against THIS `outcome_id` is skipped, so re-firing the trigger does
     not double-write. A different `outcome_id` (e.g. a supersession of
     the prior outcome) appends a fresh row per §5.1.
+
+    Superseded forecasts are excluded (trade-trace-6g7v): a forecast that
+    is the target of a forecast->forecast `supersedes` edge has been
+    replaced by a newer forecast, so auto-scoring it would write a score
+    row that pollutes calibration (inflating N, distorting Brier/ECE/skill).
+    Its current logical `scoring_state` is `superseded`, not `pending`.
     """
 
     cur = conn.execute(
@@ -117,6 +123,13 @@ def _autoscore_pending_forecasts(
         JOIN theses t ON t.id = f.thesis_id
         WHERE t.instrument_id = ?
           AND f.scoring_support = 'supported'
+          AND NOT EXISTS (
+            SELECT 1 FROM edges e
+            WHERE e.source_kind = 'forecast'
+              AND e.target_kind = 'forecast'
+              AND e.edge_type = 'supersedes'
+              AND e.target_id = f.id
+          )
           AND NOT (
             EXISTS (
               SELECT 1 FROM events e
@@ -150,6 +163,7 @@ def _autoscore_pending_forecasts(
             outcome_label=outcome_label,
             actor_id=actor_id,
             scored_at=created_at,
+            outcome_created_at=created_at,
         )
         results.append(scored)
     return results
@@ -163,10 +177,25 @@ def _score_one_forecast(
     outcome_label: str,
     actor_id: str,
     scored_at: str,
+    outcome_created_at: str | None = None,
 ) -> dict[str, Any]:
     """Compute one Brier score against a specific outcome and persist a
     `forecast_scores` row. Returns a summary dict with `forecast_id`,
     `score_id`, `score`, `failure_reason`, and `late_recorded`.
+
+    `scored_at` is the score-row write time (persisted in the
+    `forecast_scores.scored_at` column). `outcome_created_at` is the TRUE
+    `outcomes.created_at` transaction time, used solely to compute the
+    `late_recorded_by_seconds` lag per dogfood-protocol §2.1
+    (`max(0, forecast.created_at - min(outcome.created_at,
+    resolution_at))`). On the late-forecast (`forecast.add`) and
+    late-supersede paths the new forecast and the score row are written at
+    the same instant, so `scored_at` is NOT the outcome's creation time —
+    callers there MUST pass the head outcome's `created_at` explicitly
+    (bead trade-trace-d6rc), otherwise the lag collapses to 0. When
+    omitted (the `outcome.add` auto-score path, where the outcome IS being
+    created now and `scored_at == outcome.created_at`), `scored_at` is used
+    as the outcome timestamp for backward compatibility.
 
     Caller is responsible for skipping forecasts that are already scored
     against this outcome (`_autoscore_pending_forecasts` does this; the
@@ -236,7 +265,7 @@ def _score_one_forecast(
 
     late_recorded, late_by_seconds = _late_recorded_calc(
         forecast_created_at=fcreated_at,
-        outcome_created_at=scored_at,
+        outcome_created_at=outcome_created_at if outcome_created_at is not None else scored_at,
         resolution_at=resolution_at,
     )
 

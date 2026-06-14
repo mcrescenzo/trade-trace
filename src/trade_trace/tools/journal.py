@@ -80,17 +80,22 @@ def _journal_init(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     try:
         before = current_version(db.connection)
         from_v, to_v = apply_pending_migrations(db.connection)
-        # Record bootstrap metadata; idempotent (replace on conflict).
-        db.connection.execute(
-            "INSERT INTO meta(key, value) VALUES ('package_version', ?) "
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            (__version__,),
-        )
-        db.connection.execute(
-            "INSERT INTO meta(key, value) VALUES ('contract_version', ?) "
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            (CONTRACT_VERSION,),
-        )
+        # Record bootstrap metadata; idempotent (replace on conflict). Both
+        # meta rows commit atomically so a crash between the two inserts can
+        # never leave package_version updated without contract_version (or
+        # vice versa). Runs after the migration commit, so it cannot widen the
+        # migration transaction.
+        with db.transaction():
+            db.connection.execute(
+                "INSERT INTO meta(key, value) VALUES ('package_version', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (__version__,),
+            )
+            db.connection.execute(
+                "INSERT INTO meta(key, value) VALUES ('contract_version', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (CONTRACT_VERSION,),
+            )
         fts5 = has_fts5(db.connection)
         # Per trade-trace-mehh: report the real sqlite-vec capability
         # instead of hard-coding False. `has_sqlite_vec` runs a
@@ -375,6 +380,14 @@ def _journal_rescan_scoring(args: dict[str, Any], ctx: ToolContext) -> dict[str,
 
     db = open_database(path, create_parent=False)
     try:
+        # NOTE: forecasts.scoring_state is append-only (m003/m014 trigger
+        # forbids UPDATE) and never leaves 'pending' on disk, so a
+        # `WHERE f.scoring_state = 'pending'` filter would be a no-op
+        # (trade-trace-2b0z). This rescan intentionally enumerates EVERY
+        # categorical/scalar forecast and decides per-row whether a score
+        # already exists for the current head outcome (see the
+        # `already_scored_head` / `will_score` computation below), so we
+        # do not filter on the (logical) scoring state in SQL at all.
         rows = db.connection.execute(
             """
             SELECT f.id, f.kind, f.scoring_support, f.yes_label, f.resolution_at,
@@ -382,7 +395,6 @@ def _journal_rescan_scoring(args: dict[str, Any], ctx: ToolContext) -> dict[str,
             FROM forecasts f
             JOIN theses t ON t.id = f.thesis_id
             WHERE f.kind IN ('categorical','scalar')
-              AND f.scoring_state = 'pending'
             ORDER BY f.created_at, f.id
             """
         ).fetchall()
@@ -463,11 +475,18 @@ def register_journal_tools(registry: ToolRegistry) -> None:
         "journal.rescan_scoring",
         _journal_rescan_scoring,
         description=(
-            "[P1 contract; M1 stub] Re-score forecasts whose `scoring_support` "
-            "was upgraded by a new scorer installation. Returns "
-            "UNSUPPORTED_CAPABILITY in MVP with `affected_rows` set to the "
-            "count of pending unsupported forecasts so the agent can size the "
-            "future migration. See scoring.md §4.3 / §7."
+            "Re-score legacy pending categorical/scalar forecasts against the "
+            "current resolved_final head outcome. Two modes: `preview` (default) "
+            "reports `affected_rows` and `would_score_rows` without writing; "
+            "`confirm` appends a forecast_scores row per unscored forecast/head "
+            "pair. Idempotent — it never re-scores a pair that already has a "
+            "score and never mutates existing events/outcomes/forecasts. "
+            "Because the shipped scorer (`_score_one_forecast`) implements only "
+            "binary Brier, each categorical/scalar row scores with "
+            "`failure_reason=unsupported_kind` (a recorded `failed` score, not "
+            "an UNSUPPORTED_CAPABILITY envelope error). Binary forecasts are "
+            "scored at outcome time and are not enumerated here. See "
+            "scoring.md §4.3 / §7."
         ),
     )
     registry.register(

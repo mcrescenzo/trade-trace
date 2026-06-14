@@ -80,7 +80,18 @@ _OUTCOME_ADD_SCHEMA: dict[str, Any] = {
 def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     instrument_id = require(args, "instrument_id")
     resolved_at = normalize_timestamp(args, "resolved_at", required=True)
-    outcome_label = require(args, "outcome_label")
+    # Normalize the outcome_label at write time so a whitespace-padded or
+    # whitespace-only label cannot be persisted. is_auto_scoreable_final()
+    # already strips before comparing, but the raw (un-stripped) string would
+    # otherwise land in the append-only outcomes row, leaving a label like
+    # " yes " or "   " that no later reader can match cleanly (trade-trace-1k5d).
+    outcome_label = require(args, "outcome_label").strip()
+    if not outcome_label:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "outcome_label must not be empty or whitespace-only",
+            details={"field": "outcome_label"},
+        )
     status = require(args, "status")
     if status not in _OUTCOME_STATUSES:
         raise ToolError(
@@ -200,16 +211,45 @@ def _resolve_pending(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "limit must be between 1 and 1000",
             details={"field": "limit", "value": limit},
         )
+    # PRD §4.4: resolve.pending lists forecasts whose resolution_at has
+    # ALREADY PASSED ("past their resolution_at") and remain unscored. A
+    # future-dated forecast is not yet resolvable, so it must not leak into
+    # this work queue. Bind the cutoff to now_iso() (which honors the
+    # CLOCK_OVERRIDE used by tests) rather than SQL strftime('now'), so the
+    # filter stays deterministic under a frozen clock.
+    now = now_iso()
     with db_for_args(args) as db:
+        # NOTE: forecasts.scoring_state is append-only (the m003/m014
+        # trigger forbids UPDATE), so it never leaves 'pending' on disk;
+        # the logical state is projected at read time by
+        # derive_scoring_state(). A `WHERE f.scoring_state = 'pending'`
+        # clause here would be a no-op that filters nothing while implying
+        # already-scored forecasts are excluded (trade-trace-2b0z). We
+        # instead exclude logically-scored forecasts with an accurate
+        # NOT EXISTS over forecast_scores: a non-NULL score against an
+        # outcome that has not itself been superseded == logically
+        # 'scored' per derive_scoring_state(). Forecasts that are
+        # logically pending/failed/superseded-outcome remain in the list.
         cur = db.connection.execute(
             """
             SELECT f.id, f.thesis_id, f.kind, f.resolution_at, t.instrument_id
             FROM forecasts f
             JOIN theses t ON t.id = f.thesis_id
             WHERE f.resolution_at IS NOT NULL
-              AND f.scoring_state = 'pending'
+              AND f.resolution_at <= ?
+              AND NOT EXISTS (
+                SELECT 1 FROM forecast_scores fs
+                WHERE fs.forecast_id = f.id
+                  AND fs.score IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM edges e
+                    WHERE e.source_kind = 'outcome' AND e.target_kind = 'outcome'
+                      AND e.edge_type = 'supersedes' AND e.target_id = fs.outcome_id
+                  )
+              )
             ORDER BY f.resolution_at ASC, f.id ASC
             """,
+            (now,),
         )
         items = []
         for row in cur.fetchall():

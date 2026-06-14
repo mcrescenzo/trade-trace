@@ -92,6 +92,24 @@ from trade_trace.storage.migrations.m028_forecast_independence_locks import (
 from trade_trace.storage.migrations.m029_resolution_interpretations import (
     _migration_029_resolution_interpretations,
 )
+from trade_trace.storage.migrations.m030_decisions_playbook_version_id_trigger import (
+    _migration_030_decisions_playbook_version_id_trigger,
+)
+from trade_trace.storage.migrations.m031_edges_supersedes_index import (
+    _migration_031_edges_supersedes_index,
+)
+from trade_trace.storage.migrations.m032_positions_opened_at_index import (
+    _migration_032_positions_opened_at_index,
+)
+from trade_trace.storage.migrations.m033_decisions_type_created_at_index import (
+    _migration_033_decisions_type_created_at_index,
+)
+from trade_trace.storage.migrations.m034_edges_target_type_index import (
+    _migration_034_edges_target_type_index,
+)
+from trade_trace.storage.migrations.m035_memory_recall_events_filter_indexes import (
+    _migration_035_memory_recall_events_filter_indexes,
+)
 
 MIGRATIONS: list[Migration] = [
     _migration_001_meta_table,
@@ -123,6 +141,12 @@ MIGRATIONS: list[Migration] = [
     _migration_027_abstentions,
     _migration_028_forecast_independence_locks,
     _migration_029_resolution_interpretations,
+    _migration_030_decisions_playbook_version_id_trigger,
+    _migration_031_edges_supersedes_index,
+    _migration_032_positions_opened_at_index,
+    _migration_033_decisions_type_created_at_index,
+    _migration_034_edges_target_type_index,
+    _migration_035_memory_recall_events_filter_indexes,
 ]
 
 
@@ -170,6 +194,12 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
     (27, ["abstentions"]),
     (28, ["forecast_independence_locks"]),
     (29, ["resolution_interpretations"]),
+    (30, []),
+    (31, []),
+    (32, []),
+    (33, []),
+    (34, []),
+    (35, []),
 ]
 
 
@@ -235,6 +265,12 @@ _MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
     (27, {}),
     (28, {}),
     (29, {}),
+    (30, {}),
+    (31, {}),
+    (32, {}),
+    (33, {}),
+    (34, {}),
+    (35, {}),
 ]
 
 
@@ -275,6 +311,12 @@ __all__ = [
     "_migration_027_abstentions",
     "_migration_028_forecast_independence_locks",
     "_migration_029_resolution_interpretations",
+    "_migration_030_decisions_playbook_version_id_trigger",
+    "_migration_031_edges_supersedes_index",
+    "_migration_032_positions_opened_at_index",
+    "_migration_033_decisions_type_created_at_index",
+    "_migration_034_edges_target_type_index",
+    "_migration_035_memory_recall_events_filter_indexes",
     "_require_fts5",
     "apply_pending_migrations",
     "current_version",

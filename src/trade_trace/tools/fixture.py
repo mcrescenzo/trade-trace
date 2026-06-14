@@ -141,7 +141,7 @@ _ID_PREFIX_BY_TOOL: dict[str, str] = {
     "strategy.create": "strat",
     "playbook.create": "pbk",
     "playbook.propose_version": "pbv",
-    "decision.record_adherence": "adh",
+    "playbook.record_adherence": "adh",
     "source.attach_to_thesis": "edg",
     "source.attach_to_decision": "edg",
     "source.attach_to_forecast": "edg",
@@ -414,11 +414,11 @@ def _seed_mvp_eval(*, home: str | None, registry: Any) -> dict[str, int]:
     counts["playbook_versions"] = 1
 
     # Adherence: one followed + one overridden, on two different decisions.
-    _call(home, "decision.record_adherence", {
+    _call(home, "playbook.record_adherence", {
         "decision_id": decision_ids[0], "playbook_version_id": version,
         "rule_node_id": rule_node, "status": "followed",
     }, suffix="adherence-followed")
-    _call(home, "decision.record_adherence", {
+    _call(home, "playbook.record_adherence", {
         "decision_id": decision_ids[1], "playbook_version_id": version,
         "rule_node_id": rule_node, "status": "overridden",
         "reason": "edge clear despite rule",
@@ -518,7 +518,7 @@ def _seed_mvp_eval_rich_overlay(
     missing-risk rows to chart.
 
     The seed writes `position_events` rows directly via SQL and then
-    rebuilds the positions projection so the dashboards see canonical
+    rebuilds the positions projection so the reports read canonical
     rows. Decisions are still written through `decision.add` so the
     matrix invariants and idempotency contract apply.
     """
@@ -651,7 +651,7 @@ def _seed_mvp_eval_rich_overlay(
 
     # Write position_events + marks directly so the rebuild produces
     # the lifecycle states (closed / open w-mark / open wo-mark) that
-    # the dashboards exercise.
+    # the reports exercise.
     db = open_database(db_path(home_path), create_parent=False)
     try:
         with db.transaction():

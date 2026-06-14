@@ -94,6 +94,101 @@ def test_paper_fill_full_partial_no_fill_and_report_labels(initialized_home):
     assert report["confidence_label"] in {"low", "medium"}
 
 
+def test_paper_exposure_nets_buys_and_sells_for_mixed_side_account(initialized_home):
+    # 10 bought (buy fillable when book price <= limit) ...
+    buy = _ok(
+        dispatch(
+            "paper_fill.record",
+            _args(
+                initialized_home,
+                semantic_key="paper:test:netbuy",
+                idempotency_key="netbuy",
+                side="buy",
+                requested_quantity=10,
+                limit_price=0.55,
+                book_levels=[{"price": 0.50, "quantity": 10}],
+                fee_amount=1,
+            ),
+            actor_id="cli:tester",
+        )
+    )
+    assert buy["fill_status"] == "full"
+    assert buy["filled_quantity"] == 10
+
+    # ... and 10 sold (sell fillable when book price >= limit).
+    sell = _ok(
+        dispatch(
+            "paper_fill.record",
+            _args(
+                initialized_home,
+                semantic_key="paper:test:netsell",
+                idempotency_key="netsell",
+                side="sell",
+                requested_quantity=10,
+                limit_price=0.55,
+                reference_mid_price=0.60,
+                book_levels=[{"price": 0.60, "quantity": 10}],
+                fee_amount=2,
+            ),
+            actor_id="cli:tester",
+        )
+    )
+    assert sell["fill_status"] == "full"
+    assert sell["filled_quantity"] == 10
+
+    report = _ok(dispatch("report.paper_exposure", {"home": str(initialized_home), "account_label": "local-paper"}, actor_id="cli:tester"))
+    exposure = report["paper_exposure"]
+    # Net quantity is 0, not 20 — buys and sells offset.
+    assert exposure["net_quantity"] == 0
+    assert exposure["buy_quantity"] == 10
+    assert exposure["sell_quantity"] == 10
+    # Buy cost basis adds the buy fee; sell proceeds subtract the sell fee.
+    assert exposure["buy_cost_basis"] == 10 * 0.50 + 1
+    assert exposure["sell_proceeds"] == 10 * 0.60 - 2
+    assert exposure["buy_fees"] == 1
+    assert exposure["sell_fees"] == 2
+    assert exposure["cost_basis_plus_fees"] == exposure["buy_cost_basis"] - exposure["sell_proceeds"]
+
+
+def test_paper_exposure_excludes_no_fill_rows_from_quantity(initialized_home):
+    # A no_fill row (limit not met) must not inflate the exposure quantity.
+    no_fill = _ok(
+        dispatch(
+            "paper_fill.record",
+            _args(
+                initialized_home,
+                semantic_key="paper:test:nofillexpo",
+                idempotency_key="nofillexpo",
+                side="buy",
+                book_levels=[{"price": 0.60, "quantity": 10}],
+            ),
+            actor_id="cli:tester",
+        )
+    )
+    assert no_fill["fill_status"] == "no_fill"
+
+    real = _ok(
+        dispatch(
+            "paper_fill.record",
+            _args(
+                initialized_home,
+                semantic_key="paper:test:realbuy",
+                idempotency_key="realbuy",
+                side="buy",
+                book_levels=[{"price": 0.50, "quantity": 7}],
+                requested_quantity=7,
+            ),
+            actor_id="cli:tester",
+        )
+    )
+    assert real["fill_status"] == "full"
+
+    report = _ok(dispatch("report.paper_exposure", {"home": str(initialized_home), "account_label": "local-paper"}, actor_id="cli:tester"))
+    exposure = report["paper_exposure"]
+    assert exposure["buy_quantity"] == 7
+    assert exposure["net_quantity"] == 7
+
+
 def test_paper_fill_missing_stale_depth_slippage_and_idempotency(initialized_home):
     missing = _ok(dispatch("paper_fill.record", _args(initialized_home, semantic_key="paper:test:missing", idempotency_key="missing", book_levels=[]), actor_id="cli:tester"))
     assert missing["fill_status"] == "no_fill"
@@ -154,6 +249,89 @@ def test_paper_fill_rejects_impossible_and_malformed_numeric_inputs(initialized_
         assert error["details"]["code"] == detail_code
         assert _paper_fill_count(initialized_home) == 0
         assert _paper_fill_event_count(initialized_home) == 0
+
+
+def test_paper_fill_record_and_exposure_carry_mark_source_and_as_of(initialized_home):
+    """§4/§9 acceptance: paper P&L/exposure must carry a mark-price source and an
+    as_of so a reader can tell what the paper basis was marked against and when.
+
+    On the record: mark_source defaults to the conservative-model basis and
+    mark_as_of falls back to order_as_of when not supplied; an explicit
+    mark_source/mark_as_of is preserved. On report.paper_exposure: mark_source
+    names paper_fill_records (NOT imported/live truth) and as_of is populated.
+    """
+
+    default = _ok(
+        dispatch(
+            "paper_fill.record",
+            _args(initialized_home, semantic_key="paper:test:markdefault", idempotency_key="markdefault"),
+            actor_id="cli:tester",
+        )
+    )
+    # Default mark basis is the conservative model's own price source, not a
+    # live/imported mark; mark_as_of falls back to the (normalized) order
+    # timestamp.
+    assert default["mark_source"] == "paper_fill_average_or_limit"
+    assert default["mark_as_of"] == default["order_as_of"]
+    assert default["mark_as_of"].startswith("2026-05-28T00:00:10")
+
+    explicit = _ok(
+        dispatch(
+            "paper_fill.record",
+            _args(
+                initialized_home,
+                semantic_key="paper:test:markexplicit",
+                idempotency_key="markexplicit",
+                mark_source="book-mid",
+                mark_as_of="2026-05-28T00:00:05Z",
+            ),
+            actor_id="cli:tester",
+        )
+    )
+    assert explicit["mark_source"] == "book-mid"
+    assert explicit["mark_as_of"].startswith("2026-05-28T00:00:05")
+
+    report = _ok(dispatch("report.paper_exposure", {"home": str(initialized_home), "account_label": "local-paper"}, actor_id="cli:tester"))
+    assert report["mark_source"] == "paper_fill_records"
+    assert report["as_of"]
+    assert "imported/live account truth excluded" in report["source_precedence"]
+    # The exposure view must never claim live execution.
+    assert report["no_live_execution_claims"] is True
+    assert report["non_executing"] is True
+
+
+def test_paper_fill_cluster_is_not_frozen(initialized_home):
+    """Freeze-state regression (bead trade-trace-xwox).
+
+    The paper-fill ledger (paper_fill.record/get/list + report.paper_exposure)
+    was unfrozen into the public Phase-2 catalog. Pin that non-experimental
+    state so a future accidental re-freeze (re-adding any of these names to
+    EXPERIMENTAL_RECONCILIATION) is caught here.
+    """
+
+    del initialized_home  # registry-shape assertion; no DB needed
+    from trade_trace.core import (
+        EXPERIMENTAL_FROZEN_TOOLS,
+        EXPERIMENTAL_RECONCILIATION,
+        build_registry,
+    )
+
+    reg = build_registry()
+    public = set(reg.public_names())
+    for name in ("paper_fill.record", "paper_fill.get", "paper_fill.list", "report.paper_exposure"):
+        entry = reg.get(name)
+        assert entry is not None, f"{name} should be registered"
+        assert entry.catalog_visibility != "experimental", (
+            f"{name} regressed to catalog_visibility=experimental; the paper-fill "
+            "ledger was unfrozen in trade-trace-xwox"
+        )
+        assert name in public, f"{name} must appear in the default public catalog"
+        assert name not in EXPERIMENTAL_RECONCILIATION, (
+            f"{name} was re-added to EXPERIMENTAL_RECONCILIATION"
+        )
+        assert name not in EXPERIMENTAL_FROZEN_TOOLS, (
+            f"{name} re-entered the frozen-tools union"
+        )
 
 
 def test_paper_fill_append_only_triggers(initialized_home):

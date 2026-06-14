@@ -24,6 +24,7 @@ from trade_trace.tools._helpers import (
     emit_event,
     new_id,
     now_iso,
+    reject_if_contains_secrets,
     require,
     store_metadata_json,
 )
@@ -125,6 +126,15 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             details={"field": "bound_via", "value": bound_via, "allowed": ["manual"]},
         )
     idempotency_key = args.get("idempotency_key")
+    # title / question / resolution rule text are persisted verbatim onto the
+    # market (and copied onto the bound instrument's resolution_criteria_text);
+    # scan all three caller-supplied free-text fields for credential-shaped
+    # substrings before any DB write (bead trade-trace-jm14 / INV-6).
+    reject_if_contains_secrets(args.get("title"), field="title")
+    reject_if_contains_secrets(args.get("question"), field="question")
+    reject_if_contains_secrets(
+        _resolution_rule_text_from_args(args), field="resolution_rule_text"
+    )
     metadata = store_metadata_json(args)
     extra_pm_keys = (
         "gamma_event_id", "gamma_market_id", "event_slug", "market_slug", "condition_id",
@@ -157,6 +167,20 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             },
         }
         metadata_json = json.dumps(parsed_metadata, sort_keys=True, separators=(",", ":"))
+        # The extracted-text scan above (lines ~135-137) only sees the single
+        # projection _resolution_rule_text_from_args() returns; the ACTUAL row
+        # persists the whole caller-supplied `resolution_rule` object plus the
+        # merged polymarket metadata block verbatim. Two leaks slip past a
+        # projection-only scan (bead trade-trace-cmpy / jm14 / INV-6):
+        #   (1) a clean flat resolution_rule_text alongside a nested
+        #       resolution_rule={text:'<SECRET>'} — the projection prefers the
+        #       clean flat value, so the secret-bearing object is never seen;
+        #   (2) resolution_rule={text:'clean', notes:'<SECRET>'} — only `.text`
+        #       is projected, so sibling keys (notes/source/anything) persist
+        #       unscanned.
+        # Scan the serialized payload that is about to be written so a secret
+        # embedded anywhere in the merged block is rejected before the INSERT.
+        reject_if_contains_secrets(metadata_json, field="resolution_rule")
     else:
         metadata_json = metadata
     venue_metadata_json = _json_text(args.get("venue_metadata_json"), field="venue_metadata_json")

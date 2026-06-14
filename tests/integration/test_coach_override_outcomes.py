@@ -57,7 +57,7 @@ def _seed_decision_with_override(home: Path, *, suffix: str,
         "node_type": "playbook_rule", "body": f"rule-{suffix}",
         "idempotency_key": f"00000000-0000-4000-8000-co-rl-{suffix}",
     }).data["id"]
-    _mcp(home, "decision.record_adherence", {
+    _mcp(home, "playbook.record_adherence", {
         "decision_id": decision, "playbook_version_id": pv,
         "rule_node_id": rule, "status": "overridden",
         "reason": "edge clear despite rule",
@@ -168,7 +168,7 @@ def test_record_adherence_rejects_observation_node_as_rule(home):
         "node_type": "observation", "body": "obs not rule",
         "idempotency_key": "00000000-0000-4000-8000-qc-fk-obs1",
     }).data["id"]
-    env = _mcp(home, "decision.record_adherence", {
+    env = _mcp(home, "playbook.record_adherence", {
         "decision_id": decision, "playbook_version_id": pv,
         "rule_node_id": observation, "status": "considered",
         "idempotency_key": "00000000-0000-4000-8000-qc-fk-ad1",
@@ -212,7 +212,7 @@ def test_record_adherence_rejects_missing_rule_node(home):
         "playbook_id": pb, "provenance_reflection_node_id": ref,
         "idempotency_key": "00000000-0000-4000-8000-qc-nf-pv01",
     }).data["id"]
-    env = _mcp(home, "decision.record_adherence", {
+    env = _mcp(home, "playbook.record_adherence", {
         "decision_id": decision, "playbook_version_id": pv,
         "rule_node_id": "mem_does_not_exist", "status": "considered",
         "idempotency_key": "00000000-0000-4000-8000-qc-nf-ad1",

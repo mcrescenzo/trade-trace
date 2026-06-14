@@ -2,9 +2,9 @@
 
 The reporting product surfaces aggregate metrics across many pages
 (P&L, risk, calibration, decision intelligence, etc.). Each metric
-gets one definition in this module — the React dashboard renders help
-affordances by looking up the metric's `MetricEntry` here.
-A single source of truth keeps explanations consistent across pages
+gets one definition in this module — MCP tools and CLI reports look
+up the metric's `MetricEntry` here.
+A single source of truth keeps explanations consistent across reports
 and prevents copy drift when the underlying report changes.
 
 Plain-language caveats follow the same pattern: each named caveat
@@ -16,8 +16,8 @@ The glossary entries are intentionally short. Detailed math lives
 in [`docs/architecture/reporting-product.md`](../../../../docs/architecture/reporting-product.md)
 §4 and in the report module's own docstring — the entries here link
 to those sources via `reference` fields, but they don't restate
-formulas in full. Future dashboards rendering an entry MUST link
-back to its `reference` so the user can read the math.
+formulas in full. Any surface rendering an entry MUST link
+back to its `reference` so the reader can read the math.
 """
 
 from __future__ import annotations
@@ -41,9 +41,9 @@ class MetricEntry:
 
 @dataclass(frozen=True)
 class CaveatEntry:
-    """One caveat code with the copy a dashboard renders when the
-    underlying metric carries the flag. The `severity` field tells
-    the UI which chrome (banner / chip / icon) to apply."""
+    """One caveat code with the copy a report or agent surface shows
+    when the underlying metric carries the flag. The `severity` field
+    tells the consumer how prominently to surface it."""
 
     code: str
     label: str
@@ -212,7 +212,7 @@ CAVEAT_GLOSSARY: dict[str, CaveatEntry] = {
         label="No strategy",
         summary=(
             "This trade is not assigned to a strategy. Strategy "
-            "comparison dashboards bucket it under '(no strategy)'."
+            "comparison reports bucket it under '(no strategy)'."
         ),
         severity="info",
     ),

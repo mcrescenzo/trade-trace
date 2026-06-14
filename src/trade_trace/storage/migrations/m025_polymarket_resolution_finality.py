@@ -26,7 +26,23 @@ _OUTCOME_STATUSES = (
 
 def _migration_025_polymarket_resolution_finality(conn: sqlite3.Connection) -> None:
     status_sql = ",".join(f"'{status}'" for status in _OUTCOME_STATUSES)
+    # PRAGMA legacy_alter_table is session-scoped and is NOT reset by a
+    # SQLite ROLLBACK (verified experimentally). If the migration body raises
+    # between the ON and OFF below, the pragma would leak ON for the rest of
+    # the connection's lifetime, silently changing RENAME-based ALTER TABLE
+    # semantics for any later migration on the same connection (e.g. after a
+    # retry). The transaction ROLLBACK handles DDL atomicity; the pragma needs
+    # its own cleanup path. See bead trade-trace-x17b.
     conn.execute("PRAGMA legacy_alter_table=ON")
+    try:
+        _rebuild_outcomes_and_forecast_scores(conn, status_sql)
+    finally:
+        conn.execute("PRAGMA legacy_alter_table=OFF")
+
+
+def _rebuild_outcomes_and_forecast_scores(
+    conn: sqlite3.Connection, status_sql: str
+) -> None:
     conn.execute("DROP TRIGGER IF EXISTS trg_outcomes_no_update")
     conn.execute("DROP TRIGGER IF EXISTS trg_outcomes_no_delete")
     conn.execute("ALTER TABLE outcomes RENAME TO outcomes__m025_old")
@@ -133,7 +149,6 @@ def _migration_025_polymarket_resolution_finality(conn: sqlite3.Connection) -> N
         END
         """
     )
-    conn.execute("PRAGMA legacy_alter_table=OFF")
 
 
 __all__ = ["_migration_025_polymarket_resolution_finality"]

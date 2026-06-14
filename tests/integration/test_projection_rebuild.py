@@ -701,3 +701,150 @@ def test_rebuild_memory_node_stats_reports_zero_skipped_when_clean(home):
     summaries = env["data"]["results"]
     summary = next(s for s in summaries if s["projection"] == "memory_node_stats")
     assert summary["skipped_corrupt_rows"] == 0
+
+
+# -- batched decisions lookup (trade-trace-6046, N+1 fix) ---------------
+
+
+def _seed_n_positions_with_decisions(
+    home: Path, n: int
+) -> tuple[str, list[str]]:
+    """Seed `n` distinct open positions on the same instrument, each linked
+    to its own `paper_enter` decision (so each carries a non-null
+    `decision_id`). Returns `(instrument_id, [position_id, ...])`.
+
+    This is the worst case for the old N+1: every position group had a
+    decision, so the pre-fix rebuild issued `n` separate
+    `SELECT type, side FROM decisions WHERE id = ?` queries."""
+
+    from trade_trace.tools._helpers import new_id
+
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market",
+        "title": "X",
+    })
+    instrument_id = inst["data"]["id"]
+
+    position_ids: list[str] = []
+    db = open_database(db_path(home))
+    try:
+        with db.transaction():
+            for i in range(n):
+                position_id = new_id("pos")
+                decision_id = new_id("dec")
+                # Alternate yes/no so kind/side derivation is exercised for
+                # both the complement and direct branches.
+                side = "yes" if i % 2 == 0 else "no"
+                signed_qty = 100 if side == "yes" else -100
+                entry_price = 0.40 if side == "yes" else 0.60
+                db.connection.execute(
+                    "INSERT INTO decisions(id, instrument_id, type, side, "
+                    "quantity, price, created_at, actor_id) VALUES "
+                    "(?, ?, 'paper_enter', ?, 100, ?, ?, 'agent:default')",
+                    (decision_id, instrument_id, side, entry_price,
+                     "2026-05-18T14:00:00Z"),
+                )
+                db.connection.execute(
+                    "INSERT INTO position_events(id, position_id, "
+                    "instrument_id, decision_id, event_type, quantity_delta, "
+                    "price, fees, slippage, created_at, actor_id) VALUES "
+                    "(?, ?, ?, ?, 'open', ?, ?, 0, 0, ?, 'agent:default')",
+                    (new_id("pev"), position_id, instrument_id, decision_id,
+                     signed_qty, entry_price, "2026-05-18T14:00:00Z"),
+                )
+                position_ids.append(position_id)
+    finally:
+        db.close()
+    return instrument_id, position_ids
+
+
+def test_rebuild_issues_single_decisions_query_for_n_positions(home):
+    """trade-trace-6046: `rebuild_positions` pre-fetches every referenced
+    decision in ONE `SELECT ... WHERE id IN (...)` rather than one query per
+    position group. Trace SQL executed during the rebuild and assert exactly
+    one decisions SELECT fires regardless of N (here N=5)."""
+
+    n = 5
+    _seed_n_positions_with_decisions(home, n)
+
+    decisions_selects: list[str] = []
+
+    db = open_database(db_path(home))
+    try:
+        def _trace(sql: str) -> None:
+            normalized = " ".join(sql.split()).lower()
+            if normalized.startswith("select") and "from decisions" in normalized:
+                decisions_selects.append(normalized)
+
+        db.connection.set_trace_callback(_trace)
+        try:
+            with db.transaction():
+                rebuild_positions(db.connection)
+        finally:
+            db.connection.set_trace_callback(None)
+    finally:
+        db.close()
+
+    assert len(decisions_selects) == 1, (
+        "rebuild_positions must batch all decision lookups into a single "
+        f"query; saw {len(decisions_selects)} decisions SELECTs: "
+        f"{decisions_selects!r}"
+    )
+    # And it is the batched IN(...) form, not a single-id equality.
+    assert " in (" in decisions_selects[0], decisions_selects[0]
+
+
+def test_rebuild_kind_side_unchanged_with_batched_lookup(home):
+    """The batched lookup must produce identical kind/side derivation as the
+    old per-position path: yes positions stay `paper`/`yes`, no positions
+    stay `paper`/`no`."""
+
+    n = 4
+    _, position_ids = _seed_n_positions_with_decisions(home, n)
+    env = _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+    assert env["ok"] is True
+
+    rows = _positions_snapshot(home)
+    assert len(rows) == n, rows
+    # snapshot columns: id(0), instrument_id(1), kind(2), side(3), status(4)
+    by_id = {row[0]: row for row in rows}
+    for i, position_id in enumerate(position_ids):
+        row = by_id[position_id]
+        expected_side = "yes" if i % 2 == 0 else "no"
+        assert row[2] == "paper", (position_id, row)
+        assert row[3] == expected_side, (position_id, row)
+        assert row[4] == "open", (position_id, row)
+
+
+def test_rebuild_with_no_decisions_issues_zero_decisions_queries(home):
+    """When no position_events reference a decision, the batched path runs
+    NO decisions query at all (empty id set short-circuits), and derivation
+    falls back to the `simulation`/`long` defaults."""
+
+    _seed_minimal_position(home)  # direct events, no decision_id
+
+    decisions_selects: list[str] = []
+
+    db = open_database(db_path(home))
+    try:
+        def _trace(sql: str) -> None:
+            normalized = " ".join(sql.split()).lower()
+            if normalized.startswith("select") and "from decisions" in normalized:
+                decisions_selects.append(normalized)
+
+        db.connection.set_trace_callback(_trace)
+        try:
+            with db.transaction():
+                rebuild_positions(db.connection)
+        finally:
+            db.connection.set_trace_callback(None)
+    finally:
+        db.close()
+
+    assert decisions_selects == [], decisions_selects
+
+    row = _positions_snapshot(home)[0]
+    assert row[2] == "simulation"  # kind default
+    assert row[3] == "long"  # side default

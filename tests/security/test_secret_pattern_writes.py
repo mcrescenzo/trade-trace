@@ -11,11 +11,13 @@ which surfaces a *warning* on shipped events rather than blocking writes).
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
 import pytest
 
+import trade_trace
 from tests._mcp_helpers import mcp_default as _mcp
 from trade_trace.security import (
     list_patterns,
@@ -471,6 +473,101 @@ def test_register_rejects_backreference_per_redos_guard():
     assert "trade-trace-14iy" in str(exc.value)
 
 
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        r"(a{2,})+",      # {n,} inside a quantified group — the bead repro
+        r"(a{2,3})+",     # {n,m}
+        r"(a{2})+",       # {n}
+        r"(ab{2,}c)*",    # curly quantifier mid-group, outer *
+    ],
+)
+def test_register_rejects_curly_brace_nested_quantifier_per_redos_guard(pattern):
+    """Per bead trade-trace-9o2t: the nested-quantifier guard previously
+    only looked for the symbolic quantifiers (*, +, ?) inside a quantified
+    group, so curly-brace counted forms like ``(a{2,})+`` slipped through.
+    ``(a{2,})+`` is a classic catastrophic-backtracking shape (the outer
+    ``+`` interacts exponentially with the ``{2,}`` repeat). register()
+    must now refuse it via the same structural ReDoS guard."""
+
+    from trade_trace.security.patterns import (
+        _REDOS_STRUCTURE_RE,
+        SecretPatternError,
+    )
+
+    # The structural guard itself now matches the curly-brace form.
+    assert _REDOS_STRUCTURE_RE.search(pattern) is not None, (
+        f"guard regex should flag nested curly-brace quantifier {pattern!r}"
+    )
+
+    with pytest.raises(SecretPatternError) as exc:
+        register("nested_curly", pattern)
+    msg = str(exc.value).lower()
+    assert "nested quantifier" in msg or "backtracking" in msg
+    assert "trade-trace-14iy" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        r"(a+){3}",       # outer {n} count over a quantified group — the bead repro
+        r"(a{2,}){2,}",   # outer {n,} over an inner-curly quantified group
+        r"(a+){2,}",      # outer {n,} over a +-quantified group
+        r"(a*){5}",       # outer {n} over a *-quantified group
+        r"(a?){10,20}",   # outer {n,m} over a ?-quantified group
+    ],
+)
+def test_register_rejects_outer_curly_brace_quantifier_per_redos_guard(pattern):
+    """Per bead trade-trace-rpcj: the nested-quantifier guard previously
+    only allowed the symbolic quantifiers (*, +, ?) as the OUTER quantifier
+    on a group, so a group quantified by a curly count like ``(a+){3}`` or
+    ``(a{2,}){2,}`` slipped through. These are catastrophic-backtracking
+    shapes too (a bounded/unbounded outer repeat over a quantified group).
+    register() must now refuse them via the same structural ReDoS guard."""
+
+    from trade_trace.security.patterns import (
+        _REDOS_STRUCTURE_RE,
+        SecretPatternError,
+    )
+
+    # The structural guard itself now matches the outer curly-brace form.
+    assert _REDOS_STRUCTURE_RE.search(pattern) is not None, (
+        f"guard regex should flag outer curly-brace quantifier {pattern!r}"
+    )
+
+    with pytest.raises(SecretPatternError) as exc:
+        register("outer_curly", pattern)
+    msg = str(exc.value).lower()
+    assert "nested quantifier" in msg or "backtracking" in msg
+    assert "trade-trace-14iy" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        r"a{2,5}",                  # bounded repeat, no enclosing quantified group
+        r"(abc){2,5}",             # quantified group, but no inner quantifier
+        r"(abc){3}",               # outer {n} over a group with NO inner quantifier
+        r"[A-Z0-9]{8,}",           # character-class count, not a nested group
+        r"CUSTOMTOKEN-[A-Z0-9]{8}",  # realistic secret pattern
+    ],
+)
+def test_register_allows_benign_curly_quantifier(home, pattern):
+    """The curly-brace extension must stay surgical: ordinary bounded
+    repeats and quantified groups *without* an inner quantifier remain
+    accepted (no over-rejection of legitimate secret patterns). The
+    ``(abc){3}`` case guards the outer-curly extension (bead
+    trade-trace-rpcj): an outer curly count over a group is only rejected
+    when the group *also* carries an inner quantifier."""
+
+    from trade_trace.security.patterns import _REDOS_STRUCTURE_RE
+
+    assert _REDOS_STRUCTURE_RE.search(pattern) is None, (
+        f"guard regex should NOT flag benign pattern {pattern!r}"
+    )
+    register("benign_curly", pattern)  # must not raise
+
+
 def test_register_accepts_normal_custom_regex_and_scan_text_matches():
     """The ReDoS guard is scoped: normal custom secret patterns remain
     supported and take effect in scan_text()."""
@@ -663,3 +760,468 @@ def test_redact_for_log_preserves_scanned_prefix_redactions(monkeypatch):
     redacted = redact_for_log(body)
     assert "REDACTED-head_token_8n98" in redacted
     assert "HEADSECRET" not in redacted
+
+
+# -- bead trade-trace-jm14: extend write-time scan to all free-text fields --
+#
+# The systemic gap consolidated under jm14 (INV-6): several is_write tools
+# persisted long-form free-text fields that never passed the write-time
+# secret scanner. Each test below fires the tool with a credential-shaped
+# value in the named field and asserts a VALIDATION_ERROR before any DB
+# write. memory.retain.{body,title} and decision.record_adherence.reason were
+# already scanned in code but had no coverage here; jm14 adds it.
+
+
+def _seed_forecast(home: Path) -> str:
+    """Return a forecast_id usable as the interpret_resolution target."""
+
+    _venue, inst = _seed_instrument(home)
+    thesis = _mcp(home, "thesis.add", {
+        "instrument_id": inst, "side": "yes", "body": "thesis body",
+    }).data["id"]
+    return _mcp(home, "forecast.add", {
+        "thesis_id": thesis, "kind": "binary", "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.6},
+            {"outcome_label": "no", "probability": 0.4},
+        ],
+    }).data["id"]
+
+
+@pytest.mark.parametrize("pattern_kind,secret", list(SECRET_FIXTURES.items()))
+def test_abstention_reason_rejects_secret(home, pattern_kind, secret):
+    """abstention.record.reason is long-form free text → VALIDATION_ERROR."""
+
+    _venue, inst = _seed_instrument(home)
+    env = _mcp(home, "abstention.record", {
+        "instrument_id": inst,
+        "reason": f"passed because {secret} leaked into my notes",
+        "as_of": "2027-01-05T00:00:00Z",
+    })
+    assert env.ok is False, f"expected rejection on {pattern_kind}"
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "reason"
+    assert env.error.details["pattern_kind"] == pattern_kind
+
+
+@pytest.mark.parametrize("pattern_kind,secret", list(SECRET_FIXTURES.items()))
+def test_resolution_interpretation_yes_condition_rejects_secret(
+    home, pattern_kind, secret,
+):
+    """forecast.interpret_resolution.interpreted_yes_condition is long-form
+    free text → VALIDATION_ERROR."""
+
+    forecast_id = _seed_forecast(home)
+    env = _mcp(home, "forecast.interpret_resolution", {
+        "forecast_id": forecast_id,
+        "interpreted_yes_condition": f"YES when {secret} appears",
+        "as_of": "2027-01-02T00:00:00Z",
+    })
+    assert env.ok is False, f"expected rejection on {pattern_kind}"
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "interpreted_yes_condition"
+    assert env.error.details["pattern_kind"] == pattern_kind
+
+
+def test_pretrade_intent_semantic_key_rejects_secret(home):
+    """pretrade_intent.record.semantic_key is required free text and is
+    hashed into the material packet → must be scanned (jm14)."""
+
+    _venue, inst = _seed_instrument(home)
+    secret = SECRET_FIXTURES["api_key"]
+    env = _mcp(home, "pretrade_intent.record", {
+        "instrument_id": inst,
+        "semantic_key": f"pm:{secret}:yes",
+        "proposed_shape": {"side": "yes", "limit_price": "0.42"},
+        "as_of": "2027-01-02T00:00:00Z",
+        "idempotency_key": "00000000-0000-4000-8000-pti000000jm14",
+    })
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "semantic_key"
+    assert env.error.details["pattern_kind"] == "api_key"
+
+
+@pytest.mark.parametrize("field", ["title", "question", "resolution_rule_text"])
+def test_market_bind_free_text_rejects_secret(home, field):
+    """market.bind persists title/question/resolution_rule_text verbatim;
+    each is scanned before the row is written (jm14)."""
+
+    _venue, inst = _seed_instrument(home)
+    secret = SECRET_FIXTURES["slack_token"]
+    args = {
+        "id": inst,
+        "source": "polymarket",
+        "external_id": f"ext-{field}",
+        "state": "open",
+        "mechanism": "clob",
+        "bound_via": "manual",
+        "title": "Clean title",
+        "question": "Clean question?",
+        field: f"contains {secret} pasted in",
+    }
+    env = _mcp(home, "market.bind", args)
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == field
+    assert env.error.details["pattern_kind"] == "slack_token"
+
+
+def test_market_bind_nested_resolution_rule_text_rejects_secret(home):
+    """The nested resolution_rule.text form is scanned the same as the flat
+    resolution_rule_text field (jm14)."""
+
+    _venue, inst = _seed_instrument(home)
+    secret = SECRET_FIXTURES["jwt"]
+    env = _mcp(home, "market.bind", {
+        "id": inst,
+        "source": "polymarket",
+        "external_id": "ext-nested-rule",
+        "state": "open",
+        "mechanism": "clob",
+        "bound_via": "manual",
+        "resolution_rule": {"text": f"Settles when {secret} arrives"},
+    })
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "resolution_rule_text"
+    assert env.error.details["pattern_kind"] == "jwt"
+
+
+def test_market_bind_clean_flat_text_with_secret_nested_object_rejected(home):
+    """BYPASS (1) — clean flat resolution_rule_text + nested
+    resolution_rule={text:'<SECRET>'}.
+
+    The extracted-text projection prefers the clean flat value, so a
+    projection-only scan never sees the secret-bearing nested object. But the
+    whole `resolution_rule` object is persisted verbatim into metadata_json
+    (events + markets tables). The serialized-payload scan rejects it
+    (trade-trace-cmpy / jm14 / INV-6). Before the fix this returned a
+    SuccessEnvelope and leaked the jwt into both tables."""
+
+    secret = SECRET_FIXTURES["jwt"]
+    env = _mcp(home, "market.bind", {
+        "source": "polymarket",
+        "external_id": "ext-cmpy-bypass-1",
+        "state": "open",
+        "mechanism": "clob",
+        "bound_via": "manual",
+        "resolution_rule_text": "Resolve per public market rules.",
+        "resolution_rule": {"text": f"Settles when {secret} arrives"},
+    })
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "resolution_rule"
+    assert env.error.details["pattern_kind"] == "jwt"
+
+
+def test_market_bind_resolution_rule_sibling_key_secret_rejected(home):
+    """BYPASS (2) — resolution_rule={text:'clean', notes:'<SECRET>'}.
+
+    Only `.text` is projected for the extracted-text scan; sibling keys
+    (notes/source/anything) are persisted unscanned in the verbatim object.
+    The serialized-payload scan over the merged metadata block rejects the
+    secret in `notes` (trade-trace-cmpy / jm14 / INV-6). Before the fix this
+    returned a SuccessEnvelope and leaked the api_key into both tables."""
+
+    secret = SECRET_FIXTURES["api_key"]
+    env = _mcp(home, "market.bind", {
+        "source": "polymarket",
+        "external_id": "ext-cmpy-bypass-2",
+        "state": "open",
+        "mechanism": "clob",
+        "bound_via": "manual",
+        "resolution_rule": {"text": "clean", "notes": f"embedded {secret} here"},
+    })
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "resolution_rule"
+    assert env.error.details["pattern_kind"] == "api_key"
+
+
+def test_market_bind_clean_polymarket_metadata_writes_normally(home):
+    """A polymarket bind whose merged metadata block carries no secret-shaped
+    substring still writes (guards against the serialized-payload scan
+    over-rejecting clean rows — trade-trace-cmpy)."""
+
+    env = _mcp(home, "market.bind", {
+        "source": "polymarket",
+        "external_id": "ext-cmpy-clean",
+        "state": "open",
+        "mechanism": "clob",
+        "bound_via": "manual",
+        "resolution_rule": {
+            "text": "Resolve per public market rules.",
+            "source": "market_contract",
+            "provenance": "caller_supplied",
+        },
+    })
+    assert env.ok is True, env
+
+
+def test_memory_link_metadata_json_rejects_secret(home):
+    """memory.link.metadata_json now routes through store_metadata_json, so
+    a nested secret value is rejected (jm14)."""
+
+    a = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": "node a body", "title": "A",
+    }).data["id"]
+    b = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": "node b body", "title": "B",
+    }).data["id"]
+    env = _mcp(home, "memory.link", {
+        "source_kind": "memory_node", "source_id": a,
+        "target_kind": "memory_node", "target_id": b,
+        "edge_type": "about",
+        "metadata_json": {"notes": {"token": SECRET_FIXTURES["api_key"]}},
+    })
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "metadata_json"
+    assert env.error.details["pattern_kind"] == "api_key"
+
+
+def test_memory_link_metadata_json_rejects_credential_key(home):
+    """memory.link.metadata_json also gets the credential-key rejection layer
+    via store_metadata_json (jm14)."""
+
+    a = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": "node a body", "title": "A",
+    }).data["id"]
+    b = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": "node b body", "title": "B",
+    }).data["id"]
+    env = _mcp(home, "memory.link", {
+        "source_kind": "memory_node", "source_id": a,
+        "target_kind": "memory_node", "target_id": b,
+        "edge_type": "about",
+        "metadata_json": {"broker": {"private_key": "nope"}},
+    })
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "metadata_json"
+    assert env.error.details["credential_key"] == "private_key"
+
+
+@pytest.mark.parametrize("field", ["body", "title"])
+def test_memory_retain_free_text_rejects_secret(home, field):
+    """memory.retain.{body,title} scanning (already wired in code) now has
+    explicit coverage (jm14)."""
+
+    args = {"node_type": "observation", "body": "clean body", "title": "Clean"}
+    args[field] = f"holds {SECRET_FIXTURES['slack_token']} secret"
+    env = _mcp(home, "memory.retain", args)
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == field
+    assert env.error.details["pattern_kind"] == "slack_token"
+
+
+@pytest.mark.parametrize("field", ["thought", "title"])
+def test_idea_capture_free_text_rejects_secret(home, field):
+    """idea.capture.{thought,title} are scanned before persistence (jm14)."""
+
+    args = {"thought": "clean thought"}
+    args[field] = f"idea leaked {SECRET_FIXTURES['api_key']}"
+    env = _mcp(home, "idea.capture", args)
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == field
+    assert env.error.details["pattern_kind"] == "api_key"
+
+
+def test_decision_record_adherence_reason_rejects_secret(home):
+    """decision.record_adherence.reason scanning (already wired in code) now
+    has explicit coverage (jm14). The scan runs before any ref/status
+    validation, so dummy refs suffice to exercise it."""
+
+    env = _mcp(home, "decision.record_adherence", {
+        "decision_id": "dec_missing",
+        "playbook_version_id": "pbv_missing",
+        "rule_node_id": "node_missing",
+        "status": "overridden",
+        "reason": f"overrode because {SECRET_FIXTURES['jwt']} said so",
+    })
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "reason"
+    assert env.error.details["pattern_kind"] == "jwt"
+
+
+# -- replay.case_bundle security-gate budget keys are not caller-overridable --
+#
+# A caller must not be able to flip include_sensitive_sources (or the body
+# inclusion flags) on via the budgets dict; _validate_request strips those
+# keys so the fixed DEFAULT_BUDGETS redaction posture always wins (jm14,
+# parity with security.md §8 / review.bundle).
+
+
+@pytest.mark.parametrize(
+    "gate_key",
+    ["include_sensitive_sources", "include_source_bodies", "include_memory_bodies"],
+)
+def test_replay_validate_request_strips_security_gate_budget_overrides(gate_key):
+    from trade_trace.reports.replay import DEFAULT_BUDGETS, _validate_request
+
+    _as_of, _selection, _task, budgets = _validate_request(
+        {"as_of": "2027-01-01T00:00:00Z", "budgets": {gate_key: True}}
+    )
+    assert budgets[gate_key] is DEFAULT_BUDGETS[gate_key] is False, (
+        f"caller override of {gate_key} must be stripped, not honored"
+    )
+
+
+def test_replay_validate_request_still_honors_non_security_budgets():
+    """The strip must be surgical: ordinary budget knobs still pass through."""
+
+    from trade_trace.reports.replay import _validate_request
+
+    _as_of, _selection, _task, budgets = _validate_request(
+        {"as_of": "2027-01-01T00:00:00Z", "budgets": {"max_chars_total": 999}}
+    )
+    assert budgets["max_chars_total"] == 999
+
+
+# -- static enforcement: §6.5 scan-table completeness (jm14) --------
+#
+# Parse the markdown scan table in docs/architecture/security.md §6.5 and
+# assert every listed (tool, field) pair is actually scanned by
+# reject_if_contains_secrets (or routed through store_metadata_json for the
+# metadata_json catch-all) somewhere in src/. A refactor that drops a scan
+# call, or a table row added without wiring the field, breaks this test.
+
+_SRC_ROOT = Path(trade_trace.__file__).resolve().parent
+_SECURITY_MD = _SRC_ROOT.parent.parent / "docs" / "architecture" / "security.md"
+
+# Tools whose free-text field lives in a specific handler module. The static
+# check confirms the field is wired to a scan call in that module's source.
+_TOOL_SOURCE: dict[str, str] = {
+    "thesis.add": "tools/ledger/thesis.py",
+    "decision.add": "tools/ledger/decision.py",
+    "decision.record_adherence": "tools/playbook.py",
+    "instrument.add": "tools/ledger/instrument.py",
+    "forecast.add": "tools/ledger/forecast.py",
+    "source.add": "tools/ledger/source.py",
+    "strategy.create": "tools/strategy.py",
+    "strategy.update": "tools/strategy.py",
+    "playbook.create": "tools/playbook.py",
+    "playbook.propose_version": "tools/playbook.py",
+    "memory.retain": "tools/memory.py",
+    "memory.reflect": "tools/memory.py",
+    "abstention.record": "tools/abstention.py",
+    "forecast.interpret_resolution": "tools/resolution_interpretation.py",
+    "pretrade_intent.record": "tools/pretrade_intent.py",
+    "idea.capture": "tools/ideas.py",
+    "market.bind": "tools/market_bind.py",
+}
+
+
+def _scanned_fields_in_source(path: Path) -> set[str]:
+    """Return the set of field names passed to reject_if_contains_secrets in
+    a source module, resolving both literal `field=` kwargs and the
+    `for field in (...): reject_if_contains_secrets(..., field=field)` loop
+    form used by thesis.add."""
+
+    tree = ast.parse(path.read_text())
+    fields: set[str] = set()
+
+    def _call_field_literal(call: ast.Call) -> str | None:
+        for kw in call.keywords:
+            if kw.arg == "field" and isinstance(kw.value, ast.Constant) \
+                    and isinstance(kw.value.value, str):
+                return kw.value.value
+        return None
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == "reject_if_contains_secrets":
+            literal = _call_field_literal(node)
+            if literal is not None:
+                fields.add(literal)
+        # Loop form: `for field in (<literals>): reject_if_contains_secrets(...)`
+        if isinstance(node, ast.For):
+            has_scan = any(
+                isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+                and c.func.id == "reject_if_contains_secrets"
+                for c in ast.walk(node)
+            )
+            if has_scan and isinstance(node.iter, (ast.Tuple, ast.List)):
+                for elt in node.iter.elts:
+                    if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                        fields.add(elt.value)
+    return fields
+
+
+def _parse_scan_table() -> list[tuple[str, str]]:
+    """Yield (tool, field) pairs from the §6.5 scan table, skipping the
+    metadata_json catch-all row and exempt-by-design content."""
+
+    text = _SECURITY_MD.read_text()
+    section = text.split("### 6.5", 1)[1].split("Exempt by design", 1)[0]
+    pairs: list[tuple[str, str]] = []
+    for line in section.splitlines():
+        if not line.strip().startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) != 2:
+            continue
+        tool_cell, field_cell = cells
+        if tool_cell.startswith("Tool") or set(tool_cell) <= set("-: "):
+            continue
+        if "Every write tool" in tool_cell:
+            continue
+        # A cell may list several tools (split on "/") and several fields.
+        tools = [re.sub(r"`", "", t).strip() for t in tool_cell.split("/")]
+        for raw_field in field_cell.split(","):
+            # Strip backticks and any parenthetical note (e.g. "(flat or ...)").
+            field = re.sub(r"`", "", raw_field)
+            field = re.sub(r"\(.*?\)", "", field).strip()
+            if not field:
+                continue
+            for tool in tools:
+                pairs.append((tool, field))
+    return pairs
+
+
+def test_scan_table_completeness():
+    """Every (tool, field) row in security.md §6.5 is backed by a real
+    reject_if_contains_secrets call in the tool's handler source (jm14)."""
+
+    pairs = _parse_scan_table()
+    assert pairs, "failed to parse any rows from the §6.5 scan table"
+
+    cache: dict[str, set[str]] = {}
+    missing: list[str] = []
+    for tool, field in pairs:
+        rel = _TOOL_SOURCE.get(tool)
+        assert rel is not None, (
+            f"§6.5 lists tool {tool!r} but the test has no source mapping; "
+            "add it to _TOOL_SOURCE."
+        )
+        if rel not in cache:
+            cache[rel] = _scanned_fields_in_source(_SRC_ROOT / rel)
+        if field not in cache[rel]:
+            missing.append(f"{tool}.{field} (expected scan in src/trade_trace/{rel})")
+
+    assert not missing, (
+        "scan-table fields without a backing reject_if_contains_secrets call:\n  "
+        + "\n  ".join(missing)
+    )
+
+
+def test_scan_table_lists_jm14_fields():
+    """Guard the jm14 additions explicitly so a future table edit cannot
+    silently drop them."""
+
+    pairs = set(_parse_scan_table())
+    for expected in [
+        ("abstention.record", "reason"),
+        ("forecast.interpret_resolution", "interpreted_yes_condition"),
+        ("pretrade_intent.record", "semantic_key"),
+        ("idea.capture", "thought"),
+        ("idea.capture", "title"),
+        ("market.bind", "title"),
+        ("market.bind", "question"),
+        ("market.bind", "resolution_rule_text"),
+    ]:
+        assert expected in pairs, f"§6.5 table no longer lists {expected}"

@@ -10,7 +10,22 @@ from pathlib import Path
 from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
+from trade_trace.reports.forecast_diagnostics import _source_reference_coverage
 from trade_trace.storage.paths import db_path
+
+
+class _QueryTrace:
+    """Capture every SQL statement a connection executes via the sqlite trace
+    callback so a test can count how many times an `edges` query ran."""
+
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+
+    def __call__(self, sql: str) -> None:
+        self.statements.append(" ".join(sql.split()))
+
+    def count_substr(self, needle: str) -> int:
+        return sum(1 for s in self.statements if needle in s)
 
 
 def _init_home(tmp_path) -> Path:
@@ -149,6 +164,87 @@ def test_source_reference_coverage_caveat_reports_missing_local_refs(tmp_path):
     assert coverage["covered_source_reference_count"] == 1
     assert ids["thesis"] in coverage["missing_record_ids_by_kind"]["theses"]
     assert ids["decision"] in coverage["missing_record_ids_by_kind"]["decisions"]
+
+
+def _seed_distinct_binary_case(home: Path, *, tag: str, implied_probability: float) -> dict[str, str]:
+    # Content-derived ids collapse when two cases share identical content, so
+    # vary the instrument title + thesis body per case to get distinct
+    # forecast/thesis/decision ids across calls (trade-trace-u4po).
+    venue = _envelope(home, "venue.add", {"name": f"PM-{tag}", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {"venue_id": venue["data"]["id"], "asset_class": "prediction_market", "title": f"X-{tag}"})
+    snap = _envelope(home, "snapshot.add", {"instrument_id": inst["data"]["id"], "captured_at": "2026-05-18T14:00:00Z", "spread": 0.03, "volume": 100.0, "implied_probability": implied_probability})
+    thesis = _envelope(home, "thesis.add", {"instrument_id": inst["data"]["id"], "side": "yes", "body": f"retrospective case {tag}"})
+    forecast = _envelope(home, "forecast.add", {"thesis_id": thesis["data"]["id"], "kind": "binary", "yes_label": "yes", "outcomes": [{"outcome_label": "yes", "probability": 0.70}, {"outcome_label": "no", "probability": 0.30}]})
+    decision = _envelope(home, "decision.add", {"instrument_id": inst["data"]["id"], "thesis_id": thesis["data"]["id"], "forecast_id": forecast["data"]["id"], "snapshot_id": snap["data"]["id"], "type": "skip", "reason": f"diagnostic fixture {tag}"})
+    return {"forecast": forecast["data"]["id"], "thesis": thesis["data"]["id"], "decision": decision["data"]["id"]}
+
+
+def test_source_reference_coverage_uses_bulk_edge_queries_not_per_id_fanout(tmp_path):
+    # trade-trace-u4po: coverage must be computed with one bulk IN-list edge
+    # query per kind (forecast/thesis/decision), not one SELECT 1 per id.
+    home = _init_home(tmp_path)
+    ids_a = _seed_distinct_binary_case(home, tag="a", implied_probability=0.55)
+    ids_b = _seed_distinct_binary_case(home, tag="b", implied_probability=0.6)
+    ids_c = _seed_distinct_binary_case(home, tag="c", implied_probability=0.45)
+    # Attach a source edge to one forecast and one thesis so the coverage set
+    # spans both endpoints/kinds; the remaining records stay uncovered.
+    src = _envelope(home, "source.add", {"kind": "url", "uri": "https://example.invalid/u4po"})
+    _envelope(home, "source.attach_to_forecast", {"source_id": src["data"]["id"], "target_id": ids_a["forecast"]})
+    _envelope(home, "source.attach_to_thesis", {"source_id": src["data"]["id"], "target_id": ids_b["thesis"]})
+
+    rows = [
+        {"forecast_id": ids_a["forecast"], "thesis_id": ids_a["thesis"], "decision_id": ids_a["decision"]},
+        {"forecast_id": ids_b["forecast"], "thesis_id": ids_b["thesis"], "decision_id": ids_b["decision"]},
+        {"forecast_id": ids_c["forecast"], "thesis_id": ids_c["thesis"], "decision_id": ids_c["decision"]},
+    ]
+
+    with sqlite3.connect(db_path(home)) as conn:
+        trace = _QueryTrace()
+        conn.set_trace_callback(trace)
+        coverage = _source_reference_coverage(conn, rows)
+        conn.set_trace_callback(None)
+
+    # Exactly three id-sets (forecasts/theses/decisions) => exactly three edge
+    # round-trips regardless of how many ids each set holds (9 here).
+    assert trace.count_substr("FROM edges e") == 3, [
+        s for s in trace.statements if "edges" in s
+    ]
+
+    # Coverage correctness: forecast A covered (source on target side), thesis B
+    # covered, everything else uncovered. 9 total records, 2 covered.
+    assert coverage["total_record_count"] == 9
+    assert coverage["covered_source_reference_count"] == 2
+    assert coverage["missing_source_reference_count"] == 7
+    assert coverage["status"] == "missing_source_reference"
+    assert ids_a["forecast"] not in coverage["missing_record_ids_by_kind"]["forecasts"]
+    assert ids_b["forecast"] in coverage["missing_record_ids_by_kind"]["forecasts"]
+    assert ids_c["forecast"] in coverage["missing_record_ids_by_kind"]["forecasts"]
+    assert ids_b["thesis"] not in coverage["missing_record_ids_by_kind"]["theses"]
+    assert ids_a["thesis"] in coverage["missing_record_ids_by_kind"]["theses"]
+    assert sorted(coverage["missing_record_ids_by_kind"]["decisions"]) == sorted(
+        [ids_a["decision"], ids_b["decision"], ids_c["decision"]]
+    )
+
+
+def test_source_reference_coverage_all_covered_reports_complete(tmp_path):
+    # trade-trace-u4po: when every included record has a source edge, coverage
+    # is complete and no records are listed as missing.
+    home = _init_home(tmp_path)
+    ids = _seed_binary_case(home, implied_probability=0.55)
+    src = _envelope(home, "source.add", {"kind": "url", "uri": "https://example.invalid/u4po-all"})
+    _envelope(home, "source.attach_to_forecast", {"source_id": src["data"]["id"], "target_id": ids["forecast"]})
+    _envelope(home, "source.attach_to_thesis", {"source_id": src["data"]["id"], "target_id": ids["thesis"]})
+    _envelope(home, "source.attach_to_decision", {"source_id": src["data"]["id"], "target_id": ids["decision"]})
+
+    rows = [{"forecast_id": ids["forecast"], "thesis_id": ids["thesis"], "decision_id": ids["decision"]}]
+    with sqlite3.connect(db_path(home)) as conn:
+        coverage = _source_reference_coverage(conn, rows)
+
+    assert coverage["status"] == "complete"
+    assert coverage["total_record_count"] == 3
+    assert coverage["covered_source_reference_count"] == 3
+    assert coverage["missing_source_reference_count"] == 0
+    assert coverage["missing_record_ids_by_kind"] == {"forecasts": [], "theses": [], "decisions": []}
 
 
 def test_non_binary_excluded_and_missing_reference_low_n_caveats(tmp_path):

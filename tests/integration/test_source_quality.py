@@ -676,6 +676,27 @@ def test_expanded_stance_sources_attach_to_resolution_market_records(home):
     assert rule_diag["samples"][0]["contributing_ids"]["source_id"] == rule
 
 
+# -- 12. zuyj: handler-layer stale_threshold_days guard --------------
+
+
+@pytest.mark.parametrize("bad_value", [-1, True])
+def test_source_quality_rejects_out_of_range_stale_threshold(home, bad_value):
+    """Per bead trade-trace-zuyj: the `_report_source_quality` guard rejects
+    a non-negative-integer `stale_threshold_days` at the tool layer.
+
+    The JSON schema's `minimum: 0` constraint is only enforced at the stdio
+    boundary; the in-process dispatch path used here reaches the handler
+    guard directly, so these cases exercise the previously test-dead branch.
+    `-1` is out of range; `True` is a bool, which is not a meaningful day
+    count even though `isinstance(True, int)` is True."""
+
+    env = _mcp(home, "report.source_quality", {"stale_threshold_days": bad_value})
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "stale_threshold_days"
+    assert env.error.details["value"] == bad_value
+
+
 def test_redacted_sensitive_source_text_is_not_persisted_or_reported(home):
     seeds = _seed_thesis_and_decision(home)
     src = _mcp(home, "source.add", {
@@ -714,3 +735,100 @@ def test_redacted_sensitive_source_text_is_not_persisted_or_reported(home):
     assert "summary" not in sample
     assert "excerpt" not in sample
     assert "extracted_text" not in sample
+
+
+# -- x0g6: missing_sources_on_actual_enter is not N+1 ----------------
+
+
+def _seed_actual_enter_decision(home: Path, n: int) -> dict:
+    """Seed an independent actual_enter decision (fresh venue/instrument/
+    thesis/forecast chain) so several can coexist in one journal."""
+
+    venue = _mcp(home, "venue.add", {
+        "name": f"PM-{n}", "kind": "prediction_market",
+        "idempotency_key": f"00000000-0000-4000-8000-x0g6venue{n:03d}",
+    }).data["id"]
+    inst = _mcp(home, "instrument.add", {
+        "venue_id": venue, "asset_class": "prediction_market", "title": f"X{n}",
+        "idempotency_key": f"00000000-0000-4000-8000-x0g6inst0{n:03d}",
+    }).data["id"]
+    thesis = _mcp(home, "thesis.add", {
+        "instrument_id": inst, "side": "yes", "body": f"t{n}",
+        "idempotency_key": f"00000000-0000-4000-8000-x0g6thes0{n:03d}",
+    }).data["id"]
+    fcst = _mcp(home, "forecast.add", {
+        "thesis_id": thesis, "kind": "binary", "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.6},
+            {"outcome_label": "no", "probability": 0.4},
+        ],
+        "idempotency_key": f"00000000-0000-4000-8000-x0g6fcst0{n:03d}",
+    }).data["id"]
+    dec = _mcp(home, "decision.add", {
+        "type": "actual_enter", "instrument_id": inst,
+        "thesis_id": thesis, "forecast_id": fcst,
+        "side": "yes", "quantity": 1, "price": 0.6,
+        "idempotency_key": f"00000000-0000-4000-8000-x0g6dec00{n:03d}",
+    }).data["id"]
+    return {"instrument": inst, "thesis": thesis, "forecast": fcst, "decision": dec}
+
+
+def test_missing_sources_bulk_query_cost_is_fixed_not_n_plus_1(home):
+    """Per bead trade-trace-x0g6: `_missing_sources_on_actual_enter` must
+    probe edge coverage with a fixed number of bulk IN-list queries (one
+    per coverage kind: thesis, decision, forecast), not one probe per
+    decision row. We seed several actual_enter decisions and count the
+    edges-table SELECTs the helper issues; the count must stay constant as
+    the decision count grows."""
+
+    import sqlite3
+
+    from trade_trace.reports.source_quality import _missing_sources_on_actual_enter
+    from trade_trace.storage.paths import db_path
+
+    seeds = [_seed_actual_enter_decision(home, n) for n in range(5)]
+
+    edge_probe_queries: list[str] = []
+
+    def _trace(statement: str) -> None:
+        normalized = " ".join(statement.split())
+        if "FROM edges" in normalized:
+            edge_probe_queries.append(normalized)
+
+    with sqlite3.connect(db_path(home)) as conn:
+        conn.set_trace_callback(_trace)
+        result = _missing_sources_on_actual_enter(conn)
+        conn.set_trace_callback(None)
+
+    # All 5 decisions lack provenance → all surface in the diagnostic.
+    assert result["count"] == 5
+    surfaced = set(result["sample_ids"]["decisions"])
+    assert surfaced == {s["decision"] for s in seeds}
+
+    # Fixed cost: exactly 3 bulk edge queries regardless of D=5 decisions.
+    # An N+1 implementation would issue up to 3*D = 15 edge probes here.
+    assert len(edge_probe_queries) == 3, edge_probe_queries
+
+
+def test_missing_sources_bulk_query_respects_mixed_coverage(home):
+    """The bulk-query refactor must preserve per-kind coverage semantics:
+    a decision whose thesis (or decision row, or forecast) has any attached
+    source is silent, while a fully-bare decision still fires."""
+
+    covered = _seed_actual_enter_decision(home, 10)
+    bare = _seed_actual_enter_decision(home, 11)
+
+    src = _mcp(home, "source.add", {
+        "kind": "url", "stance": "supports", "uri": "https://e.x/x0g6-cov",
+        "idempotency_key": "00000000-0000-4000-8000-x0g6cov00001",
+    }).data["id"]
+    _mcp(home, "source.attach_to_thesis", {
+        "source_id": src, "target_id": covered["thesis"],
+        "idempotency_key": "00000000-0000-4000-8000-x0g6cov00002",
+    })
+
+    env = _mcp(home, "report.source_quality", {})
+    diag = env.data["diagnostics"]["missing_sources_on_actual_enter"]
+    surfaced = set(diag["sample_ids"]["decisions"])
+    assert bare["decision"] in surfaced
+    assert covered["decision"] not in surfaced

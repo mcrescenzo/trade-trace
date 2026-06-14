@@ -2,7 +2,7 @@
 
 This is the short operating guide for AI agents connecting to Trade Trace over MCP.
 
-Trade Trace is a local journal, memory, and calibration substrate for trading agents. It records decisions and outcomes; by default it performs no outbound market fetches. The optional Polymarket adapter is disabled until explicitly configured, and even then only explicit agent calls such as `market.refresh`, `snapshot.fetch`, `snapshot.fetch_series`, and `outcome.fetch` perform network I/O. Trade Trace never executes trades, signs orders, holds broker credentials, or gives financial advice.
+Trade Trace is a local journal, memory, and calibration substrate for trading agents. It records decisions and outcomes; by default it performs no outbound market fetches. The optional Polymarket adapter is disabled until explicitly configured, and even then only explicit agent calls such as `market.refresh`, `snapshot.fetch`, and `outcome.fetch` perform network I/O. Trade Trace never executes trades, signs orders, holds broker credentials, or gives financial advice.
 
 ## 1. Install the MCP server
 
@@ -26,7 +26,7 @@ Requirements:
 
 - Python 3.11+
 - SQLite with FTS5
-- The optional `mcp` extra; the base package is CLI-only.
+- MCP support is included in the base package; the `[mcp]` extra is a back-compat install alias with no additional dependencies.
 
 ## 2. Configure your MCP client
 
@@ -94,7 +94,7 @@ If `MCP_ACTOR_ID` is unset, the server uses `agent:mcp-default`.
 
 After configuring the client, verify this sequence before journaling real decisions:
 
-1. Ask the client to list MCP tools. You should see `trade-trace` tools such as `journal.status`, `tool.schema`, `market.bind`, `market.refresh`, `snapshot.add`, `snapshot.fetch`, `snapshot.fetch_series`, `forecast.add`, `decision.add`, `resolution.add`, `outcome.fetch`, `memory.recall`, and report tools. The current default public catalog has 65 tools; `tool.schema` is registry-generated and authoritative.
+1. Ask the client to list MCP tools. You should see `trade-trace` tools such as `journal.status`, `tool.schema`, `market.bind`, `market.refresh`, `snapshot.add`, `snapshot.fetch`, `snapshot.fetch_series`, `forecast.add`, `decision.add`, `resolution.add`, `outcome.fetch`, `memory.recall`, and report tools. Do not rely on a fixed tool count: `tool.schema` is registry-generated and is the authoritative list of currently exposed tools.
 2. Call `journal.status`.
 3. Call `tool.schema` with no arguments to list the current registry.
 4. Call `tool.schema` for the first write you intend to use, for example:
@@ -189,7 +189,7 @@ A useful agent loop is ordered so later records point back to earlier evidence.
 
 1. `journal.init` — initialize the local journal if not already initialized.
 2. `market.bind` — create or identify the market metadata row.
-3. Optional adapter loop, only when explicitly enabled/configured: `market.refresh`, `snapshot.fetch`, `snapshot.fetch_series`, and `outcome.fetch`. Otherwise use manual `snapshot.add` / `resolution.add`.
+3. Optional adapter loop, only when explicitly enabled/configured: `market.refresh`, `snapshot.fetch`, and `outcome.fetch`. Otherwise use manual `snapshot.add` / `resolution.add`.
 4. `snapshot.add` — record caller-supplied market state when relevant.
 5. `forecast.add` — commit binary probabilities before outcome resolution.
 6. `decision.add` — record the actual trade/skip/hold decision and rationale.
@@ -237,7 +237,7 @@ Agents must not send Trade Trace:
 
 Trade Trace ignores credential-shaped write arguments and rejects credential-looking MCP schema exposure, but agents should still avoid sending secrets at all.
 
-Trade Trace performs no outbound market fetches by default. Optional Polymarket adapter calls are fail-closed unless explicitly enabled and configured; when enabled, only explicit calls (`market.refresh`, `snapshot.fetch`, `snapshot.fetch_series`, `outcome.fetch`) perform adapter I/O. There is no background fetch scheduler.
+Trade Trace performs no outbound market fetches by default. Optional Polymarket adapter calls are fail-closed unless explicitly enabled and configured; when enabled, only explicit calls (`market.refresh`, `snapshot.fetch`, `outcome.fetch`) perform adapter I/O. There is no background fetch scheduler.
 
 ## 11. Troubleshooting
 

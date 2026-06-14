@@ -23,7 +23,16 @@ from trade_trace.core import default_registry
 from trade_trace.events.semantic_keys import TOOL_PRIMARY_EVENT_TYPE
 from trade_trace.mcp_server import mcp_call
 
-_FETCH_WRITE_TOOLS = ("market.refresh", "snapshot.fetch", "outcome.fetch")
+_FETCH_WRITE_TOOLS = (
+    "market.refresh",
+    "snapshot.fetch",
+    # snapshot.fetch_series shares the identical retryable-write idempotency
+    # contract as snapshot.fetch and was unfrozen into Phase 1 alongside the
+    # anchored-calibration readers (bead trade-trace-xtdo). Its derived schema
+    # previously omitted idempotency_key even though the dispatcher required it.
+    "snapshot.fetch_series",
+    "outcome.fetch",
+)
 
 
 def _schema_for(tool_name: str) -> dict:

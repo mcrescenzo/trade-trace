@@ -208,3 +208,115 @@ def test_external_receipt_semantic_conflict_and_malformed_quarantine(tmp_path):
     assert not env.ok
     assert env.error is not None
     assert env.error.details["code"] == "malformed_json_quarantined"
+
+
+def test_external_receipt_rejects_credential_shaped_metadata(tmp_path):
+    # Credential-shaped keys inside a persisted JSON object (sanitized_facts /
+    # provenance) must be rejected at the boundary so no credential lands.
+    home = tmp_path / "home"
+    intent_id = _seed_refs(home)
+    bad = _receipt_args(home, intent_id, semantic_key="cred-meta-receipt")
+    bad["sanitized_facts"] = {"client_secret": "shhh"}
+    env = _call("external_receipt.import", bad)
+    assert not env.ok
+    assert env.error is not None
+    assert env.error.code == "VALIDATION_ERROR"
+    assert env.error.details.get("credential_key") == "client_secret"
+
+    conn = sqlite3.connect(db_path(home))
+    try:
+        rows = conn.execute("SELECT COUNT(*) FROM external_execution_receipts WHERE semantic_key = 'cred-meta-receipt'").fetchone()[0]
+    finally:
+        conn.close()
+    assert rows == 0
+
+
+def test_external_receipt_quarantines_impossible_payloads(tmp_path):
+    # "Impossible" payloads — an unsupported schema_version, an unknown
+    # lifecycle_state, and a material_hash that does not match the canonical
+    # receipt — are refused before persistence, so no incoherent row lands.
+    home = tmp_path / "home"
+    intent_id = _seed_refs(home)
+
+    bad_schema = _receipt_args(home, intent_id, semantic_key="bad-schema")
+    bad_schema["schema_version"] = "external_execution_receipt.v999"
+    env = _call("external_receipt.import", bad_schema)
+    assert not env.ok
+    assert env.error is not None
+    assert env.error.details["code"] == "unsupported_schema_version"
+
+    bad_state = _receipt_args(home, intent_id, semantic_key="bad-state")
+    bad_state["lifecycle_state"] = "teleported"
+    env = _call("external_receipt.import", bad_state)
+    assert not env.ok
+    assert env.error is not None
+    assert env.error.details["field"] == "lifecycle_state"
+
+    bad_hash = _receipt_args(home, intent_id, semantic_key="bad-hash")
+    bad_hash["material_hash"] = "deadbeef" * 8
+    env = _call("external_receipt.import", bad_hash)
+    assert not env.ok
+    assert env.error is not None
+    assert env.error.details["field"] == "material_hash"
+
+    conn = sqlite3.connect(db_path(home))
+    try:
+        rows = conn.execute(
+            "SELECT COUNT(*) FROM external_execution_receipts WHERE semantic_key IN ('bad-schema', 'bad-state', 'bad-hash')"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert rows == 0
+
+
+def test_external_receipt_imported_correction_labeled_as_imported_evidence(tmp_path):
+    # §9 IMPORTED CORRECTION: a `corrected`/`correction` receipt is ingested as
+    # append-only imported evidence with provenance, labelled non-executing /
+    # credential-blind, and never as a fact Trade Trace fetched.
+    home = tmp_path / "home"
+    intent_id = _seed_refs(home)
+    correction = _receipt_args(home, intent_id, semantic_key="correction-receipt", state="corrected")
+    correction["external_event_type"] = "correction"
+    correction["provenance_json"] = {"importer": "external-reconciler", "corrects_event_ref": "event-redacted-1", "private_payload_ingested": False}
+    env = _call("external_receipt.import", correction)
+    assert env.ok, env
+    assert env.data["lifecycle_state"] == "corrected"
+    assert env.data["external_event_type"] == "correction"
+    assert env.data["record_kind"] == "sanitized_imported_external_execution_receipt"
+    assert env.data["non_executing"] is True
+    assert env.data["credential_blind"] is True
+    assert env.data["provenance"]["corrects_event_ref"] == "event-redacted-1"
+
+
+def test_external_receipt_cluster_is_not_frozen(tmp_path):
+    """Freeze-state regression (bead trade-trace-g776).
+
+    external_receipt.import/get/list/report were unfrozen into the public
+    Phase-2 catalog. Pin that non-experimental state so a future accidental
+    re-freeze (re-adding any of these names to EXPERIMENTAL_RECONCILIATION) is
+    caught here, mirroring test_reconciliation_cluster_is_not_frozen.
+    """
+
+    del tmp_path  # registry-shape assertion; no DB needed
+    from trade_trace.core import (
+        EXPERIMENTAL_FROZEN_TOOLS,
+        EXPERIMENTAL_RECONCILIATION,
+        build_registry,
+    )
+
+    reg = build_registry()
+    public = set(reg.public_names())
+    for name in ("external_receipt.import", "external_receipt.get", "external_receipt.list", "external_receipt.report"):
+        entry = reg.get(name)
+        assert entry is not None, f"{name} should be registered"
+        assert entry.metadata()["catalog_visibility"] == "public", (
+            f"{name} regressed off the public catalog; the external execution-receipt "
+            "import cluster was unfrozen in trade-trace-g776"
+        )
+        assert name in public, f"{name} must appear in the default public catalog"
+        assert name not in EXPERIMENTAL_RECONCILIATION, (
+            f"{name} was re-added to EXPERIMENTAL_RECONCILIATION"
+        )
+        assert name not in EXPERIMENTAL_FROZEN_TOOLS, (
+            f"{name} re-entered the frozen-tools union"
+        )

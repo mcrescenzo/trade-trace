@@ -27,6 +27,12 @@ REPORT_NAME = "report.calibration"
 name once removes the drift risk of three separate string literals
 disagreeing on the report's identity."""
 
+_UNSET: Any = object()
+"""Sentinel distinguishing "caller did not supply a pre-fetched canonical
+probability" from a genuine `None` canonical probability (trade-trace-u7j3).
+A `None` is the legacy two-outcome path; only `_UNSET` triggers the fallback
+`SELECT probability FROM forecasts` query."""
+
 
 DEFAULT_MIN_SAMPLE = 20
 """Per reports.md §3.2 / scoring.md §7.1: N=20 is the calibration floor."""
@@ -168,6 +174,26 @@ adjustment does that imply?" It is read-only, deterministic, and emits no trade
 advice — only the caller's own historical resolution rate and the
 calibration-derived recalibration of the candidate probability."""
 
+ADVISORY_BIN_POLICY = "equal_width_0.1"
+"""Bin policy the advisory uses for its band assignment. Fixed equal-width 0.1
+bands so a candidate probability maps to a stable, predictable band edge."""
+
+ADVISORY_BIN_POLICY_NOTE = (
+    f"Advisory bands use {ADVISORY_BIN_POLICY} (fixed 0.1-wide edges); the main "
+    f"report.calibration ECE/reliability_bins use bin_policy={DEFAULT_BIN_POLICY!r} "
+    "(data-driven, quantile bins). Bin boundaries therefore differ, so an advisory "
+    "band's observed_frequency is NOT directly comparable bin-to-bin with a "
+    "report.calibration reliability_bins entry — treat the cross-reference as a "
+    "rough read. For an exact comparison, re-run report.calibration with "
+    f"bin_policy={ADVISORY_BIN_POLICY!r}."
+)
+"""Cross-reference caveat (trade-trace-j2kz). The advisory partitions scored rows
+into equal-width 0.1 bands while report.calibration's ECE uses the equal_mass
+(quantile) default, so the two reports' bins do not line up. This note ships in
+the advisory output (`summary.bin_policy_note`, `caveats`, and `extra`) so an
+agent cross-referencing `summary.band` against `report.calibration`'s
+`reliability_bins` knows the boundaries differ."""
+
 
 def _band_for_probability(probability: float) -> dict[str, Any]:
     """Equal-width 0.1 band the candidate probability falls into, matching the
@@ -239,6 +265,7 @@ def report_calibration_advisory(
         "Recalibration is derived only from the caller's own past resolved "
         "forecasts in this probability band; it is not trade advice, a signal, "
         "or an edge/profit claim.",
+        ADVISORY_BIN_POLICY_NOTE,
     ]
     if excluded_late > 0:
         caveats.append(
@@ -285,6 +312,13 @@ def report_calibration_advisory(
     summary = {
         "probability": probability,
         "band": band,
+        # trade-trace-j2kz: advisory bands are equal_width_0.1 while
+        # report.calibration's ECE bins default to equal_mass, so the two
+        # reports' bin boundaries do not align. This note makes the mismatch
+        # explicit so a consumer cross-referencing summary.band against
+        # report.calibration's reliability_bins treats it as a rough read.
+        "bin_policy": ADVISORY_BIN_POLICY,
+        "bin_policy_note": ADVISORY_BIN_POLICY_NOTE,
         "sample_size": sample_size,
         # True only when sample_size >= min_sample. Autonomous feeders MUST gate
         # on this single field rather than null-checking suggested_probability or
@@ -351,7 +385,12 @@ def report_calibration_advisory(
     return standard_report_result(
         summary=summary,
         groups=groups,
-        extra={"bin_policy": "equal_width_0.1"},
+        # trade-trace-j2kz: surface the bin-policy mismatch note alongside the
+        # policy id so the envelope meta carries the cross-reference caveat too.
+        extra={
+            "bin_policy": ADVISORY_BIN_POLICY,
+            "bin_policy_note": ADVISORY_BIN_POLICY_NOTE,
+        },
     )
 
 
@@ -450,6 +489,16 @@ def _scored_row_base_where() -> list[str]:
             WHERE e.source_kind = 'outcome' AND e.target_kind = 'outcome'
               AND e.edge_type = 'supersedes' AND e.target_id = o.id
           )""",
+        # trade-trace-6g7v: exclude scores for forecasts that have been
+        # superseded by a newer forecast (forecast->forecast supersedes
+        # edge). Mirrors the auto-scorer guard so any pre-existing
+        # superseded-forecast score rows never inflate N or distort
+        # Brier/ECE/skill in report.calibration / report.compare.
+        """NOT EXISTS (
+            SELECT 1 FROM edges e
+            WHERE e.source_kind = 'forecast' AND e.target_kind = 'forecast'
+              AND e.edge_type = 'supersedes' AND e.target_id = f.id
+          )""",
     ]
 
 
@@ -487,10 +536,17 @@ def _materialize_scored_row(
     yes_label: str | None,
     outcome_label: str | None,
     baseline_probability: float | None = None,
+    canonical_probability: Any = _UNSET,
+    outcome_rows: list[tuple[Any, Any]] | None = None,
 ) -> _ScoredRow | None:
     """Shared post-fetch reconstruction (trade-trace-qnxt). Returns None
     when the p_yes/y pair can't be resolved (the original loaders both
-    `continue`d in that case)."""
+    `continue`d in that case).
+
+    trade-trace-u7j3: when the caller has already loaded `forecasts.probability`
+    (now on the parent SELECT) and bulk-fetched the forecast's
+    `forecast_outcomes` rows, it threads them through `canonical_probability` /
+    `outcome_rows` so the per-row resolution issues zero DB queries."""
 
     try:
         meta = json.loads(metadata_json or "{}")
@@ -502,6 +558,8 @@ def _materialize_scored_row(
         forecast_id=forecast_id,
         yes_label=yes_label,
         outcome_label=outcome_label,
+        canonical_probability=canonical_probability,
+        outcome_rows=outcome_rows,
     )
     if p_yes is None or y is None:
         return None
@@ -525,9 +583,11 @@ def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_Score
     params: list[Any] = []
     _apply_scored_row_filters(rf, where, params)
 
+    # trade-trace-u7j3: `f.probability` (the canonical-probability fast path) is
+    # added to the SELECT so the common case resolves with zero extra queries.
     sql = f"""
         SELECT fs.id, fs.forecast_id, fs.outcome_id, fs.score, fs.metadata_json,
-               f.yes_label,
+               f.yes_label, f.probability,
                o.outcome_label
         FROM forecast_scores fs
         JOIN forecasts f ON f.id = fs.forecast_id
@@ -536,8 +596,14 @@ def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_Score
         JOIN outcomes o ON o.id = fs.outcome_id
         WHERE {' AND '.join(where)}
         """
+    fetched = conn.execute(sql, params).fetchall()
+    # trade-trace-u7j3: bulk-fetch every forecast's `forecast_outcomes` rows in
+    # one IN-list query before the loop, replacing the per-row SELECT.
+    outcomes_by_forecast = _bulk_fetch_forecast_outcomes(
+        conn, {row[1] for row in fetched},
+    )
     rows: list[_ScoredRow] = []
-    for score_id, forecast_id, outcome_id, _score, metadata_json, yes_label, outcome_label in conn.execute(sql, params).fetchall():
+    for score_id, forecast_id, outcome_id, _score, metadata_json, yes_label, canonical_probability, outcome_label in fetched:
         materialized = _materialize_scored_row(
             conn,
             score_id=score_id,
@@ -546,21 +612,51 @@ def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_Score
             metadata_json=metadata_json,
             yes_label=yes_label,
             outcome_label=outcome_label,
+            canonical_probability=canonical_probability,
+            outcome_rows=outcomes_by_forecast.get(forecast_id, []),
         )
         if materialized is not None:
             rows.append(materialized)
     return rows
 
 
-def _resolve_p_yes_and_y(
-    conn: sqlite3.Connection,
+def _bulk_fetch_forecast_outcomes(
+    conn: sqlite3.Connection, forecast_ids: set[str],
+) -> dict[str, list[tuple[Any, Any]]]:
+    """Fetch every `forecast_outcomes` (outcome_label, probability) row for the
+    given forecast_id set in one IN-list query and group them in memory
+    (trade-trace-u7j3). Replaces the per-row `SELECT ... WHERE forecast_id = ?`
+    the N+1 loop used to fire once per scored row. Returns a map keyed by
+    forecast_id; a forecast with no rows is simply absent (resolution treats a
+    missing key as an empty list, matching the old per-row `fetchall()`)."""
+
+    outcomes: dict[str, list[tuple[Any, Any]]] = {}
+    if not forecast_ids:
+        return outcomes
+    ids = list(forecast_ids)
+    for forecast_id, outcome_label, probability in conn.execute(
+        "SELECT forecast_id, outcome_label, probability FROM forecast_outcomes "
+        f"WHERE forecast_id IN ({_placeholders(len(ids))})",
+        ids,
+    ).fetchall():
+        outcomes.setdefault(forecast_id, []).append((outcome_label, probability))
+    return outcomes
+
+
+def _resolve_p_yes_and_y_from_data(
     *,
-    forecast_id: str,
     yes_label: str | None,
     outcome_label: str | None,
+    canonical_probability: Any,
+    outcome_rows: list[tuple[Any, Any]],
 ) -> tuple[float | None, int | None]:
-    """Return `(p_yes, y)` for a scored binary forecast. Identifies the YES
-    label via the same heuristic as the auto-scorer (scoring.md §3.2)."""
+    """Pure (no-DB) core of `_resolve_p_yes_and_y` (trade-trace-u7j3). Resolves
+    `(p_yes, y)` from already-fetched `forecasts.probability` and the
+    `forecast_outcomes` (outcome_label, probability) rows for one forecast. The
+    callers pre-load both — `f.probability` is already on the parent SELECT and
+    the outcome rows come from a single bulk IN-list query — so per-row DB calls
+    are eliminated. Behavior is byte-for-byte identical to the original two-query
+    path."""
 
     # `outcomes.outcome_label` and `forecast_outcomes.outcome_label` are
     # declared NOT NULL, but historical / migration-drift data can carry
@@ -568,18 +664,10 @@ def _resolve_p_yes_and_y(
     # (trade-trace-rpb8).
     if outcome_label is None:
         return None, None
-    cur = conn.execute(
-        "SELECT outcome_label, probability FROM forecast_outcomes WHERE forecast_id = ?",
-        (forecast_id,),
-    )
-    rows = cur.fetchall()
+    rows = outcome_rows
     if rows and any(r[0] is None for r in rows):
         return None, None
 
-    canonical_row = conn.execute(
-        "SELECT probability FROM forecasts WHERE id = ?", (forecast_id,),
-    ).fetchone()
-    canonical_probability = canonical_row[0] if canonical_row else None
     resolved_norm = outcome_label.strip().lower()
     yes_norm = yes_label.strip().lower() if yes_label else None
     if canonical_probability is not None:
@@ -610,6 +698,47 @@ def _resolve_p_yes_and_y(
     p_yes = labels[yes_norm]
     y = 1 if resolved_norm == yes_norm else 0
     return p_yes, y
+
+
+def _resolve_p_yes_and_y(
+    conn: sqlite3.Connection,
+    *,
+    forecast_id: str,
+    yes_label: str | None,
+    outcome_label: str | None,
+    canonical_probability: Any = _UNSET,
+    outcome_rows: list[tuple[Any, Any]] | None = None,
+) -> tuple[float | None, int | None]:
+    """Return `(p_yes, y)` for a scored binary forecast. Identifies the YES
+    label via the same heuristic as the auto-scorer (scoring.md §3.2).
+
+    trade-trace-u7j3: callers that already hold `forecasts.probability` (the
+    parent SELECT) and the forecast's `forecast_outcomes` rows (a bulk IN-list
+    pre-fetch) pass them via `canonical_probability` / `outcome_rows` to skip the
+    two per-row SELECTs. When they are not supplied this falls back to the
+    original two-query fetch so legacy direct callers keep working unchanged."""
+
+    # `outcomes.outcome_label` is guarded in the pure resolver, but the
+    # outcome_label NULL short-circuit must precede any DB work to preserve the
+    # original early-return (trade-trace-rpb8).
+    if outcome_label is None:
+        return None, None
+    if outcome_rows is None:
+        outcome_rows = conn.execute(
+            "SELECT outcome_label, probability FROM forecast_outcomes WHERE forecast_id = ?",
+            (forecast_id,),
+        ).fetchall()
+    if canonical_probability is _UNSET:
+        canonical_row = conn.execute(
+            "SELECT probability FROM forecasts WHERE id = ?", (forecast_id,),
+        ).fetchone()
+        canonical_probability = canonical_row[0] if canonical_row else None
+    return _resolve_p_yes_and_y_from_data(
+        yes_label=yes_label,
+        outcome_label=outcome_label,
+        canonical_probability=canonical_probability,
+        outcome_rows=outcome_rows,
+    )
 
 
 # -- metrics -------------------------------------------------------------

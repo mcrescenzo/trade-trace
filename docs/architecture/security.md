@@ -18,7 +18,11 @@ process, and the persisted journal data.
 This doc enumerates the assets, the realistic attackers, and the
 mitigations that ship in MVP. It is not exhaustive; future surfaces
 (remote sync, multi-user, hosted dashboard) will need their own
-addendum.
+addendum. The first such addendum is
+[security-execution.md](security-execution.md) (Status: design — not
+implemented): the Phase-3 live-execution + credential-handling threat
+model, which extends — and does not relax — the credential-blind core
+invariants below.
 
 ## 2. Assets
 
@@ -127,7 +131,12 @@ Scanned write-time:
 | `playbook.create`               | `description`                             |
 | `playbook.propose_version`      | `description`                             |
 | `memory.retain` / `memory.reflect` | `body`, `title`                        |
-| Every write tool                | `metadata_json` (recursively, including raw JSON strings) |
+| `abstention.record`             | `reason`                                  |
+| `forecast.interpret_resolution` | `interpreted_yes_condition`               |
+| `pretrade_intent.record`        | `semantic_key`                            |
+| `idea.capture`                  | `thought`, `title`                        |
+| `market.bind`                   | `title`, `question`, `resolution_rule_text` (flat or `resolution_rule.text`) |
+| Every write tool                | `metadata_json` (recursively, including raw JSON strings, incl. `memory.link`) |
 
 Exempt by design (documented, not scanned):
 
@@ -148,6 +157,21 @@ Adding a new persisted free-text column to a migration requires:
    writes it, **or** explicitly listing the column above as exempt.
 2. A corresponding test in
    `tests/security/test_secret_pattern_writes.py`.
+
+A static enforcement test
+(`tests/security/test_secret_pattern_writes.py::test_scan_table_completeness`)
+parses this table and asserts every listed `(tool, field)` pair is
+actually scanned by `reject_if_contains_secrets` (directly or via
+`store_metadata_json`) in `src/`, so a future refactor that drops a
+scan call breaks the suite.
+
+**Security-gate budget keys are not caller-overridable.** The
+`replay.case_bundle` report (`src/trade_trace/reports/replay.py`)
+strips `include_sensitive_sources`, `include_source_bodies`, and
+`include_memory_bodies` from caller-supplied `budgets` before
+merging, so a caller cannot flip the fixed-default redaction posture
+on. Sources with `redaction_status = 'sensitive'` are unconditionally
+omitted from the bundle (parity with §8 / `review.bundle`).
 
 ## 7. No Background Network, No Telemetry, No Auto-Update
 

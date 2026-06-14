@@ -22,10 +22,11 @@ Tools:
   *, parent_version_id?, description?)` — append a new version row.
 - `playbook.adherence(playbook_id, *, strategy_id?)` — thin wrapper
   around report.playbook_adherence scoped to a single playbook.
-- `decision.record_adherence(decision_id, playbook_version_id,
+- `playbook.record_adherence(decision_id, playbook_version_id,
   rule_node_id, status, *, reason?)` — write one normalized row into
   `decision_playbook_rules` and emit the matching `playbook_rule.*`
-  event.
+  event. (Legacy name `decision.record_adherence` stays dispatchable
+  for JSONL replay; see core.py.)
 """
 
 from __future__ import annotations
@@ -361,14 +362,14 @@ def _playbook_rule_guidance(*, has_rules: bool) -> str:
     if has_rules:
         return (
             "Linked playbook_rule nodes are discoverable below. Next: use "
-            "decision.record_adherence with this playbook_version_id and a "
+            "playbook.record_adherence with this playbook_version_id and a "
             "rule_node_id when evaluating a decision; use memory.recall to "
             "retrieve broader playbook_rule context."
         )
     return (
         "No playbook_rule nodes are linked to this version yet. Next: use "
         "memory.retain(node_type='playbook_rule') to create rule memory, "
-        "then decision.record_adherence with playbook_version_id and "
+        "then playbook.record_adherence with playbook_version_id and "
         "rule_node_id to establish the existing read-side linkage."
     )
 
@@ -634,7 +635,7 @@ def _playbook_propose_version(
     }
 
 
-# -- decision.record_adherence -------------------------------------
+# -- playbook.record_adherence (legacy name: decision.record_adherence) ---
 
 
 def _decision_record_adherence(
@@ -837,7 +838,7 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
         optional_keys=("strategy_id",),
     )
     registry.register(
-        "decision.record_adherence",
+        "playbook.record_adherence",
         _decision_record_adherence,
         is_write=True,
         **_examples_for("decision.record_adherence"),
@@ -849,5 +850,8 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
             "playbook_rule.followed for every other status. Advisory only "
             "— no auto-rejection of the decision."
         ),
-        json_schema=_DECISION_RECORD_ADHERENCE_SCHEMA
+        json_schema=_DECISION_RECORD_ADHERENCE_SCHEMA,
+        # Former name; retained as a dispatch-only legacy alias in core.py for
+        # historic JSONL replay (bead trade-trace-va77).
+        legacy_name="decision.record_adherence",
     )

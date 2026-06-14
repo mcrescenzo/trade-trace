@@ -9,6 +9,7 @@ Covers ux0 chunk 4 acceptance:
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,9 @@ from trade_trace.reports.coach import (
     FORBIDDEN_PHRASES,
     TradingAdvicePhraseError,
     _assert_no_trade_advice,
+    report_coach,
 )
+from trade_trace.storage.paths import db_path
 
 
 @pytest.fixture
@@ -320,3 +323,74 @@ def test_coach_low_sample_separates_caveat_from_process_actions(home):
     assert "reflection_hygiene" in categories
     assert not any("infer skill" in a["action"] and a["category"] != "calibration_data"
                    for a in data["next_actions"])
+
+
+# -- single-execution of the tag→Brier join (trade-trace-bg12) -------
+
+
+class _QueryTrace:
+    """Capture every SQL statement a connection executes via the sqlite
+    trace callback so a test can count how many times a query ran."""
+
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+
+    def __call__(self, sql: str) -> None:
+        self.statements.append(" ".join(sql.split()))
+
+    def count_substr(self, needle: str) -> int:
+        return sum(1 for s in self.statements if needle in s)
+
+
+# Distinguishing prefix of the decision_tags→decisions→forecast_scores join
+# that report.mistakes and report.strengths share. report.mistake_tripwire
+# uses a different join (it adds `JOIN forecasts f`), so this substring
+# isolates the ranked-report query the coach consumes.
+_TAG_BRIER_JOIN = "FROM decision_tags dt JOIN decisions d ON d.id = dt.decision_id LEFT JOIN forecast_scores"
+
+
+def test_coach_runs_tag_brier_join_exactly_once(home):
+    """report.coach used to call report_mistakes and report_strengths
+    separately, executing the identical decision_tags→forecast_scores
+    join twice per packet. After trade-trace-bg12 the join runs exactly
+    once per coach call."""
+
+    _seed = _envelope  # local alias for brevity below
+    venue = _seed(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _seed(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market", "title": "X",
+    })
+    thesis = _seed(home, "thesis.add", {
+        "instrument_id": inst["data"]["id"], "side": "yes", "body": "...",
+    })
+    f = _seed(home, "forecast.add", {
+        "thesis_id": thesis["data"]["id"], "kind": "binary", "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.6},
+            {"outcome_label": "no", "probability": 0.4},
+        ],
+    })
+    _seed(home, "decision.add", {
+        "instrument_id": inst["data"]["id"],
+        "forecast_id": f["data"]["id"],
+        "thesis_id": thesis["data"]["id"],
+        "type": "paper_enter", "side": "yes", "quantity": 100, "price": 0.6,
+        "tags": ["pattern-a"],
+    })
+    _seed(home, "outcome.add", {
+        "instrument_id": inst["data"]["id"],
+        "resolved_at": "2026-06-30T00:00:00Z",
+        "outcome_label": "yes", "status": "resolved_final",
+        "confidence": 0.99,
+    })
+
+    with sqlite3.connect(db_path(home)) as conn:
+        trace = _QueryTrace()
+        conn.set_trace_callback(trace)
+        report_coach(conn)
+        conn.set_trace_callback(None)
+
+    assert trace.count_substr(_TAG_BRIER_JOIN) == 1, [
+        s for s in trace.statements if "decision_tags" in s
+    ]

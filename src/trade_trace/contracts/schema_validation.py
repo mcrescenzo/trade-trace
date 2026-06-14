@@ -52,18 +52,32 @@ def reportable_schema_validation_error(
     instance: Any,
     schema: dict[str, Any],
     policy: SchemaValidationPolicy,
+    validator: Any | None = None,
 ) -> SchemaValidationError | None:
     """Return a normalized reportable schema error for ``policy`` or ``None``.
 
-    The underlying jsonschema.validate call is deliberately unchanged from the
-    former transport-local implementations.  ``CLI_NUMERIC_BOUNDS_ONLY`` keeps
-    handler-owned friendly errors for required/type/enum failures by ignoring
-    non numeric-bound validators; ``MCP_STDIO_FULL_SCHEMA`` reports every schema
-    validation failure at the stdio boundary.
+    ``CLI_NUMERIC_BOUNDS_ONLY`` keeps handler-owned friendly errors for
+    required/type/enum failures by ignoring non numeric-bound validators;
+    ``MCP_STDIO_FULL_SCHEMA`` reports every schema validation failure at the
+    stdio boundary.
+
+    When ``validator`` is supplied it must be a pre-built jsonschema validator
+    instance for ``schema`` (e.g. ``ToolRegistration.compiled_validator``); the
+    pre-built validator is reused so the hot dispatch path skips the per-call
+    draft detection, schema re-validation, and validator instantiation that
+    ``jsonschema.validate`` performs (see trade-trace-u5l3). The reported error
+    is selected with ``best_match`` exactly as ``jsonschema.validate`` does, so
+    the validation error contract is identical whether or not a pre-built
+    validator is passed.
     """
 
     try:
-        jsonschema.validate(instance=instance, schema=schema)
+        if validator is not None:
+            error = jsonschema.exceptions.best_match(validator.iter_errors(instance))
+            if error is not None:
+                raise error
+        else:
+            jsonschema.validate(instance=instance, schema=schema)
     except jsonschema.ValidationError as exc:
         if (
             policy is CLI_NUMERIC_BOUNDS_ONLY

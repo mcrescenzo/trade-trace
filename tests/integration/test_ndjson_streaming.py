@@ -65,13 +65,15 @@ def test_resolve_pending_streaming_multi_line(tmp_path: Path):
                                       "instrument_id": inst["data"]["id"],
                                       "side": "yes", "body": "..."},
                        actor_id="agent:default").model_dump(mode="json")
-    # Create 3 forecasts.
+    # Create 3 forecasts with PAST resolution_at so they are genuinely pending
+    # resolution and resolve.pending lists them (future-dated forecasts are not
+    # yet resolvable and are excluded — trade-trace-1k5d).
     for i in range(3):
         mcp_call("forecast.add", {
             "home": str(home),
             "thesis_id": thesis["data"]["id"],
             "kind": "binary",
-            "resolution_at": f"2026-06-{30 - i:02d}T00:00:00Z",
+            "resolution_at": f"2020-01-{30 - i:02d}T00:00:00Z",
             "outcomes": [
                 {"outcome_label": "YES", "probability": 0.5},
                 {"outcome_label": "NO", "probability": 0.5},

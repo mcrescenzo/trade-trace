@@ -47,6 +47,22 @@ def _seed(conn: sqlite3.Connection) -> None:
         "INSERT INTO forecasts(id, thesis_id, kind, resolution_rule_text, created_at, actor_id) VALUES ('fc-1', 'ths-1', 'binary', 'Resolves by recorded outcome.', ?, 'test')",
         (NOW,),
     )
+    # The playbook_version referenced by dec-1 must exist before the
+    # decision is inserted (decisions.playbook_version_id is FK-enforced
+    # at insert time by migration 030 /
+    # trg_decisions_playbook_version_id_exists).
+    conn.execute(
+        "INSERT INTO playbooks(id, name, created_at, actor_id) VALUES ('pb-1', 'Playbook', ?, 'test')",
+        (NOW,),
+    )
+    conn.execute(
+        "INSERT INTO memory_nodes(id, node_type, body, valid_from, created_at, actor_id) VALUES ('refl-pbv', 'reflection', 'lineage', ?, ?, 'test')",
+        (NOW, NOW),
+    )
+    conn.execute(
+        "INSERT INTO playbook_versions(id, playbook_id, version, provenance_reflection_node_id, created_at, actor_id) VALUES ('pbv-1', 'pb-1', 1, 'refl-pbv', ?, 'test')",
+        (NOW,),
+    )
     conn.execute(
         """
         INSERT INTO decisions(

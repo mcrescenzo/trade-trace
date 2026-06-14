@@ -51,7 +51,10 @@ Three categories, each with a top-of-file header line:
   `reports.md`, `security.md`, `dogfood-protocol.md`.
 - `> Status: **design — not implemented**` for docs describing
   planned behavior. Examples: `http-sse-subscribe.md`,
-  `forecastbench-compatibility.md`. The `risk-units.md` and
+  `forecastbench-compatibility.md`, and the Phase-3 execution-safety
+  design specs such as `execution-design-review-gate.md` (the one-time
+  human sign-off process gating any live-execution code merge / live
+  capital, trade-trace-qxbb). The `risk-units.md` and
   `opportunity-analysis.md` files describe partial implementations,
   so they get `Status: **partial — see §N for the shipped subset**`.
 - `> Status: **decision document for trade-trace-<id>**` for
@@ -68,6 +71,14 @@ Three categories, each with a top-of-file header line:
   evidence bundle contract for Epic G. These are stricter than
   decision docs — they pin contract shape — but lighter than
   shipped capability docs.
+- `> Status: **legacy** — <why> for docs whose tool/surface was once
+  shipped but has since been folded, renamed, or removed from the
+  public catalog and survives only as a backward-compat dispatchable
+  alias. The note must name the consolidating surface and the pivot
+  bead. Example already in use: `market-scan-contract.md`, whose
+  `market.scan.dry_run` / `market.scan.promote` tools were folded into
+  `market.bind` in the v0.0.2 PM pivot (trade-trace-4kec) and remain
+  only in `V002_FOLDED_OR_REMOVED`.
 
 The header is a markdown blockquote so it renders inline on GitHub
 and PyPI without any extra theme.

@@ -102,6 +102,15 @@ the same append-only audit trail underneath everything. Execution arrives
 last not because it is hard to build — it is the easiest part — but because
 it is the hardest to deserve.
 
+The gate between Phase 2 and Phase 3 is made measurable — not prose — by
+[`docs/architecture/phase-gates.md`](docs/architecture/phase-gates.md) and
+the `report.phase_gate_readiness` report: resolved-N track record, Brier and
+skill versus the market baseline, reconciliation cleanliness, audit
+readiness, and paper-fill coverage, each computed from the journal. The
+*numeric thresholds* remain an explicit owner decision; the report can never
+return `ready` until the owner sets them, so the agent cannot pick the bar
+that grants itself a wallet.
+
 ## What never changes
 
 These hold in every phase, including the last one:

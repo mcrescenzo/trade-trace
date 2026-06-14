@@ -418,7 +418,7 @@ def canonicalize_payload(event_type: str, payload: dict[str, Any]) -> str:
 # gets an auto-derived idempotency_key when the agent omits one.
 # Tools that emit per-row events (`import.*`), administrative
 # capability invocations (`journal.backup`, `journal.restore`,
-# `journal.fixture_seed`, `journal.config_set`, `keyring.revoke`,
+# `journal.fixture_seed`, `journal.config_set`,
 # `model.*`, `memory.reindex`, `market.scan.promote`), and
 # attachment helpers that emit two distinct events deliberately
 # stay out of the table — they continue to require an explicit

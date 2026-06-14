@@ -29,10 +29,45 @@ from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
+from trade_trace.security.credential_keys import PROJECT_CREDENTIAL_KEYS
 from trade_trace.storage.paths import resolve_home
 from trade_trace.tools._helpers import now_iso, require
+from trade_trace.tools.admin import resolve_under_root
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.imports import _import_commit
+
+# Characters allowed in the timestamp/run-id-derived directory segment.
+# Mirrors `_safe_event_type_for_filename` in the exporter: anything outside
+# this set (including '/', '\\', NUL, and the '.' that '..' is built from)
+# is collapsed to '_' so a hostile or absolute `import_run_id` cannot escape
+# the `import/csv/<segment>` bucket via Path-join semantics (bead
+# trade-trace-yuyk).
+_RUN_ID_SAFE_CHARS = set(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+)
+
+
+def _safe_run_id_segment(run_id: str) -> str:
+    """Sanitize `run_id` into a single filename-safe path segment.
+
+    The downstream JSONL artifact lives under
+    `$HOME/import/csv/<segment>/<source>.jsonl`. An absolute or
+    `/`-containing `import_run_id` would otherwise re-root the Path join
+    (e.g. `Path('/home/u/.trade-trace/import/csv') / '/tmp/evil'` resolves
+    to `/tmp/evil`), escaping `$TRADE_TRACE_HOME` (bead trade-trace-yuyk).
+
+    `:` and `.` are first folded to `-` to preserve the legacy timestamp
+    shape (`2026-05-19T13-30-00-000Z`), then any remaining unsafe character
+    — including `/`, `\\`, NUL, and the `.` segments that form `..` — is
+    replaced with `_`. The result is always a single non-empty segment with
+    no path separators or traversal components.
+    """
+
+    folded = run_id.replace(":", "-").replace(".", "-")
+    sanitized = "".join(
+        c if c in _RUN_ID_SAFE_CHARS else "_" for c in folded
+    )
+    return sanitized[:32] or "_"
 
 # Per imports.md §4.1 — every row produces these fields after mapping.
 _REQUIRED_FIELDS = (
@@ -60,13 +95,27 @@ _VALID_SIDES = {
 # Credential-shaped target fields. Reject mappings that target any of
 # these so a CSV column called "api_key" can't be smuggled into
 # metadata_json (bead trade-trace-jky / 7j1l aligned policy).
-_FORBIDDEN_MAPPING_TARGETS = {
-    "api_key", "secret_key", "client_secret", "broker_token",
-    "wallet_seed", "wallet_seed_phrase", "seed_phrase", "mnemonic",
-    "private_key", "auth_token", "access_token", "refresh_token",
-    "bearer_token", "password", "passphrase", "session_token",
-    "signing" + "_key", "signing_secret", "trading_password",
-}
+#
+# Sourced from the canonical PROJECT_CREDENTIAL_KEYS vocabulary
+# (trade-trace-reh4 / SIMP-016A) so this boundary can never drift behind
+# the central set — the prior hand-maintained copy had silently dropped
+# `oauth_token` (bead trade-trace-g86k).
+_FORBIDDEN_MAPPING_TARGETS = set(PROJECT_CREDENTIAL_KEYS)
+
+
+# Resource bounds for CSV import — see _import_csv_fills for rationale
+# (bead trade-trace-g86k). Mirrors the JSONL importer's defaults so a CSV
+# that would blow past the JSONL row cap is rejected up front rather than
+# after the artifact is written.
+_DEFAULT_MAX_CSV_ROWS = 100_000
+_MAX_CSV_FILE_BYTES = 256 * 1024 * 1024  # 256 MiB
+
+
+def _max_csv_rows(args: dict[str, Any]) -> int:
+    try:
+        return max(1, int(args.get("max_rows", _DEFAULT_MAX_CSV_ROWS)))
+    except (TypeError, ValueError):
+        return _DEFAULT_MAX_CSV_ROWS
 
 
 def _apply_mapping_value(rule: Any, row: dict[str, str]) -> Any:
@@ -320,10 +369,28 @@ def _write_jsonl_artifact(
     decision_args_list: list[dict[str, Any]],
 ) -> Path:
     """Write the canonical JSONL artifact under
-    `$HOME/import/csv/<timestamp>/<source>.jsonl` per imports.md §4.3."""
+    `$HOME/import/csv/<timestamp>/<source>.jsonl` per imports.md §4.3.
 
-    timestamp = run_id.replace(":", "-").replace(".", "-")[:32]
-    target_dir = home / "import" / "csv" / timestamp
+    `run_id` is sanitized to a single filename-safe segment and the
+    resolved target is re-checked to be contained under
+    `$HOME/import/csv` before any directory is created, so a hostile or
+    absolute `import_run_id` cannot escape `$TRADE_TRACE_HOME` (bead
+    trade-trace-yuyk).
+    """
+
+    timestamp = _safe_run_id_segment(run_id)
+    csv_root = home / "import" / "csv"
+    try:
+        target_dir = resolve_under_root(csv_root, timestamp)
+    except ValueError as exc:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "import_run_id resolves outside the import directory; the "
+            "JSONL artifact must stay under $TRADE_TRACE_HOME/import/csv "
+            "(bead trade-trace-yuyk)",
+            details={"field": "import_run_id", "import_run_id": run_id,
+                     "segment": timestamp},
+        ) from exc
     target_dir.mkdir(parents=True, exist_ok=True)
     artifact_path = target_dir / f"{source_csv.stem}.jsonl"
     with artifact_path.open("w", encoding="utf-8", newline="\n") as f:
@@ -370,10 +437,40 @@ def _import_csv_fills(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         )
     _validate_mapping(mapping)
 
+    # Bound the in-memory load: every CSV row becomes a decision.add arg
+    # dict held in memory before the JSONL artifact is written, so an
+    # unbounded CSV is a memory-exhaustion foot-gun for an automated agent
+    # pointing import.csv_fills at an arbitrary file. Cap aggregate file
+    # size and row count; the JSONL replay path enforces the same row cap
+    # downstream (bead trade-trace-g86k).
+    try:
+        csv_bytes = csv_path.stat().st_size
+    except OSError:
+        csv_bytes = 0
+    if csv_bytes > _MAX_CSV_FILE_BYTES:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"CSV input exceeds the maximum size ({csv_bytes} bytes > "
+            f"{_MAX_CSV_FILE_BYTES} byte cap); split the file or import in "
+            "batches",
+            details={"field": "csv_path", "total_bytes": csv_bytes,
+                     "max_bytes": _MAX_CSV_FILE_BYTES},
+        )
+    max_rows = _max_csv_rows(args)
+
     decision_args_list: list[dict[str, Any]] = []
     with csv_path.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         for row_no, row in enumerate(reader, start=1):
+            if len(decision_args_list) >= max_rows:
+                raise ToolError(
+                    ErrorCode.VALIDATION_ERROR,
+                    "CSV input exceeds the maximum row count "
+                    f"({max_rows}); raise max_rows for a known-large trusted "
+                    "import or split the file into batches",
+                    details={"field": "max_rows", "max_rows": max_rows,
+                             "csv_path": str(csv_path), "row": row_no},
+                )
             decision_args_list.append(_row_to_decision_args(
                 row, mapping, row_no=row_no, run_id=run_id,
                 source_file=str(csv_path),

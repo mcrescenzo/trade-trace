@@ -64,12 +64,26 @@ Three classes of table:
   are append-only. Corrections create new rows; older rows stay
   readable for audit. The append-only invariant is tested per §8.
 - **Mutable metadata tables** (`venues`, `instruments`, `playbooks`,
-  `strategies`) hold low-volume reference data whose `description`,
-  `hypothesis`, or `status` fields may change over the life of the row.
-  Every change writes a corresponding `<subject>.updated` event in the
-  `events` log, so the audit trail is preserved even though the row
-  itself is mutated in place. There is no separate version table for
-  these entities at MVP (see PRD §11 for the deferred decisions).
+  `strategies`, `markets`) hold low-volume reference data whose
+  `description`, `hypothesis`, `status`, or (for `markets`) lifecycle
+  `state` and venue-metadata fields may change over the life of the row.
+  Every change writes a corresponding event in the `events` log
+  (`<subject>.updated` for the legacy entities; `market.bound` on first
+  bind and `market.refreshed` on each in-place refresh for `markets`),
+  so the audit trail is preserved even though the row itself is mutated
+  in place. There is no separate version table for these entities at MVP
+  (see PRD §11 for the deferred decisions). `markets` specifically is a
+  per-venue-market lifecycle anchor: its `id` is a stable foreign-key
+  target referenced by `forecasts`, `paper_fill_records`,
+  `risk_check_receipts`, `pretrade_intents`, and the
+  approval/waiver/external-execution ledgers, so the row is refreshed in
+  place (`adapter_polymarket._upsert_market`) rather than re-keyed; the
+  `market.refreshed`/`market.bound` event stream — not a row-level
+  trigger — is its append-only audit trail. Because these tables are
+  deliberately mutable, they carry NO `BEFORE UPDATE` / `BEFORE DELETE`
+  append-only trigger and are excluded from the §8 trigger-enforced
+  invariant list (see the `markets` exemption test in
+  `tests/integration/test_append_only.py`).
 - **Projection tables** (`positions`, `memory_node_stats`) are rebuildable
   from source data via `journal.rebuild_projections`. They exist for query
   performance, not authority.
@@ -405,6 +419,13 @@ Tests enforce:
   - `memory_node_embeddings` allows DELETE+INSERT inside one re-embed
     transaction per [`memory-layer.md`](memory-layer.md) §8.4 (the only
     permitted memory-side DELETE).
+  - The §2 **mutable metadata tables** (`venues`, `instruments`,
+    `playbooks`, `strategies`, `markets`) are not append-only and carry no
+    trigger; they are mutated in place and their changes are audited
+    through the `events` log (`<subject>.updated`; for `markets`,
+    `market.bound` / `market.refreshed`). `markets.id` is a stable
+    foreign-key target, so `adapter_polymarket._upsert_market` refreshes
+    the existing row rather than appending a re-keyed one.
 - Corrections to ledger rows create new rows with a `supersedes` edge.
   This is the **single canonical correction mechanism** for all
   append-only tables — there is no `parent_*_id` correction column on

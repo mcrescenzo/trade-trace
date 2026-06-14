@@ -19,6 +19,9 @@ docs/reviews/
 
 # Local agent state
 .claude/
+.codex/
+.hermes/
+.hermes-bughunt/
 
 # Local environment files / live-test secrets. Keep examples trackable.
 .env

@@ -106,6 +106,14 @@ def _detect_unscored_forecasts(
     weekly gets an auditable record of every unscored forecast they
     haven't acted on."""
 
+    # NOTE: forecasts.scoring_state is append-only (m003/m014 trigger
+    # forbids UPDATE) so it is always 'pending' on disk; a
+    # `WHERE f.scoring_state = 'pending'` clause is a no-op that filters
+    # nothing while falsely implying scored forecasts are excluded
+    # (trade-trace-2b0z). We exclude logically-scored forecasts with an
+    # accurate NOT EXISTS over forecast_scores (non-NULL score against a
+    # non-superseded outcome == logically 'scored' per
+    # derive_scoring_state), keeping this mirrored with resolve.pending.
     cur = conn.execute(
         """
         SELECT f.id, f.thesis_id, f.resolution_at, t.instrument_id
@@ -113,8 +121,17 @@ def _detect_unscored_forecasts(
         JOIN theses t ON t.id = f.thesis_id
         WHERE f.resolution_at IS NOT NULL
           AND f.resolution_at < ?
-          AND f.scoring_state = 'pending'
           AND f.scoring_support = 'supported'
+          AND NOT EXISTS (
+            SELECT 1 FROM forecast_scores fs
+            WHERE fs.forecast_id = f.id
+              AND fs.score IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM edges e2
+                WHERE e2.source_kind = 'outcome' AND e2.target_kind = 'outcome'
+                  AND e2.edge_type = 'supersedes' AND e2.target_id = fs.outcome_id
+              )
+          )
           AND NOT EXISTS (
             SELECT 1 FROM outcomes o
             WHERE o.instrument_id = t.instrument_id
