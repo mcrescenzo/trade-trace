@@ -129,6 +129,12 @@ _DIAGNOSTIC_EVENT_TOOLS = {
     # an operability.md §7 note documents the policy).
     "memory_node.invalidated",
     "signal.emitted",
+    # market.refresh re-syncs a bound market row from live Gamma on a cache
+    # miss; the event records venue truth at fetch time, not a caller
+    # mutation, and market.refresh is not import-ready (it would re-fetch
+    # live). On restore, regenerate on demand by re-running market.refresh.
+    # Bucket D per jsonl-replay-taxonomy.md (AX-068).
+    "market.refreshed",
 }
 
 _LEGACY_HARD_BREAK_CONTRACT_VERSIONS = {"0.0.1", "0.0.1rc3", "0.0.1-rc3"}
@@ -201,6 +207,23 @@ def _max_errors(args: dict[str, Any]) -> int:
         return 100
 
 
+# Resource bounds for JSONL import. The importer parses every line into an
+# in-memory ParsedRow list before dispatch, so an unbounded input file is a
+# memory-exhaustion foot-gun for an automated agent that points
+# import.commit at an arbitrary path. Cap both the row count and the
+# aggregate file size; the agent can raise max_rows explicitly for a known
+# large but trusted import (bead trade-trace-g86k).
+_DEFAULT_MAX_IMPORT_ROWS = 100_000
+_MAX_IMPORT_FILE_BYTES = 512 * 1024 * 1024  # 512 MiB across all matched files
+
+
+def _max_rows(args: dict[str, Any]) -> int:
+    try:
+        return max(1, int(args.get("max_rows", _DEFAULT_MAX_IMPORT_ROWS)))
+    except (TypeError, ValueError):
+        return _DEFAULT_MAX_IMPORT_ROWS
+
+
 def _add_error(errors: list[dict[str, Any]], max_errors: int, err: dict[str, Any]) -> bool:
     if len(errors) < max_errors:
         errors.append(err)
@@ -233,11 +256,44 @@ def _parse_rows(args: dict[str, Any], *, max_errors: int) -> tuple[list[ParsedRo
     rows: list[ParsedRow] = []
     errors: list[dict[str, Any]] = []
     truncated = False
-    for file in _input_files(str(path)):
+    max_rows = _max_rows(args)
+    input_files = _input_files(str(path))
+    total_bytes = 0
+    for file in input_files:
+        try:
+            total_bytes += file.stat().st_size
+        except OSError:
+            continue
+    if total_bytes > _MAX_IMPORT_FILE_BYTES:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "import input exceeds the maximum size "
+            f"({total_bytes} bytes > {_MAX_IMPORT_FILE_BYTES} byte cap); "
+            "split the file or import in batches",
+            details={
+                "field": "path",
+                "total_bytes": total_bytes,
+                "max_bytes": _MAX_IMPORT_FILE_BYTES,
+            },
+        )
+    for file in input_files:
         with file.open("r", encoding="utf-8") as fh:
             for lineno, text in enumerate(fh, 1):
                 if not text.strip():
                     continue
+                if len(rows) >= max_rows:
+                    raise ToolError(
+                        ErrorCode.VALIDATION_ERROR,
+                        "import input exceeds the maximum row count "
+                        f"({max_rows}); raise max_rows for a known-large "
+                        "trusted import or split the file into batches",
+                        details={
+                            "field": "max_rows",
+                            "max_rows": max_rows,
+                            "file": str(file),
+                            "line": lineno,
+                        },
+                    )
                 try:
                     raw = json.loads(text)
                 except json.JSONDecodeError as exc:
@@ -562,6 +618,27 @@ def _import_commit(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     return out.model_dump(mode="json")
 
 
+# AX-056: import.commit was registered with **_examples_for(...) and no
+# explicit json_schema, so the advertised MCP schema auto-derived from
+# example_minimal exposed transaction_mode as a bare string even though the
+# runtime enum-validates it against {single, per_row} with a self-documenting
+# error (the AX-051 / AX-054 class). This explicit schema mirrors the runtime;
+# the handler is unchanged.
+_IMPORT_COMMIT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "path": {"type": "string", "description": "Path to a JSONL file or directory of JSONL files to replay through core dispatch."},
+        "transaction_mode": {"type": "string", "enum": ["single", "per_row"], "description": "single = one transaction for the whole file (all-or-nothing after validation); per_row = commit each row independently. Defaults to 'single'."},
+        "max_errors": {"type": "integer", "description": "Stop collecting errors after this many (default 100)."},
+        "max_rows": {"type": "integer", "description": "Reject the import if it contains more than this many rows (default 100000). Guards against unbounded in-memory load; raise it for a known-large trusted import."},
+        "halt_on_error": {"type": "boolean", "description": "Stop at the first failing row (default true)."},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["path", "transaction_mode", "idempotency_key"],
+}
+
+
 def register_import_stubs(registry: ToolRegistry) -> None:
     from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 
@@ -582,5 +659,6 @@ def register_import_stubs(registry: ToolRegistry) -> None:
         _import_commit,
         description="Replay a JSONL file/directory through core dispatch.",
         is_write=True,
+        json_schema=_IMPORT_COMMIT_SCHEMA,
         **_examples_for("import.commit"),
     )

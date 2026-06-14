@@ -3,23 +3,49 @@
 > Status: **shipped**. `ReportFilter` / `ReportResult` / drill-down / `review.bundle` describe the live report surface.
 
 
-**Implementation status (v0.0.2 PM pivot):** shipped: report.calibration,
-report.calibration_anchored, report.calibration_terminal,
-report.calibration_integrity,
+**Implementation status (v0.0.2 PM pivot):**
+
+shipped (public catalog): report.calibration,
+report.calibration_integrity, report.calibration_advisory,
 report.forecast_diagnostics,
 report.book, report.risk, report.audit, report.lifecycle,
 report.recall, report.work_queue, report.bootstrap, report.coach,
 report.strategy_health, report.compare, report.policy_candidates,
 report.filter_schema, report.market_lifecycle,
-report.resolution_quality, and
-report.time_decay_sharpening. Legacy report names such as
+report.resolution_quality, report.recall_receipts,
+report.memory_usefulness, report.decision_velocity, and
+report.time_decay_sharpening.
+
+report.recall_receipts, report.memory_usefulness, and
+report.decision_velocity were unfrozen out of the experimental
+anchored-viewers cluster into the Phase-1 public catalog (bead
+trade-trace-8g7t): all three are fully-implemented, read-only
+diagnostics over Phase-1 tables (recall telemetry, memory nodes,
+typed edges, decisions) with no Phase-2 dependency. decision_velocity
+is the sole report that emits a per-day/week decision-cadence series
+(calibration_integrity emits only static hygiene rates;
+process_analytics groups by tag/pair), so it was unfrozen rather than
+cut as redundant.
+
+report.calibration_anchored and report.calibration_terminal were
+unfrozen out of the experimental anchored-viewers cluster into the
+Phase-1 public catalog (bead trade-trace-xtdo): both are read-only
+market-baseline calibration panels (Brier skill versus the market) over
+only Phase-1 tables (forecast_snapshot_anchor / forecast_scores /
+forecasts / outcomes / snapshots) with no Phase-2 dependency. The
+after-the-fact anchor WRITER forecast.anchor_to_snapshot stays frozen in
+EXPERIMENTAL_ANCHORED_VIEWERS (see src/trade_trace/core.py) because bead
+trade-trace-4kec.9 (forecast.commit_blind / forecast.reveal_snapshot)
+superseded it; the anchor write it performed is already folded into
+forecast.add at commit time.
+
+Legacy report names such as
 report.pnl, report.watchlist, report.open_positions,
 report.current_exposure, report.exposure_anomalies,
 report.audit_readiness, report.source_quality,
-report.playbook_adherence, report.recall_receipts,
-report.memory_usefulness,
-report.opportunity,
-report.unscored_forecasts, and report.decision_velocity are retained
+report.playbook_adherence,
+report.opportunity, and
+report.unscored_forecasts are retained
 only as hidden/legacy compatibility metadata or consolidated into the
 reports above. Deferred (post-v0.0.2): trading-native
 calibration-by-liquidity-bucket, skipped-positive-edge review, and
@@ -33,7 +59,7 @@ forecast Brier ranking, not the broader decision+review tag
 count/co-occurrence contract. See §4.3 for the exact shipped behavior and
 the deferred target.
 
-Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [product-scope-v002.md](product-scope-v002.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md), [memory-layer.md](memory-layer.md),
 [policy-evidence-bundles.md](policy-evidence-bundles.md), and
@@ -529,16 +555,72 @@ Inputs:
 - `group_by`: allowlisted per base report. For `base_report='calibration'`:
   `actor_id`, `agent_id`, `model_id`, `run_id`, `strategy_id`,
   `decision_type`, `venue_id`, `asset_class`, `environment`,
-  `instrument_id`, `outcome_status`, `status`. For `base_report='pnl'`:
-  `instrument_id`, `status`, `venue_id`, `asset_class`.
+  `instrument_id`, `outcome_status`, `status`, `resolution_month`
+  (a `YYYY-MM` calendar-month bucket) and `resolution_week` (a
+  `YYYY-Www` calendar-week bucket) — both keyed on the outcome's
+  `resolved_at` — the longitudinal calibration-over-time trend (see
+  below). For `base_report='pnl'`: `instrument_id`, `status`,
+  `venue_id`, `asset_class`. For `base_report='risk'`: `period` (a
+  `YYYY-MM` month bucket from the decision's `created_at` — the
+  over-time expectancy series), `strategy_id`, `decision_type`.
 - `base_report`: the underlying report whose metrics to compute per
-  group. Current shipped implementation supports `calibration` and `pnl`.
-  Other planned kernels (`mistakes`, `playbook_adherence`) remain deferred.
+  group. Current shipped implementation supports `calibration`, `pnl`,
+  and `risk`. Other planned kernels (`mistakes`, `playbook_adherence`)
+  remain deferred.
 
 Output: a `ReportResult` whose `groups[]` is one entry per distinct
 value of `group_by`, each with the `base_report`'s metric set. Each
 group carries its own sub-filter for drill-down. Sample warnings are
 per group; the summary aggregates over all groups.
+
+The `risk` base report is the longitudinal companion to the point-in-time
+`report.risk` (trade-trace-62fj): it reuses the same one-decision→one-position
+join and R-multiple metric kernel, but buckets resolved decisions by month
+(`period`), strategy, or decision type so expectancy can be trended "over enough
+resolved markets to mean something" (VISION). Every group carries a prominent
+`coverage` block — `{eligible_count (closed decisions), included_count
+(declared-risk decisions), missing_count, coverage_pct, denominator_kind}` — so a
+low-denominator group self-caveats; trend across groups with comparable coverage.
+Expectancy here is R-multiple based: resolved markets that never declared a
+positive risk amount are excluded from the series (raw realized-P&L expectancy for
+risk-unit-free markets is the open follow-up; today they surface via `report.pnl`).
+
+**Longitudinal calibration-over-time (trade-trace-txjn).** For
+`base_report='calibration'`, the `resolution_month` (`YYYY-MM`) and
+`resolution_week` (`YYYY-Www`) group_by keys answer the VISION's "its
+calibration curve visibly improves over MONTHS" with a single call:
+each calendar period emits the standard calibration metric panel
+(Brier / ECE / skill / sharpness), the contributing `forecasts` /
+`forecast_scores` / `outcomes` record_ids, a `sample_size`, and an
+explicit `insufficient` boolean. Read the sorted-ascending group keys
+as a drift series. Two owner decisions are baked in:
+
+- **Basis = the outcome's `resolved_at`** (not `decision_at`). The
+  calibration question is about *when a forecast was answered by the
+  world*, so the trend is keyed to resolution time. This aligns with
+  `report.autonomy_readiness`'s resolution-time `calibration_trend`
+  section; they share the resolution-time axis. (The `risk` base
+  report's `period` key deliberately uses *decision* `created_at`
+  instead, because expectancy is a property of when the bet was placed —
+  the two series are intentionally on different axes.) The bucket
+  expression is a fixed `strftime` over `o.resolved_at`, never
+  interpolated from caller input, preserving the allowlist safety
+  contract.
+- **Bucket width is selectable** via the key itself: `resolution_month`
+  for the default monthly view, `resolution_week` for finer resolution
+  when N supports it.
+
+*Low-N-per-period caveating policy.* Monthly (and especially weekly)
+buckets frequently fall below the N=20 calibration floor
+(`DEFAULT_MIN_SAMPLE`). Every under-floor period carries its own
+`sample_warning` and `insufficient: true`, and the summary `caveats`
+state the policy explicitly: read a thin period's Brier/ECE as noise,
+not as a real calibration shift, and compare only periods with
+comparable N. Autonomous consumers MUST gate on the per-period
+`insufficient` flag rather than treating a single sparse month as a
+trend reversal. This is **calendar** time and is distinct from
+`report.time_decay_sharpening`, whose buckets are hours-to-resolution
+(forecast horizon), not calendar period.
 
 ### 4.8 `report.calibration_integrity` (MVP hardening)
 
@@ -648,6 +730,12 @@ Current checks:
   segmentation metadata.
 
 Source: bead trade-trace-r566.
+
+`report.audit_readiness` is one input to the earned-autonomy readiness evidence
+bundle (`report.autonomy_readiness`); see
+[`phase-gates.md` §7](./phase-gates.md#7-the-readiness-evidence-bundle-reportautonomy_readiness)
+for the longitudinal composition (calibration trend + expectancy series +
+audit/hygiene), which is evidence-only and renders no verdict of its own.
 
 ### 4.11 `report.lifecycle` (derived decision/non-action lifecycle)
 
@@ -814,6 +902,60 @@ interpretations are the same as lifecycle plus no task-manager semantics:
 no scheduler/daemon/reminder, no assignment/claiming, no notification, no
 dashboard workflow, no advice/signal/ranking/profit language, no broker or
 wallet action, and no source/market/outcome fetching.
+
+### 4.16 `report.rule_lineage` (rule -> reflection -> trades, one query path)
+
+`report.rule_lineage(*, rule_node_id?, playbook_version_id?)` operationalizes
+the VISION clause "trace any rule in its playbook back through the reflection
+that proposed it to the trades that taught it" (bead trade-trace-a5dy) as a
+single deterministic, read-only query path. Today that provenance is split
+across three heterogeneous mechanisms:
+
+- `playbook_versions.provenance_reflection_node_id` — a **column** linking a
+  rule-version to the reflection that motivated it (written by
+  `playbook.propose_version`).
+- the typed `edges` table — the reflection's **outgoing** `about` /
+  `derived_from` / `supports` / `contradicts` / `supersedes` edges to
+  decisions/theses/forecasts/outcomes (the trades and judgments that taught the
+  rule), plus the **consumer→memory use edges** (`decision` / `thesis` /
+  `forecast` / `outcome` / `review` / `playbook_version` rows pointing AT the
+  reflection per §9.1 of `memory-layer.md`).
+- `decision_playbook_rules` — the per-`(decision, version, rule)` adherence
+  rows. This table is also the **only** place a `playbook_rule` node is
+  associated with a `playbook_version` today.
+
+Exactly one of `rule_node_id` (a `playbook_rule` memory-node id) or
+`playbook_version_id` is required.
+
+- **Anchored at a `playbook_version`**: that one version is walked, and the
+  rules it evaluated are surfaced.
+- **Anchored at a `playbook_rule` node**: every version that ever evaluated that
+  rule (via an adherence row) is walked. Because **rule-node `derived_from`
+  edges are not auto-written today**, the version↔rule bridge runs through
+  `decision_playbook_rules`. A rule with no adherence row on any version yields
+  the explicit gap `rule_not_linked_to_any_version` rather than a silent empty
+  result. (Owner open question: confirm the canonical lineage anchor; the report
+  bridges both directions until then.)
+
+Each chain carries the contributing `record_ids` at every hop
+(`playbook_versions`, `reflection_nodes`, `decisions`, `forecasts`, `outcomes`,
+`theses`, `rule_nodes`, `adherence`) and an explicit `gaps` list where a link is
+missing (`provenance_reflection_missing`,
+`reflection_has_no_downstream_edges`, `reflection_not_used_downstream`,
+`no_adherence_rows`, `version_not_found`). Missing links are **declared, never
+dropped**. Read-only, deterministic, local-only: no writes, fetch, execution, or
+advice.
+
+Examples:
+
+```bash
+tt report rule_lineage --home <journal-home> --playbook-version-id pv_123
+tt report rule_lineage --home <journal-home> --rule-node-id mem_rule_abc
+```
+
+```json
+{"tool":"report.rule_lineage","args":{"playbook_version_id":"pv_123"}}
+```
 
 ## 5. `review.bundle`
 

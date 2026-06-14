@@ -46,6 +46,59 @@ _LIST_STATUS_VALUES = (*_STATUS_VALUES, "both", "all")
 _DEFAULT_STALE_THRESHOLD_DAYS = 14
 _HEALTH_MIN_SAMPLE = 20
 
+# AX-055: strategy.create (the public strategy.upsert create-mode) was
+# registered with **_examples_for(...) and no explicit json_schema, so the
+# advertised MCP schema auto-derived from example_minimal exposed only
+# name/slug/idempotency_key. The runtime ALSO accepts status (enum-validated
+# against _STATUS_VALUES with a self-documenting error) plus optional
+# description/hypothesis/meta_json — none of which a schema-reading bot could
+# discover without triggering a VALIDATION_ERROR (the AX-051 / AX-054 class).
+# This explicit schema mirrors the runtime; the handler is unchanged.
+_STRATEGY_CREATE_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string", "description": "Human-readable strategy name."},
+        "slug": {"type": "string", "description": "Unique lowercase-kebab identifier; duplicate raises VALIDATION_ERROR with details.field='slug'."},
+        "description": {"type": "string", "description": "Optional free-text description."},
+        "hypothesis": {"type": "string", "description": "Optional strategy hypothesis."},
+        "status": {"type": "string", "enum": list(_STATUS_VALUES), "description": "Lifecycle status; one of the documented enum. Defaults to 'active' when omitted."},
+        "meta_json": {"type": "object", "description": "Optional structured metadata."},
+        "idempotency_key": {"type": "string"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "run_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["name", "slug", "idempotency_key"],
+}
+
+# AX-061: strategy.update was registered with **_examples_for(...) and no
+# explicit json_schema, so its MCP schema auto-derived from example_minimal
+# advertised only strategy_id/description/idempotency_key — it hid the status
+# enum (runtime enum-validates status ∈ _STATUS_VALUES with a self-documenting
+# error, the AX-055 sibling) plus the hypothesis/meta_json update fields, and
+# falsely marked `description` REQUIRED on a partial-update tool (a bot updating
+# only status=archived was wrongly blocked). This explicit schema mirrors the
+# runtime: strategy_id + idempotency_key required, all update fields optional.
+_STRATEGY_UPDATE_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "strategy_id": {"type": "string", "description": "Strategy to update; name and slug are immutable."},
+        "description": {"type": "string", "description": "Optional updated free-text description."},
+        "hypothesis": {"type": "string", "description": "Optional updated strategy hypothesis."},
+        "status": {"type": "string", "enum": list(_STATUS_VALUES), "description": "Lifecycle status; one of the documented enum. status='archived' is the archival surface."},
+        "meta_json": {"type": "object", "description": "Optional structured metadata."},
+        "idempotency_key": {"type": "string"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "run_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["strategy_id", "idempotency_key"],
+}
+
 
 def _parse_as_of(value: Any, *, field: str) -> str:
     if not isinstance(value, str) or not UTC_Z_TIMESTAMP_PATTERN.match(value):
@@ -107,13 +160,38 @@ def _strategy_health_summary(
         "SELECT id FROM theses WHERE strategy_id = ? ORDER BY created_at, id",
         (strategy_id,),
     ).fetchall()]
+    # NOTE: forecasts.scoring_state is append-only (m003/m014 trigger
+    # forbids UPDATE), so it is always 'pending' on disk; the logical
+    # state is projected at read time by derive_scoring_state(). A
+    # `WHERE f.scoring_state IN ('pending','failed')` clause is therefore
+    # a no-op that returns ALL non-invalidated forecasts — including
+    # logically scored/superseded ones — inflating the "open" count
+    # (trade-trace-2b0z). We reproduce the intended pending-or-failed set
+    # with accurate predicates: exclude forecasts that are logically
+    # 'scored' (a non-NULL score against a non-superseded outcome) and
+    # those that are logically 'superseded' (an incoming forecast->
+    # forecast supersedes edge), matching derive_scoring_state().
     forecast_ids = [r[0] for r in conn.execute(
         """
         SELECT f.id FROM forecasts f
         JOIN theses t ON t.id = f.thesis_id
         WHERE t.strategy_id = ?
-          AND f.scoring_state IN ('pending', 'failed')
           AND f.invalidated_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM forecast_scores fs
+            WHERE fs.forecast_id = f.id
+              AND fs.score IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM edges eo
+                WHERE eo.source_kind = 'outcome' AND eo.target_kind = 'outcome'
+                  AND eo.edge_type = 'supersedes' AND eo.target_id = fs.outcome_id
+              )
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM edges ef
+            WHERE ef.source_kind = 'forecast' AND ef.target_kind = 'forecast'
+              AND ef.edge_type = 'supersedes' AND ef.target_id = f.id
+          )
         ORDER BY f.created_at, f.id
         """,
         (strategy_id,),
@@ -601,6 +679,7 @@ def register_strategy_tools(registry: ToolRegistry) -> None:
         _strategy_create,
         is_write=True,
         **_examples_for("strategy.create"),
+        json_schema=_STRATEGY_CREATE_SCHEMA,
         description=(
             "Create a first-class strategy row (not a tag). Required: "
             "name, slug (lowercase-kebab, unique). Optional: description, "
@@ -639,6 +718,7 @@ def register_strategy_tools(registry: ToolRegistry) -> None:
         "strategy.update",
         _strategy_update,
         is_write=True,
+        json_schema=_STRATEGY_UPDATE_SCHEMA,
         **_examples_for("strategy.update"),
         description=(
             "Partial update on description, hypothesis, status, meta_json. "

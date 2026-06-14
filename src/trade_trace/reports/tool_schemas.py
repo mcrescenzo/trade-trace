@@ -248,6 +248,35 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "Shows caveated candidate policy statements, support/contradiction, scope, missing evidence, replay refs, and reasons not promoted. No writes, promotion, fetching, model advice, or performance claims."
         ),
     ),
+    "report.rule_lineage": _schema(
+        {
+            "rule_node_id": {
+                "type": "string",
+                "description": (
+                    "A playbook_rule memory-node id to anchor the chain. "
+                    "Bridged to its playbook_versions via decision_playbook_rules "
+                    "(rule-node provenance edges are not auto-written today)."
+                ),
+            },
+            "playbook_version_id": {
+                "type": "string",
+                "description": (
+                    "A playbook_version id to anchor the chain directly. "
+                    "Exactly one of rule_node_id or playbook_version_id is "
+                    "required."
+                ),
+            },
+        },
+        description=(
+            "Read-only local rule-lineage chain: walks a playbook_rule (or "
+            "playbook_version) -> playbook_versions.provenance_reflection_node_id "
+            "-> the reflection -> its typed edges to decisions/theses/forecasts/"
+            "outcomes + consumer->memory use edges + decision_playbook_rules "
+            "adherence rows, with contributing record_ids at each hop and "
+            "explicit gaps where a link is missing. No writes, fetch, execution, "
+            "or advice."
+        ),
+    ),
     "report.source_quality": _schema(
         {
             "stale_threshold_days": {
@@ -273,6 +302,77 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "stale_source_threshold_days": {"type": "integer", "minimum": 0},
         },
         description="Read-only local prediction/event-market audit-readiness diagnostics; no network, no advice.",
+    ),
+    "report.phase_gate_readiness": _schema(
+        {
+            "thresholds": {
+                "type": "object",
+                "description": (
+                    "OWNER-supplied numeric bar per criterion. Any unset "
+                    "criterion reports pass=null and the gate is NEVER 'ready'. "
+                    "The agent must not pick the bar that grants itself a "
+                    "wallet (VISION 'autonomy is earned')."
+                ),
+                "properties": {
+                    "resolved_n": {"type": "integer", "minimum": 0},
+                    "brier": {"type": "number", "minimum": 0},
+                    "skill_vs_market": {"type": "number"},
+                    "reconciliation_cleanliness": {"type": "integer", "minimum": 0},
+                    "audit_readiness": {"type": "boolean"},
+                    "paper_fill_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+                },
+                "additionalProperties": False,
+            },
+            "min_sample": {"type": "integer", "minimum": 1},
+        },
+        description=(
+            "Measurable VISION Phase-2 -> Phase-3 gate criteria computed from "
+            "the journal against owner-supplied numeric thresholds. Read-only, "
+            "deterministic, local-only; no network, no advice, no execution."
+        ),
+    ),
+    "report.autonomy_readiness": _schema(
+        {
+            "thresholds": {
+                "type": "object",
+                "description": (
+                    "OWNER-supplied numeric bar per gate criterion, passed "
+                    "through to report.phase_gate_readiness. Any unset criterion "
+                    "yields state='insufficient_data' and the gate is NEVER "
+                    "'ready' (the agent must not self-grant a wallet)."
+                ),
+                "properties": {
+                    "resolved_n": {"type": "integer", "minimum": 0},
+                    "brier": {"type": "number", "minimum": 0},
+                    "skill_vs_market": {"type": "number"},
+                    "reconciliation_cleanliness": {"type": "integer", "minimum": 0},
+                    "audit_readiness": {"type": "boolean"},
+                    "paper_fill_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+                },
+                "additionalProperties": False,
+            },
+            "min_sample": {"type": "integer", "minimum": 1},
+            "window_days": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Longitudinal-window width for the calibration trend and expectancy series; defaults 30.",
+            },
+            "max_windows": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Trailing-window cap for the trend/expectancy series; defaults 12.",
+            },
+        },
+        description=(
+            "Earned-autonomy readiness EVIDENCE BUNDLE. Composes the "
+            "owner-thresholded report.phase_gate_readiness verdict with a "
+            "longitudinal calibration trend, an expectancy series, and "
+            "audit/hygiene diagnostics, keyed to the gate criteria with "
+            "per-criterion pass/fail/insufficient_data and contributing "
+            "record_ids. Evidence-only: it renders no verdict of its own and "
+            "can never turn a not-ready gate ready. Read-only, deterministic, "
+            "local-only; no network, no advice, no execution."
+        ),
     ),
     "report.calibration_integrity": _schema(
         # min_sample is accepted but currently unused by the integrity
@@ -337,12 +437,23 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
     ),
     "report.compare": _schema(
         {
-            "base_report": {"type": "string", "enum": ["calibration", "pnl"]},
+            "base_report": {"type": "string", "enum": ["calibration", "pnl", "risk"]},
             "group_by": {
                 "type": "string",
                 "description": (
-                    "Allowlisted by base_report; common values include "
-                    "strategy_id, instrument_id, tag."
+                    "Allowlisted per base_report (unsupported values are rejected "
+                    "with a VALIDATION_ERROR listing the allowed set). calibration: "
+                    "strategy_id, instrument_id, decision_type, venue_id, asset_class, "
+                    "actor_id, agent_id, model_id, run_id, environment, status, "
+                    "outcome_status (status and outcome_status are aliases for the "
+                    "outcome resolution status), resolution_month (YYYY-MM) and "
+                    "resolution_week (YYYY-Www) — the longitudinal calibration-over-"
+                    "time trend, bucketed by the outcome's resolved_at; per-period N "
+                    "is often below the N=20 floor, so each thin period self-caveats "
+                    "with sample_warning and insufficient:true. pnl: instrument_id, "
+                    "status, venue_id, asset_class. risk: period (YYYY-MM month bucket "
+                    "— the over-time expectancy series), strategy_id, decision_type. "
+                    "Note: tag is not a supported group_by for any base_report."
                 ),
             },
             "filter": _FILTER_PROP,
@@ -376,8 +487,26 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "status": {"type": "string"},
             "as_of": {"type": "string", "format": "date-time"},
             "stale_threshold_days": {"type": "integer", "minimum": 0},
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "Maximum lifecycle cases per page; defaults to the report page "
+                    "default. When more cases match, truncated=true and next_cursor "
+                    "pages the next slice (mirrors report.open_positions)."
+                ),
+            },
+            "cursor": {
+                "type": "string",
+                "description": "Opaque pagination cursor from a previous report.lifecycle response.",
+            },
         },
-        description="Read-only derived lifecycle cases; filter by ReportFilter plus states/status, as_of, and stale threshold.",
+        description=(
+            "Read-only derived lifecycle cases; filter by ReportFilter plus states/status, "
+            "as_of, and stale threshold. Paginated via limit + cursor + top-level "
+            "truncated + next_cursor; summary.metrics carry full-set totals while groups/"
+            "lifecycle_cases carry the current page."
+        ),
     ),
     "report.recall_receipts": _schema(
         {
@@ -421,8 +550,26 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "stale_threshold_days": {"type": "integer", "minimum": 0},
             "kinds": {"type": "array", "items": {"type": "string"}},
             "kind": {"type": "string"},
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "Maximum obligations per page; defaults to the report page "
+                    "default. When more obligations match, truncated=true and "
+                    "next_cursor pages the next slice (mirrors report.lifecycle)."
+                ),
+            },
+            "cursor": {
+                "type": "string",
+                "description": "Opaque pagination cursor from a previous report.work_queue response.",
+            },
         },
-        description="Read-only derived process-obligation queue; not a scheduler, assignment, broker, execution, fetch, or advice path.",
+        description=(
+            "Read-only derived process-obligation queue; not a scheduler, assignment, broker, "
+            "execution, fetch, or advice path. Paginated via limit + cursor + top-level "
+            "truncated + next_cursor; summary.metrics carry full-set totals while groups/"
+            "work_queue/next_actions carry the current page."
+        ),
     ),
     "agent.next_actions": _schema(
         {
@@ -431,8 +578,24 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "stale_threshold_days": {"type": "integer", "minimum": 0},
             "kinds": {"type": "array", "items": {"type": "string"}},
             "kind": {"type": "string"},
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "Maximum obligations per page; defaults to the report page "
+                    "default. When more obligations match, truncated=true and "
+                    "next_cursor pages the next slice (mirrors report.work_queue)."
+                ),
+            },
+            "cursor": {
+                "type": "string",
+                "description": "Opaque pagination cursor from a previous agent.next_actions response.",
+            },
         },
-        description="Safe projection/alias over report.work_queue; process actions only, no planner or execution semantics.",
+        description=(
+            "Safe projection/alias over report.work_queue; process actions only, no planner or "
+            "execution semantics. Paginated via limit + cursor + top-level truncated + next_cursor."
+        ),
     ),
     "report.open_positions": _schema(
         {
@@ -488,7 +651,10 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
         description=(
             "Read-only current-exposure ambiguity/data-quality caveat report. "
             "Returns projection_anomalies with stable codes including "
-            "ENTRY_DECISION_WITHOUT_POSITION_EVENT, DUPLICATE_DECISIONS, "
+            "ENTRY_DECISION_WITHOUT_POSITION_EVENT, DUPLICATE_DECISIONS "
+            "(exact-replay entry decisions), FRAGMENTED_SAME_SIDE_EXPOSURE "
+            "(>1 open position on one instrument+side — fragmented exposure from "
+            "paper_enter always opening an independent position), "
             "RECORD_ONLY_ACTUAL, MISSING_MARK, STALE_MARK, PROJECTION_MISSING, "
             "and PROJECTION_STALE. This reports local journal/projection data quality, "
             "not market risk or broker truth."
@@ -496,6 +662,8 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
     ),
     "report.current_exposure": _schema(
         {
+            "limit": {"type": "integer", "minimum": 1, "description": "Maximum open-position rows per page; defaults to the positions page default. When more positions match, truncated=true and next_cursor pages the rest (mirrors report.open_positions)."},
+            "cursor": {"type": "string", "description": "Opaque pagination cursor from a previous report.current_exposure response; pages the next slice of open_positions."},
             "recent_limit": {"type": "integer", "minimum": 0, "description": "Maximum recent trade-typed decision rows to return; defaults to 10."},
             "include_watchlist": {"type": "boolean", "description": "Include watchlist bucket; defaults true. Watches are WATCH_ONLY_IDEA and never exposure."},
             "include_anomalies": {"type": "boolean", "description": "Include projection_anomalies bucket; defaults true."},

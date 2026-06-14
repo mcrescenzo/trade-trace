@@ -3,6 +3,7 @@
 > Status: **design — not implemented**. ForecastBench compatibility is P1+ work; nothing in the live registry exports the ForecastBench shape today.
 
 Status: deferred; investigation artifact only.
+Parent bead `trade-trace-pty` closed as Fixed meaning the design artifact itself was completed, not that an implementation was shipped.
 Access date: 2026-05-19.
 Bead: trade-trace-pty.
 

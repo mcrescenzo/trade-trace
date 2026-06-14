@@ -13,7 +13,14 @@ from trade_trace.reports import (
 )
 from trade_trace.reports.tool_schemas import _REPORT_SCHEMAS
 
-from .audit_quality import _report_audit_readiness, _report_playbook_adherence, _report_source_quality
+from .audit_quality import (
+    _report_audit_readiness,
+    _report_autonomy_readiness,
+    _report_phase_gate_readiness,
+    _report_playbook_adherence,
+    _report_rule_lineage,
+    _report_source_quality,
+)
 from .calibration_diagnostics import (
     _report_calibration, _report_calibration_advisory,
     _report_calibration_anchored, _report_calibration_integrity,
@@ -330,6 +337,70 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         json_schema=_REPORT_SCHEMAS["report.audit_readiness"],
     ),
     ReportToolRegistration(
+        "report.phase_gate_readiness",
+        _report_phase_gate_readiness,
+        description=(
+            "Measurable VISION Phase-2 -> Phase-3 gate criteria "
+            "(bead trade-trace-q04o): resolved-N track record, Brier, skill "
+            "vs market baseline, reconciliation cleanliness (open critical "
+            "mismatches), audit-readiness, and paper-fill coverage, each "
+            "computed from the journal and compared to OWNER-supplied "
+            "numeric thresholds. Numeric thresholds are an owner decision; an "
+            "unset threshold yields pass=null and the gate is NEVER 'ready' "
+            "(the agent must not self-grant autonomy). Read-only, "
+            "deterministic, local-only; no network, no advice, no execution. "
+            "See docs/architecture/phase-gates.md."
+        ),
+        example_minimal={},
+        example_rich={
+            "thresholds": {
+                "resolved_n": 200,
+                "brier": 0.18,
+                "skill_vs_market": 0.0,
+                "reconciliation_cleanliness": 0,
+                "audit_readiness": True,
+                "paper_fill_coverage": 0.9,
+            },
+            "min_sample": 30,
+        },
+        optional_keys=("thresholds", "min_sample"),
+        json_schema=_REPORT_SCHEMAS["report.phase_gate_readiness"],
+    ),
+    ReportToolRegistration(
+        "report.autonomy_readiness",
+        _report_autonomy_readiness,
+        description=(
+            "Earned-autonomy readiness EVIDENCE BUNDLE (bead trade-trace-r91l). "
+            "Composes the OWNER-thresholded report.phase_gate_readiness verdict "
+            "with a longitudinal calibration trend (Brier/skill over "
+            "resolution-time windows), an expectancy series (realized R over the "
+            "same windows), and audit/hygiene diagnostics, keyed to the gate "
+            "criteria with per-criterion pass/fail/insufficient_data and "
+            "contributing record_ids. EVIDENCE-ONLY: it renders no verdict of "
+            "its own; the only ready/gate_status is the gate's, and the trend "
+            "can never turn a not-ready gate ready (the agent must not "
+            "self-grant a wallet). Read-only, deterministic, local-only; no "
+            "network, no advice, no execution. See docs/architecture/"
+            "phase-gates.md."
+        ),
+        example_minimal={},
+        example_rich={
+            "thresholds": {
+                "resolved_n": 200,
+                "brier": 0.18,
+                "skill_vs_market": 0.0,
+                "reconciliation_cleanliness": 0,
+                "audit_readiness": True,
+                "paper_fill_coverage": 0.9,
+            },
+            "min_sample": 20,
+            "window_days": 30,
+            "max_windows": 12,
+        },
+        optional_keys=("thresholds", "min_sample", "window_days", "max_windows"),
+        json_schema=_REPORT_SCHEMAS["report.autonomy_readiness"],
+    ),
+    ReportToolRegistration(
         "report.calibration_integrity",
         _report_calibration_integrity,
         description=(
@@ -516,16 +587,23 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         _report_compare,
         description=(
             "Compare base report metrics across one allowlisted group_by. "
-            "Supported base_report values: calibration and pnl. Supported "
+            "Supported base_report values: calibration, pnl, and risk. The risk "
+            "base report yields the longitudinal / per-strategy R-multiple "
+            "expectancy series (group_by=period|strategy_id|decision_type) so "
+            "expectancy can be trended over resolved markets, with a per-group "
+            "coverage block reporting the declared-risk denominator. Supported "
             "group_by depends on base_report and is validated via fixed SQL "
             "allowlists for injection safety. Per-group sample_warning is "
             "emitted; summary.sample_warning is set when any group is low-N."
         ),
         example_minimal={"base_report": "calibration", "group_by": "strategy_id", "filter": {}},
         json_schema=_REPORT_SCHEMAS["report.compare"],
-        usage_summary="Compare calibration or pnl metrics across one allowlisted dimension using optional shared report filters.",
-        examples=("tt report compare --base-report calibration --group-by strategy_id --filter-json '{}'",),
-        enum_notes={"base_report": "calibration or pnl", "group_by": "Allowed values depend on base_report and are validated by the report schema."},
+        usage_summary="Compare calibration, pnl, or risk-expectancy metrics across one allowlisted dimension using optional shared report filters.",
+        examples=(
+            "tt report compare --base-report calibration --group-by strategy_id --filter-json '{}'",
+            "tt report compare --base-report risk --group-by period --filter-json '{}'",
+        ),
+        enum_notes={"base_report": "calibration, pnl, or risk", "group_by": "Allowed values depend on base_report and are validated by the report schema."},
         common_failures=("group_by is not allowed for the selected base_report.",),
         next_actions=("Use report.filter_schema to build the filter object before calling report.compare.",),
     ),
@@ -604,6 +682,44 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         example_minimal={"status": "candidate", "as_of": "2026-01-20T00:00:00Z"},
         optional_keys=("status", "strategy_id", "playbook_id", "as_of", "limit"),
         json_schema=_REPORT_SCHEMAS["report.policy_candidates"],
+    ),
+    ReportToolRegistration(
+        "report.rule_lineage",
+        _report_rule_lineage,
+        description=(
+            "Read-only local rule-lineage report (bead trade-trace-a5dy): given "
+            "a playbook_rule node id OR a playbook_version_id, walks "
+            "playbook_versions.provenance_reflection_node_id -> the reflection "
+            "node -> the reflection's typed edges (about/derived_from/supports/"
+            "contradicts/supersedes to decisions/theses/forecasts/outcomes) + "
+            "the consumer->memory use edges into it + the "
+            "decision_playbook_rules adherence rows, into a single chain with "
+            "contributing record_ids at each hop and EXPLICIT gaps where a link "
+            "is missing. The version<->rule bridge runs through "
+            "decision_playbook_rules because rule-node provenance edges are not "
+            "auto-written today. No writes, fetch, execution, or advice."
+        ),
+        example_minimal={"playbook_version_id": "pv_..."},
+        example_rich={"rule_node_id": "mem_..."},
+        optional_keys=("rule_node_id", "playbook_version_id"),
+        json_schema=_REPORT_SCHEMAS["report.rule_lineage"],
+        usage_summary=(
+            "Trace one playbook rule (or version) back through the reflection "
+            "that proposed it to the decisions/forecasts/outcomes that taught "
+            "it, with explicit gaps; read-only and local-evidence-only."
+        ),
+        examples=(
+            "tt report rule_lineage --home <journal-home> --playbook-version-id pv_...",
+            "tt report rule_lineage --home <journal-home> --rule-node-id mem_...",
+        ),
+        common_failures=(
+            "Exactly one of rule_node_id or playbook_version_id must be supplied (not both, not neither).",
+            "rule_node_id must reference a memory node with node_type='playbook_rule'.",
+        ),
+        next_actions=(
+            "Inspect chains[].gaps and summary.gap_codes for missing provenance links before relying on completeness.",
+            "Use the contributing record_ids at each hop for local drilldowns; callers choose whether to run any follow-up.",
+        ),
     ),
     ReportToolRegistration(
         "report.work_queue",

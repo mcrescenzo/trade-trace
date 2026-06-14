@@ -4,7 +4,7 @@ Covers:
 - playbook.create + name-uniqueness VALIDATION_ERROR.
 - playbook.show + list_versions: append-only versioned history.
 - playbook.propose_version requires a reflection node; rejects non-reflection node_type.
-- decision.record_adherence per status (4 statuses) with FK validation.
+- playbook.record_adherence per status (4 statuses) with FK validation.
 - report.playbook_adherence aggregates by playbook_version_id.
 - Adherence filter by status, strategy_id, time range.
 - Playbook semantics advisory: no auto-rejection of decisions.
@@ -90,7 +90,7 @@ def test_playbook_tools_registered():
     for tool in (
         "playbook.create", "playbook.list", "playbook.show",
         "playbook.list_versions", "playbook.propose_version",
-        "playbook.adherence", "decision.record_adherence",
+        "playbook.adherence", "playbook.record_adherence",
         "report.playbook_adherence",
     ):
         assert tool in names
@@ -301,7 +301,7 @@ def test_show_and_list_versions_include_linked_rule_summaries_and_guidance(home)
     }).data["id"]
     rule = _seed_rule_node(home, idem_suffix="rd-linked")
     decision = _seed_decision(home, idem_suffix="rd-linked")
-    _mcp(home, "decision.record_adherence", {
+    _mcp(home, "playbook.record_adherence", {
         "decision_id": decision,
         "playbook_version_id": version,
         "rule_node_id": rule,
@@ -319,7 +319,7 @@ def test_show_and_list_versions_include_linked_rule_summaries_and_guidance(home)
             "title": None,
             "body": "Rule: do not enter when spread > 8% (idem rd-linked)",
         }]
-        assert "decision.record_adherence" in item["next_call_guidance"]
+        assert "playbook.record_adherence" in item["next_call_guidance"]
         assert "memory.recall" in item["next_call_guidance"]
 
 
@@ -344,7 +344,7 @@ def test_propose_version_returns_empty_rule_discoverability_on_create_and_replay
         assert env.data["playbook_rule_summaries"] == []
         assert "memory.retain" in env.data["next_call_guidance"]
         assert "node_type='playbook_rule'" in env.data["next_call_guidance"]
-        assert "decision.record_adherence" in env.data["next_call_guidance"]
+        assert "playbook.record_adherence" in env.data["next_call_guidance"]
     assert replay.data == first.data
 
 
@@ -354,7 +354,7 @@ def test_show_not_found(home):
     assert env.error.code.value == "NOT_FOUND"
 
 
-# -- decision.record_adherence ----------------------------------
+# -- playbook.record_adherence (legacy name: decision.record_adherence) ---
 
 
 @pytest.fixture
@@ -390,7 +390,7 @@ def adherence_setup(home):
 def test_record_adherence_per_status_emits_correct_event(
     home, adherence_setup, status, expected_event,
 ):
-    env = _mcp(home, "decision.record_adherence", {
+    env = _mcp(home, "playbook.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
         "playbook_version_id": adherence_setup["version_id"],
         "rule_node_id": adherence_setup["rule_id"],
@@ -419,7 +419,7 @@ def test_record_adherence_rejects_non_playbook_rule_node(home, adherence_setup):
     """rule_node_id must reference a memory_node with node_type='playbook_rule'."""
 
     non_rule = _seed_reflection(home, idem_suffix="bad-rule")
-    env = _mcp(home, "decision.record_adherence", {
+    env = _mcp(home, "playbook.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
         "playbook_version_id": adherence_setup["version_id"],
         "rule_node_id": non_rule,
@@ -465,14 +465,14 @@ def test_record_adherence_endpoint_errors_are_exact_and_ordered(home, adherence_
             "idempotency_key": f"00000000-0000-4000-8000-pb-adh-ep{i}",
             **override,
         }
-        env = _mcp(home, "decision.record_adherence", args)
+        env = _mcp(home, "playbook.record_adherence", args)
         assert env.ok is False
         assert env.error.code.value == code
         assert env.error.message == message
         assert env.error.details == details
 
     non_rule = _seed_reflection(home, idem_suffix="bad-rule-exact")
-    wrong_type = _mcp(home, "decision.record_adherence", {
+    wrong_type = _mcp(home, "playbook.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
         "playbook_version_id": adherence_setup["version_id"],
         "rule_node_id": non_rule,
@@ -493,7 +493,7 @@ def test_record_adherence_endpoint_errors_are_exact_and_ordered(home, adherence_
 
 
 def test_record_adherence_unknown_status_rejected(home, adherence_setup):
-    env = _mcp(home, "decision.record_adherence", {
+    env = _mcp(home, "playbook.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
         "playbook_version_id": adherence_setup["version_id"],
         "rule_node_id": adherence_setup["rule_id"],
@@ -518,7 +518,7 @@ def test_report_playbook_adherence_aggregates_by_version(home, adherence_setup):
         for status in statuses
     ]
     for i, (status, rule) in enumerate(zip(statuses, rule_ids, strict=True)):
-        env = _mcp(home, "decision.record_adherence", {
+        env = _mcp(home, "playbook.record_adherence", {
             "decision_id": adherence_setup["decision_id"],
             "playbook_version_id": adherence_setup["version_id"],
             "rule_node_id": rule,
@@ -541,7 +541,7 @@ def test_report_playbook_adherence_aggregates_by_version(home, adherence_setup):
 
 
 def test_report_playbook_adherence_low_sample_summary_and_meta_warning(home, adherence_setup):
-    env = _mcp(home, "decision.record_adherence", {
+    env = _mcp(home, "playbook.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
         "playbook_version_id": adherence_setup["version_id"],
         "rule_node_id": adherence_setup["rule_id"],
@@ -567,7 +567,7 @@ def test_report_playbook_adherence_predicate_audit_alignment_and_mismatch(home, 
         "predicate": {"family": "decision_type_in", "values": ["actual_exit"]},
     })
     for i, rule in enumerate((pass_rule, fail_rule)):
-        env = _mcp(home, "decision.record_adherence", {
+        env = _mcp(home, "playbook.record_adherence", {
             "decision_id": adherence_setup["decision_id"],
             "playbook_version_id": adherence_setup["version_id"],
             "rule_node_id": rule,
@@ -593,7 +593,7 @@ def test_report_playbook_adherence_predicate_audit_missing_and_unsupported_metad
         "predicate": {"family": "parse_rule_prose"},
     })
     for i, rule in enumerate((missing_rule, unsupported_rule)):
-        env = _mcp(home, "decision.record_adherence", {
+        env = _mcp(home, "playbook.record_adherence", {
             "decision_id": adherence_setup["decision_id"],
             "playbook_version_id": adherence_setup["version_id"],
             "rule_node_id": rule,
@@ -616,7 +616,7 @@ def test_report_playbook_adherence_predicate_audit_is_read_only(home, adherence_
     rule = _seed_rule_node(home, idem_suffix="pred-readonly", meta_json={
         "predicate": {"family": "field_exists", "field": "reason"},
     })
-    env = _mcp(home, "decision.record_adherence", {
+    env = _mcp(home, "playbook.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
         "playbook_version_id": adherence_setup["version_id"],
         "rule_node_id": rule,
@@ -660,14 +660,14 @@ def test_report_playbook_adherence_filter_by_playbook(home, adherence_setup):
         "idempotency_key": "00000000-0000-4000-8000-pb-rep-v2",
     }).data["id"]
     rule2 = _seed_rule_node(home, idem_suffix="rep2")
-    _mcp(home, "decision.record_adherence", {
+    _mcp(home, "playbook.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
         "playbook_version_id": pv2,
         "rule_node_id": rule2,
         "status": "followed",
         "idempotency_key": "00000000-0000-4000-8000-pb-rep-pa2",
     })
-    _mcp(home, "decision.record_adherence", {
+    _mcp(home, "playbook.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
         "playbook_version_id": adherence_setup["version_id"],
         "rule_node_id": adherence_setup["rule_id"],
@@ -757,7 +757,7 @@ def test_report_playbook_adherence_filter_by_strategy(home):
     # Decision off the strategy.
     d_off = _seed_decision(home, idem_suffix="fstr2")
     for d, key in ((d_strat, "fstrat-on"), (d_off, "fstrat-off")):
-        _mcp(home, "decision.record_adherence", {
+        _mcp(home, "playbook.record_adherence", {
             "decision_id": d, "playbook_version_id": pv,
             "rule_node_id": rule, "status": "followed",
             "idempotency_key": f"00000000-0000-4000-8000-pb-{key}",
@@ -771,7 +771,7 @@ def test_report_playbook_adherence_filter_by_strategy(home):
 
 
 def test_playbook_adherence_wrapper_scopes_to_one_playbook(home, adherence_setup):
-    _mcp(home, "decision.record_adherence", {
+    _mcp(home, "playbook.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
         "playbook_version_id": adherence_setup["version_id"],
         "rule_node_id": adherence_setup["rule_id"],
@@ -801,7 +801,7 @@ def test_decision_with_strategy_and_no_playbook_is_valid(home):
 def test_decision_with_playbook_and_no_strategy_is_valid(home, adherence_setup):
     # adherence_setup created a decision without strategy_id; the
     # record_adherence call binds it to a playbook version.
-    env = _mcp(home, "decision.record_adherence", {
+    env = _mcp(home, "playbook.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
         "playbook_version_id": adherence_setup["version_id"],
         "rule_node_id": adherence_setup["rule_id"],
@@ -819,7 +819,7 @@ def test_overridden_adherence_does_not_block_decision(home, adherence_setup):
     'overridden'. The decision must still read back normally — no
     code path retroactively rejects it."""
 
-    _mcp(home, "decision.record_adherence", {
+    _mcp(home, "playbook.record_adherence", {
         "decision_id": adherence_setup["decision_id"],
         "playbook_version_id": adherence_setup["version_id"],
         "rule_node_id": adherence_setup["rule_id"],
@@ -859,7 +859,7 @@ def test_provenance_chain_traceable(home):
     }).data["id"]
     rule = _seed_rule_node(home, idem_suffix="prov")
     decision = _seed_decision(home, idem_suffix="prov")
-    adh = _mcp(home, "decision.record_adherence", {
+    adh = _mcp(home, "playbook.record_adherence", {
         "decision_id": decision, "playbook_version_id": pv,
         "rule_node_id": rule, "status": "followed",
         "idempotency_key": "00000000-0000-4000-8000-pb-prov-a1",

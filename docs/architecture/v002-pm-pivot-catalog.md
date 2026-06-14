@@ -1,6 +1,6 @@
 # v0.0.2 PM-pivot tool/report catalog reconciliation
 
-> Status: **shipped** as of 2026-05-25; scope reined in + decision-time features added 2026-05-29 (epic trade-trace-4kec). The default public registry now exposes **69** tools, generated from `build_registry().public_names()`. The scope-reignin half froze **40** Product-B tools behind the experimental tier (`public_names(include_experimental=True)`; see §4.6) and removed **3** redundant report tools (KEEP 56 / FREEZE 40 / CUT 3 of the prior 99); the build half then reinvested the freed budget into **13** decision-time D1–D5 tools (§1.3), taking the default catalog to 69. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
+> Status: **shipped** as of 2026-05-25; scope reined in + decision-time features added 2026-05-29 (epic trade-trace-4kec). The default public registry now exposes **70** tools, generated from `build_registry().public_names()`. The scope-reignin half froze **40** Product-B tools behind the experimental tier (`public_names(include_experimental=True)`; see §4.6) and removed **3** redundant report tools (KEEP 56 / FREEZE 40 / CUT 3 of the prior 99); the build half then reinvested the freed budget into **13** decision-time D1–D5 tools (§1.3), taking the default catalog to 69, and `market.search` (read-only live market discovery, bead trade-trace-663l) then took it to 70. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
 
 ## Why this exists
 
@@ -28,9 +28,9 @@ authoritative source the v0.0.2 implementation beads cite.
 
 ## 1. Current runtime baseline (2026-05-25)
 
-Generated from `build_registry().public_names()` for the default public catalog: 69 tools. (The scope-reignin freeze/cut landed the surface at 56; epic trade-trace-4kec then reinvested the budget into 13 decision-time D1–D5 tools — see §1.3.)
+Generated from `build_registry().public_names()` for the default public catalog: 70 tools. (The scope-reignin freeze/cut landed the surface at 56; epic trade-trace-4kec then reinvested the budget into 13 decision-time D1–D5 tools — see §1.3 — for 69; `market.search` then added the read-only live market discovery surface for 70.)
 
-`abstention.get`, `abstention.list`, `abstention.record`, `decision.add`, `export.drain`, `forecast.add`, `forecast.commit_blind`, `forecast.independence`, `forecast.interpret_resolution`, `forecast.resolution_interpretation`, `forecast.reveal_snapshot`, `import.commit`, `journal.backup`, `journal.config_set`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.find_similar`, `market.refresh`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `playbook.record_adherence`, `playbook.upsert`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_advisory`, `report.calibration_integrity`, `report.coach`, `report.compare`, `report.current_exposure`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.mistake_tripwire`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.process_quality`, `report.resolution_misreads`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `snapshot.add`, `snapshot.fetch`, `strategy.upsert`, `tool.schema`.
+`abstention.get`, `abstention.list`, `abstention.record`, `decision.add`, `export.drain`, `forecast.add`, `forecast.commit_blind`, `forecast.independence`, `forecast.interpret_resolution`, `forecast.resolution_interpretation`, `forecast.reveal_snapshot`, `import.commit`, `journal.backup`, `journal.config_set`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.find_similar`, `market.refresh`, `market.search`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `playbook.record_adherence`, `playbook.upsert`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_advisory`, `report.calibration_integrity`, `report.coach`, `report.compare`, `report.current_exposure`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.mistake_tripwire`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.process_quality`, `report.resolution_misreads`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `snapshot.add`, `snapshot.fetch`, `strategy.upsert`, `tool.schema`.
 
 ### Frozen Product-B surface (experimental tier, epic trade-trace-4kec)
 
@@ -40,7 +40,7 @@ behind the experimental tier (`public_names(include_experimental=True)` /
 the reconciliation/execution-truth cluster, and the anchored-calibration unit
 plus speculative viewers:
 
-`account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `approval.get`, `approval.list`, `approval.record`, `approval.report`, `autonomous_incident.record`, `autonomous_incident.report`, `autonomous_run.get`, `autonomous_run.record`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.anchor_to_snapshot`, `journal.restore`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `report.calibration_anchored`, `report.calibration_terminal`, `report.decision_velocity`, `report.execution_quality`, `report.market_lifecycle`, `report.memory_usefulness`, `report.operational_health`, `report.paper_exposure`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.resolution_quality`, `risk.check_record`, `risk.policy_version_add`, `snapshot.fetch_series`.
+`account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `approval.get`, `approval.list`, `approval.record`, `approval.report`, `autonomous_incident.record`, `autonomous_incident.report`, `autonomous_run.get`, `autonomous_run.record`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.anchor_to_snapshot`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `report.calibration_anchored`, `report.calibration_terminal`, `report.decision_velocity`, `report.execution_quality`, `report.market_lifecycle`, `report.memory_usefulness`, `report.operational_health`, `report.paper_exposure`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.resolution_quality`, `risk.check_record`, `risk.policy_version_add`, `snapshot.fetch_series`.
 
 The 3 removed redundant report tools (`report.calibration_trajectory`,
 `report.strategy_performance`, `report.amm_slippage`) are gone from the
@@ -246,11 +246,12 @@ omits them. They count against the v0.0.2 total of 45.
 
 | New tool | Purpose | Default network behavior |
 |---|---|---|
+| `market.search(query?, limit?, closed?)`     | **read-only** live discovery of bindable binary (YES/NO) markets via the Gamma list API; returns `external_id`/`gamma_market_id`, `slug`, `question`, `outcomes`, `close_at`. Closes the discovery gap (bead trade-trace-663l): a bot can find markets to forecast on without a pre-known `external_id`, an already-bound market, or an out-of-band Gamma curl. No DB writes, no advice, no trade execution. | adapter-only; fails closed with `ADAPTER_DISABLED` when disabled |
 | `market.bind(external_id, source)`           | fetch/cache market metadata; idempotent; populates `markets.*_at` state columns | adapter-only; disabled by default |
 | `market.refresh(market_id)`                  | re-fetch state for a bound market | adapter-only; disabled by default |
 | `snapshot.fetch(market_id, at=now)`          | capture live implied probability | adapter-only; falls back to `snapshot.add` (manual) when disabled |
 | `snapshot.fetch_series(market_id, from, to)` | capture trajectory series for `report.time_decay_sharpening` and `report.calibration_anchored` baselines | adapter-only; **no background scheduler** (see §3.3); falls back to manual `snapshot.add` loop when disabled |
-| `outcome.fetch(market_id)`                   | ingest on-chain resolution | adapter-only; **no background scheduler**; manual `resolution.add` is always available |
+| `outcome.fetch(market_id)`                   | ingest on-chain resolution | adapter-only; **no background scheduler**; requires `network.polymarket.polygon_rpc_url` for the on-chain confirmation step (fails closed `CONFIG_REQUIRED` when unset, with a `no_rpc_resolution_evidence_route` / `hint` pointing at the Gamma read path — see §3.6); manual `resolution.add` is always available |
 | `forecast.anchor_to_snapshot(forecast_id, snapshot_id)` | post-hoc anchor for `report.calibration_anchored`; idempotent; corrections via `supersedes_forecast_id` | local-only |
 
 ### 2.7 Report consolidation (28 → 13)
@@ -382,6 +383,57 @@ or interpolate `resolution_rule_text`,
 manual binds honest about provenance and prevents agents from
 inventing market semantics by omission.
 
+### 3.4a Polymarket `resolution_source` mechanism mapping
+
+**Decision (bead trade-trace-v5va, design half of AX-067):** the
+Polymarket adapter maps a bound market to the venue-agnostic
+`resolution_source` taxonomy
+(`market_contract` / `oracle_feed` / `manual_review` / `arbitration`,
+enforced by the `markets` CHECK in migration `m012`) by **mechanism**,
+not by a coarse catch-all default.
+
+**Why this changed.** The faithful Polymarket resolution mechanism is
+the **UMA optimistic oracle**: a proposer asserts the outcome by
+reading the market's stated resolution prose, anyone may dispute, and
+disputes escalate to the UMA DVM token-holder vote. There is no
+purely on-chain, deterministic `market_contract` resolution on
+Polymarket — UMA always sits in the loop. The previous adapter
+default (`out.get("resolution_source") or ("arbitration" if disputed
+else "market_contract")`) therefore stamped the **least faithful**
+value on every non-disputed market. Because `report.resolution_misreads`
+scores an agent's `interpreted_resolution_source` against
+`markets.resolution_source`, the report could **never** record
+`aligned` for a defensible `oracle_feed` reading of a UMA-over-Binance
+crypto strike on the live venue, and hard-classified it
+`contract_misread` against a constant default — making the diagnostic
+unreliable exactly where it is used.
+
+**The mapping** (`adapter_polymarket._resolution_source`):
+
+- **Venue-supplied enum value wins.** If
+  `outcome.resolution_source` is already one of the four enum values
+  (the path synthetic fixtures and any future faithful Gamma field
+  take), it is honored verbatim.
+- **`arbitration`** — the market is disputed (the UMA assertion was
+  challenged and escalated to the DVM vote).
+- **`manual_review`** — ambiguous / unresolvable-by-rule outcomes
+  (state `ambiguous`, `raw.ambiguous`, or `outcome.status ==
+  "ambiguous"`).
+- **`oracle_feed`** — every other (non-disputed, non-ambiguous)
+  Polymarket market. This is the faithful default: the UMA optimistic
+  oracle is the resolver.
+
+**Consequence.** An agent that reads an undisputed Polymarket market
+as `oracle_feed` now scores `aligned`. The provenance/caveat surfacing
+shipped in commit 81345c8 (`actual_source_provenance=bound_via`,
+`contract_misread_adapter_bound_count`, the adapter caveat) stays in
+place; it now fires only when an agent's reading genuinely disagrees
+with the faithfully-mapped mechanism (e.g. reading a disputed
+`arbitration` market as `oracle_feed`), where it correctly remains a
+lower-confidence misread. `market_contract` is retained in the enum
+(other venues / explicit venue values may use it) but is no longer the
+Polymarket catch-all.
+
 ### 3.5 Legacy 0.0.1rc3 import behavior
 
 **Decision:** `import.commit` against a 0.0.1rc3-shaped JSONL bundle
@@ -393,6 +445,47 @@ ever shipped — lives outside the v0.0.2 surface and is approved as
 its own bead. Users with 0.0.1rc3 bundles re-import from their
 upstream source (the producing agent's logs / broker exports), which
 they generally still have because there is no 0.0.1 stable cut.
+
+### 3.6 No-RPC resolution-evidence route (`outcome.fetch` vs Gamma read path)
+
+**Decision (bead trade-trace-isqo):** `outcome.fetch` ingests
+*on-chain* resolution and therefore requires
+`network.polymarket.polygon_rpc_url`; with that key unset it fails
+closed with `CONFIG_REQUIRED`
+(`details.config_key = "network.polymarket.polygon_rpc_url"`). We do
+**not** auto-fall back to the Gamma-reported outcome, because doing so
+would silently substitute a venue read for on-chain confirmation and
+weaken the finality guarantee of an `outcome`/`resolution` row — a
+resolution-contract change that is out of scope for a no-RPC
+deployment to make implicitly.
+
+Instead, the no-RPC deployment (Gamma enabled, `polygon_rpc_url`
+unset) has a **signposted** alternative: the Gamma read path
+(`snapshot.fetch` / `market.refresh`) needs no RPC endpoint and
+already surfaces Gamma's resolution-evidence fields
+(`winningOutcome` / `outcomePrices`, normalized into
+`markets.venue_metadata_json`). A caller reads that evidence and
+records the resolution with `resolution.add`, which is always
+available regardless of adapter config.
+
+To stop an automated resolution feeder from dead-ending here (which
+would leave forecasts perpetually pending and never reach the
+calibration `N>=20` floor), two non-contract-changing signposts were
+added:
+
+- `outcome.fetch`'s `CONFIG_REQUIRED` error now carries
+  `details.no_rpc_resolution_evidence_route = "snapshot.fetch"` and a
+  human-readable `details.hint` naming the Gamma read path +
+  `resolution.add`.
+- The `resolve_due_forecast` work-queue obligation
+  (`report.work_queue` / `report.bootstrap`) lists
+  `fetch_gamma_resolution_evidence_via_snapshot_fetch_when_no_polygon_rpc`
+  in its `allowed_actions`, so the no-RPC route is discoverable from
+  the obligation itself, not only from the failed call.
+
+The forbidden-action and read-only boundary of `report.work_queue`
+is unchanged: this is a pointer to an existing adapter read tool, not
+a new fetch/scheduler/broker capability.
 
 ---
 
@@ -472,7 +565,7 @@ update those pins and docs together.
 PYTHONPATH=src python -c \
   "from trade_trace.core import default_registry; \
    print(len(default_registry().public_names()))"
-# Expected: 69
+# Expected: 70
 
 # 1b. Frozen experimental Product-B surface (epic trade-trace-4kec)
 PYTHONPATH=src python -c \

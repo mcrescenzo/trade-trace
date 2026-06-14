@@ -202,9 +202,9 @@ def report_execution_quality(args: dict[str, Any]) -> dict[str, Any]:
                         counts["improved"] += 1
                 else:
                     _caveat(codes, "SLIPPAGE_UNAVAILABLE")
-                if side == "buy" and fill_price is not None and _num(snapshot.get("ask")) is not None and fill_price >= float(snapshot["ask"]):
+                if side == "buy" and fill_price is not None and _num(snapshot.get("ask")) is not None and fill_price > float(snapshot["ask"]):
                     _caveat(codes, "SPREAD_CROSSED")
-                if side == "sell" and fill_price is not None and _num(snapshot.get("bid")) is not None and fill_price <= float(snapshot["bid"]):
+                if side == "sell" and fill_price is not None and _num(snapshot.get("bid")) is not None and fill_price < float(snapshot["bid"]):
                     _caveat(codes, "SPREAD_CROSSED")
             if len(records) < min_sample:
                 _caveat(codes, "SPARSE_SAMPLE")

@@ -34,7 +34,7 @@ For decision cases the current internal precedence is:
 9. terminal close for unmarked `skip`, `resolved`, or `invalidate_thesis`;
 10. otherwise open.
 
-Forecast cases use supersession/scoring/outcome/due/open precedence. These are derived interpretations, not persisted lifecycle facts.
+Forecast cases use supersession/scoring/outcome/due/open precedence. An open forecast whose `resolution_at` is null is treated as `pending_review` (reason code `resolution_at_missing`) rather than silently `open`: it can never become due by clock, so without this it would never surface in `report.work_queue` as a resolve obligation (trade-trace-ptyi). These are derived interpretations, not persisted lifecycle facts.
 
 ## Public usage
 

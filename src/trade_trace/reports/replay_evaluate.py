@@ -202,7 +202,15 @@ def evaluate_output(args: dict[str, Any]) -> dict[str, Any]:
     results.append(_result("bundle_contract", "pass" if valid_bundle else "fail", "blocking", bundle_msg, source_refs=list(bundle.get("case_index") or []), caveat_codes=bundle_contract_caveats))
 
     required = candidate_task.get("candidate_metadata_required") or []
+    # Accept `candidate_metadata` as an alias for `metadata`: the bundle field is
+    # named `candidate_metadata_required`, there is no published
+    # replay.candidate_output.v0 schema to consult, and this module is already
+    # alias-tolerant for case ids / citations, so a caller reasonably reaches for
+    # `candidate_metadata`. Without this, a fully-supplied-but-misplaced metadata
+    # block reports every field "missing", indistinguishable from absent. AX-053.
     raw_metadata = candidate.get("metadata")
+    if not isinstance(raw_metadata, dict):
+        raw_metadata = candidate.get("candidate_metadata")
     metadata: dict[str, Any] = raw_metadata if isinstance(raw_metadata, dict) else {}
     missing = [field for field in required if not _non_empty(metadata.get(field))]
     results.append(_result("candidate_metadata", "pass" if not missing else "fail", "blocking", "All required candidate metadata fields are present." if not missing else "Missing required candidate metadata fields: " + ", ".join(missing), caveat_codes=["missing_candidate_metadata"] if missing else []))

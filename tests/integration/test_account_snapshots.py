@@ -211,3 +211,63 @@ def test_account_snapshot_rejects_impossible_account_state_before_persistence(tm
     finally:
         conn.close()
     assert rows == 0
+
+
+def test_account_snapshot_is_imported_evidence_with_provenance_never_tt_fetched(tmp_path):
+    # Substrate spec §2.2 / §5.2: imported account truth (balances, positions,
+    # open orders) is labelled as sanitized imported EVIDENCE with provenance and
+    # source-precedence/confidence/staleness semantics — never a fact Trade Trace
+    # fetched. Pin the labelling contract so an importer that started to look like
+    # a TT-native fetch (or dropped the provenance) is caught.
+    home = tmp_path / "home"
+    _init(home)
+    env = _call("account_snapshot.import", _snapshot_args(home, semantic_key="provenance-snapshot"))
+    assert env.ok, env
+    data = env.data
+    assert data["record_kind"] == "sanitized_imported_account_snapshot"
+    assert data["local_evidence_only"] is True
+    assert data["non_executing"] is True
+    assert data["credential_blind"] is True
+    # Provenance + precedence/confidence/staleness travel with the imported truth.
+    assert data["provenance"]["importer"] == "unit-test"
+    assert data["source_precedence"] == 10
+    assert data["confidence_label"] == "high"
+    assert data["staleness_status"] == "fresh"
+    # The balances/positions/open-orders families round-trip as imported claims.
+    assert data["balances"] == [{"asset": "USD", "total": "100", "available": "75"}]
+    assert data["positions"] == [{"instrument_ref": "instrument-redacted-1", "quantity": "15"}]
+    assert data["open_orders"] == [{"ref": "order-redacted-1", "quantity": "10"}]
+
+
+def test_account_snapshot_cluster_is_not_frozen(tmp_path):
+    """Freeze-state regression (bead trade-trace-qfn8).
+
+    account_snapshot.import/get/list/report were unfrozen into the public Phase-2
+    catalog. Pin that non-experimental state so a future accidental re-freeze
+    (re-adding any of these names to EXPERIMENTAL_RECONCILIATION) is caught here,
+    mirroring test_external_receipt_cluster_is_not_frozen.
+    """
+
+    del tmp_path  # registry-shape assertion; no DB needed
+    from trade_trace.core import (
+        EXPERIMENTAL_FROZEN_TOOLS,
+        EXPERIMENTAL_RECONCILIATION,
+        build_registry,
+    )
+
+    reg = build_registry()
+    public = set(reg.public_names())
+    for name in ("account_snapshot.import", "account_snapshot.get", "account_snapshot.list", "account_snapshot.report"):
+        entry = reg.get(name)
+        assert entry is not None, f"{name} should be registered"
+        assert entry.metadata()["catalog_visibility"] == "public", (
+            f"{name} regressed off the public catalog; the account-snapshot import "
+            "cluster was unfrozen in trade-trace-qfn8"
+        )
+        assert name in public, f"{name} must appear in the default public catalog"
+        assert name not in EXPERIMENTAL_RECONCILIATION, (
+            f"{name} was re-added to EXPERIMENTAL_RECONCILIATION"
+        )
+        assert name not in EXPERIMENTAL_FROZEN_TOOLS, (
+            f"{name} re-entered the frozen-tools union"
+        )

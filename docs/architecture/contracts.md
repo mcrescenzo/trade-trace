@@ -9,7 +9,7 @@ deterministic-replay meta fields, CLI/MCP parity tests. The only
 known additive extension is `meta.preview_only` (bead trade-trace-2z7)
 and `meta.dry_run` (bead 268), both backward-compatible.
 
-Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [product-scope-v002.md](product-scope-v002.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [memory-layer.md](memory-layer.md),
 [current-exposure-agent-contract.md](current-exposure-agent-contract.md),
@@ -73,7 +73,7 @@ Examples:
 | `journal.init` | `trade-trace journal init` |
 | `market.bind` | `trade-trace market bind` |
 
-The current default public registry exposes 65 tools. Renamed tools expose compatibility metadata such as `legacy_name` (for example `resolution.add` has legacy `outcome.add`; `playbook.record_adherence` has legacy `decision.record_adherence`; `playbook.upsert`/`strategy.upsert` replace `playbook.create`/`strategy.create`). `tool.schema`/MCP metadata is the authoritative way for legacy callers to discover these hints and removed-tool guidance. For the public forecast/decision setup path, clients should call `market.bind` first and use its returned `instrument_id` for `snapshot.add`/`decision.add`; `forecast.add` can create the folded thesis prerequisite when supplied that `market_id` or `instrument_id` plus `rationale_body`.
+The default public registry exposes the consolidated v0.0.2 catalog. Renamed tools expose compatibility metadata such as `legacy_name` (for example `resolution.add` has legacy `outcome.add`; `playbook.record_adherence` has legacy `decision.record_adherence`; `playbook.upsert`/`strategy.upsert` replace `playbook.create`/`strategy.create`). `playbook.propose_version` stays catalog-visible — it is the only tool that mints a `playbook_version_id`, and `playbook.record_adherence` (which feeds `report.playbook_adherence`) hard-requires one, so folding the producer would leave the adherence report structurally unreachable from the MCP catalog (trade-trace-47tp). `tool.schema`/MCP metadata is the authoritative way for legacy callers to discover these hints and removed-tool guidance. For the public forecast/decision setup path, clients should call `market.bind` first and use its returned `instrument_id` for `snapshot.add`/`decision.add`; `forecast.add` can create the folded thesis prerequisite when supplied that `market_id` or `instrument_id` plus `rationale_body`.
 
 The mapping is mechanical and irreversible-with-collisions: two MCP
 tool names cannot map to the same CLI invocation.
@@ -169,6 +169,52 @@ Sometimes-present fields:
   normally and returns the would-be IDs / payload, but the wrapping
   transaction rolls back; no events are appended and no projections are
   updated. Per bead trade-trace-268.
+
+### 3.3 Considered-and-passed survivorship surfaces (trade-trace-s7nn)
+
+The calibration integrity control `abstention_coverage`
+(`report.calibration_integrity.diagnostics.abstention_coverage`, also
+embedded in `report.calibration.data.integrity_diagnostics` and
+`report.coach.integrity_diagnostics`) exists to make the calibration
+denominator honest about survivorship bias: it surfaces the markets the
+agent *considered and passed on*, which never enter the Brier/log-score
+numbers.
+
+There are **two** documented ways an agent records "I considered this
+market and passed", and the control counts **both**:
+
+1. **`abstention.record`** → a first-class `abstentions` row. This is the
+   primary survivorship surface. Reported under `count` /
+   `abstention_share_pct` (unchanged shape for existing consumers;
+   `abstention_share_pct = abstentions / (forecasts + abstentions)`).
+2. **`decision.add(type='skip')` with no linked forecast** → the
+   material-non-action path advertised by the decision matrix
+   (`x-material-non-action-taxonomy`). A skip that carries
+   `forecast_id IS NULL` is a considered-and-passed-without-forecasting
+   event that never enters calibration. Reported under the
+   `skip_coverage` sub-block (`{count, sample_ids.decisions, truncated}`).
+
+A skip that **does** link a forecast is intentionally *not* re-counted as
+a pass here: the forecast already carries it into the calibration
+denominator and into `forecast_coverage`. Such skips remain visible via
+`report.forecast_diagnostics.decision_coverage` (which also carries a
+`skip_survivorship_surface` signpost back to `abstention_coverage`).
+
+**No double-counting.** A single market may carry both a skip *and* an
+`abstention.record`. The two lines above stay distinct, and the
+de-duplicated union is reported separately:
+
+- `considered_passes_dedup` — abstentions plus forecast-less-skip
+  *instruments* that are not already represented by an abstention (each
+  passed market counted once).
+- `considered_total_dedup` — `total_forecasts + considered_passes_dedup`.
+- `considered_share_pct` — `considered_passes_dedup /
+  considered_total_dedup`, the honest pass-surface share.
+
+`report.coach` renders the de-duplicated union in its callout, breaking
+out the abstention vs forecast-less-skip contributions, so a bot that
+diligently records skips is never shown 0% coverage when it has in fact
+documented its passes.
 
 ## 4. Error Envelope
 

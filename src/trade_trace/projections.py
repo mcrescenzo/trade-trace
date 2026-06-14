@@ -127,13 +127,20 @@ def rebuild_positions(conn: sqlite3.Connection) -> RebuildResult:
     ).fetchall()
 
     by_position: dict[str, list[PositionEventRow]] = {}
+    all_events: list[PositionEventRow] = []
     for row in groups:
         event = PositionEventRow(*row)
         by_position.setdefault(event.position_id, []).append(event)
+        all_events.append(event)
+
+    # Batch-fetch every referenced decision's (type, side) in ONE query
+    # (trade-trace-6046) instead of one SELECT per position group inside
+    # the loop below.
+    decisions = _fetch_decision_kinds_and_sides(conn, all_events)
 
     rebuilt = 0
     for position_id, events in by_position.items():
-        projection = _accumulate_position(conn, position_id, events)
+        projection = _accumulate_position(conn, position_id, events, decisions)
         if projection is None:
             continue
         conn.execute(
@@ -174,10 +181,44 @@ _ACTUAL_DECISION_TYPES = frozenset(
 )
 
 
-def _derive_kind_and_side(
+def _fetch_decision_kinds_and_sides(
     conn: sqlite3.Connection, events: list[PositionEventRow]
+) -> dict[str, tuple[str | None, str | None]]:
+    """Batch-fetch the `(type, side)` for every distinct `decision_id`
+    referenced by `events` in a single `SELECT ... WHERE id IN (...)`.
+
+    Resolves the N+1 (trade-trace-6046): `_derive_kind_and_side` previously
+    issued one `SELECT type, side FROM decisions WHERE id = ?` per position
+    group. This collects the unique decision ids across ALL already-fetched
+    `position_events` and runs one query, returning a `dict[id, (type, side)]`
+    that `_derive_kind_and_side` consults in memory. Decision ids with no
+    matching row are simply absent from the map (the caller falls through to
+    the next event / the defaults), matching the prior per-row
+    `fetchone() is None` skip."""
+
+    decision_ids = sorted(
+        {row.decision_id for row in events if row.decision_id is not None}
+    )
+    if not decision_ids:
+        return {}
+
+    placeholders = ",".join("?" for _ in decision_ids)
+    rows = conn.execute(
+        f"SELECT id, type, side FROM decisions WHERE id IN ({placeholders})",
+        decision_ids,
+    ).fetchall()
+    return {row[0]: (row[1], row[2]) for row in rows}
+
+
+def _derive_kind_and_side(
+    events: list[PositionEventRow],
+    decisions: dict[str, tuple[str | None, str | None]],
 ) -> tuple[str, str]:
     """Pull kind/side from the opening event's decision when present.
+
+    `decisions` is the pre-fetched `dict[decision_id, (type, side)]` built
+    once per rebuild by `_fetch_decision_kinds_and_sides` (trade-trace-6046),
+    so this function does no per-position SQL.
 
     Defaults to `simulation` / `long` so a direct position_events fixture
     that doesn't reference a decision still produces a deterministic
@@ -189,9 +230,7 @@ def _derive_kind_and_side(
         decision_id = row.decision_id
         if decision_id is None:
             continue
-        decision = conn.execute(
-            "SELECT type, side FROM decisions WHERE id = ?", (decision_id,)
-        ).fetchone()
+        decision = decisions.get(decision_id)
         if decision is None:
             continue
         dtype, dside = decision
@@ -209,6 +248,7 @@ def _accumulate_position(
     conn: sqlite3.Connection,
     position_id: str,
     events: list[PositionEventRow],
+    decisions: dict[str, tuple[str | None, str | None]],
 ) -> dict[str, Any] | None:
     """Walk one position_id's event sequence and return the projection
     row. Returns None when the sequence is empty (defensive — the SQL
@@ -310,13 +350,13 @@ def _accumulate_position(
 
     status = "closed" if _approx_zero(qty) else "open"
 
+    kind, side = _derive_kind_and_side(events, decisions)
+
     unrealized_pnl: float | None = None
     if status == "open" and avg_entry_price is not None:
         snap_price = _latest_snapshot_price(conn, instrument_id)
         if snap_price is not None:
-            unrealized_pnl = (snap_price - avg_entry_price) * qty
-
-    kind, side = _derive_kind_and_side(conn, events)
+            unrealized_pnl = _unrealized_pnl(side, snap_price, avg_entry_price, qty)
 
     return {
         "id": position_id,
@@ -338,6 +378,123 @@ def _accumulate_position(
 
 def _approx_zero(value: float) -> bool:
     return abs(value) < 1e-9
+
+
+# Prediction-market sides whose `decision.add price` is the side-NATIVE
+# contract price (the price actually paid for the NO contract), not the
+# YES-contract price. Snapshots store the YES-contract price, so the mark
+# for these sides must be complemented (1 - yes_price) before it is
+# compared against the side-native entry price. See the canonical price
+# convention documented on `decision.add` via
+# `decision_matrix.PRICE_CONVENTION` (trade-trace-ctvb).
+_COMPLEMENT_SIDES = frozenset({"no"})
+
+
+def _unrealized_pnl(
+    side: str | None,
+    snap_price: float,
+    avg_entry_price: float,
+    qty: float,
+) -> float:
+    """Compute side-aware unrealized P&L for an open position.
+
+    Canonical price convention (trade-trace-ctvb): `decision.add price` is
+    the SIDE-NATIVE price the bot paid for the contract — for a `no`
+    prediction-market side that is the NO-contract price (1 - yes_price),
+    not the YES-contract price. Snapshots (`snapshots.price`) always store
+    the YES-contract price (the YES implied probability / mid). So:
+
+    * Long / yes (qty > 0): mark and entry are both YES-contract prices
+      already, so ``(yes_mark - entry) * qty``.
+    * No prediction-market side (qty < 0, side == 'no'): the entry is a
+      NO-contract price; convert the YES mark to NO terms
+      (``1 - yes_mark``) and price the NO contracts the bot holds:
+      ``((1 - yes_mark) - entry) * |qty|``.
+    * Generic short (qty < 0, side == 'short'): there is no
+      complement — the short was opened and is marked against the SAME
+      instrument price, so the signed convention ``(mark - entry) * qty``
+      already yields a profit when the mark falls below entry.
+
+    Without this conversion a flat `no` position entered at the NO price
+    while the YES mark is unchanged reported a phantom P&L of
+    ``(yes_mark - no_entry) * (-qty)`` (e.g. (0.125 - 0.875) * (-100) =
+    +75.5) instead of ~0.
+
+    `side` is matched case-insensitively as defense-in-depth. The real
+    guarantee is upstream: ``decisions.side`` carries a CHECK constraint
+    admitting only the lowercase enum (m003_m1_ledger.py), so a ``'No'`` /
+    ``'NO'`` side is rejected at write time and never reaches this pure
+    function. The ``.lower()`` here keeps the math correct even if a future
+    caller marks a position from a path that does not go through that
+    constraint.
+    """
+
+    if side is not None and side.strip().lower() in _COMPLEMENT_SIDES:
+        side_native_mark = 1.0 - snap_price
+        return (side_native_mark - avg_entry_price) * abs(qty)
+    return (snap_price - avg_entry_price) * qty
+
+
+def remark_open_positions(
+    conn: sqlite3.Connection,
+) -> dict[str, float]:
+    """Return the live read-layer re-mark of `unrealized_pnl` for every open
+    position, keyed by position_id (trade-trace-pr2j).
+
+    The `positions` projection only computes `unrealized_pnl` at rebuild time
+    (`rebuild_positions` -> `_unrealized_pnl`, against whatever snapshot was
+    latest then). A snapshot that lands AFTER the last rebuild therefore never
+    refreshes the stored column, so a position can keep `unrealized_pnl=NULL`
+    (opened before its first snapshot) or hold a value marked against an older
+    snapshot even though a fresher mark exists.
+
+    `report.open_positions` / `report.current_exposure` already reconcile this
+    in their shared row builder (`_position_row_payload`) by recomputing from
+    the latest mark. The other PnL-reading surfaces (`report.pnl`,
+    `report.compare`, `review.bundle`) read `positions.unrealized_pnl`
+    directly and so disagreed with the exposure surfaces. This function is the
+    SINGLE shared read-layer re-mark those surfaces apply so every PnL surface
+    reports the same number for the same open position.
+
+    The re-mark uses the canonical side-aware convention (`_unrealized_pnl`,
+    trade-trace-ctvb): the latest snapshot's YES-contract price is converted to
+    the position's side-native terms before being differenced against the
+    side-native `avg_entry_price`. Only open positions with a non-null
+    `avg_entry_price`, a non-zero signed `net_quantity` derived from
+    `position_events`, and at least one usable snapshot price for the
+    instrument are re-marked; positions with no mark are simply absent from the
+    returned map (the caller keeps treating them as unmarked).
+    """
+
+    rows = conn.execute(
+        """
+        WITH event_aggs AS (
+            SELECT position_id, COALESCE(SUM(quantity_delta), 0) AS net_quantity
+            FROM position_events
+            GROUP BY position_id
+        )
+        SELECT p.id, p.instrument_id, p.side, p.avg_entry_price,
+               COALESCE(ea.net_quantity, 0)
+        FROM positions p
+        LEFT JOIN event_aggs ea ON ea.position_id = p.id
+        WHERE p.status = 'open' AND p.avg_entry_price IS NOT NULL
+        """
+    ).fetchall()
+
+    marks: dict[str, float | None] = {}
+    remarked: dict[str, float] = {}
+    for position_id, instrument_id, side, avg_entry_price, net_quantity in rows:
+        if net_quantity is None or _approx_zero(float(net_quantity)):
+            continue
+        if instrument_id not in marks:
+            marks[instrument_id] = _latest_snapshot_price(conn, instrument_id)
+        snap_price = marks[instrument_id]
+        if snap_price is None:
+            continue
+        remarked[position_id] = _unrealized_pnl(
+            side, snap_price, float(avg_entry_price), float(net_quantity)
+        )
+    return remarked
 
 
 def _latest_snapshot_price(conn: sqlite3.Connection, instrument_id: str) -> float | None:

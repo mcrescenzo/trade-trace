@@ -1,10 +1,21 @@
-"""M1 ledger model stubs.
+"""M1 ledger models (trade-trace-w251).
 
-These models capture the M1 schema surface from PRD §3.1 enough for the M0
-import contract; constraint enforcement (required-field matrix, idempotency,
-bi-temporal validity) lands with M1 implementation beads. Free-text fields are
-deliberately not capped here — operability.md §8 blob caps are enforced at the
-write-tool boundary, not at model load.
+These models capture the M1 schema surface from PRD §3.1. The M0 stubs used
+``extra='allow'`` purely for import-path stabilization; the M1 constraint pass
+tightens them:
+
+- ``extra='forbid'`` rejects unknown top-level fields (required-field-matrix
+  enforcement: only declared columns are accepted, and required columns with no
+  default are enforced by Pydantic). Arbitrary structured payloads still live in
+  the explicit ``metadata_json`` / ``liquidity_depth_json`` dict fields.
+- Bi-temporal validity: where both are present, ``valid_to`` MUST NOT precede
+  ``valid_from`` — the ``[valid_from, valid_to)`` interval per PRD §563 and
+  operability.md §2.
+- Enum exhaustion: ``DecisionType`` / ``OutcomeStatus`` are ``StrEnum`` fields,
+  so Pydantic rejects any value outside the closed set at validation time.
+
+Free-text fields are deliberately not length-capped here — operability.md §8
+blob caps are enforced at the write-tool boundary, not at model load.
 """
 
 from __future__ import annotations
@@ -13,7 +24,22 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+def _check_bitemporal(valid_from: datetime | None, valid_to: datetime | None) -> None:
+    """Raise ``ValueError`` if a closed bi-temporal interval is inverted.
+
+    ``valid_to`` is the half-open upper bound of ``[valid_from, valid_to)``; an
+    equal pair is permitted (an empty/instantaneous interval) but a ``valid_to``
+    strictly before ``valid_from`` is never valid.
+    """
+
+    if valid_from is not None and valid_to is not None and valid_to < valid_from:
+        raise ValueError(
+            f"bi-temporal validity violated: valid_to ({valid_to.isoformat()}) "
+            f"precedes valid_from ({valid_from.isoformat()})"
+        )
 
 
 class DecisionType(StrEnum):
@@ -48,7 +74,7 @@ class OutcomeStatus(StrEnum):
 class _Row(BaseModel):
     """Common metadata across ledger rows. See PRD §2 common metadata block."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     id: str | None = None
     created_at: datetime | None = None
@@ -94,6 +120,11 @@ class Thesis(_Row):
     invalidated_at: datetime | None = None
     invalidated_by: str | None = None
 
+    @model_validator(mode="after")
+    def _validate_bitemporal(self) -> Thesis:
+        _check_bitemporal(self.valid_from, self.valid_to)
+        return self
+
 
 class ForecastOutcome(BaseModel):
     """A single row of the `forecast_outcomes` table.
@@ -102,7 +133,7 @@ class ForecastOutcome(BaseModel):
     labels whose probabilities sum to 1.0 within 1e-6 (PRD §3.1, scoring.md §2).
     """
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     outcome_label: str
     probability: float
@@ -123,6 +154,11 @@ class Forecast(_Row):
     valid_to: datetime | None = None
     invalidated_at: datetime | None = None
     invalidated_by: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_bitemporal(self) -> Forecast:
+        _check_bitemporal(self.valid_from, self.valid_to)
+        return self
 
 
 class Decision(_Row):

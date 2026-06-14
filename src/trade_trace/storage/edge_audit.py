@@ -27,12 +27,14 @@ EDGE_ENDPOINT_TABLES: Final[dict[str, str]] = {
     "memory_node": "memory_nodes",
     "signal": "signals",
     "strategy": "strategies",
+    "playbook_version": "playbook_versions",
 }
 """Endpoint kinds with concrete backing tables in the current schema.
 
-`review` and `playbook_version` remain enum-valid but are intentionally absent:
-they do not have backing tables in this schema, so an audit cannot prove their
-row existence without creating false positives.
+`review` remains enum-valid but is intentionally absent: it has no backing
+table in this schema, so an audit cannot prove its row existence without
+creating false positives. (`playbook_version` DOES have a backing table —
+`playbook_versions`, created by m008 — so it is audited here.)
 """
 
 

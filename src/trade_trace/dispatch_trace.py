@@ -32,6 +32,18 @@ _DEFAULT_MAX_FILES = 5
 
 
 def is_enabled() -> bool:
+    # DEFERRED (trade-trace-ukwy item 2): memoizing this env read at import /
+    # first-call to skip the per-dispatch os.environ lookup is NOT
+    # behavior-safe in this codebase. ~12 test modules toggle
+    # TRADE_TRACE_DISPATCH_TRACE mid-process via monkeypatch.setenv and rely
+    # on is_enabled() reflecting it live, and shared fixtures (e.g.
+    # initialized_home) dispatch — warming any cache to False — BEFORE the
+    # test body sets the env var. A correct memoized design therefore
+    # requires a reset_enabled_cache() call after every setenv across those
+    # out-of-scope test files, which exceeds this bead's single-file scope.
+    # The per-call cost is a single dict lookup + a short str compare, so the
+    # win is negligible relative to that risk. Revisit only if profiling
+    # shows this on a hot path. See bead notes for the full rationale.
     value = os.environ.get(ENABLE_ENV)
     return value is not None and value.strip().lower() not in {"", "0", "false", "no", "off"}
 

@@ -29,6 +29,7 @@ from trade_trace.events.log import IdempotencyConflictError
 from trade_trace.events.semantic_keys import derive_idempotency_key
 from trade_trace.events.unit_of_work import DRY_RUN_FLAG
 from trade_trace.storage.paths import HomePathValidationError
+from trade_trace.tools._helpers import CLOCK_OVERRIDE
 from trade_trace.tools.abstention import register_abstention_tools
 from trade_trace.tools.account_snapshots import register_account_snapshot_tools
 from trade_trace.tools.adapter_polymarket import register_adapter_polymarket_tools
@@ -91,7 +92,15 @@ V002_FOLDED_OR_REMOVED: dict[str, str | None] = {
     "playbook.list": "playbook.upsert",
     "playbook.show": "playbook.upsert",
     "playbook.list_versions": "playbook.upsert",
-    "playbook.propose_version": "playbook.upsert",
+    # playbook.propose_version is NOT folded: it is the ONLY tool that mints a
+    # playbook_version_id, and playbook.record_adherence (catalog-visible)
+    # HARD-REQUIRES one (NOT_FOUND otherwise). Folding it to playbook.upsert
+    # left the report.playbook_adherence POPULATED path structurally
+    # unreachable from the MCP catalog — a consumer (record_adherence) shipped
+    # without its producer, and the redirect pointed at a tool (playbook.upsert
+    # → _playbook_create) that creates only a playbook row, never a version. It
+    # stays catalog-visible so the adherence chain is completable end-to-end
+    # (bead trade-trace-47tp / AX dogfood 2026-06-05-08).
     "import.validate": "import.commit",
     "journal.rescan_scoring": "journal.rebuild_projections",
     "agent.bootstrap": "report.bootstrap",
@@ -109,13 +118,28 @@ V002_FOLDED_OR_REMOVED: dict[str, str | None] = {
     "memory.reindex": None,
     "model.import": None,
     "model.warm": None,
-    "keyring.revoke": None,
 }
 
 V002_ADMIN_TOOLS = {
     "journal.rebuild_projections",
     "journal.repair",
     "signal.scan",
+    # Destructive operator-only tools (bead trade-trace-6rnk). These are
+    # registered is_write=True but defaulted to is_admin=False, so the default
+    # catalog view (public_names(include_admin=False)) surfaced journal.backup
+    # and journal.config_set — both catalog_visibility='public' — to non-admin
+    # agents (e.g. automated trading bots) with no admin-tier signal.
+    # journal.restore is an admin-tier disaster-recovery tool (it was un-frozen
+    # from the experimental Phase-2 shelf in bead trade-trace-26sl); is_admin
+    # keeps include_admin=False callers from ever seeing it regardless of any
+    # future visibility change. model.import and memory.reindex are 'legacy' (hidden by
+    # default) but are added for defense in depth: include_legacy=True must not
+    # re-surface destructive operator tools to non-admin callers.
+    "journal.backup",
+    "journal.restore",
+    "journal.config_set",
+    "model.import",
+    "memory.reindex",
 }
 
 
@@ -131,9 +155,15 @@ def _apply_v002_catalog_overlay(registry: ToolRegistry) -> None:
     register_market_bind_tool(registry)
     register_adapter_polymarket_tools(registry)
     registry.alias("resolution.add", "outcome.add", legacy_name="outcome.add")
+    # playbook.record_adherence is the canonical registered name (playbook.py).
+    # The legacy decision.record_adherence name is retained ONLY as a dispatch
+    # alias so historic JSONL exports / import.commit replay carrying
+    # tool='decision.record_adherence' still resolve to the same handler. The
+    # V002_RENAMED_TO loop below marks it catalog_visibility='legacy' so it
+    # stays hidden from the default v0.0.2 catalog (bead trade-trace-va77).
     registry.alias(
-        "playbook.record_adherence",
         "decision.record_adherence",
+        "playbook.record_adherence",
         legacy_name="decision.record_adherence",
     )
     registry.alias(
@@ -184,15 +214,37 @@ def _apply_v002_catalog_overlay(registry: ToolRegistry) -> None:
 # "contract surface" story can revive them. Each cluster is a separate child
 # bead; the sets are unioned and marked in one pass.
 EXPERIMENTAL_AUTONOMOUS_OPS: frozenset[str] = frozenset({
-    "pretrade_intent.record",
-    "pretrade_intent.get",
-    "pretrade_intent.list",
+    # The pre-trade intent cluster (pretrade_intent.record/get/list) was
+    # UNFROZEN into the public Phase-2 catalog (bead trade-trace-2g47). It is
+    # the write side of VISION Phase 2 "the agent proposes trades": each tool
+    # records/reads an immutable, hashed, non-executing local audit packet and
+    # never places, signs, routes, approves, or cancels an order. The packet's
+    # risk_check_receipt_id links to an immutable risk.check_record receipt, so
+    # an intent that has been run through the deterministic risk evaluator
+    # surfaces an `evaluation` block (status from the linked receipt) on
+    # pretrade_intent.get/list — "intent awaiting check" vs "intent with check"
+    # are derived from append-only rows, not a mutable status column. A
+    # freeze-state regression test pins this non-experimental state so a future
+    # accidental re-freeze is caught
+    # (tests/integration/test_pretrade_intent.py::test_pretrade_intent_cluster_is_not_frozen).
     "approval.record",
     "approval.get",
     "approval.list",
     "approval.report",
-    "risk.check_record",
-    "risk.policy_version_add",
+    # The risk policy/receipt/evaluate cluster was UNFROZEN into the public
+    # Phase-2 catalog (bead trade-trace-ur8w) now that the deterministic
+    # evaluator ships (trade-trace-g629). The three tools form one closed loop:
+    #   risk.policy_version_add  -> stores an immutable versioned policy;
+    #   risk.evaluate            -> deterministic, read-only verdict over a
+    #                               proposed non-executing intent (is_write=False);
+    #   risk.check_record        -> persists that verdict as an immutable receipt,
+    #                               with an optional consistency guard that
+    #                               re-runs evaluate_risk_policy when evaluator
+    #                               inputs are supplied (see _risk_check_record).
+    # None of them block, sign, place, or route an order; the cluster is
+    # audit-only and credential-blind, so it is safe in the public catalog. A
+    # freeze-state regression test pins this so a future re-freeze is caught
+    # (tests/integration/test_report_risk.py::test_risk_cluster_is_not_frozen).
     "autonomous_run.record",
     "autonomous_run.get",
     "autonomous_incident.record",
@@ -200,40 +252,156 @@ EXPERIMENTAL_AUTONOMOUS_OPS: frozenset[str] = frozenset({
 })
 
 EXPERIMENTAL_RECONCILIATION: frozenset[str] = frozenset({
-    "paper_fill.record",
-    "paper_fill.get",
-    "paper_fill.list",
-    "report.paper_exposure",
-    "external_receipt.import",
-    "external_receipt.get",
-    "external_receipt.list",
-    "external_receipt.report",
-    "account_snapshot.import",
-    "account_snapshot.get",
-    "account_snapshot.list",
-    "account_snapshot.report",
-    "reconciliation.record",
-    "reconciliation.get",
-    "report.reconciliation_mismatches",
+    # The paper-fill ledger cluster (paper_fill.record/get/list +
+    # report.paper_exposure) was UNFROZEN into the public Phase-2 catalog (bead
+    # trade-trace-xwox). It is the VISION Phase 2 "paper fills track what would
+    # have happened" surface: paper_fill.record runs a deterministic,
+    # conservative limit/depth fill ENGINE (conservative_fill_model =
+    # limit_depth_v1) over caller-supplied book/snapshot facts — full/partial/
+    # no-fill by limit price, snapshot freshness/staleness rejection, and
+    # slippage-cap rejection — and persists an immutable, append-only,
+    # idempotent local record. It has no venue client, no private-account fetch,
+    # no signing, no order placement, no cancellation, and no fund-movement path;
+    # every record is paper_only / non_executing / not_imported_account_truth.
+    # report.paper_exposure aggregates ONLY filled rows into a paper-only
+    # exposure/P&L basis carrying mark_source + as_of and excluding imported/live
+    # account truth. The cluster is local-evidence-only and credential-blind, so
+    # it is safe in the default public catalog. A freeze-state regression test
+    # pins this so a future re-freeze is caught
+    # (tests/integration/test_paper_fill_records.py::test_paper_fill_cluster_is_not_frozen).
+    #
+    # The reconciliation result cluster (reconciliation.record/get +
+    # report.reconciliation_mismatches) was UNFROZEN into the public Phase-2
+    # catalog (bead trade-trace-opoc). It is the VISION Phase 2 "reconciliation
+    # compares records against imported account truth" surface: reconciliation.record
+    # runs a DETERMINISTIC derivation (_build_derived) that queries positions,
+    # account_snapshots, external_execution_receipts, paper_fill_records,
+    # pretrade_intents, and approval_waiver_records and derives a reproducible set
+    # of stable mismatch codes (MISSING_EXTERNAL_EVENT, ORPHAN_EXTERNAL_*,
+    # DUPLICATE_FILL, REJECTED_APPROVED_INTENT, PARTIAL_FILL_REMAINING_MISMATCH,
+    # POSITION/PRICE/FEE/BALANCE_MISMATCH, STALE_SNAPSHOT, EVENT_EXPOSURE_UNAVAILABLE,
+    # POLICY_WAIVER_BREACH). Caller-supplied codes are NOT unioned into that derived
+    # set; they are recorded on a distinct `manually_flagged` channel so the derived
+    # set stays byte-reproducible (the determinism hole at the old caller-union is
+    # closed). The cluster is local-evidence-only, credential-blind, and
+    # non-executing (no fetch, signing, placement, cancellation, settlement, fund
+    # movement, or remediation), so it is safe in the default public catalog. A
+    # freeze-state regression test pins this so a future re-freeze is caught
+    # (tests/integration/test_reconciliation_records.py::test_reconciliation_cluster_is_not_frozen).
+    #
+    # The external execution-receipt import cluster
+    # (external_receipt.import/get/list/report) was UNFROZEN into the public
+    # Phase-2 catalog (bead trade-trace-g776). It is the import side of the
+    # VISION Phase 2 "reconciliation compares records against imported account
+    # truth" surface: external_receipt.import ingests one sanitized,
+    # caller-supplied execution-event claim (submission/acceptance/rejection,
+    # partial/full fill, cancel, expiry, correction, status) as APPEND-ONLY
+    # LOCAL EVIDENCE only — labelled record_kind=
+    # sanitized_imported_external_execution_receipt with provenance, never a
+    # fact Trade Trace fetched. The module has no venue client, no private-auth
+    # fetch, no signing, no placement, no cancellation, no custody movement, and
+    # no remediation path; every record is non_executing / credential_blind.
+    # Imports are quarantined at the boundary: malformed JSON / non-object
+    # payloads raise malformed_*_quarantined, secret-bearing free text and
+    # credential-shaped metadata are rejected before persistence
+    # (reject_if_contains_secrets / reject_credential_metadata), and
+    # material_hash / semantic_key mismatches are refused, so no
+    # impossible/credential-bearing row lands. These rows are exactly what
+    # reconciliation._build_derived consumes to derive ORPHAN_EXTERNAL_FILL/
+    # ORDER, DUPLICATE_FILL, and REJECTED_APPROVED_INTENT, so freezing the
+    # importer would starve the (already-public) reconciliation cluster. The
+    # cluster is local-evidence-only, credential-blind, and non-executing, so it
+    # is safe in the default public catalog. A freeze-state regression test pins
+    # this so a future re-freeze is caught
+    # (tests/integration/test_external_receipts.py::test_external_receipt_cluster_is_not_frozen).
+    #
+    # The account-snapshot import cluster (account_snapshot.import/get/list/report)
+    # was UNFROZEN into the public Phase-2 catalog (bead trade-trace-qfn8). It is
+    # the account-truth side of the VISION Phase 2 "reconciliation compares records
+    # against imported account truth" surface (substrate spec §2.2 / §5.2):
+    # account_snapshot.import ingests one sanitized, caller-supplied account-state
+    # claim (balances, available/committed collateral, open orders, positions,
+    # fills/trades, unsettled claims, public allowance facts, venue timestamps,
+    # account label, environment) as APPEND-ONLY LOCAL EVIDENCE only — labelled
+    # record_kind=sanitized_imported_account_snapshot with provenance and
+    # source-precedence/confidence/staleness semantics, never a fact Trade Trace
+    # fetched (local_evidence_only / non_executing / credential_blind). The module
+    # has no venue client, no private-auth fetch, no signing, no placement, no
+    # cancellation, no custody movement, and no remediation path. Imports are
+    # quarantined at the boundary: malformed JSON / non-object / non-array payloads
+    # raise malformed_*_quarantined, impossible/conflicting numeric account-state
+    # (negative values, available>total) is refused, secret-bearing free text and
+    # credential-shaped metadata are rejected before persistence, and
+    # material_hash / semantic_key mismatches are refused, so no
+    # impossible/credential-bearing row lands. These rows are exactly what
+    # reconciliation._latest_snapshot reads (source_precedence ASC, as_of DESC,
+    # imported_at DESC, id DESC) and _build_derived consumes to derive
+    # STALE_SNAPSHOT / BALANCE_MISMATCH / POSITION_MISMATCH against local
+    # projections, so freezing the importer would starve the (already-public)
+    # reconciliation cluster. The cluster is local-evidence-only, credential-blind,
+    # and non-executing, so it is safe in the default public catalog. A freeze-state
+    # regression test pins this so a future re-freeze is caught
+    # (tests/integration/test_account_snapshots.py::test_account_snapshot_cluster_is_not_frozen).
     "report.execution_quality",
     "report.operational_health",
 })
 
-# Anchored-calibration unit (standalone anchor writer + its sole readers) plus
-# speculative viewers that re-read already-written rows or expose unpopulated
-# downstream-use signals. If the anchored flow is revived, the anchor write
-# should fold into forecast.add (see trade-trace-4kec.9).
+# Anchored-calibration unit. The standalone anchor WRITER
+# (forecast.anchor_to_snapshot) stays frozen: bead trade-trace-4kec.9
+# (forecast.commit_blind / forecast.reveal_snapshot, in
+# tools/forecast_independence.py) was built as its explicit semantic
+# replacement — that module's docstring states it "supersedes the frozen
+# forecast.anchor_to_snapshot, which linked a snapshot after the fact and
+# proved nothing about blindness." Promoting the after-the-fact anchor writer
+# into the public Phase-1 catalog would re-surface the deprecated anti-pattern
+# the supersession removed. The anchor write it performs is ALREADY folded into
+# forecast.add (see _anchor_forecast_to_snapshot_in_transaction, called inline
+# from _insert_forecast's commit path when a snapshot_id /
+# _anchor_to_latest_snapshot is supplied), so anchor_to_snapshot is retained
+# only as a frozen backfill path, satisfying the 4kec.5 acceptance.
+#
+# Its three READERS, by contrast, are NOT superseded — they are read-only
+# Phase-1 calibration diagnostics that measure forecast skill vs the market
+# baseline (VISION Phase 1 "forecast scoring, calibration reports") over only
+# Phase-1 tables (forecast_snapshot_anchor / forecast_scores / forecasts /
+# outcomes / snapshots), with zero Phase-2 dependency. They were UNFROZEN into
+# the public Phase-1 catalog (bead trade-trace-xtdo):
+#   - report.calibration_anchored / report.calibration_terminal: market-baseline
+#     Brier-skill panels over the inline-captured anchor.
+#   - snapshot.fetch_series: the time-series snapshot fetcher (markets-table
+#     backed) that populates the snapshot history those reports read; its
+#     idempotency_key contract matches snapshot.fetch (both is_write, both
+#     absent from TOOL_PRIMARY_EVENT_TYPE, so both require an explicit caller
+#     key — pinned by test_snapshot_fetch_series_requires_idempotency_key).
 EXPERIMENTAL_ANCHORED_VIEWERS: frozenset[str] = frozenset({
     "forecast.anchor_to_snapshot",
-    "report.calibration_anchored",
-    "report.calibration_terminal",
-    "snapshot.fetch_series",
-    "report.decision_velocity",
-    "report.memory_usefulness",
-    "report.recall_receipts",
-    "report.market_lifecycle",
-    "report.resolution_quality",
-    "journal.restore",
+    # report.decision_velocity, report.memory_usefulness, and
+    # report.recall_receipts were unfrozen into the Phase-1 public catalog
+    # (bead trade-trace-8g7t). All three are fully-implemented, read-only
+    # diagnostics over Phase-1 tables with zero Phase-2 dependency:
+    # recall_receipts reconstructs recall attribution from
+    # memory_recall_events / memory_nodes / edges; memory_usefulness wraps it
+    # with negative controls; decision_velocity counts decisions bucketed by
+    # day/week FROM decisions only. The original freeze rationale claimed
+    # decision_velocity's day/week cadence was redundant with
+    # calibration_integrity, but calibration_integrity emits only static
+    # hygiene rates and process_analytics groups by tag/pair — neither
+    # produces a per-day/week decision-count series, so decision_velocity is
+    # the sole producer and was UNFROZEN rather than cut.
+    # report.market_lifecycle and report.resolution_quality were unfrozen into
+    # the Phase-1 public catalog (bead trade-trace-y0cr). Both read only
+    # Phase-1 tables (markets, snapshots, decisions, forecasts, outcomes,
+    # forecast_scores) and carry no Phase-2 dependency. market_lifecycle is
+    # PM-native situational awareness with no public equivalent;
+    # resolution_quality is the resolution-status quality family (status mix,
+    # ambiguous/void/disputed/cancelled, pre-resolution uncertainty), distinct
+    # from the public report.resolution_misreads (which classifies an agent's
+    # interpreted-vs-actual resolution *source* over resolution_interpretations).
+    # journal.restore was swept into this cluster only because it was "operator
+    # DR, never dogfooded" — it has nothing to do with Phase 2 or the anchored
+    # calibration flow (bead trade-trace-26sl). It is an admin-tier disaster-
+    # recovery tool: gated via V002_ADMIN_TOOLS / is_admin alongside its
+    # journal.backup counterpart, not frozen behind the experimental shelf.
 })
 
 EXPERIMENTAL_FROZEN_TOOLS: frozenset[str] = (
@@ -318,8 +486,6 @@ def new_request_id() -> str:
     table rows. Otherwise uses `uuid4().hex` for production-grade
     unpredictability."""
 
-    from trade_trace.tools._helpers import CLOCK_OVERRIDE
-
     if CLOCK_OVERRIDE.get() is not None:
         _REQUEST_ID_COUNTER[0] += 1
         return f"det-req-{_REQUEST_ID_COUNTER[0]:08d}".ljust(32, "0")[:32]
@@ -332,6 +498,29 @@ def _is_single_writer_lock_error(env: SuccessEnvelope | ErrorEnvelope) -> bool:
     if env.error.code != ErrorCode.STORAGE_ERROR:
         return False
     return env.error.details.get("reason") == "single_writer_lock"
+
+
+def _classify_integrity_error(msg: str) -> ErrorCode:
+    """Map a sqlite3.IntegrityError message to a typed error code.
+
+    Constraint checks match SQLite's full violation phrases ("UNIQUE
+    constraint failed", "FOREIGN KEY constraint failed", "CHECK constraint
+    failed") rather than the bare keyword, so a table/column name that merely
+    contains the word UNIQUE/FOREIGN KEY cannot misclassify an unrelated
+    storage error as a VALIDATION_ERROR (trade-trace-1k5d)."""
+
+    if "append-only invariant" in msg:
+        return ErrorCode.INVARIANT_VIOLATION
+    if "VALIDATION_ERROR:" in msg:
+        # Trigger-raised validation messages from migration 004.
+        return ErrorCode.VALIDATION_ERROR
+    if (
+        "CHECK constraint" in msg
+        or "FOREIGN KEY constraint" in msg
+        or "UNIQUE constraint" in msg
+    ):
+        return ErrorCode.VALIDATION_ERROR
+    return ErrorCode.STORAGE_ERROR
 
 
 def dispatch(
@@ -523,15 +712,7 @@ def dispatch(
             # surface as IntegrityError. Translate them into a typed envelope so
             # callers can branch on a stable code.
             msg = str(exc)
-            if "append-only invariant" in msg:
-                code = ErrorCode.INVARIANT_VIOLATION
-            elif "VALIDATION_ERROR:" in msg:
-                # Trigger-raised validation messages from migration 004.
-                code = ErrorCode.VALIDATION_ERROR
-            elif "CHECK constraint" in msg or "FOREIGN KEY" in msg or "UNIQUE" in msg:
-                code = ErrorCode.VALIDATION_ERROR
-            else:
-                code = ErrorCode.STORAGE_ERROR
+            code = _classify_integrity_error(msg)
             _apply_hints()
             return error_envelope(meta, code, msg, {"sqlite_error": msg})
         except sqlite3.Error as exc:

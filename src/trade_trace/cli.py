@@ -324,8 +324,8 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
         action="store_true",
         help=(
             "required by mutating admin tools (journal.restore, "
-            "journal.backup, journal.repair, journal.config_set, "
-            "keyring.revoke) — without it the tool returns "
+            "journal.backup, journal.repair, journal.config_set) "
+            "— without it the tool returns "
             "meta.preview_only=true (bead trade-trace-2z7)"
         ),
     )
@@ -448,6 +448,9 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
             instance=tool_args,
             schema=schema,
             policy=CLI_NUMERIC_BOUNDS_ONLY,
+            validator=registration.compiled_validator
+            if registration is not None
+            else None,
         )
         if validation_error is not None:
             return _emit_cli_error(

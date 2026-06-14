@@ -76,6 +76,89 @@ BOUNDARY_CAVEATS: Final[list[str]] = [
     "no_scheduler_or_alert_creation",
 ]
 
+# Relative path (from the repo root / docs site root) to the human/agent
+# readable caveat-code glossary. Surfaced inline so a bot reading the
+# packet can resolve any code it does not recognise without out-of-band
+# knowledge (trade-trace-o1wr).
+CAVEAT_GLOSSARY_DOC: Final = "docs/architecture/bootstrap-caveat-glossary.md"
+
+# One-line gloss per caveat code that report.bootstrap can emit anywhere
+# in the packet. Keep this in sync with the glossary doc; the doc test
+# `tests/docs/test_bootstrap_caveat_glossary.py` asserts every code here
+# is documented and vice versa, and the read-model test asserts every
+# code that actually appears in a composed packet has a gloss here.
+#
+# Codes are grouped by origin for readability only; lookup is flat.
+CAVEAT_GLOSSARY: Final[dict[str, str]] = {
+    # Hard boundary caveats (always present): non-negotiable safety limits.
+    "no_market_data_fetch": "This packet did not fetch live market/price data; treat any market context as caller-supplied and possibly stale.",
+    "no_broker_verification": "No broker/exchange was queried; positions and fills reflect the local journal only, not verified account state.",
+    "no_trade_execution": "Nothing here was executed; suggestions are inspection prompts, never orders.",
+    "no_financial_advice": "Summaries are not buy/sell recommendations or profit claims.",
+    "caller_supplied_data_only": "All evidence comes from data the caller previously recorded locally; no external truth was added.",
+    "local_read_only_synthesis": "The packet is a read-only synthesis over local rows; it wrote nothing and ran no recall telemetry.",
+    "no_scheduler_or_alert_creation": "No jobs, reminders, or alerts were created; obligations are derived signals, not scheduled tasks.",
+    # Scope caveats: the caller left a dimension unscoped so the read broadened.
+    "missing_agent_id": "No agent_id was supplied, so the read spans all agents; results may mix unrelated agents.",
+    "missing_run_id": "No run_id was supplied, so the read spans all runs; results may mix unrelated sessions.",
+    "missing_strategy_ids": "No strategy_id was supplied, so the read spans all strategies; results may mix unrelated strategies.",
+    # Evidence caveats.
+    "no_fetch_performed": "No external fetch backed this item; it rests entirely on previously recorded local evidence.",
+    "not_trade_advice": "This item is a process artifact, not trading advice or a signal.",
+    "not_executed": "This suggested call was not run; the caller must choose whether to invoke it.",
+    "requires_caller_supplied_data": "Acting on this suggestion requires the caller to provide external evidence first.",
+    "requires_caller_supplied_evidence": "Acting on this suggestion requires the caller to provide external evidence first.",
+    "count_unavailable": "An exact available/omitted count could not be computed for this section; absence is not proof of emptiness.",
+    # Data-quality caveats from sub-reports (work_queue, strategy_health,
+    # forecast_diagnostics, lifecycle, recall, memory_usefulness).
+    "derived_read_only": "Work-queue obligations are derived read-only signals, not a task manager.",
+    "local_rows_only": "Only local journal rows were considered; nothing external was consulted.",
+    "no_scheduler_daemon_or_reminder": "The work queue is not a scheduler/daemon and created no reminders.",
+    "no_assignment_or_broker_action": "No owner assignment or broker action was taken on these obligations.",
+    "no_external_fetch_or_market_lookup": "No external fetch or market lookup backed these obligations.",
+    "no_trading_advice_or_signal": "Obligations are process prompts, not trading advice or signals.",
+    "low_n_decisions": "Too few decisions to make strategy metrics reliable; treat as directional only.",
+    "low_n": "Sample size is below the diagnostic minimum; metrics are caveated and may be noise.",
+    "caller_supplied_market_reference_only": "Market references come only from caller-supplied snapshots stored locally; no market data was fetched or derived.",
+    "no_external_fetch": "No external fetch backed these diagnostics; they rest on local rows only.",
+    "not_advice_or_profitability_evidence": "These diagnostics are not trading advice and are not evidence of profitability.",
+    "thesis_source_coverage_only_missing_refs": "Source-coverage check only flags theses missing source refs; it does not assess source content.",
+    "source_quality_checks_limited_to_thesis_source_refs": "Source-quality checks look only at thesis source refs, not full provenance.",
+    "policy_candidates_unsupported_local_surface": "Policy-candidate promotion is not a supported local surface; candidates are read-only.",
+    "late_recorded_excluded": "Late-recorded outcomes were excluded from scoring to avoid look-ahead bias.",
+    "baseline_unavailable": "No baseline was available, so calibration is reported without a comparison anchor.",
+    "missing_source_reference": "Some items lack a source reference, weakening their provenance.",
+    "missing_source_ref": "This case has no linked source record; its provenance is incomplete.",
+    "missing_market_reference": "A forecast-decision link lacks a market reference, so market context is incomplete.",
+    "missing_spread": "Spread context is missing for some references; liquidity quality is unknown.",
+    "wide_spread": "A referenced market had a wide spread; fills/marks may be unreliable.",
+    "missing_liquidity_context": "Liquidity context is missing for some references.",
+    # Memory / recall caveats.
+    "memory_body_omitted": "Memory node bodies were omitted to save budget; only summaries/IDs are shown.",
+    "STALE_OR_INVALIDATED_MEMORY": "A recalled memory node is stale or has been invalidated; do not rely on it as current.",
+    "STALE_AS_OF_RECEIPT": "The recall receipt itself is stale relative to as_of; the recall may not reflect current memory.",
+    "CONTRADICTED_DOWNSTREAM": "A later record contradicts this memory; weigh it against the contradiction.",
+    "SUPERSEDED_DOWNSTREAM": "This memory has been superseded by a newer node; prefer the successor.",
+    "HARMFUL_DOWNSTREAM": "Downstream evidence suggests acting on this memory was harmful.",
+    "NO_DOWNSTREAM_USE_EVIDENCE": "There is no evidence this recalled memory was used downstream.",
+    "CONSUMER_INFERENCE_UNSCOPED": "Consumer attribution could not be scoped precisely; usefulness is uncertain.",
+    "RETURNED_NODE_MISSING": "A recall returned a node ID that no longer resolves to a stored node.",
+    "REJECTED_RECEIPT": "This recall receipt was rejected and should not be treated as valid attribution.",
+    "DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM": "Memory-usefulness metrics are diagnostic associations only; they make no causal claim.",
+    "OUTCOME_IMPACT_NOT_INFERRED": "The impact of memory on outcomes was not inferred; correlation is not impact.",
+    "NO_EXPECTED_MEMORY_SIGNAL": "No expected-memory signal could be measured for this control; it is not measurable here, not a finding.",
+    "BAD_OUTCOME_NOT_CANONICALLY_INFERRED": "High-confidence-bad-outcome control is edge-based only; the bad outcome was not canonically inferred.",
+    "HARMFUL_OVERFIT_EDGE_BASED_ONLY": "Harmful-overfit control is edge-based only; treat as a heuristic flag, not a proven failure.",
+    # Section/structural caveats.
+    "section_not_requested": "This section was not requested by the caller, so it is empty by choice, not by absence of data.",
+    "playbook_detail_not_composed": "Playbook detail is not composed into this packet; drill in via dedicated tools.",
+    "section_unavailable": "This section could not be composed (e.g. invalid sub-report inputs); not an assertion of emptiness.",
+    # Truncation caveats.
+    "max_items": "The section hit its max-items budget; some rows were omitted (see omitted_counts).",
+    "max_chars": "The section hit its max-chars budget and was emptied; raise the budget to see it.",
+    "max_total_chars": "The whole packet hit its total-chars budget; some sections were pruned (see omitted_counts).",
+}
+
 
 def compose_bootstrap_packet(
     conn: sqlite3.Connection,
@@ -103,7 +186,11 @@ def compose_bootstrap_packet(
     # connection is already in a transaction here.
     with read_snapshot(conn):
         source_tools: list[str] = []
-        work = report_work_queue(conn, raw_filter=report_filter, as_of=resolved_as_of)
+        # limit=None: the composer derives obligations off the WHOLE queue, so
+        # it must not be paginated here (trade-trace-1y9s); the transport-facing
+        # report.work_queue / agent.next_actions surfaces default to a bounded
+        # page size instead.
+        work = report_work_queue(conn, raw_filter=report_filter, as_of=resolved_as_of, limit=None)
         source_tools.append("report.work_queue")
         lifecycle = report_lifecycle(conn, raw_filter=report_filter, as_of=resolved_as_of)
         source_tools.append("report.lifecycle")
@@ -125,7 +212,8 @@ def compose_bootstrap_packet(
     active_ideas = _active_ideas(lifecycle)
     strategy_context = _strategy_context(strategy)
     memory_context = _memory_context(recall, memory, include_body=effective_budgets["include_memory_body"])
-    suggested = _suggested_calls(obligations)
+    cold_start = _is_cold_start(obligations, lifecycle, strategy_context, memory_context)
+    suggested = _suggested_calls(obligations, cold_start=cold_start)
     caveats = _caveats(broadening, work, strategy, recall, memory, forecast)
 
     sections_data: dict[str, Any] = {
@@ -185,6 +273,10 @@ def compose_bootstrap_packet(
         "suggested_process_calls": sections_data["suggested_process_calls"],
         "hard_constraints": deepcopy(HARD_CONSTRAINTS),
     }
+    # The total-budget enforcer attaches/refreshes the inline caveat gloss
+    # on every measurement, so the glossary's bytes are counted against
+    # max_chars_total and it always reflects exactly the codes that survive
+    # pruning (trade-trace-o1wr).
     _enforce_total_budget(packet, effective_budgets["max_chars_total"])
     packet["metadata"]["packet_id"] = _packet_id(packet)
     packet["truncation"]["total_chars_returned"] = _serialized_len(packet)
@@ -350,7 +442,38 @@ def _memory_context(recall: dict[str, Any], memory: dict[str, Any], *, include_b
     return {"included": True, "recall_queries": [{"source": "report.recall_receipts", "telemetry_persisted": False}], "memory_nodes": nodes, "recall_receipts": recall.get("recall_receipts", []), "memory_diagnostics": memory.get("memory_diagnostics", []), "omitted_memory": {}, "memory_caveats": sorted(set(recall.get("summary", {}).get("caveat_codes", []) + memory.get("summary", {}).get("caveat_codes", []) + (["memory_body_omitted"] if not include_body else [])))}
 
 
-def _suggested_calls(obligations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _is_cold_start(
+    obligations: list[dict[str, Any]],
+    lifecycle: dict[str, Any],
+    strategy_context: dict[str, Any],
+    memory_context: dict[str, Any],
+) -> bool:
+    """A journal is a *cold start* when it holds nothing to orient on: no
+    derived process obligations, no lifecycle cases (forecasts, positions,
+    watches, reviews), no strategies, and no recalled memory nodes. On such a
+    truly empty journal the continuity/read suggested_process_calls all return
+    empty, so there is no discoverable forward action; bootstrap surfaces a
+    first-run breadcrumb pointing at the entry sequence instead (trade-trace-xqjv).
+
+    Emptiness is read off the already-composed sub-reports — never a fresh fetch
+    or DB probe — so it stays inside the read-only/no-fetch contract. The
+    lifecycle total is taken from ``summary.metrics.case_count`` (the WHOLE
+    filtered set), not the page, so a paginated-but-non-empty journal is never
+    misread as cold."""
+
+    if obligations:
+        return False
+    lifecycle_total = lifecycle.get("summary", {}).get("metrics", {}).get("case_count", 0)
+    if lifecycle_total:
+        return False
+    if strategy_context.get("active_strategies") or strategy_context.get("relevant_archived_strategies"):
+        return False
+    if memory_context.get("memory_nodes"):
+        return False
+    return True
+
+
+def _suggested_calls(obligations: list[dict[str, Any]], *, cold_start: bool = False) -> list[dict[str, Any]]:
     base = [
         ("report.work_queue", "Inspect derived local process obligations."),
         ("agent.next_actions", "Inspect the safe alias projection of local process obligations."),
@@ -360,11 +483,112 @@ def _suggested_calls(obligations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     calls = [{"call_id": f"call_{i:03d}", "tool": tool, "reason": reason, "preconditions": ["local_read_only"], "args_template": {}, "source_refs": [{"kind": "report", "id": tool}], "caveat_codes": ["not_trade_advice", "not_executed", "no_fetch_performed"]} for i, (tool, reason) in enumerate(base, 1)]
     for i, obl in enumerate(obligations[:3], len(calls) + 1):
         calls.append({"call_id": f"call_{i:03d}", "tool": "decision.add", "reason": "Record a caller-supplied review/non-action decision if the caller has evidence.", "preconditions": ["caller_supplied_evidence"], "args_template": {"type": "review"}, "source_refs": obl["source_refs"], "caveat_codes": ["requires_caller_supplied_data", "not_trade_advice", "not_executed"]})
+    if cold_start:
+        # First-run onboarding breadcrumb: on a truly empty journal every
+        # read/continuity call above returns empty, so a cold agent has no
+        # discoverable forward action. Point it at the entry sequence
+        # (market.search -> market.bind -> snapshot.fetch -> forecast.add) so
+        # the loop can BEGIN (trade-trace-xqjv). This is a process-call HINT,
+        # not advice or a fetch: the tools are listed (not invoked), no market
+        # is named or ranked, and the caveat codes mark it as such — preserving
+        # the no-market-data-fetch / no-financial-advice contract. Distinct
+        # from trade-trace-663l, which added the market.search surface itself.
+        calls.extend(_first_run_onboarding_calls(len(calls) + 1))
     return calls
 
 
+# Ordered entry sequence a brand-new agent follows to begin the forecasting
+# loop. market.search/bind/snapshot.fetch are listed as the discovery + binding
+# steps; forecast.add is the first journal write. None are invoked here.
+_FIRST_RUN_ENTRY_SEQUENCE: Final[tuple[tuple[str, str, list[str], dict[str, Any]], ...]] = (
+    ("market.search", "First-run entry point: discover bindable live binary markets (read-only adapter scan). No market is named, ranked, or recommended here.", ["local_read_only", "adapter_enabled"], {}),
+    ("market.bind", "Bind a caller-chosen discovered market into the local journal so it can be referenced.", ["caller_selected_market"], {"external_id": "<from market.search>"}),
+    ("snapshot.fetch", "Record a caller-triggered local price/liquidity snapshot for the bound market.", ["bound_market", "adapter_enabled"], {"market_id": "<from market.bind>"}),
+    ("forecast.add", "Record the agent's own first forecast (probability + resolution rule) for the bound market's thesis; inspect tool.schema for the required fields.", ["caller_supplied_thesis_and_probability"], {}),
+)
+
+
+def _first_run_onboarding_calls(start_index: int) -> list[dict[str, Any]]:
+    return [
+        {
+            "call_id": f"call_{start_index + offset:03d}",
+            "tool": tool,
+            "reason": reason,
+            "preconditions": preconditions,
+            "args_template": args_template,
+            "source_refs": [{"kind": "doc", "id": "docs/AGENT_GUIDE.md"}],
+            "caveat_codes": ["not_trade_advice", "not_executed", "no_fetch_performed"],
+        }
+        for offset, (tool, reason, preconditions, args_template) in enumerate(_FIRST_RUN_ENTRY_SEQUENCE)
+    ]
+
+
 def _caveats(broadening: list[str], *reports: dict[str, Any]) -> dict[str, Any]:
-    return {"hard_boundary_caveats": list(BOUNDARY_CAVEATS), "scope_caveats": broadening, "evidence_caveats": ["no_fetch_performed"], "data_quality_caveats": sorted({c for r in reports for c in r.get("summary", {}).get("caveats", []) + r.get("summary", {}).get("caveat_codes", [])}), "memory_caveats": [], "truncation_caveats": []}
+    return {
+        "hard_boundary_caveats": list(BOUNDARY_CAVEATS),
+        "scope_caveats": broadening,
+        "evidence_caveats": ["no_fetch_performed"],
+        "data_quality_caveats": sorted({c for r in reports for c in r.get("summary", {}).get("caveats", []) + r.get("summary", {}).get("caveat_codes", [])}),
+        "memory_caveats": [],
+        "truncation_caveats": [],
+        # Inline gloss (code -> one-line meaning) for every caveat code
+        # that appears anywhere in this packet, plus a pointer to the full
+        # glossary doc. Populated in a final pass once the packet is fully
+        # composed and budgeted (trade-trace-o1wr).
+        "caveat_glossary_doc": CAVEAT_GLOSSARY_DOC,
+        "caveat_glossary": {},
+    }
+
+
+def _is_caveat_code(value: Any) -> bool:
+    """A caveat *code* is a machine-readable identifier token: a non-empty
+    string with no whitespace. Some sub-reports also carry full prose
+    sentences under `caveats`/`caveat` keys (human notes, not codes); those
+    contain spaces and are excluded so the inline glossary stays a code map
+    rather than a sentence map (trade-trace-o1wr)."""
+
+    return isinstance(value, str) and bool(value) and not any(ch.isspace() for ch in value)
+
+
+def _collect_caveat_codes(value: Any, found: set[str]) -> None:
+    """Walk an arbitrary packet substructure and collect every caveat
+    *code* (identifier-shaped string) from `caveat`/`caveat_codes`/
+    `scope_caveat_codes` fields and from the various ``*caveats`` arrays,
+    so the inline glossary can resolve them. Prose caveat sentences are
+    skipped by `_is_caveat_code`."""
+
+    if isinstance(value, dict):
+        for key, sub in value.items():
+            if key == "caveat_glossary":
+                # Don't recurse into the glossary itself (its keys are the
+                # codes, already accounted for via the rest of the packet).
+                continue
+            if key in {"caveat_codes", "scope_caveat_codes", "caveat"}:
+                if isinstance(sub, list):
+                    found.update(c for c in sub if _is_caveat_code(c))
+                elif _is_caveat_code(sub):
+                    found.add(sub)
+            elif key.endswith("caveats") and isinstance(sub, list):
+                found.update(c for c in sub if _is_caveat_code(c))
+            else:
+                _collect_caveat_codes(sub, found)
+    elif isinstance(value, list):
+        for item in value:
+            _collect_caveat_codes(item, found)
+
+
+def _attach_caveat_glossary(packet: dict[str, Any]) -> None:
+    """Populate ``caveats.caveat_glossary`` with a one-line gloss for every
+    caveat code present in the composed packet. Unknown codes get a stable
+    placeholder so a bot can still tell the code was deliberate."""
+
+    found: set[str] = set()
+    _collect_caveat_codes(packet, found)
+    glossary = {
+        code: CAVEAT_GLOSSARY.get(code, "No gloss registered for this code; see the caveat-glossary doc.")
+        for code in sorted(found)
+    }
+    packet["caveats"]["caveat_glossary"] = glossary
 
 
 def _apply_budget(name: str, value: Any, budget: dict[str, int]) -> tuple[Any, dict[str, Any], dict[str, int]]:
@@ -382,7 +606,13 @@ def _apply_budget(name: str, value: Any, budget: dict[str, int]) -> tuple[Any, d
     reason = "max_items" if omitted["max_items"] else None
     if len(json.dumps(out, sort_keys=True)) > budget["max_chars"]:
         omitted["max_chars"] += 1
-        reason = reason or "max_chars"
+        # The char guard discards the whole section, so it — not any prior
+        # per-item trimming — is the controlling reason the section is empty.
+        # Reporting a stale "max_items" here would be self-contradictory
+        # (returned_count:0 under a >0 max_items budget) and would mislead a
+        # consumer into "some rows omitted" when in fact ALL rows were dropped
+        # by the char cap (axloop AX-038).
+        reason = "max_chars"
         out = _empty_section(name)
     returned = len(out) if isinstance(out, list) else sum(len(v) for v in out.values() if isinstance(v, list)) if isinstance(out, dict) else 1
     return out, _trunc(name, returned, available, reason=reason), omitted
@@ -429,8 +659,24 @@ def _section_count(value: Any) -> int:
     return 1 if value else 0
 
 
+def _measure(packet: dict[str, Any], *, suppress_glossary: bool = False) -> int:
+    """Recompute the inline caveat glossary (so it reflects exactly the
+    codes currently in the packet) and return the packet's serialized
+    length. Pruning a section drops its codes from the glossary, so the
+    byte count stays accurate as the enforcer prunes. When the packet is
+    still over budget after pruning every section, the glossary itself is
+    suppressed (the `caveat_glossary_doc` pointer still resolves codes),
+    so the gloss never blocks the hard total-chars bound (trade-trace-o1wr)."""
+
+    if suppress_glossary:
+        packet["caveats"]["caveat_glossary"] = {}
+    else:
+        _attach_caveat_glossary(packet)
+    return _serialized_len(packet)
+
+
 def _enforce_total_budget(packet: dict[str, Any], max_chars_total: int) -> None:
-    packet["truncation"]["total_chars_returned"] = _serialized_len(packet)
+    packet["truncation"]["total_chars_returned"] = _measure(packet)
     if packet["truncation"]["total_chars_returned"] <= max_chars_total:
         return
 
@@ -447,7 +693,14 @@ def _enforce_total_budget(packet: dict[str, Any], max_chars_total: int) -> None:
         packet[name] = _empty_section_for_total_budget(name)
         packet["omitted_counts"].setdefault(name, _empty_omitted())["max_total_chars"] += max(before, 1)
         packet["truncation"]["sections"][name] = _trunc(name, 0, before, reason="max_total_chars")
-        packet["truncation"]["total_chars_returned"] = _serialized_len(packet)
+        packet["truncation"]["total_chars_returned"] = _measure(packet)
+
+    # Last resort before failing: drop the inline gloss. The codes remain
+    # resolvable via `caveats.caveat_glossary_doc`.
+    if packet["truncation"]["total_chars_returned"] > max_chars_total:
+        packet["caveats"]["caveat_glossary"] = {}
+        packet["caveats"].setdefault("caveat_glossary_omitted", "max_total_chars")
+        packet["truncation"]["total_chars_returned"] = _measure(packet, suppress_glossary=True)
 
     if packet["truncation"]["total_chars_returned"] > max_chars_total:
         raise ValueError("bootstrap packet cannot fit within max_chars_total without omitting required metadata")
@@ -460,4 +713,9 @@ def _packet_id(packet: dict[str, Any]) -> str:
     return "bootstrap:" + hashlib.sha256(raw.encode()).hexdigest()[:24]
 
 
-__all__ = ["BOOTSTRAP_CONTRACT_VERSION", "compose_bootstrap_packet"]
+__all__ = [
+    "BOOTSTRAP_CONTRACT_VERSION",
+    "CAVEAT_GLOSSARY",
+    "CAVEAT_GLOSSARY_DOC",
+    "compose_bootstrap_packet",
+]

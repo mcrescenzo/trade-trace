@@ -69,6 +69,86 @@ def test_operational_health_flags_stale_blocked_failed_unreviewed_and_unresolved
     assert data["families"]["risk_checks"]["contributing_record_ids"]["risk_check_receipts"] == ["risk1"]
 
 
+def _seed_market_inst(conn):
+    conn.execute("INSERT INTO venues(id, name, kind, metadata_json, created_at, actor_id) VALUES ('v1','Venue','prediction_market','{}','2026-05-28T00:00:00Z','agent:test')")
+    conn.execute("INSERT INTO instruments(id, venue_id, external_id, symbol, title, asset_class, metadata_json, created_at, actor_id) VALUES ('inst1','v1','ext','SYM','Instrument','prediction_market','{}','2026-05-28T00:00:00Z','agent:test')")
+    conn.execute("INSERT INTO markets(id, source, external_id, title, question, state, mechanism, bound_via, venue_metadata_json, metadata_json, created_at, actor_id) VALUES ('m1','manual','m-ext','Market','Q','open','clob','manual','{}','{}','2026-05-28T00:00:00Z','agent:test')")
+
+
+def _insert_intent(conn, intent_id, semantic_key, material_hash, approval_state, approval_ref_id):
+    ref_sql = "NULL" if approval_ref_id is None else f"'{approval_ref_id}'"
+    conn.execute(
+        f"INSERT INTO pretrade_intents(id, semantic_key, material_hash, market_id, instrument_id, proposed_shape_json, risk_budget_json, approval_state, approval_ref_id, as_of, created_at, actor_id) "
+        f"VALUES ('{intent_id}','{semantic_key}','{material_hash}','m1','inst1','{{}}','{{}}','{approval_state}',{ref_sql},'2026-05-28T00:06:00Z','2026-05-28T00:06:00Z','agent:test')"
+    )
+
+
+def test_operational_health_not_requested_null_approval_ref_is_clean(tmp_path):
+    """Regression (trade-trace-t6db): a normal intent with approval_state='not_requested'
+    and NULL approval_ref_id must NOT be flagged, so the approvals section is not
+    permanently in 'attention'."""
+    home = tmp_path / "home"
+    conn = _init(home)
+    try:
+        _seed_market_inst(conn)
+        _insert_intent(conn, "intent-clean", "intent-clean-key", "mh-clean", "not_requested", None)
+        conn.commit()
+    finally:
+        conn.close()
+
+    report = _call("report.operational_health", {"home": str(home), "as_of": "2026-05-28T03:00:00Z"})
+    assert report.ok, report
+    approvals = report.data["families"]["approvals"]
+    # The normal not_requested intent produces no flagged approval rows, so the
+    # bug code is absent (the section reports MISSING_APPROVAL_INPUTS only because
+    # there are no actionable approval rows — that is a distinct, correct signal).
+    assert "PENDING_OR_MISSING_APPROVAL" not in approvals["health_codes"], approvals
+    assert approvals["count"] == 0, approvals
+
+
+def test_operational_health_approved_elsewhere_null_ref_is_flagged(tmp_path):
+    """Regression (trade-trace-t6db): an intent claiming approval_state='approved_elsewhere'
+    with a NULL approval_ref_id IS a genuine actionable gap and must be flagged — while a
+    coexisting normal not_requested/NULL intent must NOT be flagged."""
+    home = tmp_path / "home"
+    conn = _init(home)
+    try:
+        _seed_market_inst(conn)
+        _insert_intent(conn, "intent-gap", "intent-gap-key", "mh-gap", "approved_elsewhere", None)
+        _insert_intent(conn, "intent-normal", "intent-normal-key", "mh-normal", "not_requested", None)
+        conn.commit()
+    finally:
+        conn.close()
+
+    report = _call("report.operational_health", {"home": str(home), "as_of": "2026-05-28T03:00:00Z"})
+    assert report.ok, report
+    approvals = report.data["families"]["approvals"]
+    assert "PENDING_OR_MISSING_APPROVAL" in approvals["health_codes"], approvals
+    # Only the approved_elsewhere/NULL gap is flagged; the normal not_requested/NULL
+    # intent is absent from the contributing ids.
+    assert approvals["contributing_record_ids"]["pretrade_intents"] == ["intent-gap"], approvals
+    assert approvals["count"] == 1, approvals
+
+
+def test_operational_health_approved_elsewhere_with_ref_is_clean(tmp_path):
+    """Regression (trade-trace-t6db): approved_elsewhere with a present approval_ref_id is
+    a resolved approval and must NOT be flagged."""
+    home = tmp_path / "home"
+    conn = _init(home)
+    try:
+        _seed_market_inst(conn)
+        _insert_intent(conn, "intent-ok", "intent-ok-key", "mh-ok", "approved_elsewhere", "approval-ref-1")
+        conn.commit()
+    finally:
+        conn.close()
+
+    report = _call("report.operational_health", {"home": str(home), "as_of": "2026-05-28T03:00:00Z"})
+    assert report.ok, report
+    approvals = report.data["families"]["approvals"]
+    assert "PENDING_OR_MISSING_APPROVAL" not in approvals["health_codes"], approvals
+    assert approvals["count"] == 0, approvals
+
+
 def test_operational_health_honors_report_filter_run_id(tmp_path):
     home = tmp_path / "home"
     conn = _init(home)

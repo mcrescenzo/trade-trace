@@ -95,6 +95,82 @@ def test_market_bind_enabled_fetches_fixture_backed_market(tmp_path: Path, monke
 
 
 
+def test_market_bind_prefers_gamma_market_id_over_namespaced_external_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Regression (AX dogfood FR-1): on the FIRST bind the row does not exist yet,
+    # so the Gamma /markets/{id} lookup must use the caller-supplied
+    # gamma_market_id, not the namespaced external_id. The AGENT_GUIDE's own
+    # market.bind example passes external_id="polymarket:<id>" + a bare
+    # gamma_market_id; building the URL from external_id 422s on the namespace.
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+    calls: list[str] = []
+
+    def fake_gamma_get(self: PolymarketClient, path: str):
+        calls.append(path)
+        return _fixture("market_binary_open.json")
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", fake_gamma_get)
+
+    env = mcp_call(
+        "market.bind",
+        {
+            "home": home,
+            "source": "polymarket",
+            "external_id": "polymarket:2410562",
+            "gamma_market_id": "2410562",
+        },
+    )
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    # The lookup used the bare gamma_market_id, not the namespaced external_id.
+    assert calls == ["/markets/2410562"]
+    # The caller's namespaced external_id is still persisted for bookkeeping.
+    assert env.data["external_id"] == "polymarket:2410562"
+    assert env.data["bound_via"] == "adapter"
+
+
+def test_adapter_bound_market_is_immediately_forecastable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Regression (AX dogfood AX-023): market.bind via the adapter path returns a
+    # market_id the docstring promises is a prerequisite for forecast.add, but it
+    # previously created only the markets row and left the compatibility
+    # instruments row to the first snapshot.fetch. So bind -> forecast.add (no
+    # snapshot yet) failed NOT_FOUND "instrument_id not found". The adapter bind
+    # path must materialize the instrument row at bind time, like the manual path.
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+    monkeypatch.setattr(
+        PolymarketClient, "gamma_get", lambda self, path: _fixture("market_binary_open.json")
+    )
+
+    bind = mcp_call("market.bind", {"home": home, "source": "polymarket", "external_id": "pm-forecastable"})
+    assert bind.ok, bind
+    assert bind.data["bound_via"] == "adapter"
+    market_id = bind.data["id"]
+
+    # No snapshot.fetch in between — forecast.add must still resolve the instrument.
+    fc = mcp_call(
+        "forecast.add",
+        {
+            "home": home,
+            "kind": "binary",
+            "market_id": market_id,
+            "yes_label": "yes",
+            "outcomes": [
+                {"label": "yes", "outcome_label": "yes", "probability": 0.4},
+                {"label": "no", "outcome_label": "no", "probability": 0.6},
+            ],
+            "rationale_body": "Adapter-bound market should be forecastable without a prior snapshot.",
+            "idempotency_key": "test:ax023:forecast-after-adapter-bind",
+        },
+    )
+    assert fc.ok, fc
+    assert isinstance(fc, SuccessEnvelope)
+    assert fc.data["kind"] == "binary"
+
+
 def test_market_bind_accepts_string_list_outcomes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok

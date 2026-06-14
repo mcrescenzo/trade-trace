@@ -138,6 +138,71 @@ def test_no_broker_auto_inference_external_symbol_is_not_resolved(tmp_path: Path
     assert env["error"]["details"]["field"] == "instrument_external_id"
 
 
+def test_absolute_import_run_id_cannot_escape_home(tmp_path: Path):
+    """Security regression (bead trade-trace-yuyk): an absolute
+    `import_run_id` must NOT re-root the JSONL artifact outside
+    `$TRADE_TRACE_HOME`. Before the fix, the run-id-derived directory
+    segment was joined onto `$HOME/import/csv` without stripping `/`, so
+    `import_run_id='/tmp/...'` resolved the target dir to `/tmp/...` and
+    wrote the artifact + parents outside home."""
+
+    home = tmp_path / "home"
+    instrument_id = _init_with_instrument(home)
+    csv_path, mapping_path = _write_csv_and_mapping(tmp_path, instrument_id)
+
+    escape_dir = tmp_path / "escape"
+    evil_run_id = str(escape_dir / "evil")
+    assert not escape_dir.exists()
+
+    env = _env(
+        "import.csv_fills",
+        {
+            "home": str(home),
+            "csv_path": str(csv_path),
+            "mapping_path": str(mapping_path),
+            "import_run_id": evil_run_id,
+        },
+    )
+
+    # The import still succeeds — the run id is sanitized, not rejected —
+    # but the artifact stays under $HOME/import/csv.
+    assert env["ok"] is True, env
+    artifact = Path(env["data"]["artifact_path"])
+    assert artifact.exists()
+    assert home in artifact.parents
+    csv_root = home / "import" / "csv"
+    assert csv_root in artifact.parents
+    # The single sanitized segment carries no path separators.
+    segment = artifact.parent.relative_to(csv_root)
+    assert len(segment.parts) == 1
+    # Nothing was written to the would-be escape location.
+    assert not escape_dir.exists()
+
+
+def test_traversal_import_run_id_cannot_escape_home(tmp_path: Path):
+    """Security regression (bead trade-trace-yuyk): a `..`-laden
+    `import_run_id` cannot climb out of `$HOME/import/csv` either."""
+
+    home = tmp_path / "home"
+    instrument_id = _init_with_instrument(home)
+    csv_path, mapping_path = _write_csv_and_mapping(tmp_path, instrument_id)
+
+    env = _env(
+        "import.csv_fills",
+        {
+            "home": str(home),
+            "csv_path": str(csv_path),
+            "mapping_path": str(mapping_path),
+            "import_run_id": "../../../../tmp/escape",
+        },
+    )
+    assert env["ok"] is True, env
+    artifact = Path(env["data"]["artifact_path"])
+    assert artifact.exists()
+    assert (home / "import" / "csv") in artifact.parents
+    assert ".." not in artifact.parent.relative_to(home / "import" / "csv").parts
+
+
 def test_csv_import_does_not_use_socket_network(tmp_path: Path, monkeypatch):
     home = tmp_path / "home"
     instrument_id = _init_with_instrument(home)

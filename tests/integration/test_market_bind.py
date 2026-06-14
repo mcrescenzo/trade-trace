@@ -24,12 +24,33 @@ def test_market_bind_is_public_mcp_catalog_tool_and_local_only(tmp_path):
     assert "market.scan.dry_run" not in specs
     assert "market.scan.promote" not in specs
     rendered = (specs["market.bind"]["description"] + " " + str(specs["market.bind"]["metadata"])).lower()
-    assert "manual/local" in rendered
-    assert "no network" in rendered
+    # Dual-mode: local/manual by default, with a read-only Gamma enrich path
+    # when the polymarket adapter is enabled (AX dogfood FR-1 corrected the old
+    # "no network" claim, which was false for the adapter-enabled path).
+    assert "local/manual" in rendered
+    assert "gamma" in rendered and "read-only" in rendered
+    # It still disclaims the heavier outbound paths it never touches.
     assert "broker" in rendered and "wallet" in rendered and "scheduler" in rendered
     schema_props = specs["market.bind"]["input_schema"]["properties"]
     for key in ("gamma_event_id", "outcome_ids_by_label", "resolution_rule", "tick_size", "fee_rate_bps", "tradable", "accepting_orders"):
         assert key in schema_props
+
+
+def test_market_bind_missing_enum_field_error_lists_allowed_values(tmp_path):
+    # A missing required-enum field (source/state/mechanism) must surface the
+    # allowed values, not just a bare "<field> is required" — otherwise a caller
+    # has no way to discover the valid set. Regression for AX dogfood friction.
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}, actor_id="agent:test").ok
+
+    args = _bind_args(home)
+    del args["source"]
+    result = mcp_call("market.bind", args, actor_id="agent:test")
+    assert isinstance(result, ErrorEnvelope), result
+    assert result.error.code.value == "VALIDATION_ERROR"
+    assert result.error.details["field"] == "source"
+    assert result.error.details["allowed"] == ["kalshi", "manifold", "manual", "polymarket", "predictit"]
+    assert "polymarket" in result.error.message
 
 
 def test_market_bind_idempotency_replay_sets_envelope_meta(tmp_path):

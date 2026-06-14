@@ -7,15 +7,53 @@ from trade_trace.adapters.polymarket.config import PolymarketConfig
 from trade_trace.adapters.polymarket.errors import error_details, scrub_endpoint
 
 
-def test_scrub_endpoint_removes_scheme_credentials_query_fragment_and_key():
-    raw = "https://user:secret@polygon.example.com/rpc/v2/APIKEY123?token=LEAK#frag"
+def test_scrub_endpoint_removes_scheme_credentials_query_and_fragment():
+    # Keyless host: scheme, userinfo, query, fragment stripped; path preserved
+    # for debuggability (no secret rides the path on this host).
+    raw = "https://user:secret@polygon-rpc.com/rpc?token=LEAK#frag"
     scrubbed = scrub_endpoint(raw)
-    assert scrubbed == "polygon.example.com/rpc/v2/APIKEY123"
+    assert scrubbed == "polygon-rpc.com/rpc"
     assert scrubbed is not None
-    # Query-string API keys are common for RPC providers and must not leak.
     assert "token=LEAK" not in scrubbed
     assert "user" not in scrubbed
     assert "secret" not in scrubbed
+
+
+def test_scrub_endpoint_drops_path_segment_keys_for_known_rpc_providers():
+    """trade-trace-2sm7 regression: path-embedded RPC keys must not survive.
+
+    Alchemy /v2/KEY, Infura /v3/KEY, Ankr /polygon/KEY, and QuickNode
+    /path/SECRET all carry the credential in the URL path. scrub_endpoint must
+    strip the path for these providers so the key never reaches logs, error
+    details, or outcomes.metadata_json.
+    """
+
+    cases = [
+        # (raw_url, expected_scrub, key_material)
+        ("https://polygon-mainnet.g.alchemy.com/v2/ALCHEMY_KEY_abc123",
+         "polygon-mainnet.g.alchemy.com", "ALCHEMY_KEY_abc123"),
+        ("https://polygon-mainnet.infura.io/v3/INFURA_KEY_def456",
+         "polygon-mainnet.infura.io", "INFURA_KEY_def456"),
+        ("https://rpc.ankr.com/polygon/ANKR_KEY_ghi789",
+         "rpc.ankr.com", "ANKR_KEY_ghi789"),
+        ("https://my-endpoint.matic.quicknode.pro/QUICKNODE_SECRET_jkl012/",
+         "my-endpoint.matic.quicknode.pro", "QUICKNODE_SECRET_jkl012"),
+    ]
+    for raw, expected, key in cases:
+        scrubbed = scrub_endpoint(raw)
+        assert scrubbed == expected, f"{raw} -> {scrubbed!r}"
+        assert scrubbed is not None
+        assert key not in scrubbed, f"key {key!r} leaked through scrub_endpoint"
+
+
+def test_scrub_endpoint_drops_path_key_through_error_details_and_log():
+    """The three documented leak sites all flow through scrub_endpoint, so the
+    Alchemy key must be absent from error_details output too."""
+
+    raw = "https://polygon-mainnet.g.alchemy.com/v2/ALCHEMY_KEY_abc123"
+    details = error_details(endpoint=raw, status_code=500)
+    assert details["endpoint"] == "polygon-mainnet.g.alchemy.com"
+    assert "ALCHEMY_KEY_abc123" not in repr(details)
 
 
 def test_error_details_strip_body_and_scrub_endpoint():

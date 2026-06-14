@@ -130,7 +130,31 @@ def _inline_source_attachments(conn: sqlite3.Connection) -> list[dict[str, Any]]
         ("snapshots", "snapshot"),
         ("instruments", "instrument"),
     ):
-        for target_id, metadata_json in conn.execute(f"SELECT id, metadata_json FROM {table}").fetchall():
+        # Skip rows with no inline `sources` array before pulling them
+        # into Python (bead trade-trace-yt45). Previously every row of all
+        # six tables was deserialized with json.loads just to discover most
+        # carry no inline sources. The `json_valid(...) AND json_extract(...
+        # '$.sources') IS NOT NULL` predicate resolves the path inside
+        # SQLite (JSON1 is already a hard dependency — see signals.py /
+        # calibration.py), so only rows that actually hold a sources key are
+        # materialized. NULL / '{}' / absent-key rows — the overwhelming
+        # majority on a real journal — are filtered in the engine.
+        #
+        # The `json_valid()` guard short-circuits (SQLite evaluates AND
+        # left-to-right) so a malformed `metadata_json` blob is skipped
+        # instead of raising inside `json_extract`; that matches the old
+        # Python path, where `_safe_metadata` swallowed a JSONDecodeError
+        # and returned `{}` (sources=None → no attachment). So the output
+        # is byte-identical: a malformed or sources-less row produced no
+        # attachment before and produces none now. A row whose sources is
+        # not a list is still handled by the `isinstance(sources, list)`
+        # guard below.
+        for target_id, metadata_json in conn.execute(
+            f"SELECT id, metadata_json FROM {table} "
+            "WHERE metadata_json IS NOT NULL "
+            "AND json_valid(metadata_json) "
+            "AND json_extract(metadata_json, '$.sources') IS NOT NULL"
+        ).fetchall():
             sources = _safe_metadata(metadata_json).get("sources")
             if not isinstance(sources, list):
                 continue
@@ -185,6 +209,33 @@ def _has_inline_sources(metadata_json: str | None) -> bool:
     return isinstance(sources, list) and any(isinstance(source, dict) for source in sources)
 
 
+def _covered_target_ids(
+    conn: sqlite3.Connection, target_kind: str, target_ids: set[str],
+) -> set[str]:
+    """Bulk-resolve which `target_ids` have at least one attached `source`
+    edge of the given `target_kind`.
+
+    Replaces the per-row `SELECT 1 ... LIMIT 1` probes in
+    `_missing_sources_on_actual_enter` (bead trade-trace-x0g6): one IN-list
+    query per coverage kind instead of one round-trip per decision, so the
+    DB cost is fixed (3 queries) rather than 3D for D actual_enter rows.
+    """
+
+    if not target_ids:
+        return set()
+    placeholders = ",".join("?" * len(target_ids))
+    rows = conn.execute(
+        f"""
+        SELECT DISTINCT e.target_id FROM edges e
+        WHERE e.source_kind = 'source'
+          AND e.target_kind = ?
+          AND e.target_id IN ({placeholders})
+        """,
+        (target_kind, *target_ids),
+    ).fetchall()
+    return {row[0] for row in rows}
+
+
 def _missing_sources_on_actual_enter(conn: sqlite3.Connection) -> dict[str, Any]:
     """Actual-enter decisions with no usable legacy or inline provenance.
 
@@ -193,7 +244,7 @@ def _missing_sources_on_actual_enter(conn: sqlite3.Connection) -> dict[str, Any]
     the decision/forecast rows. Treat any of those as coverage.
     """
 
-    cur = conn.execute(
+    decisions = conn.execute(
         """
         SELECT d.id, d.thesis_id, d.forecast_id, d.metadata_json,
                f.metadata_json AS forecast_metadata_json
@@ -202,39 +253,23 @@ def _missing_sources_on_actual_enter(conn: sqlite3.Connection) -> dict[str, Any]
         WHERE d.type = 'actual_enter'
         ORDER BY d.created_at, d.id
         """
-    )
+    ).fetchall()
+
+    # One bulk IN-list query per coverage kind (3 fixed queries total),
+    # then pure-Python set lookups while iterating the decisions list.
+    thesis_ids = {row[1] for row in decisions if row[1] is not None}
+    decision_ids = {row[0] for row in decisions}
+    forecast_ids = {row[2] for row in decisions if row[2] is not None}
+
+    covered_thesis = _covered_target_ids(conn, "thesis", thesis_ids)
+    covered_decision = _covered_target_ids(conn, "decision", decision_ids)
+    covered_forecast = _covered_target_ids(conn, "forecast", forecast_ids)
+
     items: list[dict[str, Any]] = []
-    for d_id, thesis_id, forecast_id, decision_meta, forecast_meta in cur.fetchall():
-        legacy_thesis_source = thesis_id is not None and conn.execute(
-            """
-            SELECT 1 FROM edges e
-            WHERE e.source_kind = 'source'
-              AND e.target_kind = 'thesis'
-              AND e.target_id = ?
-            LIMIT 1
-            """,
-            (thesis_id,),
-        ).fetchone() is not None
-        direct_decision_source = conn.execute(
-            """
-            SELECT 1 FROM edges e
-            WHERE e.source_kind = 'source'
-              AND e.target_kind = 'decision'
-              AND e.target_id = ?
-            LIMIT 1
-            """,
-            (d_id,),
-        ).fetchone() is not None
-        direct_forecast_source = forecast_id is not None and conn.execute(
-            """
-            SELECT 1 FROM edges e
-            WHERE e.source_kind = 'source'
-              AND e.target_kind = 'forecast'
-              AND e.target_id = ?
-            LIMIT 1
-            """,
-            (forecast_id,),
-        ).fetchone() is not None
+    for d_id, thesis_id, forecast_id, decision_meta, forecast_meta in decisions:
+        legacy_thesis_source = thesis_id is not None and thesis_id in covered_thesis
+        direct_decision_source = d_id in covered_decision
+        direct_forecast_source = forecast_id is not None and forecast_id in covered_forecast
         if any((
             legacy_thesis_source,
             direct_decision_source,

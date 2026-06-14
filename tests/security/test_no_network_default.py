@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.mcp_server import mcp_call
 
 
@@ -119,6 +120,17 @@ _NO_NETWORK_SMOKE_ROWS: list[tuple[str, str]] = [
     ("strategy.create", "strategy"),
     ("playbook.create", "playbook"),
     ("signal.scan", "noop"),
+    # Adapter discovery writes/reads. Under the *default* (adapter-disabled)
+    # config these must fail closed with ADAPTER_DISABLED *without* touching
+    # the network — the no-network fixture proves the fail-closed path opens
+    # no socket (bead trade-trace-g86k). Marked `adapter_network` so the
+    # adapter-ENABLED smoke below skips them: reaching the network is their
+    # job once enabled, so they are not a contamination signal there.
+    ("market.search", "adapter_network"),
+    ("market.refresh", "adapter_network"),
+    # market.find_similar is a LOCAL, deterministic tool (no remote provider,
+    # no network) regardless of adapter state, so it stays in both smokes.
+    ("market.find_similar", "local_read_only"),
     # Tool introspection + journal lifecycle
     ("tool.schema", "tool_schema"),
     ("journal.schema", "noop"),
@@ -169,6 +181,13 @@ def _make_kwargs(tool: str, home: Path, seed: dict[str, str]) -> dict:
         return {**base, "bucket": "day"}
     if tool == "report.watchlist":
         return {**base, "mode": "all"}
+    if tool == "market.search":
+        return {**base, "query": "smoke", "limit": 5, "closed": False}
+    if tool == "market.refresh":
+        return {**base, "market_id": "mkt_smoke",
+                "idempotency_key": "00000000-0000-4000-8000-marketrefresh01"}
+    if tool == "market.find_similar":
+        return {**base, "instrument_id": "ins_smoke"}
     return base
 
 
@@ -216,6 +235,79 @@ def test_no_outbound_network_across_representative_tool_registry(
         # envelope shape.
         assert env.ok or env.error.code is not None, (
             f"{tool} returned an untyped failure: {env}"
+        )
+        seed = _absorb_seed(tool, env, seed)
+
+
+# -- adapter-ENABLED registry smoke per bead trade-trace-ijw5 -------
+#
+# INV-1: the registry smoke above runs under the *default* config, with
+# the Polymarket adapter DISABLED. That proves no non-adapter tool
+# leaks outbound traffic when the air-gap default is in force — but it
+# does NOT prove the air-gap holds once an operator opts the adapter IN
+# (network.polymarket.enabled=true). The open question (per the bead):
+# does flipping that one config key contaminate unrelated tool
+# dispatches — e.g. via a module-level httpx import that runs on every
+# memory.recall / report.calibration call? This test pins the answer:
+# with the adapter enabled, the same representative non-adapter slice
+# must still return a typed envelope without tripping the socket/DNS
+# stub. The slice deliberately excludes the adapter tools themselves
+# (market.bind / outcome.fetch / snapshot.fetch), whose whole job is to
+# reach the network when enabled — those fail-closed paths are covered
+# in tests/integration/test_adapter_polymarket_offline.py.
+
+
+def test_no_outbound_network_with_adapter_enabled_across_registry(
+    no_outbound_connect_or_dns, tmp_path: Path,
+):
+    """Enable the Polymarket adapter, then run the same representative
+    non-adapter registry slice under the no-network fixture. Enabling
+    the adapter must NOT contaminate unrelated tool dispatches with an
+    outbound httpx import or call: every non-adapter tool still returns
+    a typed envelope (ok=True or a typed error) and no socket connect /
+    DNS lookup is attempted. Resolves the INV-1 open question — the
+    adapter's network reach is confined to the adapter code path, not
+    triggered by enabling the config flag."""
+
+    home = _initialized_home(tmp_path)
+
+    # Opt the adapter IN. journal.config_set is a local SQLite write —
+    # it must not itself open a socket under the no-network fixture.
+    cfg = mcp_call(
+        "journal.config_set",
+        with_legacy_idempotency_key("journal.config_set", {
+            "home": str(home),
+            "key": "network.polymarket.enabled",
+            "value": "true",
+            "confirm": True,
+        }),
+    )
+    assert cfg.ok, cfg
+
+    # Confirm the flag actually flipped: the adapter is now enabled, so
+    # any contamination of non-adapter paths would surface below.
+    status = mcp_call("journal.status", {"home": str(home)})
+    assert status.ok, status
+    assert status.data["adapter_state"]["polymarket"]["enabled"] is True
+
+    seed: dict[str, str] = {}
+    for tool, _seed_kind in _NO_NETWORK_SMOKE_ROWS:
+        # Adapter network tools (market.search / market.refresh) legitimately
+        # reach the network once the adapter is enabled — that is their job,
+        # not contamination — so they are not part of this "enabling the
+        # adapter must not contaminate UNRELATED paths" invariant.
+        if _seed_kind == "adapter_network":
+            continue
+        kwargs = _make_kwargs(tool, home, seed)
+        env = mcp_call(tool, kwargs)
+        # The contract under test: enabling the adapter does not make any
+        # of these non-adapter tools reach the network. The no-network
+        # fixture raises AssertionError on any outbound attempt, which
+        # would surface here as a test failure regardless of envelope
+        # shape. A typed error envelope is acceptable (the slice runs
+        # against a sparse DB); an *untyped* failure is not.
+        assert env.ok or env.error.code is not None, (
+            f"{tool} returned an untyped failure with adapter enabled: {env}"
         )
         seed = _absorb_seed(tool, env, seed)
 
@@ -337,6 +429,101 @@ def test_no_forbidden_network_imports_in_src():
         "src/ imports forbidden network library/SDK without an "
         "allowlist entry; either remove the import or, if the air-gap "
         "promise has been revised, update _ALLOWED_NETWORK_IMPORT_FILES.\n"
+        + "\n".join(f"  {p}:{ln}  {pattern!r}" for p, pattern, ln in offenders)
+    )
+
+
+# -- low-level connection-primitive audit per bead trade-trace-il4n -
+#
+# The named-import audit above catches a supply-chain attacker who
+# pulls in requests/httpx/aiohttp/etc. It does NOT catch an attacker
+# who reaches the network through stdlib primitives that are already
+# imported for legitimate reasons: asyncio (used by the MCP stdio
+# server), ssl, and socket. This audit closes that gap by banning the
+# specific *connection-opening* call sites:
+#
+#   - asyncio.open_connection(...)        -> opens a TCP stream
+#   - ssl.SSLContext(...)                 -> builds a TLS context
+#   - ssl.create_default_context(...)     -> builds a TLS context
+#   - socket.create_connection(...)       -> opens a TCP socket
+#
+# Open question resolution (per the bead): sqlite3 legitimately uses a
+# socket internally on some platforms, and the storage layer calls
+# `sqlite3.connect(...)` heavily. These patterns are deliberately
+# *module-qualified* on the connection primitive itself
+# (`socket.create_connection`, NOT a bare `.connect(`), so the SQLite
+# layer's `sqlite3.connect(...)` cannot match — `sqlite3.connect` and
+# `socket.create_connection` are textually disjoint. We do NOT ban
+# `import ssl` / `import socket` / `import asyncio` themselves, because
+# those modules have non-network uses (asyncio.run for the stdio event
+# loop, socket constants, etc.); we ban only the call sites that open
+# an outbound connection. This keeps the audit precise: no false
+# positive on legitimate stdlib usage, no false negative on a smuggled
+# connection.
+_FORBIDDEN_CONNECTION_PRIMITIVES: tuple[str, ...] = (
+    "asyncio.open_connection",
+    "ssl.SSLContext",
+    "ssl.create_default_context",
+    "socket.create_connection",
+)
+"""Connection-opening stdlib call sites banned in src/. Each pattern is
+module-qualified so that `sqlite3.connect(...)` (the legitimate SQLite
+layer) cannot match. A supply-chain attacker who tries to reach the
+network via stdlib primitives instead of a third-party SDK trips this
+audit. Adding an allowlist entry below requires a justification comment
+and bead/docs review, exactly like the named-import allowlist."""
+
+_ALLOWED_CONNECTION_PRIMITIVE_FILES: tuple[str, ...] = (
+    # Intentionally empty: no module under src/ legitimately opens a raw
+    # outbound connection. The opt-in Polymarket adapter reaches the
+    # network through httpx (covered by the named-import allowlist), not
+    # through asyncio.open_connection / ssl / socket.create_connection.
+    # Adding an entry here is a docs + bead change, not a silent edit —
+    # justify the opt-in boundary and confirm it cannot weaken the
+    # default air-gap promise (PRD §2.4.1, VISION safety §).
+)
+"""Paths under src/ allowed to call a raw connection primitive. Empty by
+design — the default MVP makes no outbound calls and the one opt-in
+network adapter uses httpx, not stdlib socket/ssl primitives."""
+
+
+def test_no_forbidden_connection_primitives_in_src():
+    """Static audit: src/ must not call a low-level connection primitive
+    (asyncio.open_connection, ssl.SSLContext / ssl.create_default_context,
+    socket.create_connection) unless its file path is on the explicit
+    allowlist. This complements the named-import audit: an attacker who
+    avoids requests/httpx/aiohttp and instead smuggles in a raw stdlib
+    connection still trips this guard.
+
+    The patterns are module-qualified so the SQLite layer's
+    `sqlite3.connect(...)` cannot be a false positive — see the open
+    question resolved in bead trade-trace-il4n."""
+
+    assert _ALLOWED_CONNECTION_PRIMITIVE_FILES == (), (
+        "No module under src/ should open a raw outbound connection. "
+        "Adding an allowlist entry requires explicit docs + bead review "
+        "and must not weaken default no-network behavior."
+    )
+
+    root = Path(__file__).resolve().parents[2] / "src" / "trade_trace"
+    offenders: list[tuple[Path, str, int]] = []
+    for py_path in root.rglob("*.py"):
+        rel = py_path.relative_to(root.parent.parent)
+        if str(rel) in _ALLOWED_CONNECTION_PRIMITIVE_FILES:
+            continue
+        text = py_path.read_text(encoding="utf-8")
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            stripped = line.split("#", 1)[0]
+            for pattern in _FORBIDDEN_CONNECTION_PRIMITIVES:
+                if pattern in stripped:
+                    offenders.append((rel, pattern, line_no))
+
+    assert not offenders, (
+        "src/ calls a low-level connection primitive without an "
+        "allowlist entry; either remove the call or, if a real outbound "
+        "path was intentionally added, update "
+        "_ALLOWED_CONNECTION_PRIMITIVE_FILES with a justification comment "
+        "and security-docs review.\n"
         + "\n".join(f"  {p}:{ln}  {pattern!r}" for p, pattern, ln in offenders)
     )
 

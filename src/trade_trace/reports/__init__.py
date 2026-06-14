@@ -1,6 +1,10 @@
 """Deterministic reports per docs/architecture/reports.md."""
 
 from trade_trace.reports.audit_readiness import report_audit_readiness
+from trade_trace.reports.autonomy_readiness import (
+    AUTONOMY_READINESS_CONTRACT_VERSION,
+    report_autonomy_readiness,
+)
 from trade_trace.reports.bootstrap import BOOTSTRAP_CONTRACT_VERSION, compose_bootstrap_packet
 from trade_trace.reports.buckets import (
     CONFIDENCE_LABELS,
@@ -41,6 +45,7 @@ from trade_trace.reports.opportunity import (
     DEFAULT_OPPORTUNITY_MIN_SAMPLE,
     report_opportunity,
 )
+from trade_trace.reports.phase_gate_readiness import report_phase_gate_readiness
 from trade_trace.reports.playbook_adherence import (
     DEFAULT_ADHERENCE_MIN_SAMPLE,
     report_playbook_adherence,
@@ -59,6 +64,7 @@ from trade_trace.reports.replay import export_case_bundle
 from trade_trace.reports.replay_evaluate import evaluate_output
 from trade_trace.reports.resolution_misreads import report_resolution_misreads
 from trade_trace.reports.risk import DEFAULT_RISK_MIN_SAMPLE, report_risk
+from trade_trace.reports.rule_lineage import report_rule_lineage
 from trade_trace.reports.source_quality import (
     STALE_SOURCE_THRESHOLD_DAYS,
     report_source_quality,
@@ -77,6 +83,7 @@ from trade_trace.reports.watchlist import report_watchlist
 from trade_trace.reports.work_queue import agent_next_actions, report_work_queue
 
 __all__ = [
+    "AUTONOMY_READINESS_CONTRACT_VERSION",
     "CONFIDENCE_LABELS",
     "BOOTSTRAP_CONTRACT_VERSION",
     "DEFAULT_ADHERENCE_MIN_SAMPLE",
@@ -117,11 +124,13 @@ __all__ = [
     "report_mistakes",
     "report_mistake_tripwire",
     "report_opportunity",
+    "report_phase_gate_readiness",
     "report_pnl",
     "report_process_analytics",
     "report_process_quality",
     "report_recall_receipts",
     "report_resolution_misreads",
+    "report_rule_lineage",
     "report_playbook_adherence",
     "report_policy_candidates",
     "report_risk",
@@ -134,5 +143,6 @@ __all__ = [
     "report_work_queue",
     "spread_bucket",
     "report_audit_readiness",
+    "report_autonomy_readiness",
     "volume_bucket",
 ]

@@ -31,7 +31,6 @@ ADMIN_TOOLS = [
     "model.import",
     "model.warm",
     "memory.reindex",
-    "keyring.revoke",
 ]
 
 
@@ -98,6 +97,21 @@ def test_journal_backup_writes_files_and_manifest_with_confirm(home, tmp_path):
     assert db_entry["sha256"] == actual
 
 
+def test_journal_backup_dry_run_does_not_write(home, tmp_path):
+    """journal.backup writes files outside UnitOfWork, so `_dry_run` must
+    short-circuit to the preview instead of writing the backup tree — even
+    when `_confirm` is passed. Same raw-IO admin-writer class as
+    config_set. Regression for the AX dogfood finding."""
+
+    dest = tmp_path / "bk"
+    env = _mcp(home, "journal.backup",
+               {"dest": str(dest), "_confirm": True, "_dry_run": True})
+    assert env.ok, env
+    assert env.data["preview_only"] is True
+    assert not (dest / "manifest.json").exists()
+    assert not (dest / "trade-trace.sqlite").exists()
+
+
 # -- journal.restore --------------------------------------------
 
 
@@ -115,6 +129,24 @@ def test_journal_restore_preview_does_not_write(home, tmp_path):
     assert env.ok, env
     assert env.data["preview_only"] is True
     # New home file should not exist yet.
+    assert not (new_home / "trade-trace.sqlite").exists()
+
+
+def test_journal_restore_dry_run_does_not_write(home, tmp_path):
+    """journal.restore overwrites the live home outside UnitOfWork, so
+    `_dry_run` must short-circuit to the preview rather than restore — even
+    with `_confirm`. Same raw-IO admin-writer class as config_set/backup;
+    the most destructive member since it overwrites the journal DB."""
+
+    src = tmp_path / "bk"
+    _mcp(home, "journal.backup", {"dest": str(src), "_confirm": True})
+    new_home = tmp_path / "restored"
+    env = _mcp(new_home, "journal.restore", {
+        "src": str(src), "home": str(new_home),
+        "_confirm": True, "_dry_run": True,
+    })
+    assert env.ok, env
+    assert env.data["preview_only"] is True
     assert not (new_home / "trade-trace.sqlite").exists()
 
 
@@ -204,6 +236,33 @@ def test_journal_config_set_preview_does_not_persist(home):
     assert row is None, "preview must not write any config row"
 
 
+def test_journal_config_set_dry_run_does_not_persist(home):
+    """A write tool advertises supports_dry_run=true via tool.schema, so
+    `_dry_run` must roll back even when `_confirm` is also passed. config_set
+    writes outside UnitOfWork (raw sqlite/open_database commits), so it must
+    branch on the request-scoped dry-run flag itself or the "dry-run" silently
+    mutates the live config table. Regression for the AX dogfood finding."""
+
+    env = _mcp(home, "journal.config_set", {
+        "key": "report.calibration.min_sample", "value": "30",
+        "_confirm": True, "_dry_run": True,
+    })
+    assert env.ok, env
+    assert env.data["preview_only"] is True
+
+    from trade_trace.storage import open_database
+    from trade_trace.storage.paths import db_path
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            "SELECT value FROM config WHERE key = ?",
+            ("report.calibration.min_sample",),
+        ).fetchone()
+    finally:
+        db.close()
+    assert row is None, "dry-run must not write any config row"
+
+
 def test_journal_config_set_embeddings_provider_none_succeeds(home):
     env = _mcp(home, "journal.config_set", {
         "key": "embeddings.provider", "value": "none",
@@ -277,6 +336,22 @@ def test_model_import_air_gap_succeeds_with_sockets_patched(home, tmp_path, monk
     target = home / "models" / "bge-small-en-v1.5"
     assert (target / "config.json").read_bytes() == (src / "config.json").read_bytes()
     assert env.data["verified_files"] == ["config.json"]
+
+
+def test_model_import_dry_run_does_not_copy(home, tmp_path, monkeypatch):
+    """model.import copies a model dir outside UnitOfWork, so `_dry_run` must
+    short-circuit to the preview instead of staging the assets — even with
+    `_confirm`. Same raw-IO admin-writer class as config_set/backup."""
+
+    payload = b"deterministic tiny bge-small test fixture\n"
+    _patch_tiny_trusted_lock(monkeypatch, payload)
+    src = _write_fixture_model(tmp_path / "BAAI" / "bge-small-en-v1.5", payload=payload)
+    env = _mcp(home, "model.import",
+               {"path": str(src), "_confirm": True, "_dry_run": True})
+    assert env.ok, env
+    assert env.data["preview_only"] is True
+    target = home / "models" / "bge-small-en-v1.5"
+    assert not target.exists(), "dry-run must not stage the model dir"
 
 
 def test_model_import_rejects_malicious_self_manifest(home, tmp_path, monkeypatch):
@@ -373,6 +448,50 @@ def test_memory_reindex_preview_no_write(home):
     assert env.data["would_reindex"]["provider"] == "local"
     assert env.data["would_reindex"]["node_count"] == 2
     assert env.data["would_reindex"]["cost_estimate"]["estimated_usd"] == 0.0
+    assert _embedding_rows(home) == before
+
+
+def test_memory_reindex_dry_run_with_confirm_does_not_reindex(home):
+    """memory.reindex is registered is_write=true, so it advertises
+    supports_dry_run=true. When `_dry_run` and `_confirm` are passed
+    together the handler must short-circuit to the preview branch (like
+    every sibling admin writer) rather than reporting a committed
+    reindexed_count. Otherwise the envelope is self-contradictory:
+    meta.dry_run=true alongside data.preview_only=false / a
+    data.reindexed_count an agent would read as "it committed".
+    Regression for trade-trace-fsyq."""
+
+    node_ids = [
+        _retain_memory(home, "00000000-0000-4000-8000-reindex301", "eta memory"),
+        _retain_memory(home, "00000000-0000-4000-8000-reindex302", "theta memory"),
+    ]
+    conn = sqlite3.connect(str(home / "trade-trace.sqlite"), isolation_level=None)
+    try:
+        conn.execute(
+            "INSERT INTO config(key, value, updated_at) VALUES ('embeddings.provider', 'local', 'now') "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+        for node_id in node_ids:
+            conn.execute(
+                "INSERT INTO memory_node_embeddings(node_id, provider, dim, model_id, embedding, created_at) "
+                "VALUES (?, 'local', 2, 'old-model', ?, 'old')",
+                (node_id, b"12345678"),
+            )
+        before = _embedding_rows(home)
+    finally:
+        conn.close()
+
+    env = _mcp(home, "memory.reindex", {"_confirm": True, "_dry_run": True})
+
+    assert env.ok, env
+    # meta.dry_run and data.preview_only must agree — the envelope cannot
+    # claim a committed reindex while the dispatcher rolled the write back.
+    assert env.meta.dry_run is True
+    assert env.meta.preview_only is True
+    assert env.data["preview_only"] is True
+    assert "reindexed_count" not in env.data
+    assert env.data["would_reindex"]["provider"] == "local"
+    # Dry-run must leave the prior provider rows untouched (no INSERT/DELETE).
     assert _embedding_rows(home) == before
 
 

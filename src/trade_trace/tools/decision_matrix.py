@@ -6,6 +6,16 @@ The matrix is the single source of truth; the dispatch path checks every
 field for every decision type. Adding a field for a new decision type
 requires updating this map; removing a field requires a contract version
 bump per the closed-enum policy in storage/policy.py.
+
+Design note (trade-trace-t9n5): `forecast_id` is `O` (optional) on the
+non-trade decision types `watch`/`skip`/`hold`. A bot that records a real
+forecast and then deliberately skips for insufficient edge can now carry the
+forecast linkage on the decision row, documented in the x-decision-matrix
+contract rather than relying on it being silently accepted. This complements
+the instrument-level forecast-linkage check in reports/coach.py: coach no
+longer flags a forecasted-then-skipped market as 'no linked forecast' even
+when the skip row itself carries no forecast_id, because the *instrument* is
+forecasted.
 """
 
 from __future__ import annotations
@@ -15,18 +25,21 @@ from typing import Any, Literal
 FieldKind = Literal["R", "O", "X"]
 DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
     "watch": {
-        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "O",
+        "instrument_id": "R", "thesis_id": "O", "forecast_id": "O",
+        "snapshot_id": "O", "side": "O",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
         "reason": "O", "review_by": "O",
     },
     "skip": {
-        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "O",
+        "instrument_id": "R", "thesis_id": "O", "forecast_id": "O",
+        "snapshot_id": "O", "side": "O",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
         "reason": "R", "review_by": "X",
     },
     "paper_enter": {
         "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
+        "declared_risk_amount": "O", "declared_risk_unit": "O",
         "reason": "O", "review_by": "X",
     },
     "paper_exit": {
@@ -37,6 +50,7 @@ DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
     "actual_enter": {
         "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
+        "declared_risk_amount": "O", "declared_risk_unit": "O",
         "reason": "O", "review_by": "X",
     },
     "actual_exit": {
@@ -47,6 +61,7 @@ DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
     "add": {
         "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
+        "declared_risk_amount": "O", "declared_risk_unit": "O",
         "reason": "O", "review_by": "X",
     },
     "reduce": {
@@ -55,7 +70,8 @@ DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
         "reason": "O", "review_by": "X",
     },
     "hold": {
-        "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "O",
+        "instrument_id": "R", "thesis_id": "O", "forecast_id": "O",
+        "snapshot_id": "O", "side": "O",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
         "reason": "O", "review_by": "O",
     },
@@ -98,11 +114,63 @@ MATERIALITY_REASONS: list[str] = [
     "review_obligation", "scanner_selected", "source_gap",
 ]
 
+# Canonical `decision.add price` convention (trade-trace-ctvb).
+#
+# `price` is the SIDE-NATIVE price the bot actually paid for the contract
+# on the chosen `side`, NOT a normalized YES-contract price. For a `no`
+# prediction-market position, `price` is the NO-contract price (which is
+# `1 - yes_price`); the bot records exactly what it paid. The positions
+# projection is side-aware: it complements the YES-contract mark stored in
+# `snapshots.price` (`1 - yes_price`) when marking `no` positions so a flat
+# `no` entry reports ~0 unrealized P&L. A generic `short` side is marked
+# against the same instrument price with no complement.
+PRICE_CONVENTION: dict[str, Any] = {
+    "field": "price",
+    "semantics": "side_native",
+    "summary": (
+        "`price` is the side-native price you paid for the contract on the "
+        "chosen `side`, not a normalized YES-contract price."
+    ),
+    "by_side": {
+        "yes": "YES-contract price (e.g. 0.62 to buy YES at 62c).",
+        "long": "Instrument price paid to open the long.",
+        "no": (
+            "NO-contract price you actually paid (i.e. 1 - yes_price). "
+            "Record what you paid for NO; do NOT convert to the YES price."
+        ),
+        "short": "Instrument price at which the short was opened (no complement).",
+    },
+    "marking": (
+        "snapshots.price stores the YES-contract price. The positions "
+        "projection marks `no` positions against the complemented mark "
+        "(1 - yes_price) so a flat NO entry reports ~0 unrealized P&L; "
+        "`short` positions mark against the same instrument price."
+    ),
+    "rebuild": (
+        "The positions projection is rebuildable from position_events "
+        "(journal.rebuild_projections projection=positions). Existing rows "
+        "written before this convention was enforced are corrected in place "
+        "by re-running the rebuild — no data migration of position_events is "
+        "required because the side-native entry price was already stored."
+    ),
+}
+
 
 def allowed_decision_types() -> list[str]:
     """Return the stable decision.type choices in matrix order."""
 
     return list(DECISION_MATRIX)
+
+
+def price_convention() -> dict[str, Any]:
+    """Expose the canonical `decision.add price` side convention.
+
+    Surfaced on `decision.add`'s JSON schema as `x-price-convention` so
+    callers learn that `price` is the side-native contract price and that
+    the positions projection complements the YES mark for `no` sides
+    (trade-trace-ctvb)."""
+
+    return dict(PRICE_CONVENTION)
 
 
 def material_non_action_taxonomy() -> dict[str, Any]:

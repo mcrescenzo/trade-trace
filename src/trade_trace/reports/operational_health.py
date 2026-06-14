@@ -27,6 +27,11 @@ DEFAULT_LIMIT = 100
 _OPEN_RECEIPT_STATES = {"submitted", "accepted", "cancel_requested", "partial_fill"}
 _BLOCKED_RISK_OUTCOMES = {"hard_block", "missing_data", "stale_data"}
 _OPEN_APPROVAL_STATES = {"pending_external_review"}
+# States that claim an external approval/waiver decision exists: a NULL
+# approval_ref_id here is a genuine, actionable gap. By contrast,
+# 'not_requested' (the default) with a NULL ref is normal and must NOT be
+# flagged — otherwise the approvals section is permanently in 'attention'.
+_CLAIMED_EXTERNAL_APPROVAL_STATES = {"approved_elsewhere", "waived_elsewhere"}
 _BAD_RUN_STATUSES = {"failed", "blocked", "timed_out"}
 _OPEN_INCIDENT_RESOLUTION = {"unresolved", "monitoring"}
 _STALE_SNAPSHOT_STATUSES = {"stale", "missing", "unknown"}
@@ -198,7 +203,7 @@ def _build(conn: sqlite3.Connection, args: dict[str, Any]) -> dict[str, Any]:
         where, params = _where(_cols(conn, "pretrade_intents"), rf)
         for r in conn.execute(f"SELECT id, approval_state, risk_check_receipt_id, approval_ref_id, market_id, instrument_id, as_of FROM pretrade_intents{where} ORDER BY as_of DESC, id DESC LIMIT ?", (*params, limit)).fetchall():
             codes = []
-            if r[1] in _OPEN_APPROVAL_STATES or not r[3]:
+            if r[1] in _OPEN_APPROVAL_STATES or (r[1] in _CLAIMED_EXTERNAL_APPROVAL_STATES and not r[3]):
                 codes.append("PENDING_OR_MISSING_APPROVAL")
             if codes:
                 rows.append({"id": r[0], "status": "caveated", "codes": codes, "approval_state": r[1], "contributing_ids": {"pretrade_intents": [r[0]], "risk_check_receipts": [r[2]] if r[2] else []}})

@@ -3,6 +3,7 @@
 > Status: **design — not implemented**. The MVP transport is stdio MCP + the CLI; HTTP/SSE is listed in PRD §P1+ work and has no implementation in the live registry.
 
 Status: proposed design artifact for bead `trade-trace-alr`; design-only, not implemented.
+Parent bead `trade-trace-alr` closed as Fixed meaning the design artifact itself was completed, not that an implementation was shipped.
 Date: 2026-05-19.
 
 Companion docs: [PRD.md](../PRD.md), [persistence.md](persistence.md), [contracts.md](contracts.md), [operability.md](operability.md), [security.md](security.md).

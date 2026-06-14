@@ -375,9 +375,9 @@ def test_memory_recall_schema_matches_runtime_required_query_and_optional_knobs(
 def test_report_schemas_advertise_defaulted_args_as_optional():
     expected_optional = {
         "report.watchlist": ("filter", "mode", "stale_threshold_days"),
-        "report.lifecycle": ("filter", "states", "status", "as_of", "stale_threshold_days"),
-        "report.work_queue": ("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
-        "agent.next_actions": ("filter", "as_of", "stale_threshold_days", "kinds", "kind"),
+        "report.lifecycle": ("filter", "states", "status", "as_of", "stale_threshold_days", "limit", "cursor"),
+        "report.work_queue": ("filter", "as_of", "stale_threshold_days", "kinds", "kind", "limit", "cursor"),
+        "agent.next_actions": ("filter", "as_of", "stale_threshold_days", "kinds", "kind", "limit", "cursor"),
         "report.open_positions": ("limit", "cursor", "kind", "instrument_id", "strategy_id"),
         "report.current_exposure": ("recent_limit", "include_watchlist", "include_anomalies", "kind", "instrument_id", "strategy_id"),
         "report.source_quality": ("stale_threshold_days",),
@@ -486,10 +486,235 @@ def test_memory_reflect_schema_advertises_canonical_and_sugar_shapes():
         "strength_tags",
         "weakness_tags",
         "meta_json",
+        # memory-layer.md §10 edge-sugar fields are now implemented
+        # (bead trade-trace-qikt) and advertised on the schema.
+        "derived_from",
+        "supports",
+        "contradicts",
+        "supersedes",
     ):
         assert key in properties
-    assert "derived_from" not in properties
-    assert "supports" not in properties
+
+
+def test_memory_link_schema_advertises_endpoint_and_edge_enums():
+    """memory.link validates source_kind/target_kind against
+    VALID_MEMORY_ENDPOINTS and edge_type against EDGE_TYPES at runtime, but
+    the advertised schema auto-derived from example_minimal exposed them as
+    bare strings — a bot reading the schema could not discover the allowed
+    values without triggering a VALIDATION_ERROR (AX-051). The advertised
+    enums must match the runtime allowlists exactly."""
+    from trade_trace.tools.memory import EDGE_TYPES, VALID_MEMORY_ENDPOINTS
+
+    schema = _schema_for("memory.link")
+    properties = schema.get("properties", {})
+
+    for key in (
+        "source_kind",
+        "source_id",
+        "target_kind",
+        "target_id",
+        "edge_type",
+        "idempotency_key",
+    ):
+        assert key in properties, f"memory.link schema omits {key}"
+        assert key in schema.get("required", []), f"memory.link {key} not required"
+
+    assert properties["source_kind"]["enum"] == list(VALID_MEMORY_ENDPOINTS)
+    assert properties["target_kind"]["enum"] == list(VALID_MEMORY_ENDPOINTS)
+    assert properties["edge_type"]["enum"] == list(EDGE_TYPES)
+
+
+def test_outcome_add_schema_advertises_status_enum_and_confidence():
+    """outcome.add (and its resolve.record / resolution.add aliases) validates
+    status against _OUTCOME_STATUSES at runtime with a self-documenting error,
+    but the schema auto-derived from example_minimal exposed status as a bare
+    string and omitted the auto-score-gating confidence field from properties
+    (AX-054, the AX-051 / AX-030 class). The advertised enum must match the
+    runtime allowlist and confidence must be discoverable."""
+    from trade_trace.tools.ledger.outcome import _OUTCOME_STATUSES
+
+    for tool_name in ("outcome.add", "resolve.record", "resolution.add"):
+        schema = _schema_for(tool_name)
+        properties = schema.get("properties", {})
+        assert properties["status"]["enum"] == sorted(_OUTCOME_STATUSES), (
+            f"{tool_name} must advertise the status enum matching the runtime allowlist"
+        )
+        assert "confidence" in properties, (
+            f"{tool_name} must advertise the auto-score-gating confidence field"
+        )
+        for runtime_required in ("instrument_id", "resolved_at", "outcome_label", "status", "idempotency_key"):
+            assert runtime_required in schema.get("required", []), (
+                f"{tool_name} runtime requires {runtime_required!r}"
+            )
+
+
+def test_strategy_create_schema_advertises_status_enum_and_optional_fields():
+    """strategy.create (the public strategy.upsert create-mode) validates
+    status against _STATUS_VALUES at runtime with a self-documenting error and
+    accepts description/hypothesis/meta_json, but the schema auto-derived from
+    example_minimal exposed only name/slug/idempotency_key (AX-055, the
+    AX-051 / AX-054 class). The advertised status enum must match the runtime
+    allowlist and the optional fields must be discoverable."""
+    from trade_trace.tools.strategy import _STATUS_VALUES
+
+    for tool_name in ("strategy.create", "strategy.upsert"):
+        schema = _schema_for(tool_name)
+        properties = schema.get("properties", {})
+        assert properties["status"]["enum"] == list(_STATUS_VALUES), (
+            f"{tool_name} must advertise the status enum matching the runtime allowlist"
+        )
+        for optional in ("description", "hypothesis", "meta_json"):
+            assert optional in properties, (
+                f"{tool_name} must advertise the runtime-accepted {optional!r} field"
+            )
+            assert optional not in schema.get("required", [])
+        for runtime_required in ("name", "slug", "idempotency_key"):
+            assert runtime_required in schema.get("required", [])
+
+
+def test_import_commit_schema_advertises_transaction_mode_enum():
+    """import.commit validates transaction_mode against {single, per_row} at
+    runtime with a self-documenting error, but the schema auto-derived from
+    example_minimal exposed it as a bare string (AX-056, the AX-051 class).
+    The advertised enum must match the runtime allowlist."""
+    schema = _schema_for("import.commit")
+    properties = schema.get("properties", {})
+    assert properties["transaction_mode"]["enum"] == ["single", "per_row"], (
+        "import.commit must advertise the transaction_mode enum matching the runtime allowlist"
+    )
+    for runtime_required in ("path", "transaction_mode", "idempotency_key"):
+        assert runtime_required in schema.get("required", [])
+
+
+def test_review_bundle_schema_advertises_filter_and_scoping_knobs():
+    """review.bundle was registered with neither json_schema nor
+    example_minimal, so it advertised zero properties even though the runtime
+    ReviewBundleInput accepts a ReportFilter `filter` plus scoping knobs
+    (AX-057). The scoping surface must be discoverable and `filter` must be a
+    typed object so the MCP bridge passes it through as a dict."""
+    from trade_trace.tools.review_bundle import RedactionProfile
+
+    schema = _schema_for("review.bundle")
+    properties = schema.get("properties", {})
+    assert properties["filter"]["type"] == "object", (
+        "review.bundle must advertise filter as an object so it is passed through as a dict"
+    )
+    for knob in (
+        "max_records",
+        "include_sources",
+        "include_reflections",
+        "include_playbook",
+        "include_recall_receipts",
+        "include_autonomous_lifecycle",
+        "redaction_profile",
+        "max_examples_per_record",
+    ):
+        assert knob in properties, f"review.bundle must advertise the {knob!r} knob"
+        assert knob not in schema.get("required", [])
+    assert properties["redaction_profile"]["enum"] == [m.value for m in RedactionProfile], (
+        "review.bundle must advertise the redaction_profile enum matching RedactionProfile"
+    )
+    # review.bundle accepts an empty {} payload (an unscoped bounded sweep).
+    assert schema.get("required", []) == []
+
+
+def test_journal_fixture_seed_schema_advertises_target_enum_and_optional_default():
+    """journal.fixture_seed validates target against the FIXTURE_TARGETS
+    profile set at runtime with a self-documenting error, but the schema
+    auto-derived from example_minimal exposed target as a bare *required*
+    string (AX-059, the AX-055/056 auto-derived-schema class). The advertised
+    enum must match the runtime allowlist, and target must be optional because
+    the runtime defaults it to 'mvp-eval-pm'."""
+    from trade_trace.tools.fixture import FIXTURE_TARGETS
+
+    schema = _schema_for("journal.fixture_seed")
+    properties = schema.get("properties", {})
+    assert properties["target"]["enum"] == list(FIXTURE_TARGETS), (
+        "journal.fixture_seed must advertise the target enum matching FIXTURE_TARGETS"
+    )
+    # target is runtime-defaulted (mvp-eval-pm), so it must NOT be required.
+    assert "target" not in schema.get("required", []), (
+        "journal.fixture_seed target is runtime-defaulted and must be optional"
+    )
+    assert "idempotency_key" in schema.get("required", [])
+
+
+def test_memory_retain_schema_advertises_node_type_enum_and_optional_knobs():
+    """memory.retain validates node_type against NODE_TYPES at runtime with a
+    self-documenting error, but the schema auto-derived from example_minimal
+    exposed node_type as a bare string (AX-060, the AX-051/054 class). The
+    advertised enum must match the runtime allowlist and the optional knobs
+    (importance/confidence_base/validity) must be discoverable."""
+    from trade_trace.tools.memory import NODE_TYPES
+
+    schema = _schema_for("memory.retain")
+    properties = schema.get("properties", {})
+    assert properties["node_type"]["enum"] == list(NODE_TYPES), (
+        "memory.retain must advertise the node_type enum matching NODE_TYPES"
+    )
+    for knob in ("importance", "confidence_base", "valid_from", "valid_to"):
+        assert knob in properties, f"memory.retain must advertise the {knob!r} knob"
+        assert knob not in schema.get("required", [])
+    assert set(schema.get("required", [])) == {"node_type", "body", "idempotency_key"}
+
+
+def test_market_bind_schema_advertises_source_state_mechanism_enums():
+    """market.bind validates source/state/mechanism (required) and
+    resolution_source/ambiguity_kind (optional) against runtime allowlists with
+    self-documenting errors, but the schema auto-derived from example_minimal
+    exposed all five as bare strings (AX-064, the AX-055/059/060
+    auto-derived-schema class on the PRIMARY public entry tool). A bot reading
+    the schema could not discover the allowed values without first triggering a
+    VALIDATION_ERROR. The advertised enums must mirror the runtime allowlists
+    (sorted, matching the order the runtime error surfaces)."""
+    from trade_trace.tools.market_bind import (
+        _ALLOWED_AMBIGUITY_KINDS,
+        _ALLOWED_MECHANISMS,
+        _ALLOWED_RESOLUTION_SOURCES,
+        _ALLOWED_SOURCES,
+        _ALLOWED_STATES,
+    )
+
+    schema = _schema_for("market.bind")
+    properties = schema.get("properties", {})
+    assert properties["source"]["enum"] == sorted(_ALLOWED_SOURCES)
+    assert properties["state"]["enum"] == sorted(_ALLOWED_STATES)
+    assert properties["mechanism"]["enum"] == sorted(_ALLOWED_MECHANISMS)
+    assert properties["resolution_source"]["enum"] == sorted(_ALLOWED_RESOLUTION_SOURCES)
+    assert properties["ambiguity_kind"]["enum"] == sorted(_ALLOWED_AMBIGUITY_KINDS)
+    # The four runtime-required fields stay required...
+    for runtime_required in ("source", "external_id", "state", "mechanism"):
+        assert runtime_required in schema.get("required", []), (
+            f"market.bind runtime requires {runtime_required!r}"
+        )
+    # ...and the optional enum fields must not be falsely marked required.
+    for optional in ("resolution_source", "ambiguity_kind"):
+        assert optional not in schema.get("required", []), (
+            f"market.bind {optional!r} is optional and must not be required"
+        )
+
+
+def test_strategy_update_schema_advertises_status_enum_and_optional_fields():
+    """strategy.update validates status against _STATUS_VALUES at runtime with a
+    self-documenting error and updates description/hypothesis/status/meta_json,
+    but the schema auto-derived from example_minimal hid the status enum and the
+    other update fields and falsely marked `description` required (AX-061, the
+    AX-055 sibling). status must carry the enum and description must be
+    optional on this partial-update tool."""
+    from trade_trace.tools.strategy import _STATUS_VALUES
+
+    schema = _schema_for("strategy.update")
+    properties = schema.get("properties", {})
+    assert properties["status"]["enum"] == list(_STATUS_VALUES), (
+        "strategy.update must advertise the status enum matching _STATUS_VALUES"
+    )
+    for field in ("hypothesis", "meta_json"):
+        assert field in properties, f"strategy.update must advertise the {field!r} update field"
+    # description is optional on a partial update; only strategy_id + key required.
+    assert "description" not in schema.get("required", []), (
+        "strategy.update description must be optional on a partial-update tool"
+    )
+    assert set(schema.get("required", [])) == {"strategy_id", "idempotency_key"}
 
 
 def test_playbook_read_and_write_schemas_advertise_runtime_optional_fields():
@@ -502,7 +727,7 @@ def test_playbook_read_and_write_schemas_advertise_runtime_optional_fields():
         assert key in propose["properties"]
         assert key not in propose["required"]
 
-    adherence = _schema_for("decision.record_adherence")
+    adherence = _schema_for("playbook.record_adherence")
     assert adherence["properties"]["status"]["enum"] == [
         "considered",
         "followed",

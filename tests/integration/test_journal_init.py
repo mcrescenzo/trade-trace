@@ -79,6 +79,59 @@ def test_init_enables_wal(tmp_path: Path):
     assert mode.lower() == "wal"
 
 
+def test_open_database_sets_synchronous_normal(tmp_path: Path):
+    """trade-trace-1k5d: open_database must set synchronous=NORMAL (value 1)
+    on the connection. synchronous is connection-scoped, so it is asserted on
+    a connection obtained from open_database itself."""
+
+    db = open_database(tmp_path / "home" / "journal.db")
+    try:
+        value = db.connection.execute("PRAGMA synchronous").fetchone()[0]
+    finally:
+        db.close()
+    assert value == 1  # 1 == NORMAL
+
+
+def test_open_database_still_sets_synchronous_when_wal_pragma_is_locked(tmp_path: Path, monkeypatch):
+    """trade-trace-1k5d: a transient 'database is locked' raised by the
+    journal_mode=WAL negotiation must NOT skip the synchronous=NORMAL pragma.
+    Previously both pragmas shared one try/except, so a contended open silently
+    left synchronous at the SQLite default (FULL). Simulate the locked WAL
+    pragma and assert synchronous is still applied."""
+
+    real_connect = sqlite3.connect
+
+    class _Proxy:
+        def __init__(self, conn: sqlite3.Connection) -> None:
+            self._conn = conn
+            self.synchronous_set = False
+
+        def execute(self, sql: str, *args, **kwargs):
+            if "journal_mode = WAL" in sql:
+                raise sqlite3.OperationalError("database is locked")
+            if "synchronous = NORMAL" in sql:
+                self.synchronous_set = True
+            return self._conn.execute(sql, *args, **kwargs)
+
+        def __getattr__(self, name):
+            return getattr(self._conn, name)
+
+    proxies: list[_Proxy] = []
+
+    def _fake_connect(*args, **kwargs):
+        proxy = _Proxy(real_connect(*args, **kwargs))
+        proxies.append(proxy)
+        return proxy
+
+    monkeypatch.setattr(sqlite3, "connect", _fake_connect)
+    db = open_database(tmp_path / "home" / "journal.db")
+    try:
+        # The WAL pragma was swallowed (locked) but synchronous still ran.
+        assert proxies and proxies[-1].synchronous_set is True
+    finally:
+        db.connection._conn.close()
+
+
 def test_status_reports_schema_version_after_init(tmp_path: Path):
     home = tmp_path / "home"
     _init(home)

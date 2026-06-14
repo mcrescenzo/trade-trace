@@ -105,9 +105,14 @@ def test_tool_schema_catalog_lists_default_public_catalog(home):
     names = {t["name"] for t in env.data["tools"]}
     # Representative default v0.0.2 surface: new catalog names plus stable reports.
     for required in ("market.bind", "decision.add", "resolution.add",
-                     "playbook.record_adherence", "tool.schema", "report.calibration"):
+                     "playbook.record_adherence", "tool.schema", "report.calibration",
+                     # playbook.propose_version is the ONLY tool that mints a
+                     # playbook_version_id; playbook.record_adherence requires
+                     # one, so the producer must stay catalog-visible alongside
+                     # its consumer (trade-trace-47tp).
+                     "playbook.propose_version"):
         assert required in names
-    for legacy_hidden in ("venue.add", "thesis.add", "outcome.add", "playbook.propose_version"):
+    for legacy_hidden in ("venue.add", "thesis.add", "outcome.add"):
         assert legacy_hidden not in names
 
 

@@ -25,7 +25,7 @@ def _instrument(home: Path, idx: int) -> str:
     return _envelope(home, "instrument.add", {"venue_id": venue, "asset_class": "prediction_market", "title": f"M{idx}"})["data"]["id"]
 
 
-def _sized_entry(home: Path, idx: int, *, probability: float, price: float, quantity: float, side: str = "yes") -> None:
+def _sized_entry(home: Path, idx: int, *, probability: float, price: float, quantity: float, side: str = "yes") -> str:
     inst = _instrument(home, idx)
     thesis = _envelope(home, "thesis.add", {"instrument_id": inst, "side": side, "body": "t"})["data"]["id"]
     forecast = _envelope(
@@ -38,6 +38,7 @@ def _sized_entry(home: Path, idx: int, *, probability: float, price: float, quan
         {"instrument_id": inst, "thesis_id": thesis, "forecast_id": forecast, "type": "paper_enter",
          "side": side, "quantity": quantity, "price": price, "reason": "r"},
     )
+    return inst
 
 
 def _pq(home: Path, **extra):
@@ -86,6 +87,79 @@ def test_no_outcome_consulted_still_scores(home: Path):
     assert env["ok"]
     assert env["data"]["summary"]["sample_size"] == 1
     assert "process quality only" in env["data"]["summary"]["caveats"][0].lower()
+
+
+def test_wrong_outcome_is_ignored_invariant(home: Path):
+    """INV-3 (trade-trace-hpcr): the process score is outcome-BLIND by
+    invariant, not merely by current implementation.
+
+    Seed a YES-side sized decision + linked forecast, snapshot the full
+    report, then write a deliberately WRONG, auto-scored resolution
+    (outcome_label=no, resolved_final, high confidence — so BOTH an
+    `outcomes` row and a derived `forecast_scores` row now exist on disk).
+    Re-running the report must yield a byte-for-byte identical envelope
+    (ignoring the per-call `request_id`/timing in meta). If a future
+    regression adds an outcomes/forecast_scores JOIN, this fails.
+    """
+    instrument_id = _sized_entry(home, 0, probability=0.8, price=0.4, quantity=50, side="yes")
+    before = _pq(home, min_sample=1)
+    assert before["ok"], before
+    assert before["data"]["summary"]["sample_size"] == 1
+
+    out = _envelope(
+        home,
+        "outcome.add",
+        {
+            "instrument_id": instrument_id,
+            "resolved_at": "2026-06-30T00:00:00Z",
+            "outcome_label": "no",  # WRONG for a YES forecast at p=0.8
+            "status": "resolved_final",
+            "confidence": 0.99,  # high enough to auto-score the pending forecast
+        },
+    )
+    # Confirm the resolution really landed AND auto-scored, so the report is
+    # now running against a DB that contains the contradictory outcome.
+    assert out["ok"], out
+    assert out["data"]["status"] == "resolved_final"
+    assert len(out["data"]["auto_scored_forecasts"]) == 1
+
+    after = _pq(home, min_sample=1)
+    assert after["ok"], after
+
+    # Outcome-blindness invariant: identical summary + groups + data regardless
+    # of the (wrong) outcome row. Compare the substantive payload, not the
+    # per-request meta envelope which legitimately varies between calls.
+    assert before["data"]["summary"] == after["data"]["summary"]
+    assert before["data"]["groups"] == after["data"]["groups"]
+    assert before["data"] == after["data"]
+    # The winning side per the score is NO, yet direction stays YES-consistent
+    # and kelly_alignment is unchanged — proving variance cannot move it.
+    assert after["data"]["summary"]["direction_consistency_rate"] == pytest.approx(1.0)
+
+
+def test_process_quality_record_ids_never_reference_outcomes(home: Path):
+    """Parity guard (INV-3 optional): `report.process_quality` group
+    `record_ids` reference only process-side tables (decisions/forecasts),
+    never outcomes/forecast_scores — whereas `report.calibration` DOES
+    surface `outcomes` in its `record_ids`. Encodes the design split: process
+    is graded without resolution; calibration is graded against it.
+    """
+    _sized_entry(home, 0, probability=0.9, price=0.5, quantity=80)
+    env = _pq(home, min_sample=1)
+    assert env["ok"], env
+    for group in env["data"]["groups"]:
+        record_ids = group.get("record_ids", {})
+        assert "outcomes" not in record_ids
+        assert "forecast_scores" not in record_ids
+        assert set(record_ids) <= {"decisions", "forecasts"}
+
+    # Parity: calibration's own record_ids contract DOES carry outcomes — the
+    # structural reference process_quality must never grow.
+    from trade_trace.reports import calibration as _calibration_module
+
+    cal_src = Path(_calibration_module.__file__).read_text()
+    assert "JOIN outcomes" in cal_src
+    assert '"outcomes": sorted(' in cal_src
 
 
 def test_low_sample_warns(home: Path):

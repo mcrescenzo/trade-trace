@@ -1,8 +1,11 @@
-"""Local-only `market.bind` tool for the v0.0.2 PM catalog.
+"""`market.bind` tool for the v0.0.2 PM catalog.
 
-This is intentionally a manual/local binding surface. It records market metadata
-in the existing `markets` table and makes no adapter, HTTP, scheduler, broker,
-wallet, or market-data calls.
+This is primarily a manual/local binding surface that records market metadata in
+the existing `markets` table. As a convenience, when source='polymarket', the
+Polymarket adapter is enabled, and the caller does not force `bound_via='manual'`,
+it enriches the row via a single read-only Gamma `/markets/{id}` lookup (see the
+dual-mode branch in `_market_bind`). It never touches a broker, wallet, scheduler,
+or order/advice path.
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from typing import Any
 
 from trade_trace.adapters.polymarket.config import load_config
 from trade_trace.contracts.errors import ErrorCode
+from trade_trace.contracts.json_schema_derive import derive_schema
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
@@ -20,6 +24,7 @@ from trade_trace.tools._helpers import (
     emit_event,
     new_id,
     now_iso,
+    reject_if_contains_secrets,
     require,
     store_metadata_json,
 )
@@ -53,7 +58,16 @@ def _optional_enum(args: dict[str, Any], field: str, allowed: set[str]) -> str |
 
 
 def _required_enum(args: dict[str, Any], field: str, allowed: set[str]) -> str:
-    value = require(args, field)
+    # Surface the allowed set on BOTH the missing and the invalid path. A bare
+    # "<field> is required" (the default require() message) leaves a caller with
+    # no way to discover that e.g. `source` must be one of polymarket/kalshi/...
+    if field not in args or args[field] is None:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"{field} is required and must be one of {sorted(allowed)!r}",
+            details={"field": field, "allowed": sorted(allowed)},
+        )
+    value = args[field]
     if value not in allowed:
         raise ToolError(
             ErrorCode.VALIDATION_ERROR,
@@ -112,6 +126,15 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             details={"field": "bound_via", "value": bound_via, "allowed": ["manual"]},
         )
     idempotency_key = args.get("idempotency_key")
+    # title / question / resolution rule text are persisted verbatim onto the
+    # market (and copied onto the bound instrument's resolution_criteria_text);
+    # scan all three caller-supplied free-text fields for credential-shaped
+    # substrings before any DB write (bead trade-trace-jm14 / INV-6).
+    reject_if_contains_secrets(args.get("title"), field="title")
+    reject_if_contains_secrets(args.get("question"), field="question")
+    reject_if_contains_secrets(
+        _resolution_rule_text_from_args(args), field="resolution_rule_text"
+    )
     metadata = store_metadata_json(args)
     extra_pm_keys = (
         "gamma_event_id", "gamma_market_id", "event_slug", "market_slug", "condition_id",
@@ -144,6 +167,20 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             },
         }
         metadata_json = json.dumps(parsed_metadata, sort_keys=True, separators=(",", ":"))
+        # The extracted-text scan above (lines ~135-137) only sees the single
+        # projection _resolution_rule_text_from_args() returns; the ACTUAL row
+        # persists the whole caller-supplied `resolution_rule` object plus the
+        # merged polymarket metadata block verbatim. Two leaks slip past a
+        # projection-only scan (bead trade-trace-cmpy / jm14 / INV-6):
+        #   (1) a clean flat resolution_rule_text alongside a nested
+        #       resolution_rule={text:'<SECRET>'} — the projection prefers the
+        #       clean flat value, so the secret-bearing object is never seen;
+        #   (2) resolution_rule={text:'clean', notes:'<SECRET>'} — only `.text`
+        #       is projected, so sibling keys (notes/source/anything) persist
+        #       unscanned.
+        # Scan the serialized payload that is about to be written so a secret
+        # embedded anywhere in the merged block is rejected before the INSERT.
+        reject_if_contains_secrets(metadata_json, field="resolution_rule")
     else:
         metadata_json = metadata
     venue_metadata_json = _json_text(args.get("venue_metadata_json"), field="venue_metadata_json")
@@ -293,6 +330,23 @@ def _market_bind(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             return payload
 
 
+def _resolution_rule_text_from_args(args: dict[str, Any]) -> str | None:
+    """Extract a caller-supplied resolution rule text from market.bind args.
+
+    Accepts either the flat ``resolution_rule_text`` field or the nested
+    ``resolution_rule.text`` object. Returns ``None`` for absent/blank text so
+    the caller can fall back to the question (trade-trace-n33z).
+    """
+
+    text = args.get("resolution_rule_text")
+    if not (isinstance(text, str) and text.strip()):
+        rule = args.get("resolution_rule")
+        text = rule.get("text") if isinstance(rule, dict) else None
+    if isinstance(text, str) and text.strip():
+        return text.strip()
+    return None
+
+
 def _ensure_market_bind_prerequisites(
     uow: UnitOfWork,
     *,
@@ -338,6 +392,12 @@ def _ensure_market_bind_prerequisites(
             sort_keys=True,
             separators=(",", ":"),
         )
+        # Carry a caller-supplied resolution rule into the instrument's
+        # resolution_criteria_text so the criterion travels with the bound
+        # market; fall back to the question only when no rule text was supplied
+        # (trade-trace-n33z). Previously this was hard-wired to the question, so
+        # the auditable resolution criterion was never stored on the instrument.
+        resolution_criteria_text = _resolution_rule_text_from_args(args) or question
         instrument_payload = {
             "id": instrument_id,
             "venue_id": venue_id,
@@ -347,7 +407,7 @@ def _ensure_market_bind_prerequisites(
             "asset_class": "prediction_market",
             "currency_or_collateral": None,
             "expiration_or_resolution_at": args.get("close_at") or args.get("resolved_at"),
-            "resolution_criteria_text": question,
+            "resolution_criteria_text": resolution_criteria_text,
             "contract_multiplier": None,
             "metadata_json": metadata_json,
         }
@@ -356,7 +416,7 @@ def _ensure_market_bind_prerequisites(
             (
                 instrument_id, venue_id, external_id, external_id, instrument_title,
                 "prediction_market", None, instrument_payload["expiration_or_resolution_at"],
-                question, None, metadata_json, created_at, ctx.actor_id,
+                resolution_criteria_text, None, metadata_json, created_at, ctx.actor_id,
             ),
         )
         emit_event(
@@ -369,62 +429,101 @@ def _ensure_market_bind_prerequisites(
 
 
 def register_market_bind_tool(registry: ToolRegistry) -> None:
+    example_minimal = {
+        "source": "polymarket",
+        "external_id": "example-market-1",
+        "state": "open",
+        "mechanism": "clob",
+        "bound_via": "manual",
+        "title": "Will example happen?",
+        "question": "Will example happen by 2026-12-31?",
+        "url": "https://example.invalid/market/example-market-1",
+        "resolution_source": "market_contract",
+        "ambiguity_kind": "market_rules_unclear",
+        "opened_at": "2026-01-01T00:00:00Z",
+        "close_at": "2026-12-31T00:00:00Z",
+        "closed_for_trading_at": "2026-12-31T00:00:00Z",
+        "resolving_at": "2027-01-01T00:00:00Z",
+        "resolved_at": "2027-01-02T00:00:00Z",
+        "voided_at": "2027-01-02T00:00:00Z",
+        "ambiguous_at": "2027-01-02T00:00:00Z",
+        "venue_metadata_json": {},
+        "metadata_json": {},
+        "gamma_event_id": "evt-example-1",
+        "gamma_market_id": "example-market-1",
+        "event_slug": "example-event",
+        "market_slug": "example-market-1",
+        "condition_id": "condition-example-1",
+        "outcome_ids_by_label": {"yes": "outcome-yes", "no": "outcome-no"},
+        "negative_risk": {"enabled": False},
+        "event_grouping": {"event_id": "evt-example-1", "event_slug": "example-event"},
+        "resolution_rule": {"text": "Resolve per public market rules.", "source": "market_contract", "provenance": "caller_supplied"},
+        "resolution_rule_text": "Resolve per public market rules.",
+        "tick_size": 0.01,
+        "fee_rate_bps": 0,
+        "rewards": {},
+        "rebates": {},
+        "tradable": True,
+        "accepting_orders": True,
+        "idempotency_key": "00000000-0000-4000-8000-marketbind01",
+    }
+    optional_keys = (
+        "idempotency_key", "title", "question", "url", "resolution_source", "ambiguity_kind",
+        "bound_via", "opened_at", "close_at", "closed_for_trading_at", "resolving_at",
+        "resolved_at", "voided_at", "ambiguous_at", "venue_metadata_json", "metadata_json",
+        "gamma_event_id", "gamma_market_id", "event_slug", "market_slug", "condition_id",
+        "outcome_ids_by_label", "negative_risk", "event_grouping", "resolution_rule",
+        "resolution_rule_text", "tick_size", "fee_rate_bps", "rewards", "rebates",
+        "tradable", "accepting_orders",
+    )
+    # The schema is auto-derived from example_minimal, which loses the enum
+    # constraints the runtime enforces on source/state/mechanism (required, via
+    # _required_enum) and resolution_source/ambiguity_kind (optional, via
+    # _optional_enum). A bot reading the schema could not discover the allowed
+    # values without first triggering a VALIDATION_ERROR (AX-064, the
+    # AX-055/059/060 auto-derived-schema class on the PRIMARY public entry
+    # tool). Derive then inject the enums, sorted to match the order the runtime
+    # error surfaces, so the advertised schema mirrors the runtime allowlists.
+    json_schema = derive_schema(example_minimal, optional_keys=optional_keys)
+    for field_name, allowed in (
+        ("source", _ALLOWED_SOURCES),
+        ("state", _ALLOWED_STATES),
+        ("mechanism", _ALLOWED_MECHANISMS),
+        ("resolution_source", _ALLOWED_RESOLUTION_SOURCES),
+        ("ambiguity_kind", _ALLOWED_AMBIGUITY_KINDS),
+    ):
+        json_schema["properties"][field_name]["enum"] = sorted(allowed)
     registry.register(
         "market.bind",
         _market_bind,
         is_write=True,
         description=(
             "Bind a prediction/event market into the local markets table. "
-            "Manual/local only: no network, adapter, broker, wallet, scheduler, or advice path. "
+            "Local/manual by default; when source='polymarket', the adapter is enabled, and "
+            "bound_via is not 'manual', it enriches the row via a single read-only Polymarket "
+            "Gamma /markets/{id} lookup (no broker, wallet, scheduler, order, or advice path). "
+            "Pass bound_via='manual' to force the offline path. "
             "Returns stable market_id/instrument_id prerequisites for snapshot.add, forecast.add, and decision.add."
         ),
-        example_minimal={
+        example_minimal=example_minimal,
+        json_schema=json_schema,
+        # `display_minimal` is the example surfaced by `tool.schema`; it is
+        # DECOUPLED from `example_minimal` (the json_schema-derivation source)
+        # per bead trade-trace-mpsu. `example_minimal` must keep every accepted
+        # property so the derived input schema stays complete, but the displayed
+        # example shows only the four required fields (source, external_id,
+        # state, mechanism) plus a couple of core fields so agents are not
+        # buried under ~30 optional keys.
+        display_minimal={
             "source": "polymarket",
             "external_id": "example-market-1",
             "state": "open",
             "mechanism": "clob",
-            "bound_via": "manual",
             "title": "Will example happen?",
-            "question": "Will example happen by 2026-12-31?",
-            "url": "https://example.invalid/market/example-market-1",
-            "resolution_source": "market_contract",
-            "ambiguity_kind": "market_rules_unclear",
-            "opened_at": "2026-01-01T00:00:00Z",
-            "close_at": "2026-12-31T00:00:00Z",
-            "closed_for_trading_at": "2026-12-31T00:00:00Z",
-            "resolving_at": "2027-01-01T00:00:00Z",
-            "resolved_at": "2027-01-02T00:00:00Z",
-            "voided_at": "2027-01-02T00:00:00Z",
-            "ambiguous_at": "2027-01-02T00:00:00Z",
-            "venue_metadata_json": {},
-            "metadata_json": {},
-            "gamma_event_id": "evt-example-1",
-            "gamma_market_id": "example-market-1",
-            "event_slug": "example-event",
-            "market_slug": "example-market-1",
-            "condition_id": "condition-example-1",
-            "outcome_ids_by_label": {"yes": "outcome-yes", "no": "outcome-no"},
-            "negative_risk": {"enabled": False},
-            "event_grouping": {"event_id": "evt-example-1", "event_slug": "example-event"},
-            "resolution_rule": {"text": "Resolve per public market rules.", "source": "market_contract", "provenance": "caller_supplied"},
-            "resolution_rule_text": "Resolve per public market rules.",
-            "tick_size": 0.01,
-            "fee_rate_bps": 0,
-            "rewards": {},
-            "rebates": {},
-            "tradable": True,
-            "accepting_orders": True,
+            "bound_via": "manual",
             "idempotency_key": "00000000-0000-4000-8000-marketbind01",
         },
-        optional_keys=(
-            "idempotency_key", "title", "question", "url", "resolution_source", "ambiguity_kind",
-            "bound_via", "opened_at", "close_at", "closed_for_trading_at", "resolving_at",
-            "resolved_at", "voided_at", "ambiguous_at", "venue_metadata_json", "metadata_json",
-            "gamma_event_id", "gamma_market_id", "event_slug", "market_slug", "condition_id",
-            "outcome_ids_by_label", "negative_risk", "event_grouping", "resolution_rule",
-            "resolution_rule_text", "tick_size", "fee_rate_bps", "rewards", "rebates",
-            "tradable", "accepting_orders",
-        ),
+        optional_keys=optional_keys,
         example_rich={
             "source": "polymarket",
             "external_id": "example-market-1",

@@ -1,6 +1,6 @@
 # Imports: Local JSONL and CSV
 
-> Status: **shipped**. JSONL `import.validate` / `import.commit` and CSV `import.csv_fills` are live; the contract on this page matches the current registry envelope shape.
+> Status: **shipped**. `import.commit` is the live public JSONL/CSV import tool; `import.validate` and `import.csv_fills` are retained only as legacy back-compat aliases that redirect to `import.commit` (see `src/trade_trace/core.py`). The contract on this page matches the current registry envelope shape.
 
 
 **Implementation status:** `import.validate` and `import.commit` are real

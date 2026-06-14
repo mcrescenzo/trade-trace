@@ -312,3 +312,94 @@ def test_report_coach_embeds_integrity_diagnostics(home):
     # The late-recorded forecast triggers suspicious_late_rate → callout.
     callouts = " ".join(coach["callouts"])
     assert "suspicious_late_rate" in callouts
+
+
+# -- abstention_coverage: skip pass-surface (trade-trace-s7nn) --------
+
+
+def _skip(home: Path, instrument_id: str, *, forecast_id: str | None = None, key: str) -> dict:
+    args = {
+        "type": "skip",
+        "instrument_id": instrument_id,
+        "reason": "insufficient edge vs spread",
+        "idempotency_key": key,
+    }
+    if forecast_id is not None:
+        args["forecast_id"] = forecast_id
+    env = _mcp(home, "decision.add", args)
+    assert env.ok, env
+    return env.data
+
+
+def test_abstention_coverage_counts_forecast_less_skip(home):
+    """positive (trade-trace-s7nn): a decision.add(type=skip) with NO linked
+    forecast is a considered-and-passed-without-forecasting event and is
+    surfaced under abstention_coverage.skip_coverage, so the survivorship
+    control is no longer 0% for a bot that only records skips."""
+
+    inst = _seed_instrument(home)
+    skip = _skip(home, inst, key="00000000-0000-4000-8000-000000000201")
+    env = _mcp(home, "report.calibration_integrity", {})
+    diag = env.data["diagnostics"]["abstention_coverage"]
+    assert diag["count"] == 0  # no abstention.record
+    assert diag["skip_coverage"]["count"] == 1
+    assert skip["id"] in diag["skip_coverage"]["sample_ids"]["decisions"]
+    # De-duplicated union now counts the pass: no longer 0%.
+    assert diag["considered_passes_dedup"] == 1
+    assert diag["considered_total_dedup"] == 1
+    assert diag["considered_share_pct"] == 100.0
+
+
+def test_abstention_coverage_skip_with_forecast_not_counted_as_pass(home):
+    """negative (trade-trace-s7nn): a skip that LINKS a forecast is already
+    represented through the forecast denominator/forecast_coverage and must NOT
+    be re-counted under skip_coverage (no double-count of the same market)."""
+
+    seed = _seed_resolved_binary_forecast(home, p_yes=0.6)
+    _skip(
+        home, seed["instrument_id"], forecast_id=seed["forecast_id"],
+        key="00000000-0000-4000-8000-000000000202",
+    )
+    env = _mcp(home, "report.calibration_integrity", {})
+    diag = env.data["diagnostics"]["abstention_coverage"]
+    assert diag["skip_coverage"]["count"] == 0
+    assert diag["considered_passes_dedup"] == 0
+
+
+def test_abstention_coverage_dedups_skip_and_abstention_same_market(home):
+    """trade-trace-s7nn: a market carrying BOTH a forecast-less skip AND an
+    abstention.record contributes ONCE to the de-duplicated union (counted
+    under the abstention), even though both lines report it on their own
+    surface."""
+
+    inst = _seed_instrument(home)
+    abst = _mcp(home, "abstention.record", {
+        "instrument_id": inst,
+        "reason": "spread too wide vs edge",
+        "as_of": "2027-01-05T00:00:00Z",
+        "idempotency_key": "00000000-0000-4000-8000-000000000203",
+    })
+    assert abst.ok, abst
+    _skip(home, inst, key="00000000-0000-4000-8000-000000000204")
+    env = _mcp(home, "report.calibration_integrity", {})
+    diag = env.data["diagnostics"]["abstention_coverage"]
+    # Both surfaces report it on their own line...
+    assert diag["count"] == 1
+    assert diag["skip_coverage"]["count"] == 1
+    # ...but the de-dup union counts the market once.
+    assert diag["considered_passes_dedup"] == 1
+    assert diag["considered_total_dedup"] == 1
+
+
+def test_coach_callout_breaks_out_skip_pass_surface(home):
+    """trade-trace-s7nn: report.coach renders the de-duplicated union and
+    breaks out the forecast-less-skip contribution, so a skip-only bot is
+    never shown 0% no-bet coverage in the coach callout."""
+
+    inst = _seed_instrument(home)
+    _skip(home, inst, key="00000000-0000-4000-8000-000000000205")
+    env = _mcp(home, "report.coach", {})
+    assert env.ok, env
+    callouts = " ".join(env.data["callouts"])
+    assert "abstention_coverage" in callouts
+    assert "forecast-less skip" in callouts

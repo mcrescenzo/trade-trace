@@ -15,6 +15,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, get_args
 
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
+from trade_trace.reporting.pagination import (
+    MAX_LIMIT,
+    PaginationError,
+    _decode_cursor,
+    _encode_cursor,
+)
 from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 from trade_trace.reports.watchlist import DEFAULT_STALE_THRESHOLD_DAYS
@@ -164,17 +170,42 @@ def report_lifecycle(
     states: list[str] | None = None,
     as_of: str | None = None,
     stale_threshold_days: int = DEFAULT_STALE_THRESHOLD_DAYS,
+    limit: int | None = None,
+    cursor: str | None = None,
 ) -> dict[str, Any]:
-    """Return public derived lifecycle gaps/cases without persisting state."""
+    """Return public derived lifecycle gaps/cases without persisting state.
+
+    The case list is paginated (``limit`` + opaque ``cursor`` keyset, mirroring
+    ``report.open_positions``). Summary metrics (``case_count``, ``state_counts``,
+    ``due_count``, ``material_non_action_count``) are computed over the FULL
+    filtered set so a bot sees true backlog totals, while ``groups`` and
+    ``lifecycle_cases`` carry only the current page; ``truncated``/``next_cursor``
+    signal more pages. Previously the whole filtered set was returned with each
+    case serialized twice (once per ``groups`` entry with an echoed per-group
+    filter, again in full under ``lifecycle_cases``), so a populated journal
+    overflowed the MCP token cap with no way to narrow (trade-trace-hv19).
+
+    ``limit=None`` disables paging and returns the full filtered set (the
+    in-process bootstrap composer relies on this to feed active-ideas off the
+    whole case list); the MCP/CLI surface supplies a default page size so the
+    transport-facing path is always bounded.
+    """
 
     if not isinstance(stale_threshold_days, int) or stale_threshold_days < 0:
         raise ValueError("stale_threshold_days must be a non-negative integer")
+    if limit is not None and (not isinstance(limit, int) or limit < 1):
+        raise ValueError("limit must be a positive integer")
+    page_limit = min(int(limit), MAX_LIMIT) if limit is not None else None
     allowed_states = set(get_args(LifecycleState))
     state_filter = sorted(set(states or []))
     unknown = [state for state in state_filter if state not in allowed_states]
     if unknown:
-        raise ValueError(f"unsupported lifecycle state(s): {unknown!r}")
+        raise ValueError(
+            f"unsupported lifecycle state(s): {unknown!r}; "
+            f"allowed states are {sorted(allowed_states)!r}"
+        )
     resolved_as_of = _iso(_parse_ts(as_of or now_iso()))
+    as_of_dt = _parse_ts(resolved_as_of)
 
     rf = ReportFilter.model_validate(raw_filter or {})
     filter_view = process_filter(rf, report="report.lifecycle")
@@ -188,9 +219,38 @@ def report_lifecycle(
     ]
     cases = [case for case in cases if _case_matches_filter(case, rf, state_filter)]
 
+    # Aggregate metrics are computed over the full filtered set (true totals),
+    # not the page, so backlog counts stay honest under pagination.
+    total_count = len(cases)
     state_counts = {state: 0 for state in sorted(allowed_states)}
     for case in cases:
         state_counts[case["state"]] += 1
+    due_count = sum(1 for case in cases if _review_overdue(case.get("due_at"), as_of_dt))
+    material_count = sum(1 for case in cases if case.get("material_non_action") is not None)
+
+    # Keyset page over the stable (created_at, case_id) sort that
+    # derive_lifecycle_cases already guarantees. The cursor encodes that full
+    # composite key (not case_id alone), so paging follows the same order the
+    # rows are emitted in and the anchor does not drift between requests.
+    def _anchor(case: dict[str, Any]) -> tuple[str, str]:
+        return (case["timestamps"].get("created_at") or "", case["case_id"])
+
+    if cursor is not None:
+        after = _decode_cursor(cursor)
+        if not (isinstance(after, list) and len(after) == 2 and all(isinstance(part, str) for part in after)):
+            raise PaginationError("lifecycle cursor payload must be [created_at, case_id]")
+        after_key = (after[0], after[1])
+        start = next((i for i, case in enumerate(cases) if _anchor(case) > after_key), len(cases))
+    else:
+        start = 0
+    if page_limit is None:
+        page = cases[start:]
+        next_cursor = None
+    else:
+        page = cases[start : start + page_limit]
+        has_more = start + page_limit < total_count
+        next_cursor = _encode_cursor(list(_anchor(page[-1]))) if (page and has_more) else None
+
     groups = [
         {
             "key": case["case_id"],
@@ -202,31 +262,35 @@ def report_lifecycle(
                 "created_at": case["timestamps"].get("created_at"),
                 "material_non_action": case.get("material_non_action") is not None,
             },
-            "filter": {**filter_view, "states": state_filter},
             "record_ids": case["record_ids"],
             "examples": [{"kind": "lifecycle_case", "id": case["case_id"], "summary": ",".join(case["reason_codes"])}],
             "sample_size": 1,
             "sample_warning": None,
             "truncated": False,
         }
-        for case in cases
+        for case in page
     ]
     return standard_report_result(
         summary={
-            "sample_size": len(cases),
+            "sample_size": total_count,
+            "returned_count": len(page),
             "sample_warning": None,
             "filter": {**filter_view, "states": state_filter},
             "metrics": {
-                "case_count": len(cases),
+                "case_count": total_count,
+                "returned_count": len(page),
                 "state_counts": state_counts,
-                "due_count": sum(1 for case in cases if case.get("due_at") is not None),
-                "material_non_action_count": sum(1 for case in cases if case.get("material_non_action") is not None),
+                "due_count": due_count,
+                "material_non_action_count": material_count,
                 "stale_threshold_days": stale_threshold_days,
+                "limit": page_limit,
             },
             "caveats": [],
         },
         groups=groups,
-        extra={"as_of": resolved_as_of, "lifecycle_cases": cases},
+        truncated=next_cursor is not None,
+        next_cursor=next_cursor,
+        extra={"as_of": resolved_as_of, "lifecycle_cases": page},
     )
 
 
@@ -382,6 +446,29 @@ def _derive_forecast_case(
     elif _review_overdue(forecast["resolution_at"], as_of_dt):
         state = "pending_review"
         reason_codes.append("resolution_at_due_without_score")
+    elif not forecast["resolution_at"] and not _market_demonstrably_live(
+        conn, forecast["instrument_id"], as_of_dt
+    ):
+        # An open forecast with no resolution_at can never become due by clock,
+        # so it would otherwise stay silently "open" and never surface in
+        # report.work_queue as a resolve obligation (trade-trace-ptyi). Treat the
+        # missing horizon itself as a review obligation so the agent loop is
+        # prompted to record an outcome or set a resolution horizon.
+        #
+        # BUT: when the linked market is demonstrably still live (latest market
+        # row has state='open' AND a close_at strictly in the future), forcing
+        # pending_review here produced a false 'resolve_due_forecast' obligation
+        # at 'due' urgency on a long-dated open market — a bot would go looking
+        # for an outcome that does not exist yet (trade-trace-fe2f, the inverse
+        # over-correction of trade-trace-ptyi). In that case we keep the forecast
+        # 'open' below: it still surfaces in bootstrap's unresolved_forecasts
+        # bucket, just without the spurious go-fetch-an-outcome urgency. The
+        # resolve obligation now gates on an actually-resolvable / horizon-absent
+        # market, not on resolution_at IS NULL alone. Forecasts with no linked
+        # market row (manual instruments, unbound markets) still surface, so the
+        # trade-trace-ptyi visibility guarantee holds.
+        state = "pending_review"
+        reason_codes.append("resolution_at_missing")
     else:
         state = "open"
         reason_codes.append("forecast_pending")
@@ -506,6 +593,38 @@ def _outcome_id_for_forecast(conn: sqlite3.Connection, forecast: dict[str, Any])
         (forecast["instrument_id"],),
     ).fetchone()
     return row[0] if row else None
+
+
+def _market_demonstrably_live(
+    conn: sqlite3.Connection, instrument_id: str | None, as_of_dt: datetime
+) -> bool:
+    """True only when a linked market row proves the market is still trading.
+
+    ``markets.id`` is the instrument_id (snapshots/decisions/outcomes all key on
+    ``instrument_id = markets.id``). A market is treated as demonstrably live
+    when its persisted ``state`` is ``open`` AND it carries a ``close_at`` that
+    is strictly in the future relative to ``as_of``. Any other shape — no market
+    row, a NULL/past ``close_at``, or a non-``open`` state such as
+    ``resolving``/``resolved``/``voided``/``ambiguous``/``closed_for_trading`` —
+    returns False so the missing-resolution_at review obligation is preserved
+    (trade-trace-ptyi). Only the live-open case suppresses it (trade-trace-fe2f).
+    """
+
+    if not instrument_id:
+        return False
+    row = conn.execute(
+        "SELECT state, close_at FROM markets WHERE id = ?",
+        (instrument_id,),
+    ).fetchone()
+    if row is None:
+        return False
+    state, close_at = row
+    if state != "open" or not close_at:
+        return False
+    try:
+        return _parse_ts(close_at) > as_of_dt
+    except (ValueError, TypeError):
+        return False
 
 
 def _has_later_resolved_decision(conn: sqlite3.Connection, decision: dict[str, Any]) -> bool:

@@ -193,8 +193,23 @@ def report_opportunity(
         FROM decisions d
         LEFT JOIN theses t ON t.id = d.thesis_id
         LEFT JOIN forecasts f ON f.id = d.forecast_id
-        LEFT JOIN outcomes o ON o.instrument_id = d.instrument_id AND o.status = 'resolved_final'
-        LEFT JOIN positions p ON p.instrument_id = d.instrument_id
+        -- Pick a single canonical resolved_final outcome per instrument. An
+        -- instrument can carry multiple resolved_final rows (e.g. a resolution.add
+        -- retry leaves a duplicate); joining on instrument_id alone would fan one
+        -- decision into N identical records and inflate sample_size/bucket counts.
+        LEFT JOIN outcomes o ON o.id = (
+            SELECT o2.id FROM outcomes o2
+            WHERE o2.instrument_id = d.instrument_id AND o2.status = 'resolved_final'
+            ORDER BY o2.resolved_at DESC, o2.id DESC
+            LIMIT 1
+        )
+        -- Aggregate positions to one row per instrument; an instrument can hold
+        -- multiple position rows (paper-entry fragmentation) and only realized_pnl
+        -- is consumed downstream, so sum it rather than fanning out the decision.
+        LEFT JOIN (
+            SELECT instrument_id, SUM(realized_pnl) AS realized_pnl
+            FROM positions GROUP BY instrument_id
+        ) p ON p.instrument_id = d.instrument_id
         LEFT JOIN snapshots ss ON ss.id = d.snapshot_id
         LEFT JOIN (
             SELECT decision_id, SUM(CASE WHEN status = 'overridden' THEN 1 ELSE 0 END) AS overridden_playbook_rule_count

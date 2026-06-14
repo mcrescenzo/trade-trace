@@ -18,6 +18,8 @@ For a fresh/stateless run, start with the local bootstrap packet before creating
 4. Before any new write, make targeted local read calls such as `report.lifecycle`, `report.work_queue`, `report.recall_receipts`, `review.bundle`, or another specific report/drilldown suggested by the packet.
 5. Only then write new thesis/decision/outcome/reflection rows, and only when supported by local evidence or caller-supplied evidence that you can cite with source IDs.
 
+On a **truly empty journal** (zero forecasts, positions, and obligations — e.g. the very first run after `journal init`), the continuity/read `suggested_process_calls` (`report.work_queue`, `agent.next_actions`, `report.recall_receipts`, `strategy.show`) all return empty, so there is nothing yet to orient on. In that cold-start case only, `report.bootstrap` additionally surfaces a first-run onboarding breadcrumb in `suggested_process_calls` pointing at the entry sequence that *begins* the loop: `market.search` → `market.bind` → `snapshot.fetch` → `forecast.add`. These are process-call hints, not advice or fetches — `market.search` is read-only adapter discovery (it names/ranks no market), nothing is invoked for you, and the `no_market_data_fetch` / `no_financial_advice` hard constraints are unchanged. As soon as the journal has any obligation, position, forecast, strategy, or recalled memory, the breadcrumb disappears and the packet is unchanged. Acting on the breadcrumb still requires caller-supplied thesis/probability when you reach `forecast.add`.
+
 Safe CLI examples:
 
 ```bash
@@ -82,8 +84,10 @@ When a run is partially complete, use `report.lifecycle`, `report.work_queue`, `
 1. `market.bind` — create or identify the market metadata row for the external market/instrument.
 
 ```json
-{"tool":"market.bind","args":{"external_id":"polymarket:event-x","title":"Will event X happen by 2026-06-30?","idempotency_key":"agent-run-42:market:event-x"}}
+{"tool":"market.bind","args":{"source":"polymarket","external_id":"polymarket:event-x","gamma_market_id":"123456","state":"open","mechanism":"clob","title":"Will event X happen by 2026-06-30?","idempotency_key":"agent-run-42:market:event-x"}}
 ```
+
+`state` and `mechanism` are required (not just `source`/`external_id`): `state` is one of `open`, `closed_for_trading`, `resolving`, `resolved`, `voided`, `ambiguous`, and `mechanism` is one of `clob`, `amm`, `scalar`, `hybrid` (a freshly discovered live market is `state:"open"`, `mechanism:"clob"`). For Polymarket markets, pass the bare numeric Gamma market id as `gamma_market_id` (and you may use a namespaced `external_id` such as `polymarket:123456` for your own bookkeeping). `snapshot.fetch`, `snapshot.fetch_series`, and `market.refresh` issue the Gamma `/markets/{id}` lookup using `gamma_market_id` when present, falling back to `external_id`; Gamma expects the bare numeric id, so an `external_id` like `polymarket:123456` without a `gamma_market_id` returns `ADAPTER_PROTOCOL_ERROR` (HTTP 422).
 
 2. `snapshot.add` — record caller-supplied market state when relevant. Keep resolution criteria/evidence explicit enough that future resolution is auditable.
 

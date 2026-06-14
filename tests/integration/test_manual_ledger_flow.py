@@ -80,6 +80,17 @@ def test_instrument_add_missing_title(home):
     assert env["error"]["details"]["field"] == "title"
 
 
+def test_decision_add_missing_type_lists_allowed(home):
+    # A missing 'type' must name the field and list the allowed decision types,
+    # not just "type is required". Regression for AX dogfood friction.
+    env = _envelope(home, "decision.add", {"side": "no", "quantity": 1, "price": 0.5})
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "type"
+    assert "paper_enter" in env["error"]["details"]["allowed_decision_types"]
+    assert "paper_enter" in env["error"]["message"]
+
+
 # -- snapshot.add --------------------------------------------------------
 
 
@@ -214,6 +225,121 @@ def test_forecast_add_probability_out_of_range(home):
     assert env["error"]["code"] == "INVARIANT_VIOLATION"
 
 
+# -- forecast.add _anchor_to_latest_snapshot flag (trade-trace-6zpz) -----
+# The internal `_anchor_to_latest_snapshot` flag (forecast.py:514-519) anchors
+# a forecast to the latest market snapshot carrying an implied_probability when
+# snapshot_id is omitted. Before this bead the flag only appeared in schema-
+# contract tests and had no functional write coverage: neither the no-snapshot
+# NOT_FOUND branch nor the positive snapshot_anchor-returned branch was exercised.
+
+
+def test_forecast_add_anchor_to_latest_snapshot_no_snapshot_not_found(home):
+    # No snapshot with implied_probability exists for the market, so the
+    # anchor lookup (forecast.py:518-519) must raise NOT_FOUND naming the
+    # market in details.
+    _, thesis_id = _setup_thesis(home)
+    env = _envelope(home, "forecast.add", {
+        "thesis_id": thesis_id,
+        "kind": "binary",
+        "_anchor_to_latest_snapshot": True,
+        "outcomes": [
+            {"outcome_label": "YES", "probability": 0.48},
+            {"outcome_label": "NO", "probability": 0.52},
+        ],
+    })
+    assert env["ok"] is False
+    assert env["error"]["code"] == "NOT_FOUND"
+    assert "no snapshot with implied_probability" in env["error"]["message"]
+    assert "market_id" in env["error"]["details"]
+
+
+def test_forecast_add_anchor_to_latest_snapshot_returns_anchor(home):
+    # Seed a snapshot carrying implied_probability, then the flagged forecast
+    # anchors to it and returns snapshot_anchor (forecast.py:520-523, 552-553).
+    inst_id, thesis_id = _setup_thesis(home)
+    snap = _envelope(home, "snapshot.add", {
+        "instrument_id": inst_id,
+        "captured_at": "2026-01-01T00:00:00Z",
+        "source": "manual",
+        "implied_probability": 0.55,
+    })
+    assert snap["ok"] is True, snap
+    snapshot_id = snap["data"]["id"]
+
+    env = _envelope(home, "forecast.add", {
+        "thesis_id": thesis_id,
+        "kind": "binary",
+        "_anchor_to_latest_snapshot": True,
+        "outcomes": [
+            {"outcome_label": "YES", "probability": 0.48},
+            {"outcome_label": "NO", "probability": 0.52},
+        ],
+    })
+    assert env["ok"] is True, env
+    anchor = env["data"]["snapshot_anchor"]
+    assert anchor["snapshot_id"] == snapshot_id
+    assert anchor["forecast_id"] == env["data"]["id"]
+    assert anchor["market_implied_probability"] == pytest.approx(0.55)
+
+
+# -- confidence_label enum (ax-dogfood AX-010) ---------------------------
+# A bad confidence_label used to leak the raw SQLite CHECK constraint as the
+# user-facing message; it now returns a clean VALIDATION_ERROR whose details
+# carry the allowed values so an agent can discover the enum on failure.
+
+
+def test_thesis_add_invalid_confidence_label(home):
+    inst_id, _ = _setup_thesis(home)
+    env = _envelope(home, "thesis.add", {
+        "instrument_id": inst_id,
+        "side": "yes",
+        "body": "...",
+        "confidence_label": "moderate",  # not in the enum
+    })
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "confidence_label"
+    assert "medium" in env["error"]["details"]["allowed"]
+    assert "moderate" not in env["error"]["message"].lower() or "CHECK" not in env["error"]["message"]
+
+
+def test_forecast_add_folded_invalid_confidence_label(home):
+    inst_id, _ = _setup_thesis(home)
+    env = _envelope(home, "forecast.add", {
+        "instrument_id": inst_id,
+        "rationale_body": "edge",
+        "kind": "binary",
+        "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.4},
+            {"outcome_label": "no", "probability": 0.6},
+        ],
+        "confidence_label": "moderate",  # not in the enum
+    })
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "confidence_label"
+    assert set(env["error"]["details"]["allowed"]) == {
+        "very_low", "low", "medium", "high", "very_high"
+    }
+
+
+def test_forecast_add_folded_valid_confidence_label(home):
+    inst_id, _ = _setup_thesis(home)
+    env = _envelope(home, "forecast.add", {
+        "instrument_id": inst_id,
+        "rationale_body": "edge",
+        "kind": "binary",
+        "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.4},
+            {"outcome_label": "no", "probability": 0.6},
+        ],
+        "confidence_label": "medium",
+    })
+    assert env["ok"] is True, env
+
+
 # -- decision.add (required-field matrix) --------------------------------
 
 
@@ -254,6 +380,34 @@ def test_decision_add_paper_enter_full(home):
     })
     assert env["ok"] is True
     assert env["data"]["tags"] == ["good-skip", "liquidity-ignored"]
+
+
+def test_decision_add_paper_enter_derives_thesis_from_forecast(home):
+    # AX dogfood ergonomics: a caller holding only forecast_id (what forecast.add
+    # returns) should be able to paper_enter without separately looking up the
+    # thesis. thesis_id is derived from the forecast.
+    inst_id, thesis_id = _setup_thesis(home)
+    fc = _envelope(home, "forecast.add", {
+        "thesis_id": thesis_id,
+        "kind": "binary",
+        "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.4},
+            {"outcome_label": "no", "probability": 0.6},
+        ],
+        "rationale_body": "edge",
+    })
+    assert fc["ok"] is True, fc
+    env = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "forecast_id": fc["data"]["id"],  # no thesis_id supplied
+        "type": "paper_enter",
+        "side": "no",
+        "quantity": 50,
+        "price": 0.6,
+    })
+    assert env["ok"] is True, env
+    assert env["data"].get("position_id")  # paper_enter opened a position
 
 
 # -- bead trade-trace-8u3s: tag sanitization at write time -----------
@@ -304,6 +458,59 @@ def test_decision_add_rejects_empty_or_whitespace_tags(home, bad_tag):
     assert env["error"]["code"] == "VALIDATION_ERROR"
     assert env["error"]["details"]["field"] == "tags"
     assert env["error"]["details"]["reason"] == "empty_tag"
+
+
+def test_decision_add_rejects_tag_over_64_chars(home):
+    """`_store_tags` caps normalized tags at 64 chars (_shared.py:76-81).
+    A 65-char tag must be rejected with a clean VALIDATION_ERROR naming the
+    `tags` field, not silently truncated or persisted (trade-trace-nyix)."""
+
+    inst_id, _ = _setup_thesis(home)
+    over_cap = "a" * 65
+    env = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "type": "skip",
+        "reason": "boundary test",
+        "tags": ["clean", over_cap],
+    })
+    assert env["ok"] is False
+    assert env["error"]["code"] == "VALIDATION_ERROR"
+    assert env["error"]["details"]["field"] == "tags"
+    assert env["error"]["details"]["value"] == over_cap
+
+
+def test_decision_add_accepts_tag_at_64_char_boundary(home):
+    """The cap is `> 64`, so a tag of exactly 64 chars is accepted — pin
+    the boundary so a future off-by-one doesn't silently reject valid tags
+    (trade-trace-nyix)."""
+
+    inst_id, _ = _setup_thesis(home)
+    at_cap = "b" * 64
+    env = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "type": "skip",
+        "reason": "boundary test",
+        "tags": [at_cap],
+    })
+    assert env["ok"] is True, env
+    assert env["data"]["tags"] == [at_cap]
+
+
+def test_decision_add_accepts_comma_separated_tag_string(home):
+    """The CLI passes `tags` as a single comma-separated STRING; `_store_tags`
+    splits on commas, trims, lowercases, dedupes, and sorts (_shared.py:49-51).
+    `'alpha,beta,Alpha'` must normalize to `['alpha', 'beta']`
+    (trade-trace-nyix)."""
+
+    inst_id, _ = _setup_thesis(home)
+    env = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "type": "skip",
+        "reason": "comma-separated tag input",
+        "tags": "alpha,beta,Alpha",
+    })
+    assert env["ok"] is True, env
+    assert env["data"]["tags"] == ["alpha", "beta"]
 
 
 def test_decision_add_paper_enter_creates_position_event_and_live_projection(home):
@@ -560,7 +767,10 @@ def test_resolve_pending_lists_unresolved(home):
     _envelope(home, "forecast.add", {
         "thesis_id": thesis["data"]["id"],
         "kind": "binary",
-        "resolution_at": "2026-06-30T00:00:00Z",
+        # Past resolution_at so it is genuinely *pending resolution* — a
+        # future-dated forecast is not yet resolvable and resolve.pending must
+        # NOT list it (trade-trace-1k5d).
+        "resolution_at": "2020-01-01T00:00:00Z",
         "outcomes": [
             {"outcome_label": "YES", "probability": 0.6},
             {"outcome_label": "NO", "probability": 0.4},
@@ -572,10 +782,95 @@ def test_resolve_pending_lists_unresolved(home):
     assert all("resolution_at" in item for item in env["data"]["items"])
 
 
+def test_resolve_pending_excludes_future_dated_forecasts(home):
+    # trade-trace-1k5d: a forecast whose resolution_at is in the FUTURE is not
+    # yet resolvable, so resolve.pending must NOT list it. Only the past-dated
+    # forecast should appear.
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market",
+        "title": "Test",
+    })
+    thesis = _envelope(home, "thesis.add", {
+        "instrument_id": inst["data"]["id"],
+        "side": "yes",
+        "body": "...",
+    })
+    past = _envelope(home, "forecast.add", {
+        "thesis_id": thesis["data"]["id"],
+        "kind": "binary",
+        "resolution_at": "2020-01-01T00:00:00Z",
+        "outcomes": [
+            {"outcome_label": "YES", "probability": 0.6},
+            {"outcome_label": "NO", "probability": 0.4},
+        ],
+    })
+    future = _envelope(home, "forecast.add", {
+        "thesis_id": thesis["data"]["id"],
+        "kind": "binary",
+        "resolution_at": "2099-12-31T00:00:00Z",
+        "outcomes": [
+            {"outcome_label": "YES", "probability": 0.5},
+            {"outcome_label": "NO", "probability": 0.5},
+        ],
+    })
+    env = _envelope(home, "resolve.pending", {})
+    assert env["ok"] is True
+    listed = {item["forecast_id"] for item in env["data"]["items"]}
+    assert past["data"]["id"] in listed
+    assert future["data"]["id"] not in listed
+
+
 def test_resolve_pending_limit_validation(home):
     env = _envelope(home, "resolve.pending", {"limit": 2000})
     assert env["ok"] is False
     assert env["error"]["details"]["field"] == "limit"
+
+
+def _seed_instrument(home: Path) -> str:
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market",
+        "title": "Test",
+    })
+    return inst["data"]["id"]
+
+
+def test_outcome_add_rejects_whitespace_only_label(home):
+    # trade-trace-1k5d: a whitespace-only outcome_label must be rejected at
+    # write time rather than persisted as a meaningless append-only row.
+    inst_id = _seed_instrument(home)
+    env = _envelope(home, "outcome.add", {
+        "instrument_id": inst_id,
+        "resolved_at": "2026-06-01T00:00:00Z",
+        "outcome_label": "   ",
+        "status": "resolved_final",
+        "idempotency_key": "ws-label",
+    })
+    assert env["ok"] is False
+    assert env["error"]["details"]["field"] == "outcome_label"
+
+
+def test_outcome_add_strips_padded_label(home):
+    # trade-trace-1k5d: a padded label is normalized (stripped) before it is
+    # persisted, so the stored label is clean and a resolved_final binary
+    # outcome still auto-scores.
+    inst_id = _seed_instrument(home)
+    env = _envelope(home, "outcome.add", {
+        "instrument_id": inst_id,
+        "resolved_at": "2026-06-01T00:00:00Z",
+        "outcome_label": "  yes  ",
+        "status": "resolved_final",
+        "confidence": 0.99,
+        "idempotency_key": "padded-label",
+    })
+    assert env["ok"] is True
+    # The stored/echoed label is stripped, so finality predicates see a clean
+    # binary label (auto_scoreable is true for a high-confidence resolved_final
+    # binary outcome).
+    assert env["data"]["auto_scoreable"] is True
 
 
 # -- forecast.supersede --------------------------------------------------

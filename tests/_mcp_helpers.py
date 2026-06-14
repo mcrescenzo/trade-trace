@@ -21,7 +21,6 @@ _LEGACY_EXPLICIT_KEY_WRITE_TOOLS = {
     "journal.backup",
     "journal.config_set",
     "journal.restore",
-    "keyring.revoke",
     "market.refresh",
     "market.scan.promote",
     "memory.link",

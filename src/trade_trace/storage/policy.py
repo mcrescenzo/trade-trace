@@ -41,14 +41,24 @@ CLOSED_ENUMS: dict[str, frozenset[str]] = {
             "review",
         }
     ),
+    # Must stay in lockstep with the outcomes.status CHECK constraint
+    # (migration m025_polymarket_resolution_finality) and models.ledger
+    # OutcomeStatus. The four PROPOSED/PROVISIONAL/IMPORTED_REDEEMED/
+    # IMPORTED_SETTLED values were added to the DB CHECK by m025 but omitted
+    # here, leaving the migration-policy guard blind to those values
+    # (trade-trace-w251).
     "outcomes.status": frozenset(
         {
+            "proposed",
+            "provisional",
             "resolved_final",
             "resolved_provisional",
             "ambiguous",
             "disputed",
             "void",
             "cancelled",
+            "imported_redeemed",
+            "imported_settled",
         }
     ),
     "memory_nodes.node_type": frozenset({"observation", "reflection", "playbook_rule"}),
@@ -119,6 +129,28 @@ OPEN_ENUMS: dict[str, frozenset[str]] = {
             "signal.emitted",
             # Importer bookkeeping.
             "import.row_committed",
+            # M2/M3 audit + finality + risk + reconciliation + market-bind
+            # event types registered in events/semantic_keys.SEMANTIC_KEYS but
+            # previously absent from this open-enum mirror (trade-trace-1k5d).
+            # Open-enum additions are non-breaking and need no contract bump.
+            "market.bound",
+            "market.refreshed",
+            "playbook.created",
+            "pretrade_intent.recorded",
+            "approval_waiver.recorded",
+            "external_execution_receipt.imported",
+            "account_snapshot.imported",
+            "replay_evaluation_artifact.recorded",
+            "paper_fill.recorded",
+            "autonomous_run.recorded",
+            "autonomous_incident.recorded",
+            "abstention.recorded",
+            "forecast.blind_committed",
+            "forecast.independence_revealed",
+            "forecast.resolution_interpreted",
+            "reconciliation.recorded",
+            "risk_policy_version.created",
+            "risk_check_receipt.recorded",
         }
     ),
 }

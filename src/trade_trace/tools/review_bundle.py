@@ -26,6 +26,7 @@ from trade_trace.contracts.autonomous_substrate import RedactionProfile
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
+from trade_trace.projections import remark_open_positions
 from trade_trace.reports._filter_support import (
     UnsupportedFilterError,
     _placeholders,
@@ -262,6 +263,14 @@ def _related_record_rows(
             dict(zip(_POSITION_COLS, row, strict=True))
             for row in position_rows
         ]
+        # Re-mark open positions from the latest snapshot so the bundle's
+        # positions agree with report.pnl / report.open_positions
+        # (trade-trace-pr2j) instead of carrying the stale rebuild-time
+        # projection column. Single shared read-layer source of truth.
+        remark = remark_open_positions(conn)
+        for position in positions:
+            if position.get("status") == "open" and position["id"] in remark:
+                position["unrealized_pnl"] = remark[position["id"]]
 
     return {
         "decisions": decisions,
@@ -1029,6 +1038,33 @@ def _suggested_prompts(selected: dict[str, list[dict[str, Any]]]) -> list[str]:
     ]
 
 
+# AX-057: review.bundle was registered with neither an explicit json_schema
+# nor an example_minimal, so tool.schema advertised json_schema=null and the
+# MCP input_schema exposed ZERO properties — yet the runtime ReviewBundleInput
+# contract accepts a full ReportFilter `filter` plus several knobs. An MCP bot
+# therefore could not discover how to scope the reviewer bundle, and passing a
+# `filter` even failed with a dict_type error because the undeclared param was
+# stringified by the bridge. This explicit schema mirrors ReviewBundleInput so
+# the scoping surface is discoverable and `filter` is passed through as an
+# object; the handler/redaction logic is unchanged.
+_REVIEW_BUNDLE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "filter": {"type": "object", "description": "ReportFilter object selecting the decisions to bundle; call report.filter_schema for the canonical nested schema. Defaults to {} (an unscoped, max_records-bounded sweep)."},
+        "max_records": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Max decision cases to include (default 25)."},
+        "include_sources": {"type": "boolean", "description": "Include attached sources (default true)."},
+        "include_reflections": {"type": "boolean", "description": "Include attached reflections (default true)."},
+        "include_playbook": {"type": "boolean", "description": "Include attached playbook versions (default true)."},
+        "include_recall_receipts": {"type": "boolean", "description": "Include recall-receipt attribution blocks (default true)."},
+        "include_autonomous_lifecycle": {"type": "boolean", "description": "Include autonomous-lifecycle audit records (default true)."},
+        "redaction_profile": {"type": "string", "enum": [m.value for m in RedactionProfile], "description": "Redaction profile label; values are accepted as compatibility labels and currently apply the conservative audit-export minimum redaction. Defaults to 'audit_export'."},
+        "max_examples_per_record": {"type": "integer", "minimum": 0, "maximum": 20, "description": "Cap on attached example rows per record (default 3)."},
+        "home": {"type": "string"},
+    },
+    "required": [],
+}
+
+
 def register_review_bundle(registry: ToolRegistry) -> None:
     registry.register(
         "review.bundle",
@@ -1042,6 +1078,8 @@ def register_review_bundle(registry: ToolRegistry) -> None:
             "are included with content stripped. The output's "
             "bundle_hash is sha-256 over the canonical JSON of `data` "
             "(minus the hash itself) so the same DB state + same input "
-            "yields the same hash."
+            "yields the same hash. Scope the bundle with `filter` "
+            "(ReportFilter) and bound it with `max_records`."
         ),
+        json_schema=_REVIEW_BUNDLE_SCHEMA,
     )

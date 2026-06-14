@@ -57,6 +57,7 @@ class MarketScanPromoteInput(MarketScanDryRunInput):
     """Input contract for market.scan.promote."""
 
     promote_hash: str | None = None
+    stale_source_days: int = Field(default=14, ge=1, le=3650, description="Source-staleness window forwarded to the final journal.bundle.status check.")
 
 
 _EXAMPLE_MINIMAL = {
@@ -107,6 +108,7 @@ _PROMOTE_SCHEMA: dict[str, Any] = {
     "properties": {
         **_SCHEMA["properties"],
         "promote_hash": {"type": "string", "description": "Optional dry-run promote_hash guard; mismatches fail before writes."},
+        "stale_source_days": {"type": "integer", "minimum": 1, "maximum": 3650, "description": "Source-staleness window forwarded to the final journal.bundle.status check."},
     },
     "description": "Write-capable materializer for market.scan.dry_run plans using deterministic child idempotency keys.",
 }
@@ -373,7 +375,7 @@ def _market_scan_promote(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
     except ValidationError as exc:
         raise ToolError(ErrorCode.VALIDATION_ERROR, f"market.scan.promote input validation failed: {exc.errors()}", details={"validation_errors": exc.errors()}) from exc
 
-    dry_args = parsed.model_dump(exclude_none=True, exclude={"promote_hash"})
+    dry_args = parsed.model_dump(exclude_none=True, exclude={"promote_hash", "stale_source_days"})
     dry_run = _market_scan_dry_run(dry_args, ctx)
     if parsed.promote_hash and parsed.promote_hash != dry_run["promote_hash"]:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "promote_hash does not match current market.scan.dry_run plan", details={"field": "promote_hash", "expected": dry_run["promote_hash"], "actual": parsed.promote_hash})
@@ -439,6 +441,11 @@ def _market_scan_promote(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
                 created_ids["memory_node_id"] = reflection_result["id"]
 
     status_args = {k: ids[k] for k in ("decision_id", "forecast_id", "thesis_id", "instrument_id", "source_id", "memory_node_id") if ids.get(k)}
+    # Thread the deterministic clock + staleness window so final_check is
+    # reproducible instead of flipping with the wall clock (trade-trace-efmq).
+    if parsed.current_time:
+        status_args["current_time"] = parsed.current_time
+    status_args["stale_source_days"] = parsed.stale_source_days
     if parsed.home:
         status_args["home"] = parsed.home
     final_env = dispatch("journal.bundle.status", status_args, actor_id=ctx.actor_id)

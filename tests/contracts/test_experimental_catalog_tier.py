@@ -70,6 +70,41 @@ def test_mcp_tool_specs_honor_experimental_flag():
     assert "frozen.tool" in opted_in
 
 
+def test_destructive_operator_tools_are_admin_gated():
+    """Regression for bead trade-trace-6rnk.
+
+    journal.backup, journal.restore, and journal.config_set are destructive
+    operator-only tools registered is_write=True. They must be is_admin=True so
+    the default catalog view (public_names(include_admin=False)) never surfaces
+    them to non-admin agents. model.import and memory.reindex are gated for
+    defense in depth: even include_legacy=True must not re-surface them.
+    """
+
+    reg = build_registry()
+    destructive = (
+        "journal.backup",
+        "journal.restore",
+        "journal.config_set",
+        "model.import",
+        "memory.reindex",
+    )
+
+    default = set(reg.public_names())
+    legacy_view = set(reg.public_names(include_legacy=True))
+    experimental_view = set(reg.public_names(include_experimental=True))
+    admin_view = set(reg.public_names(include_admin=True, include_legacy=True, include_experimental=True))
+
+    for name in destructive:
+        assert name in reg.by_name, f"{name} should be registered"
+        assert reg.get(name).is_admin, f"{name} must be is_admin=True"
+        # Excluded from every non-admin listing surface.
+        assert name not in default, f"{name} leaked into default catalog"
+        assert name not in legacy_view, f"{name} leaked via include_legacy"
+        assert name not in experimental_view, f"{name} leaked via include_experimental"
+        # Still reachable when the operator explicitly opts into admin tools.
+        assert name in admin_view, f"{name} should appear in the admin view"
+
+
 def test_real_registry_has_no_unexpected_experimental_leak(tmp_path):
     # The shipped registry should currently expose no experimental tools in the
     # default catalog; this guards future freeze beads against accidental leaks.

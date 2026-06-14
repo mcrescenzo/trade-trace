@@ -1,24 +1,37 @@
 from __future__ import annotations
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
 
 from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.adapters.polymarket.config import PolymarketConfig
 from trade_trace.adapters.polymarket.errors import AdapterError
 from trade_trace.adapters.polymarket.retry import retry_policy_kwargs
+from trade_trace.contracts.envelope import SuccessEnvelope
 from trade_trace.mcp_server import mcp_call
+from trade_trace.storage import open_database
+from trade_trace.storage.paths import db_path
 from trade_trace.tools._market_rows import adapter_cache_hit_row_dict
 from trade_trace.tools.adapter_polymarket import (
+    _apply_caller_resolution_rule,
     _market_cache_hit,
     _market_payload,
     _normalize_gamma_market,
     _snapshot_from_raw,
 )
+
+FIXTURES = Path(__file__).parent / "fixtures" / "polymarket"
+
+
+def _fixture(name: str) -> dict:
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
 def test_journal_status_adapter_state_default_offline(tmp_path: Path):
@@ -196,6 +209,85 @@ def test_adapter_normalizes_false_like_booleans_and_token_id_string_variants():
     assert snap["metadata_json"]["accepting_orders"] is False
 
 
+def test_snapshot_price_marks_to_book_mid_not_off_book_last_trade():
+    """ax-dogfood AX-027: `snapshots.price` is the canonical YES mark the
+    positions projection values open positions against. When a live two-sided
+    book exists, that mark must be the within-book mid, NOT `lastTradePrice`,
+    which can be a stale print outside the current bid/ask. A live ETH market
+    printed lastTrade=0.49 while the book was 0.41/0.44 — marking a 0.44 entry
+    against 0.49 reported +PnL on a position the mid said was underwater."""
+    snap = _snapshot_from_raw({"bestBid": "0.41", "bestAsk": "0.44", "lastTradePrice": "0.49"})
+    assert snap["mid"] == pytest.approx(0.425)
+    # price must agree with the same snapshot's mid / implied_probability,
+    # not the off-book last trade (0.49, which is above the 0.44 ask).
+    assert snap["price"] == pytest.approx(0.425)
+    assert snap["implied_probability"] == pytest.approx(0.425)
+    assert snap["price"] != pytest.approx(0.49)
+
+
+def test_snapshot_price_falls_back_to_last_trade_without_two_sided_book():
+    """When no two-sided book is present the mid is undefined, so `price`
+    falls back to the last/raw price rather than dropping the only mark."""
+    snap = _snapshot_from_raw({"lastTradePrice": "0.33"})
+    assert snap["mid"] == pytest.approx(0.33)
+    assert snap["price"] == pytest.approx(0.33)
+
+
+def test_adapter_market_payload_maps_description_to_rule_text():
+    """trade-trace-n33z (was AX-037 root cause): Polymarket carries the
+    resolution prose in `description`, not the `resolutionCriteria`/`rules` keys.
+    The adapter now reads `description` into the structured
+    `resolution_rule.text` so the criterion an agent needs to forecast travels
+    in the structured field instead of being null while the rule sits unreadable
+    in venue_metadata_json.description."""
+    rule_text = "Resolves YES per some venue page; full rule lives here."
+    market = _market_payload(
+        {
+            "id": "m1",
+            "question": "Will X happen?",
+            "outcomes": '["Yes","No"]',
+            "description": rule_text,
+        },
+        "m1",
+    )
+    metadata = json.loads(market["metadata_json"])
+    assert metadata["resolution_rule"]["text"] == rule_text
+    assert metadata["resolution_rule"]["provenance"] == "polymarket_gamma_payload"
+
+
+def test_adapter_bind_preserves_caller_resolution_rule_text_when_venue_has_none():
+    """ax-dogfood AX-037: the adapter bind path silently dropped a
+    caller-supplied resolution_rule_text — the Gamma-derived resolution_rule
+    (text=null, since Polymarket's rule is in `description`) overwrote it, so
+    the documented n33z workaround ("the agent can just supply the rule text")
+    was ineffective on the path a live bot uses. The manual path preserved it.
+    Now a null/blank venue text is filled from the caller's text, marked
+    caller_supplied; venue text (when present) still wins."""
+    venue_null = {"resolution_rule": {"text": None, "source": "https://x", "provenance": "polymarket_gamma_payload"}}
+
+    # 1) resolution_rule_text fills a null venue text.
+    filled = _apply_caller_resolution_rule(json.loads(json.dumps(venue_null)), {"resolution_rule_text": "Agent-supplied rule."})
+    assert filled["resolution_rule"]["text"] == "Agent-supplied rule."
+    assert filled["resolution_rule"]["provenance"] == "caller_supplied"
+    assert filled["resolution_rule"]["source"] == "https://x"
+
+    # 2) nested resolution_rule.text also fills.
+    nested = _apply_caller_resolution_rule(json.loads(json.dumps(venue_null)), {"resolution_rule": {"text": "Nested rule."}})
+    assert nested["resolution_rule"]["text"] == "Nested rule."
+
+    # 3) venue-supplied text always wins; caller text does not clobber it.
+    venue_present = {"resolution_rule": {"text": "Venue rule.", "provenance": "polymarket_gamma_payload"}}
+    kept = _apply_caller_resolution_rule(json.loads(json.dumps(venue_present)), {"resolution_rule_text": "Agent rule."})
+    assert kept["resolution_rule"]["text"] == "Venue rule."
+    assert kept["resolution_rule"]["provenance"] == "polymarket_gamma_payload"
+
+    # 4) blank/absent caller text is a no-op (null preserved, no fake provenance).
+    untouched = _apply_caller_resolution_rule(json.loads(json.dumps(venue_null)), {"resolution_rule_text": "   "})
+    assert untouched["resolution_rule"]["text"] is None
+    assert untouched["resolution_rule"]["provenance"] == "polymarket_gamma_payload"
+    assert _apply_caller_resolution_rule(json.loads(json.dumps(venue_null)), {})["resolution_rule"]["text"] is None
+
+
 class _FakeResponse:
     def __init__(self, status_code: int, payload: Any = None, *, headers: dict[str, str] | None = None, invalid_json: bool = False) -> None:
         self.status_code = status_code
@@ -345,3 +437,102 @@ def test_polygon_rpc_fails_closed_on_non_retryable_http_4xx():
         assert exc.details["endpoint"] == "polygon-rpc.com/rpc/secret-token"
     else:  # pragma: no cover
         raise AssertionError("expected polygon RPC 4xx adapter error")
+
+
+def test_concurrent_outcome_fetch_inserts_exactly_one_outcome_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Regression for trade-trace-4kbk (outcome.fetch TOCTOU).
+
+    Two concurrent outcome.fetch calls for the same market formerly each ran
+    their existence check and their INSERT in *separate* db connections /
+    UnitOfWork transactions. With both callers passing the pre-RPC existence
+    check before either inserted, both INSERTs landed, producing two rows for
+    the (instrument_id, 'polymarket') pair (the outcomes table has no UNIQUE
+    constraint there). The fix re-checks existence inside the same UnitOfWork
+    that performs the INSERT; BEGIN IMMEDIATE serializes the two writers so
+    exactly one row is written and the loser returns an idempotent replay.
+
+    The deterministic race window is created with a threading.Barrier that the
+    patched polygon_rpc waits on: both threads pass the fast-path existence
+    check and reach the RPC together, guaranteeing the overlap that the old
+    code mishandled.
+    """
+
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+
+    # Enable the adapter with a polygon_rpc_url so outcome.fetch ingests on-chain
+    # resolution rather than failing closed with CONFIG_REQUIRED.
+    for key, value in (
+        ("network.polymarket.enabled", "true"),
+        ("network.polymarket.polygon_rpc_url", "https://polygon.example/rpc/secret-token"),
+    ):
+        assert mcp_call(
+            "journal.config_set",
+            with_legacy_idempotency_key(
+                "journal.config_set",
+                {"home": home, "key": key, "value": value, "confirm": True},
+            ),
+        ).ok
+
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: _fixture("market_binary_resolved_yes.json"),
+    )
+
+    # Both fetch threads must arrive at the RPC before either can proceed to its
+    # INSERT. The barrier releases both only once two callers are waiting,
+    # forcing the concurrent window the old two-connection code mishandled.
+    rpc_barrier = threading.Barrier(2, timeout=10)
+
+    def _patched_polygon_rpc(self, method, params=None):
+        rpc_barrier.wait()
+        return _fixture("polygon_resolution_tx.json")
+
+    monkeypatch.setattr(PolymarketClient, "polygon_rpc", _patched_polygon_rpc)
+
+    market = mcp_call(
+        "market.bind",
+        {"home": home, "source": "polymarket", "external_id": "pm-toctou-fetch"},
+    )
+    assert market.ok, market
+    assert isinstance(market, SuccessEnvelope)
+    instrument_id = market.data["id"]
+
+    def _fetch() -> Any:
+        return mcp_call(
+            "outcome.fetch",
+            with_legacy_idempotency_key(
+                "outcome.fetch", {"home": home, "market_id": instrument_id}
+            ),
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        envelopes = [f.result(timeout=30) for f in [pool.submit(_fetch), pool.submit(_fetch)]]
+
+    # Both calls succeed (no duplicate-key error, no race failure).
+    for env in envelopes:
+        assert env.ok, env
+        assert isinstance(env, SuccessEnvelope)
+
+    # Exactly one of them inserted; the other returned the idempotent replay.
+    inserted = [e for e in envelopes if not e.data.get("idempotent_replay")]
+    replayed = [e for e in envelopes if e.data.get("idempotent_replay")]
+    assert len(inserted) == 1, [e.data for e in envelopes]
+    assert len(replayed) == 1, [e.data for e in envelopes]
+    assert inserted[0].data["id"] == replayed[0].data["id"]
+
+    # The invariant under test: exactly ONE outcome row exists for the
+    # (instrument_id, 'polymarket') pair.
+    db = open_database(db_path(Path(home)))
+    try:
+        rows = db.connection.execute(
+            "SELECT id FROM outcomes WHERE instrument_id=? AND source='polymarket'",
+            (instrument_id,),
+        ).fetchall()
+    finally:
+        db.close()
+    assert len(rows) == 1, rows
+    assert rows[0][0] == inserted[0].data["id"]

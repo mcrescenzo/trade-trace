@@ -484,6 +484,30 @@ def test_journal_bundle_status_playbook_adherence_guidance_uses_registered_tool(
         "asset_class": "prediction_market",
     })
     assert isinstance(instrument, SuccessEnvelope)
+    # The decision references a real playbook_version (FK-enforced at
+    # insert time by migration 030) but records NO adherence rows — that
+    # missing-rows condition is exactly what the "weak" guidance below
+    # asserts on.
+    db = open_database(db_path(home))
+    try:
+        conn = db.connection
+        now = "2026-05-20T14:00:00.000Z"
+        conn.execute(
+            "INSERT INTO playbooks (id, name, created_at, actor_id) VALUES ('pb_missing_rows_fixture', 'Playbook', ?, 'agent:default')",
+            (now,),
+        )
+        conn.execute(
+            "INSERT INTO memory_nodes (id, node_type, body, valid_from, created_at, actor_id) VALUES ('refl_missing_rows_fixture', 'reflection', 'lineage', ?, ?, 'agent:default')",
+            (now, now),
+        )
+        conn.execute(
+            "INSERT INTO playbook_versions (id, playbook_id, version, provenance_reflection_node_id, created_at, actor_id) "
+            "VALUES ('pbv_missing_rows_fixture', 'pb_missing_rows_fixture', 1, 'refl_missing_rows_fixture', ?, 'agent:default')",
+            (now,),
+        )
+        conn.commit()
+    finally:
+        db.close()
     decision = _mcp(home, "decision.add", {
         "type": "watch",
         "instrument_id": instrument.data["id"],
@@ -548,6 +572,51 @@ def test_journal_bundle_status_source_weakness_keeps_all_sources_distinct(home):
     assert source_check["status"] == "weak"
     assert set(source_check["record_ids"]["sources"]) == {stale_source.data["id"], fresh_source.data["id"]}
     assert source_check["record_ids"]["weak_source_ids"] == [stale_source.data["id"]]
+
+
+def test_journal_bundle_status_current_time_pins_source_staleness_clock(home):
+    """Per trade-trace-efmq: a caller-supplied current_time pins the
+    14-day staleness cutoff so bundle.status is reproducible instead of
+    flipping ok->weak as the wall clock advances past the source date."""
+
+    venue = _mcp(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    instrument = _mcp(home, "instrument.add", {
+        "venue_id": venue.data["id"],
+        "title": "Event for deterministic staleness",
+        "asset_class": "prediction_market",
+    })
+    thesis = _mcp(home, "thesis.add", {
+        "instrument_id": instrument.data["id"], "side": "yes", "body": "Thesis.",
+    })
+    source = _mcp(home, "source.add", {
+        "kind": "url", "uri": "https://example.com/pinned",
+        "freshness_at": "2026-05-21T00:00:00.000Z",
+    })
+    attach = _mcp(home, "source.attach_to_thesis", {
+        "source_id": source.data["id"], "target_id": thesis.data["id"],
+    })
+    assert attach.ok, attach
+
+    # current_time 9 days after the source -> inside the 14-day window -> ok.
+    fresh = _mcp(home, "journal.bundle.status", {
+        "thesis_id": thesis.data["id"],
+        "stale_source_days": 14,
+        "current_time": "2026-05-30T00:00:00Z",
+    })
+    assert isinstance(fresh, SuccessEnvelope)
+    fresh_check = {c["step"]: c for c in fresh.data["checklist"]}["source_attached"]
+    assert fresh_check["status"] == "ok", fresh_check
+
+    # Same bundle, current_time 40 days later -> past the cutoff -> weak.
+    stale = _mcp(home, "journal.bundle.status", {
+        "thesis_id": thesis.data["id"],
+        "stale_source_days": 14,
+        "current_time": "2026-06-30T00:00:00Z",
+    })
+    assert isinstance(stale, SuccessEnvelope)
+    stale_check = {c["step"]: c for c in stale.data["checklist"]}["source_attached"]
+    assert stale_check["status"] == "weak", stale_check
+    assert stale_check["record_ids"]["weak_source_ids"] == [source.data["id"]]
 
 
 def test_journal_bundle_status_metadata_lookup_escapes_like_wildcards(home):

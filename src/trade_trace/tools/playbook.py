@@ -22,10 +22,11 @@ Tools:
   *, parent_version_id?, description?)` — append a new version row.
 - `playbook.adherence(playbook_id, *, strategy_id?)` — thin wrapper
   around report.playbook_adherence scoped to a single playbook.
-- `decision.record_adherence(decision_id, playbook_version_id,
+- `playbook.record_adherence(decision_id, playbook_version_id,
   rule_node_id, status, *, reason?)` — write one normalized row into
   `decision_playbook_rules` and emit the matching `playbook_rule.*`
-  event.
+  event. (Legacy name `decision.record_adherence` stays dispatchable
+  for JSONL replay; see core.py.)
 """
 
 from __future__ import annotations
@@ -48,6 +49,13 @@ from trade_trace.tools._helpers import (
 from trade_trace.tools.errors import ToolError
 
 ADHERENCE_STATUSES = ("considered", "followed", "overridden", "not_applicable")
+
+# Lifecycle status for the playbook row itself, symmetric with
+# strategy.upsert's {active, archived} enum (trade-trace-47tp secondary).
+# The DB column is unconstrained TEXT, so the tool layer is the only
+# validation boundary; default to 'active' when omitted.
+PLAYBOOK_STATUSES = ("active", "archived")
+_DEFAULT_PLAYBOOK_STATUS = "active"
 
 
 def _require_playbook(conn: Any, playbook_id: str) -> None:
@@ -147,6 +155,28 @@ def _schema(properties: dict[str, Any], *, required: list[str] | None = None, de
     }
 
 
+# playbook.upsert (legacy playbook.create) had no explicit json_schema, so its
+# MCP schema auto-derived from example_minimal and hid the `status` field
+# entirely (example_rich was null) — asymmetric with strategy.upsert, which
+# advertises its {active, archived} enum. This explicit schema mirrors the
+# runtime: name + idempotency_key required, status enum-validated and defaulting
+# to 'active' (trade-trace-47tp secondary).
+_PLAYBOOK_CREATE_SCHEMA = _schema(
+    {
+        "name": {"type": "string", "description": "Unique playbook name; duplicate raises VALIDATION_ERROR with details.field='name'."},
+        "description": {"type": "string", "description": "Optional free-text description; scanned for sensitive-shaped text."},
+        "status": {"type": "string", "enum": list(PLAYBOOK_STATUSES), "description": "Lifecycle status; one of the documented enum. Defaults to 'active' when omitted."},
+        "metadata_json": {"type": "object", "description": "Optional structured metadata."},
+        "idempotency_key": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    required=["name", "idempotency_key"],
+    description=(
+        "Register a named playbook. Rules live in memory_nodes"
+        "(node_type='playbook_rule') wired via playbook.propose_version, "
+        "not on the playbook row itself."
+    ),
+)
 _PLAYBOOK_LIST_SCHEMA = _schema(
     {"limit": {"type": "integer", "minimum": 1, "maximum": 1000}},
     description="Optional limit defaults to 100 and is capped at 1000.",
@@ -209,7 +239,14 @@ def _playbook_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     # Per bead trade-trace-7j1l: scan the long-form playbook description
     # field. `name` is a short identifier and exempt.
     reject_if_contains_secrets(description, field="description")
-    status = args.get("status")
+    status = args.get("status", _DEFAULT_PLAYBOOK_STATUS)
+    if status not in PLAYBOOK_STATUSES:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"status must be one of {PLAYBOOK_STATUSES}; got {status!r}",
+            details={"field": "status", "value": status,
+                     "allowed": list(PLAYBOOK_STATUSES)},
+        )
     metadata_json = store_metadata_json(args)
     idempotency_key = args.get("idempotency_key")
 
@@ -325,14 +362,14 @@ def _playbook_rule_guidance(*, has_rules: bool) -> str:
     if has_rules:
         return (
             "Linked playbook_rule nodes are discoverable below. Next: use "
-            "decision.record_adherence with this playbook_version_id and a "
+            "playbook.record_adherence with this playbook_version_id and a "
             "rule_node_id when evaluating a decision; use memory.recall to "
             "retrieve broader playbook_rule context."
         )
     return (
         "No playbook_rule nodes are linked to this version yet. Next: use "
         "memory.retain(node_type='playbook_rule') to create rule memory, "
-        "then decision.record_adherence with playbook_version_id and "
+        "then playbook.record_adherence with playbook_version_id and "
         "rule_node_id to establish the existing read-side linkage."
     )
 
@@ -598,7 +635,7 @@ def _playbook_propose_version(
     }
 
 
-# -- decision.record_adherence -------------------------------------
+# -- playbook.record_adherence (legacy name: decision.record_adherence) ---
 
 
 def _decision_record_adherence(
@@ -738,11 +775,13 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
         **_examples_for("playbook.create"),
         description=(
             "Register a named playbook. `name` is unique; duplicate "
-            "raises VALIDATION_ERROR with details.field='name'. The "
-            "row carries no rules of its own — rules live in "
-            "memory_nodes(node_type='playbook_rule') and are wired to "
-            "the playbook via versions (playbook.propose_version)."
+            "raises VALIDATION_ERROR with details.field='name'. Optional "
+            "`status` is enum-validated against {active, archived} and "
+            "defaults to 'active'. The row carries no rules of its own — "
+            "rules live in memory_nodes(node_type='playbook_rule') and are "
+            "wired to the playbook via versions (playbook.propose_version)."
         ),
+        json_schema=_PLAYBOOK_CREATE_SCHEMA,
     )
     registry.register(
         "playbook.list",
@@ -799,7 +838,7 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
         optional_keys=("strategy_id",),
     )
     registry.register(
-        "decision.record_adherence",
+        "playbook.record_adherence",
         _decision_record_adherence,
         is_write=True,
         **_examples_for("decision.record_adherence"),
@@ -811,5 +850,8 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
             "playbook_rule.followed for every other status. Advisory only "
             "— no auto-rejection of the decision."
         ),
-        json_schema=_DECISION_RECORD_ADHERENCE_SCHEMA
+        json_schema=_DECISION_RECORD_ADHERENCE_SCHEMA,
+        # Former name; retained as a dispatch-only legacy alias in core.py for
+        # historic JSONL replay (bead trade-trace-va77).
+        legacy_name="decision.record_adherence",
     )

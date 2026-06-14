@@ -324,8 +324,10 @@ Required object with machine-readable caveat arrays:
 - `data_quality_caveats`: projection anomalies, unsupported forecast scoring, low samples, ambiguous/disputed/void outcomes, count-unavailable warnings.
 - `memory_caveats`: recall and memory validity warnings.
 - `truncation_caveats`: packet/section partial-output warnings.
+- `caveat_glossary`: an object mapping every caveat code that appears anywhere in the packet to a one-line plain-language gloss, so a stateless bot can tell which caveats matter without out-of-band knowledge. Populated after budgeting, so it covers exactly the codes that survived truncation.
+- `caveat_glossary_doc`: a relative path to the full caveat-code glossary doc ([`bootstrap-caveat-glossary.md`](./bootstrap-caveat-glossary.md)) for the canonical, complete code list.
 
-Each caveat may be a string code or object. Object form must include `code`, `severity` (`info`, `warn`, `blocker`), `message`, and optional `source_refs`.
+Each caveat may be a string code or object. Object form must include `code`, `severity` (`info`, `warn`, `blocker`), `message`, and optional `source_refs`. The inline `caveat_glossary` is the lightweight default: codes stay terse in the arrays and the gloss is resolved once per code.
 
 #### `suggested_process_calls`
 

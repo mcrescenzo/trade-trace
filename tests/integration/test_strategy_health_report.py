@@ -9,7 +9,22 @@ import urllib.request
 from tests._direct_sql_builders import insert_instrument, insert_venue
 from tests._mcp_helpers import mcp_default as _mcp
 from trade_trace.core import default_registry
+from trade_trace.reports.strategy_health import report_strategy_health
 from trade_trace.storage.paths import db_path
+
+
+class _QueryTrace:
+    """Capture every SQL statement a connection executes so a test can assert
+    the per-strategy fan-out is gone (trade-trace-oupw)."""
+
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+
+    def __call__(self, sql: str) -> None:
+        self.statements.append(" ".join(sql.split()))
+
+    def count_substr(self, needle: str) -> int:
+        return sum(1 for s in self.statements if needle in s)
 
 
 def _assert_no_advice_profit_ranking_text(payload: object, *, description: str = "") -> None:
@@ -155,3 +170,109 @@ def test_strategy_health_repeated_overrides_requires_two(home):
     assert group["sections"]["repeated_overrides"]["count"] == 2
     assert group["sections"]["repeated_overrides"]["record_ids"] == ["dh_single", "dh_second"]
     assert env.data["summary"]["metrics"]["repeated_overrides"] == 2
+
+
+def _seed_strategies(home, count: int, *, ns: str = "a") -> list[str]:
+    """Create `count` active strategies, each with one decision, one thesis with
+    a missing source ref, one open forecast, and a single (non-repeated) override.
+
+    `ns` namespaces every fixed-id row so the helper can be called more than once
+    against the same journal without colliding on shared ids. Returns the new
+    strategy ids in creation order."""
+
+    ids: list[str] = []
+    for i in range(count):
+        env = _mcp(home, "strategy.create", {
+            "name": f"Fan {ns} {i}", "slug": f"fan-{ns}-{i:03d}",
+            "idempotency_key": f"00000000-0000-4000-8000-fan{ns}{i:05d}",
+        })
+        assert env.ok, env
+        ids.append(env.data["id"])
+
+    conn = sqlite3.connect(db_path(home))
+    try:
+        insert_venue(conn, venue_id=f"vf_{ns}")
+        insert_instrument(conn, instrument_id=f"if_{ns}", venue_id=f"vf_{ns}")
+        conn.execute("INSERT INTO memory_nodes(id, node_type, title, body, valid_from, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", (f"mn_fr_{ns}", "playbook_rule", "rule", "b", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "actor-a"))
+        conn.execute("INSERT INTO memory_nodes(id, node_type, title, body, valid_from, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", (f"mn_fref_{ns}", "reflection", "ref", "b", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "actor-a"))
+        conn.execute("INSERT INTO playbooks(id, name, created_at, actor_id) VALUES (?,?,?,?)", (f"pb_f_{ns}", f"PB {ns}", "2026-01-01T00:00:00Z", "actor-a"))
+        conn.execute("INSERT INTO playbook_versions(id, playbook_id, version, provenance_reflection_node_id, created_at, actor_id) VALUES (?,?,?,?,?,?)", (f"pbv_f_{ns}", f"pb_f_{ns}", 1, f"mn_fref_{ns}", "2026-01-01T00:00:00Z", "actor-a"))
+        for i, sid in enumerate(ids):
+            conn.execute("INSERT INTO decisions(id, instrument_id, type, review_by, strategy_id, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", (f"df_{ns}_{i}", f"if_{ns}", "watch", "2026-01-05T00:00:00Z", sid, "2026-01-02T00:00:00Z", "actor-a"))
+            conn.execute("INSERT INTO theses(id, instrument_id, side, body, strategy_id, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", (f"tf_{ns}_{i}", f"if_{ns}", "yes", "missing ref", sid, "2026-01-01T00:00:00Z", "actor-a"))
+            conn.execute("INSERT INTO forecasts(id, thesis_id, kind, scoring_state, created_at, actor_id) VALUES (?,?,?,?,?,?)", (f"ff_{ns}_{i}", f"tf_{ns}_{i}", "binary", "pending", "2026-01-02T00:00:00Z", "actor-a"))
+            conn.execute("INSERT INTO decision_playbook_rules(id, decision_id, playbook_version_id, rule_node_id, status, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", (f"dpr_f_{ns}_{i}", f"df_{ns}_{i}", f"pbv_f_{ns}", f"mn_fr_{ns}", "overridden", "2026-01-03T00:00:00Z", "actor-a"))
+        conn.commit()
+    finally:
+        conn.close()
+    return ids
+
+
+def _signal_query_count(trace: _QueryTrace) -> int:
+    """Count statements that scan a per-strategy signal table. Each of these
+    should fire exactly once across all strategies, not once per strategy."""
+
+    return (
+        trace.count_substr("FROM decisions d")
+        + trace.count_substr("FROM theses t")
+        + trace.count_substr("FROM forecasts f")
+    )
+
+
+def test_strategy_health_query_count_is_constant_in_strategy_count(home):
+    """The per-strategy 5-query fan-out is replaced by a constant number of
+    batch queries: doubling the strategy count must not change the number of
+    signal-table scans (trade-trace-oupw)."""
+
+    _seed_strategies(home, 3, ns="a")
+    with sqlite3.connect(db_path(home)) as conn:
+        small = _QueryTrace()
+        conn.set_trace_callback(small)
+        report_strategy_health(conn, as_of="2026-01-10T00:00:00Z")
+        conn.set_trace_callback(None)
+
+    _seed_strategies(home, 9, ns="b")  # now 12 active strategies
+    with sqlite3.connect(db_path(home)) as conn:
+        big = _QueryTrace()
+        conn.set_trace_callback(big)
+        data = report_strategy_health(conn, as_of="2026-01-10T00:00:00Z")
+        conn.set_trace_callback(None)
+
+    assert data["summary"]["metrics"]["strategy_count"] == 12
+    # Five signal scans regardless of strategy count (decisions x3 incl. the
+    # override join, theses x1, forecasts x1) — and stable across populations.
+    assert _signal_query_count(small) == _signal_query_count(big)
+    assert _signal_query_count(big) == 5
+    # No per-strategy `WHERE d.strategy_id = ?` style scoping survives; the
+    # batch path scopes with `strategy_id IN (...)` instead.
+    assert big.count_substr("d.strategy_id IN (") >= 1
+
+
+def test_strategy_health_multi_strategy_output_matches_per_strategy(home):
+    """Batch partitioning must yield identical per-group output to running the
+    report scoped to one strategy at a time."""
+
+    ids = _seed_strategies(home, 4)
+
+    combined = report_strategy_health(home_conn := sqlite3.connect(db_path(home)), as_of="2026-01-10T00:00:00Z")
+    home_conn.close()
+
+    by_key = {g["key"]: g for g in combined["groups"]}
+    assert set(by_key) == set(ids)
+
+    for sid in ids:
+        scoped_conn = sqlite3.connect(db_path(home))
+        scoped = report_strategy_health(
+            scoped_conn,
+            raw_filter={"strategy": {"strategy_id": sid}},
+            as_of="2026-01-10T00:00:00Z",
+        )
+        scoped_conn.close()
+        assert len(scoped["groups"]) == 1
+        # Identical group payload whether the strategy was reported alone or as
+        # part of the multi-strategy batch. The per-group `filter` echo
+        # legitimately differs (the scoped run records the strategy_id it was
+        # filtered to), so compare everything else.
+        scoped_group = {k: v for k, v in scoped["groups"][0].items() if k != "filter"}
+        combined_group = {k: v for k, v in by_key[sid].items() if k != "filter"}
+        assert scoped_group == combined_group

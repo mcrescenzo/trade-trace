@@ -24,6 +24,7 @@ from trade_trace.tools._helpers import (
     reject_if_contains_secrets,
     require,
     store_metadata_json,
+    validate_confidence_label,
 )
 from trade_trace.tools.ledger._shared import examples_for
 
@@ -39,6 +40,7 @@ def _thesis_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     for field in ("falsification_criteria", "exit_triggers", "risk_notes",
                   "invalidation_condition", "risk_unit_label"):
         reject_if_contains_secrets(args.get(field), field=field)
+    validate_confidence_label(args.get("confidence_label"))
     parent = args.get("parent_thesis_id")
     version = args.get("version", 1)
     idempotency_key = args.get("idempotency_key")

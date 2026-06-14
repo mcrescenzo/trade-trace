@@ -137,3 +137,150 @@ def test_pretrade_intent_rejects_nested_secret_pattern_in_evidence_refs(tmp_path
     assert bad.error.code == "VALIDATION_ERROR"
     assert bad.error.details["field"] == "evidence_refs"
     assert "pattern_kind" in bad.error.details
+
+
+# ---------------------------------------------------------------------------
+# Section-9 lifecycle fixtures (autonomous-trader-substrate.md §9; bead
+# trade-trace-2g47): an intent is derived as "awaiting check" until it links an
+# immutable risk_check_receipts row, then "with check" surfacing the receipt's
+# verdict status. No mutable status column — the lifecycle view is derived from
+# the append-only risk.check_record receipt the intent points at.
+# ---------------------------------------------------------------------------
+
+
+def _record_pass_receipt(home) -> str:
+    """Run the public risk.evaluate -> risk.check_record loop and return the
+    immutable receipt id an intent can link via risk_check_receipt_id."""
+
+    policy = _call(
+        "risk.policy_version_add",
+        {
+            "home": str(home),
+            "policy_key": "pm-default",
+            "version": "1",
+            "rules_json": [],
+            "source": "operator",
+            "effective_from": "2026-05-28T00:00:00.000Z",
+            "idempotency_key": "policy-1",
+        },
+        actor_id="agent:risk",
+    )
+    assert policy.ok, policy
+    policy_version_id = policy.data["id"]
+
+    receipt = _call(
+        "risk.check_record",
+        {
+            "home": str(home),
+            "policy_version_id": policy_version_id,
+            "status": "pass",
+            "outcome": "pass",
+            "rule_results": [],
+            "as_of": "2026-05-28T00:00:00.000Z",
+            "market_id": "m_pm_1",
+            "idempotency_key": "receipt-1",
+        },
+        actor_id="agent:risk",
+    )
+    assert receipt.ok, receipt
+    return receipt.data["id"]
+
+
+def test_pretrade_intent_awaiting_check_lifecycle(tmp_path):
+    """§9 fixture: an intent with no linked receipt is derived as not-evaluated."""
+
+    home = tmp_path / "home"
+    _seed_refs(home)
+    env = _call("pretrade_intent.record", _base(home))
+    assert env.ok, env
+    evaluation = env.data["evaluation"]
+    assert evaluation == {"evaluated": False, "risk_check_receipt_id": None, "status": None}
+
+    got = _call("pretrade_intent.get", {"home": str(home), "id": env.data["id"]})
+    assert got.ok
+    assert got.data["evaluation"]["evaluated"] is False
+
+    listed = _call("pretrade_intent.list", {"home": str(home), "market_id": "m_pm_1"})
+    assert listed.ok
+    assert listed.data["records"][0]["evaluation"]["evaluated"] is False
+
+
+def test_pretrade_intent_with_check_lifecycle(tmp_path):
+    """§9 fixture: an intent linking a risk_check_receipt is derived as evaluated
+    and surfaces the receipt's verdict status on get and list."""
+
+    home = tmp_path / "home"
+    _seed_refs(home)
+    receipt_id = _record_pass_receipt(home)
+
+    args = _base(home)
+    args["semantic_key"] = "intent-with-check"
+    args["idempotency_key"] = "intent-with-check"
+    args["risk_check_receipt_id"] = receipt_id
+    env = _call("pretrade_intent.record", args)
+    assert env.ok, env
+    assert env.data["risk_check_receipt_id"] == receipt_id
+    assert env.data["evaluation"] == {
+        "evaluated": True,
+        "risk_check_receipt_id": receipt_id,
+        "status": "pass",
+    }
+
+    got = _call("pretrade_intent.get", {"home": str(home), "id": env.data["id"]})
+    assert got.ok
+    assert got.data["evaluation"]["evaluated"] is True
+    assert got.data["evaluation"]["status"] == "pass"
+
+    listed = _call("pretrade_intent.list", {"home": str(home), "market_id": "m_pm_1"})
+    assert listed.ok
+    record = next(r for r in listed.data["records"] if r["id"] == env.data["id"])
+    assert record["evaluation"]["status"] == "pass"
+
+
+def test_pretrade_intent_record_rejects_unknown_risk_check_receipt(tmp_path):
+    """The risk_check_receipt_id link is FK-validated, so an intent cannot claim
+    to be evaluated against a receipt that does not exist."""
+
+    home = tmp_path / "home"
+    _seed_refs(home)
+    args = _base(home)
+    args["semantic_key"] = "intent-bad-receipt"
+    args["idempotency_key"] = "intent-bad-receipt"
+    args["risk_check_receipt_id"] = "rcr_missing"
+    bad = _call("pretrade_intent.record", args)
+    assert not bad.ok
+    assert bad.error.code == "VALIDATION_ERROR"
+    tables = {m["table"] for m in bad.error.details["missing_refs"]}
+    assert "risk_check_receipts" in tables
+
+
+def test_pretrade_intent_cluster_is_not_frozen():
+    """Freeze-state regression (bead trade-trace-2g47).
+
+    The pre-trade intent cluster was unfrozen into the public Phase-2 catalog.
+    Pin that non-experimental state so a future accidental re-freeze (re-adding
+    pretrade_intent.* to EXPERIMENTAL_AUTONOMOUS_OPS) is caught here.
+    """
+
+    from trade_trace.core import (
+        EXPERIMENTAL_AUTONOMOUS_OPS,
+        EXPERIMENTAL_FROZEN_TOOLS,
+        build_registry,
+    )
+
+    reg = build_registry()
+    public = set(reg.public_names())
+    for name in ("pretrade_intent.record", "pretrade_intent.get", "pretrade_intent.list"):
+        entry = reg.get(name)
+        assert entry is not None, f"{name} should be registered"
+        assert entry.catalog_visibility != "experimental", (
+            f"{name} regressed to catalog_visibility=experimental; the pre-trade "
+            "intent cluster was unfrozen in trade-trace-2g47"
+        )
+        assert name in public, f"{name} must appear in the default public catalog"
+        assert name not in EXPERIMENTAL_AUTONOMOUS_OPS, (
+            f"{name} was re-added to EXPERIMENTAL_AUTONOMOUS_OPS"
+        )
+        assert name not in EXPERIMENTAL_FROZEN_TOOLS, (
+            f"{name} re-entered the frozen-tools union"
+        )

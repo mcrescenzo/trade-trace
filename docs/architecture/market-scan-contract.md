@@ -1,6 +1,6 @@
 # Guided market-scan dry-run/promote contract
 
-> Status: **shipped** — `market.scan.dry_run` and `market.scan.promote` are implemented; this document specifies their public contract and the Polymarket-style caller-supplied mapping/workflow.
+> Status: **legacy** — `market.scan.dry_run` and `market.scan.promote` were folded into `market.bind` in the v0.0.2 PM pivot (trade-trace-4kec). Callers should use `market.bind`; these names are kept as dispatchable aliases for backward compatibility only (see `V002_FOLDED_OR_REMOVED` in `src/trade_trace/core.py`). This document specifies the original public contract and the Polymarket-style caller-supplied mapping/workflow that informed the consolidated `market.bind` surface.
 
 ## 1. Purpose and public surface
 

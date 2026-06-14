@@ -17,6 +17,7 @@ from trade_trace.tools._helpers import (
     normalize_timestamp,
     now_iso,
     reject_credential_metadata,
+    reject_if_contains_secrets,
     require,
     store_metadata_json,
 )
@@ -84,7 +85,36 @@ def _validate_refs(conn: Any, args: dict[str, Any]) -> list[dict[str, str]]:
     return missing
 
 
-def _row_to_response(row: Any) -> dict[str, Any]:
+def _evaluation_for(conn: Any, receipt_id: Any) -> dict[str, Any]:
+    """Derive the intent's risk-evaluation lifecycle view from append-only rows.
+
+    An intent is "evaluated" exactly when it links an immutable
+    risk_check_receipts row written by risk.check_record (itself the persisted
+    output of the deterministic risk.evaluate verdict). We never mutate the
+    intent to record this; the receipt link is set at record time and the
+    verdict status is read through here so pretrade_intent.get/list surface
+    "intent awaiting check" (no receipt) vs "intent with check" (receipt +
+    status) without a mutable status column (bead trade-trace-2g47;
+    autonomous-trader-substrate.md §9).
+    """
+
+    if not receipt_id:
+        return {"evaluated": False, "risk_check_receipt_id": None, "status": None}
+    row = conn.execute(
+        "SELECT status FROM risk_check_receipts WHERE id = ?",
+        (receipt_id,),
+    ).fetchone()
+    # The FK is validated at write time, so a linked receipt is normally
+    # present; if it is somehow missing we still report the link without
+    # asserting a verdict rather than raising on a read path.
+    return {
+        "evaluated": row is not None,
+        "risk_check_receipt_id": receipt_id,
+        "status": row[0] if row is not None else None,
+    }
+
+
+def _row_to_response(row: Any, conn: Any) -> dict[str, Any]:
     return {
         "id": row[0], "semantic_key": row[1], "material_hash": row[2],
         "market_id": row[3], "instrument_id": row[4], "snapshot_id": row[5],
@@ -95,6 +125,7 @@ def _row_to_response(row: Any) -> dict[str, Any]:
         "caveats": json.loads(row[16]), "approval_state": row[17], "approval_ref_id": row[18],
         "as_of": row[19], "run_id": row[20], "idempotency_key": row[21],
         "provenance": json.loads(row[22]), "created_at": row[23], "actor_id": row[24],
+        "evaluation": _evaluation_for(conn, row[9]),
         "record_kind": "proposed_local_pretrade_intent", "non_executing": True,
     }
 
@@ -106,7 +137,7 @@ def _response(conn: Any, intent_id: str) -> dict[str, Any]:
     ).fetchone()
     if row is None:
         raise ToolError(ErrorCode.NOT_FOUND, "pre-trade intent not found", details={"id": intent_id})
-    return _row_to_response(row)
+    return _row_to_response(row, conn)
 
 
 def _material(args: dict[str, Any], as_of: str, proposed_shape: dict[str, Any], risk_budget: dict[str, Any], evidence_refs: list[Any], source_ids: list[Any], caveats: list[Any], provenance: dict[str, Any]) -> dict[str, Any]:
@@ -124,6 +155,11 @@ def _material(args: dict[str, Any], as_of: str, proposed_shape: dict[str, Any], 
 def _pretrade_intent_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     if not (args.get("market_id") or args.get("instrument_id")):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "market_id or instrument_id is required", details={"field": "market_id"})
+    # semantic_key is a required, caller-supplied free-text field that is
+    # persisted verbatim and hashed into the material packet; scan it for
+    # credential-shaped substrings before any further work (bead
+    # trade-trace-jm14 / INV-6).
+    reject_if_contains_secrets(require(args, "semantic_key"), field="semantic_key")
     proposed_shape = _dict_arg(args, "proposed_shape")
     if not proposed_shape:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "proposed_shape must be explicit", details={"field": "proposed_shape"})
@@ -200,7 +236,7 @@ def _pretrade_intent_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, A
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
         rows = db.connection.execute(sql, (*params, limit)).fetchall()
-        return {"records": [_row_to_response(row) for row in rows], "count": len(rows), "record_kind": "proposed_local_pretrade_intent"}
+        return {"records": [_row_to_response(row, db.connection) for row in rows], "count": len(rows), "record_kind": "proposed_local_pretrade_intent"}
 
 
 def register_pretrade_intent_tools(registry: ToolRegistry) -> None:

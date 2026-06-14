@@ -27,6 +27,9 @@ from trade_trace.tools._helpers import (
 )
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.ledger._finality import (
+    auto_score_block_reason as _auto_score_block_reason,
+)
+from trade_trace.tools.ledger._finality import (
     finality_uncertain_for_outcome as _finality_uncertain_for_outcome,
 )
 from trade_trace.tools.ledger._finality import (
@@ -43,10 +46,52 @@ _OUTCOME_STATUSES = {
     "disputed", "ambiguous", "void", "cancelled",
     "imported_redeemed", "imported_settled",
 }
+
+# Advertise the status enum (and the auto-score-gating confidence field) in the
+# MCP tool.schema. Without an explicit schema the registration auto-derives from
+# example_minimal, exposing status as a bare string even though the runtime
+# rejects out-of-enum values with a self-documenting error — the AX-051 class
+# (cf. memory.link). Also surfaces confidence in properties, not just
+# example_rich, closing the AX-030 discoverability residual. AX-054.
+_OUTCOME_ADD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "instrument_id": {"type": "string"},
+        "resolved_at": {"type": "string"},
+        "outcome_label": {"type": "string", "description": "Resolved outcome label; a binary label (yes/no/true/false) is required for a resolved_final outcome to auto-score a pending binary forecast."},
+        "status": {"type": "string", "enum": sorted(_OUTCOME_STATUSES), "description": "Resolution status; must be one of the documented enum. Only resolved_final auto-scores pending forecasts."},
+        "outcome_value": {"type": "number"},
+        "confidence": {"type": "number", "description": "Caller's certainty in the outcome (0..1). REQUIRED >= 0.9 (with a binary outcome_label and status=resolved_final) for a resolved outcome to auto-score a pending binary forecast; omit it and the write succeeds but scores nothing (see auto_score_skipped_reason on the result)."},
+        "settlement_price": {"type": "number"},
+        "resolution_source_url": {"type": "string"},
+        "source": {"type": "string"},
+        "metadata_json": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "agent_id": {"type": "string"},
+        "model_id": {"type": "string"},
+        "run_id": {"type": "string"},
+        "environment": {"type": "string"},
+        "home": {"type": "string"},
+    },
+    "required": ["instrument_id", "resolved_at", "outcome_label", "status", "idempotency_key"],
+}
+
+
 def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     instrument_id = require(args, "instrument_id")
     resolved_at = normalize_timestamp(args, "resolved_at", required=True)
-    outcome_label = require(args, "outcome_label")
+    # Normalize the outcome_label at write time so a whitespace-padded or
+    # whitespace-only label cannot be persisted. is_auto_scoreable_final()
+    # already strips before comparing, but the raw (un-stripped) string would
+    # otherwise land in the append-only outcomes row, leaving a label like
+    # " yes " or "   " that no later reader can match cleanly (trade-trace-1k5d).
+    outcome_label = require(args, "outcome_label").strip()
+    if not outcome_label:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "outcome_label must not be empty or whitespace-only",
+            details={"field": "outcome_label"},
+        )
     status = require(args, "status")
     if status not in _OUTCOME_STATUSES:
         raise ToolError(
@@ -99,6 +144,9 @@ def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                         "auto_scoreable": _is_auto_scoreable_final(
                             status=row_status, confidence=row_confidence, outcome_label=row_label,
                         ),
+                        "auto_score_skipped_reason": _auto_score_block_reason(
+                            status=row_status, confidence=row_confidence, outcome_label=row_label,
+                        ),
                         "finality_uncertain": _finality_uncertain_for_outcome(
                             status=row_status, confidence=row_confidence, outcome_label=row_label,
                         ),
@@ -146,6 +194,7 @@ def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     return {"id": outcome_id, "instrument_id": instrument_id, "status": status,
             "resolved_at": resolved_at, "auto_scored_forecasts": auto_scored,
             "auto_scoreable": _is_auto_scoreable_final(status=status, confidence=args.get("confidence"), outcome_label=outcome_label),
+            "auto_score_skipped_reason": _auto_score_block_reason(status=status, confidence=args.get("confidence"), outcome_label=outcome_label),
             "finality_uncertain": _finality_uncertain_for_outcome(status=status, confidence=args.get("confidence"), outcome_label=outcome_label),
             "created_at": created_at}
 
@@ -162,16 +211,45 @@ def _resolve_pending(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "limit must be between 1 and 1000",
             details={"field": "limit", "value": limit},
         )
+    # PRD §4.4: resolve.pending lists forecasts whose resolution_at has
+    # ALREADY PASSED ("past their resolution_at") and remain unscored. A
+    # future-dated forecast is not yet resolvable, so it must not leak into
+    # this work queue. Bind the cutoff to now_iso() (which honors the
+    # CLOCK_OVERRIDE used by tests) rather than SQL strftime('now'), so the
+    # filter stays deterministic under a frozen clock.
+    now = now_iso()
     with db_for_args(args) as db:
+        # NOTE: forecasts.scoring_state is append-only (the m003/m014
+        # trigger forbids UPDATE), so it never leaves 'pending' on disk;
+        # the logical state is projected at read time by
+        # derive_scoring_state(). A `WHERE f.scoring_state = 'pending'`
+        # clause here would be a no-op that filters nothing while implying
+        # already-scored forecasts are excluded (trade-trace-2b0z). We
+        # instead exclude logically-scored forecasts with an accurate
+        # NOT EXISTS over forecast_scores: a non-NULL score against an
+        # outcome that has not itself been superseded == logically
+        # 'scored' per derive_scoring_state(). Forecasts that are
+        # logically pending/failed/superseded-outcome remain in the list.
         cur = db.connection.execute(
             """
             SELECT f.id, f.thesis_id, f.kind, f.resolution_at, t.instrument_id
             FROM forecasts f
             JOIN theses t ON t.id = f.thesis_id
             WHERE f.resolution_at IS NOT NULL
-              AND f.scoring_state = 'pending'
+              AND f.resolution_at <= ?
+              AND NOT EXISTS (
+                SELECT 1 FROM forecast_scores fs
+                WHERE fs.forecast_id = f.id
+                  AND fs.score IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM edges e
+                    WHERE e.source_kind = 'outcome' AND e.target_kind = 'outcome'
+                      AND e.edge_type = 'supersedes' AND e.target_id = fs.outcome_id
+                  )
+              )
             ORDER BY f.resolution_at ASC, f.id ASC
             """,
+            (now,),
         )
         items = []
         for row in cur.fetchall():
@@ -204,11 +282,13 @@ def _resolve_pending(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 def register_outcome_tools(registry: ToolRegistry) -> None:
     registry.register(
         "outcome.add", _outcome_add, is_write=True,
+        json_schema=_OUTCOME_ADD_SCHEMA,
         **examples_for("outcome.add"),
     )
     # resolve.record is an alias for outcome.add (PRD §4.4).
     registry.register(
         "resolve.record", _outcome_add, is_write=True,
+        json_schema=_OUTCOME_ADD_SCHEMA,
         **examples_for("outcome.add"),
     )
     registry.register("resolve.pending", _resolve_pending)

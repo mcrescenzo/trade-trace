@@ -14,6 +14,7 @@ from tests._direct_sql_builders import (
 from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import apply_pending_migrations, find_orphan_edges, open_database
+from trade_trace.storage.edge_audit import EDGE_ENDPOINT_TABLES
 from trade_trace.storage.paths import db_path
 
 
@@ -89,6 +90,32 @@ def test_orphan_edge_audit_ignores_valid_edge(tmp_path: Path):
         )
 
         assert find_orphan_edges(db.connection) == []
+    finally:
+        db.close()
+
+
+def test_playbook_version_endpoint_is_audited(tmp_path: Path):
+    """trade-trace-1k5d: `playbook_version` endpoints DO have a backing table
+    (`playbook_versions`, created by m008), so the orphan audit must cover them.
+    An edge pointing at a missing playbook_version row is reported as an orphan.
+    """
+
+    assert EDGE_ENDPOINT_TABLES.get("playbook_version") == "playbook_versions"
+    db = _db(tmp_path)
+    try:
+        _seed_minimal(db.connection)
+        db.connection.execute(
+            "INSERT INTO edges(id, source_kind, source_id, target_kind, target_id, "
+            "edge_type, created_at, actor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "e_pv_orphan", "thesis", "t_1", "playbook_version", "pv_missing",
+                "supports", "2026-05-18T14:01:00Z", "agent:default",
+            ),
+        )
+
+        rows = find_orphan_edges(db.connection)
+        orphaned = {(r["edge_id"], r["endpoint_kind"], r["endpoint_id"]) for r in rows}
+        assert ("e_pv_orphan", "playbook_version", "pv_missing") in orphaned
     finally:
         db.close()
 

@@ -24,6 +24,12 @@ DEFAULT_BUDGETS = {
     "include_sensitive_sources": False,
     "redaction_policy": "metadata_and_snippets_only",
 }
+# Budget keys a caller may NOT flip on: they would weaken the bundle's
+# fixed redaction posture (bead trade-trace-jm14). _validate_request strips
+# these from caller-supplied budgets so DEFAULT_BUDGETS always wins.
+_SECURITY_GATE_BUDGET_KEYS = frozenset(
+    {"include_sensitive_sources", "include_source_bodies", "include_memory_bodies"}
+)
 ALLOWED_TASK_MODES = ["blind_decision", "forecast_only", "review_original"]
 _ALLOWED_FILTERS = {
     "time_window": {"created_at_gte", "created_at_lt"},
@@ -72,7 +78,17 @@ def _validate_request(args: dict[str, Any]) -> tuple[str, dict[str, Any], dict[s
     if mode not in ALLOWED_TASK_MODES:
         raise ValueError(f"task.mode must be one of {ALLOWED_TASK_MODES}")
     task = {**task, "mode": mode, "include_evaluation_labels": bool(task.get("include_evaluation_labels", False))}
-    budgets = {**DEFAULT_BUDGETS, **(args.get("budgets") or {})}
+    # Security-gate budget keys are NOT caller-overridable: the replay/review
+    # bundle must unconditionally exclude sensitive sources and long-form
+    # bodies regardless of what a caller passes (security.md §6.5/§8, bead
+    # trade-trace-jm14). Strip them from caller input before merging so the
+    # hardened DEFAULT_BUDGETS values always win.
+    caller_budgets = {
+        k: v
+        for k, v in (args.get("budgets") or {}).items()
+        if k not in _SECURITY_GATE_BUDGET_KEYS
+    }
+    budgets = {**DEFAULT_BUDGETS, **caller_budgets}
     if not isinstance(budgets["default_max_items_per_section"], int) or budgets["default_max_items_per_section"] < 0:
         raise ValueError("budgets.default_max_items_per_section must be a non-negative integer")
     if not isinstance(budgets["default_max_chars_per_section"], int) or budgets["default_max_chars_per_section"] < 1:

@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Local calibration journal for LLM prediction-market trading agents.</strong><br>
-  Trade Trace is a continuity and evaluation layer for an agent's prediction-market process. It is not a trader.
+  Trade Trace is a continuity and evaluation layer for an agent's prediction-market process. It is not yet a trader — see <a href="./VISION.md">VISION.md</a> for the full arc.
 </p>
 
 <p align="center">
@@ -124,7 +124,7 @@ See [`docs/AI_AGENT_MCP_GETTING_STARTED.md`](./docs/AI_AGENT_MCP_GETTING_STARTED
 
 ## Use the CLI
 
-The CLI mirrors the MCP catalog by replacing dots in MCP tool names with spaces (for example, `market.bind` becomes `tt market bind`). It emits JSON by default; streaming list/read paths use NDJSON envelopes. The current default public catalog contains 69 registry-generated tools (the scope-reignin freeze/cut landed it at 56, then 13 decision-time tools were added). A further 40 Product-B tools (autonomous-ops, reconciliation/execution-truth, and the anchored-calibration unit) are frozen behind an experimental tier — hidden from the default catalog but still dispatchable via `MCP_INCLUDE_EXPERIMENTAL=1` or `tool.schema {"include_experimental": true}`. `tool.schema` is the source of truth and includes compatibility metadata such as `legacy_name` for renamed tools and hints for removed legacy callers.
+The CLI mirrors the MCP catalog by replacing dots in MCP tool names with spaces (for example, `market.bind` becomes `tt market bind`). It emits JSON by default; streaming list/read paths use NDJSON envelopes. The current default public catalog contains 70 registry-generated tools (the scope-reignin freeze/cut landed it at 56, then 13 decision-time tools plus `market.search` were added); `tool.schema` / `build_registry().public_names()` is the live count. A further 40 Product-B tools (autonomous-ops, reconciliation/execution-truth, and the anchored-calibration unit) are frozen behind an experimental tier — hidden from the default catalog but still dispatchable via `MCP_INCLUDE_EXPERIMENTAL=1` or `tool.schema {"include_experimental": true}`. `tool.schema` is the source of truth and includes compatibility metadata such as `legacy_name` for renamed tools and hints for removed legacy callers.
 
 ```bash
 tt journal init
@@ -154,7 +154,8 @@ Read [`SECURITY.md`](./SECURITY.md) for vulnerability reporting and supported-ve
 | [`docs/AI_AGENT_MCP_GETTING_STARTED.md`](./docs/AI_AGENT_MCP_GETTING_STARTED.md) | First MCP connection and safe write loop. |
 | [`docs/AGENT_GUIDE.md`](./docs/AGENT_GUIDE.md) | Full agent journal loop, continuity surfaces, patterns, and pitfalls. |
 | [`docs/CLAUDE_CODE.md`](./docs/CLAUDE_CODE.md), [`docs/CLAUDE_DESKTOP.md`](./docs/CLAUDE_DESKTOP.md), [`docs/IDE_MCP_SETUP.md`](./docs/IDE_MCP_SETUP.md) | Client setup recipes. |
-| [`docs/VISION.md`](./docs/VISION.md) | Product north star and non-goals. |
+| [`VISION.md`](./VISION.md) | Product north star — where Trade Trace is ultimately headed. |
+| [`docs/architecture/product-scope-v002.md`](./docs/architecture/product-scope-v002.md) | Current-phase (v0.0.2) scope, principles, and non-goals. |
 | [`docs/PRD.md`](./docs/PRD.md) | Working product requirements and milestone scope. |
 | [`docs/architecture/contracts.md`](./docs/architecture/contracts.md) | CLI/MCP JSON envelope, parity, error codes, and schemas. |
 | [`docs/architecture/persistence.md`](./docs/architecture/persistence.md) | SQLite, events, outbox, idempotency, and append-only invariants. |

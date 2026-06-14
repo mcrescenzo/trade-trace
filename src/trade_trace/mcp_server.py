@@ -205,20 +205,30 @@ def _build_stdio_server(registry: ToolRegistry | None = None):
     include_experimental = os.environ.get("MCP_INCLUDE_EXPERIMENTAL") == "1"
     server = Server("trade-trace")
 
+    # Precompute the tool list once at server-build time (bead
+    # trade-trace-yt45). The registry, include_admin, and
+    # include_experimental inputs are all fixed for the life of this
+    # server, so mcp_tool_specs() — which re-runs the recursive
+    # _assert_no_secret_transport_hints scan over every spec — produced
+    # byte-identical output on every list_tools request. Hoisting it out
+    # of the handler turns a per-request O(tools * schema-depth) scan into
+    # a one-time cost; the immutable Tool list is simply returned.
+    _tool_list: list[Any] = [
+        types.Tool(
+            name=spec["name"],
+            description=spec["description"],
+            inputSchema=spec["input_schema"] or {"type": "object", "properties": {}},
+        )
+        for spec in mcp_tool_specs(
+            reg,
+            include_admin=include_admin,
+            include_experimental=include_experimental,
+        )
+    ]
+
     @server.list_tools()
     async def _list_tools() -> list[Any]:
-        return [
-            types.Tool(
-                name=spec["name"],
-                description=spec["description"],
-                inputSchema=spec["input_schema"] or {"type": "object", "properties": {}},
-            )
-            for spec in mcp_tool_specs(
-                reg,
-                include_admin=include_admin,
-                include_experimental=include_experimental,
-            )
-        ]
+        return _tool_list
 
     @server.call_tool(validate_input=False)
     async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
@@ -246,6 +256,9 @@ def _build_stdio_server(registry: ToolRegistry | None = None):
                 instance=arguments,
                 schema=schema,
                 policy=MCP_STDIO_FULL_SCHEMA,
+                validator=registration.compiled_validator
+                if registration is not None
+                else None,
             )
             if validation_error is not None:
                 return _stdio_validation_error(

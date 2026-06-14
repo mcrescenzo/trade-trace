@@ -88,6 +88,66 @@ def _insert_latest_snapshot(home: Path, *, instrument_id: str, captured_at: str,
         db.close()
 
 
+def _insert_open_paper_position(home: Path, *, idx: int) -> None:
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        venue_id = db.connection.execute(
+            "INSERT INTO venues(id, name, kind, created_at, actor_id) "
+            "VALUES (?, ?, 'prediction_market', '2026-05-19T00:00:00Z', 'agent:test') RETURNING id",
+            (f"venue_default_{idx}", f"Venue {idx}"),
+        ).fetchone()[0]
+        instrument_id = f"inst_default_{idx}"
+        db.connection.execute(
+            "INSERT INTO instruments(id, venue_id, asset_class, title, created_at, actor_id) "
+            "VALUES (?, ?, 'prediction_market', ?, '2026-05-19T00:00:00Z', 'agent:test')",
+            (instrument_id, venue_id, f"Will event {idx} happen?"),
+        )
+        db.connection.execute(
+            """
+            INSERT INTO positions(id, instrument_id, kind, side, status, opened_at, closed_at,
+                                  resolved_at, realized_pnl, unrealized_pnl, avg_entry_price,
+                                  updated_at, initial_risk_amount)
+            VALUES (?, ?, 'paper', 'yes', 'open', '2026-05-20T00:00:00Z', NULL,
+                    NULL, NULL, NULL, 0.42, '2026-05-20T00:00:00Z', 10.0)
+            """,
+            (f"pos_default_{idx}", instrument_id),
+        )
+        db.connection.execute(
+            """
+            INSERT INTO position_events(id, position_id, instrument_id, decision_id, event_type,
+                                        quantity_delta, price, fees, slippage, metadata_json, created_at, actor_id)
+            VALUES (?, ?, ?, NULL, 'open', 1.0, 0.42, 0.0, 0.0, '{}', '2026-05-20T00:00:00Z', 'agent:test')
+            """,
+            (f"pe_default_{idx}", f"pos_default_{idx}", instrument_id),
+        )
+        db.connection.commit()
+    finally:
+        db.close()
+
+
+def test_report_open_positions_default_no_limit_call_is_bounded_by_transport_default(home: Path) -> None:
+    # The documented default call (`tt report open_positions`, no limit) must
+    # NOT page the full set: open-position rows are heavy (each embeds two
+    # 78-digit CLOB token IDs), so the old 100-row default overflowed the MCP
+    # token cap once positions accumulated (trade-trace-lszg / AX-034 observed
+    # ~61KB at N=9). The default call is now bounded to the small transport
+    # default and signals truncated=true + a next_cursor.
+    from trade_trace.reports.tool_handlers.portfolio_exposure import (
+        OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT,
+    )
+
+    for idx in range(OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT + 1):
+        _insert_open_paper_position(home, idx=idx)
+
+    body = _call(home)
+    assert body["ok"] is True, body
+    data = body["data"]
+    assert len(data["open_positions"]) == OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT
+    assert data["summary"]["filter"]["limit"] == OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT
+    assert data["truncated"] is True
+    assert data["next_cursor"], "bounded default call must page the rest via next_cursor"
+
+
 def test_report_open_positions_no_positions_returns_positive_empty(home: Path) -> None:
     body = _call(home)
 
@@ -157,6 +217,112 @@ def test_report_open_positions_surfaces_latest_mark_and_stale_caveat(rich_home: 
     assert "MISSING_MARK" not in row["caveat_codes"]
     assert "STALE_MARK" in body["data"]["summary"]["caveat_codes"]
     assert body["data"]["summary"]["filter"]["as_of"] == "2026-05-21T00:00:00.000Z"
+
+
+def test_report_open_positions_remarks_open_position_when_fresh_mark_available(rich_home: Path) -> None:
+    # Repro (AX dogfood AX-025): a paper position opened before its first
+    # snapshot has a null projection unrealized_pnl and an `open_no_mark`
+    # caveat ("this position has no current mark"). The projection only marks
+    # unrealized_pnl at rebuild time, so landing a later snapshot used to leave
+    # the row advertising mark_state=available + a populated latest_mark while
+    # STILL carrying open_no_mark and a null unrealized_pnl — a contradictory
+    # signal. The report must re-mark from the live mark and drop the caveat.
+    before = _call(rich_home, {"limit": 100})
+    target = next(
+        row
+        for row in before["data"]["open_positions"]
+        if row["kind"] == "paper" and "MISSING_MARK" in row["caveat_codes"]
+    )
+    # Precondition: the unmarked row is null-PnL and carries open_no_mark.
+    assert target["unrealized_pnl"] is None
+    assert "open_no_mark" in target["read_model_caveats"]
+    assert target["mark_state"] == "missing"
+    assert target["avg_entry_price"] is not None
+
+    _insert_latest_snapshot(
+        rich_home,
+        instrument_id=target["instrument_id"],
+        captured_at="2026-05-20T23:00:00Z",
+        snapshot_id="snap_fresh_open_position_ax",
+    )
+
+    body = _call(
+        rich_home,
+        {
+            "instrument_id": target["instrument_id"],
+            "limit": 10,
+            "as_of": "2026-05-21T00:00:00Z",
+            "stale_mark_threshold_days": 14,
+        },
+    )
+    row = next(r for r in body["data"]["open_positions"] if r["position_id"] == target["position_id"])
+
+    assert row["mark_state"] == "available"
+    assert "MISSING_MARK" not in row["caveat_codes"]
+    # The contradiction is gone: no stale open_no_mark while a mark is attached.
+    assert "open_no_mark" not in row["read_model_caveats"]
+    assert all(entry["code"] != "open_no_mark" for entry in row["caveats"])
+    # Re-marked side-aware from the fresh snapshot YES-contract price (0.42),
+    # matching the canonical projection convention (trade-trace-ctvb).
+    yes_mark = 0.42
+    entry_price = target["avg_entry_price"]
+    qty = target["net_quantity"]
+    if (target["side"] or "").lower() == "no":
+        expected = ((1.0 - yes_mark) - entry_price) * abs(qty)
+    else:
+        expected = (yes_mark - entry_price) * qty
+    assert row["unrealized_pnl"] == pytest.approx(expected)
+
+
+def test_report_open_positions_remarks_when_stored_pnl_predates_latest_mark(rich_home: Path) -> None:
+    # Repro (AX dogfood AX-028): the AX-025 fix only re-marked rows whose
+    # stored projection unrealized_pnl was NULL. A position whose stored PnL was
+    # marked against an OLDER snapshot kept that stale non-null value while the
+    # report attached a fresher latest_mark — so latest_mark.price and
+    # unrealized_pnl on the SAME row disagreed (observed live: latest_mark
+    # price=0.415 while unrealized_pnl still reflected a 0.49 mark). The report
+    # must always re-mark from the live mark. The helper stores a stale
+    # projection unrealized_pnl=3.25 (avg_entry_price=0.55), deliberately
+    # inconsistent with the fresh 0.42 mark.
+    _insert_actual_open_position(rich_home)
+    before = _call(rich_home, {"kind": "actual", "limit": 10})
+    target = next(
+        r for r in before["data"]["open_positions"] if r["position_id"] == "pos_actual_open_dr4m"
+    )
+    instrument_id = target["instrument_id"]
+
+    # A clearly-latest snapshot (far-future captured_at) at a known YES mark
+    # (0.42, set by the helper) that differs from the stored 0.55 projection PnL.
+    _insert_latest_snapshot(
+        rich_home,
+        instrument_id=instrument_id,
+        captured_at="2026-12-31T00:00:00Z",
+        snapshot_id="snap_stale_pnl_remark_ax028",
+    )
+
+    body = _call(
+        rich_home,
+        {
+            "kind": "actual",
+            "instrument_id": instrument_id,
+            "limit": 10,
+            "as_of": "2027-01-01T00:00:00Z",
+            "stale_mark_threshold_days": 14,
+        },
+    )
+    row = next(r for r in body["data"]["open_positions"] if r["position_id"] == "pos_actual_open_dr4m")
+
+    assert row["mark_state"] == "available"
+    assert row["latest_mark"]["price"] == pytest.approx(0.42)
+    # Re-marked side-aware from the fresh 0.42 mark, NOT left at the stale
+    # stored projection value (3.25). pos_actual_open_dr4m is a yes side with
+    # net_quantity=+2.0 and avg_entry_price=0.55.
+    yes_mark = 0.42
+    entry_price = row["avg_entry_price"]
+    qty = row["net_quantity"]
+    expected = (yes_mark - entry_price) * qty
+    assert row["unrealized_pnl"] == pytest.approx(expected)
+    assert row["unrealized_pnl"] != pytest.approx(3.25)
 
 
 @pytest.mark.parametrize(

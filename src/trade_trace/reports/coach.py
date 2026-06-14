@@ -30,7 +30,7 @@ from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.reports._filter_support import process_filter
 from trade_trace.reports.integrity import report_calibration_integrity
 from trade_trace.reports.source_quality import report_source_quality
-from trade_trace.reports.tag_aggregates import report_mistakes, report_strengths
+from trade_trace.reports.tag_aggregates import load_mistakes_and_strengths
 from trade_trace.reports.unscored import report_unscored_forecasts
 from trade_trace.reports.watchlist import report_watchlist
 
@@ -77,8 +77,10 @@ def report_coach(
     rf = ReportFilter.model_validate(raw_filter or {})
     filter_dict = process_filter(rf, report="report.coach")
 
-    mistakes = report_mistakes(conn, raw_filter=filter_dict)
-    strengths = report_strengths(conn, raw_filter=filter_dict)
+    # report.mistakes and report.strengths run the identical tag→Brier
+    # query and differ only in Python-side sort order; load both ranked
+    # views from a single DB round-trip (trade-trace-bg12).
+    mistakes, strengths = load_mistakes_and_strengths(conn, raw_filter=filter_dict)
     unscored = report_unscored_forecasts(conn, raw_filter=filter_dict)
     stale_watches = report_watchlist(
         conn, raw_filter=filter_dict, stale=True,
@@ -214,13 +216,21 @@ def report_coach(
                 )
             continue
         if diagnostic_key == "abstention_coverage":
-            share = diag["abstention_share_pct"]
-            if share is not None and diag["count"] > 0:
+            # Two pass-surfaces (trade-trace-s7nn): first-class
+            # abstention.record rows AND forecast-less decision.add(type=skip)
+            # rows. Report the de-duplicated union so a bot that diligently
+            # records skips is not shown 0% coverage.
+            skip_count = diag.get("skip_coverage", {}).get("count", 0)
+            considered = diag.get("considered_passes_dedup", diag["count"])
+            considered_total = diag.get("considered_total_dedup", diag["total"])
+            share = diag.get("considered_share_pct", diag["abstention_share_pct"])
+            if share is not None and considered > 0:
                 callouts.append(
-                    f"abstention_coverage: {diag['count']} of {diag['total']} "
-                    f"considered markets were recorded as no-bet ({share:.1f}%) "
-                    "— calibration excludes these by construction; review for "
-                    "survivorship context."
+                    f"abstention_coverage: {considered} of {considered_total} "
+                    f"considered markets were recorded as no-bet "
+                    f"({diag['count']} abstention.record + {skip_count} "
+                    f"forecast-less skip; {share:.1f}%) — calibration excludes "
+                    "these by construction; review for survivorship context."
                 )
             continue
         rate = diag["rate_pct"]
@@ -317,10 +327,23 @@ def _process_quality_gaps(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     """Return concrete, non-statistical cleanup actions for early journals."""
 
     actions: list[dict[str, Any]] = []
+    # Forecast linkage is evaluated at the INSTRUMENT level, not the decision
+    # row alone (bead trade-trace-t9n5). skip/watch/hold decisions deliberately
+    # carry no `forecast_id` of their own — a bot records a real forecast then
+    # skips for insufficient edge. Flagging those rows as "no linked forecast"
+    # is a false positive: the market IS forecasted. A decision is therefore
+    # only flagged when neither the decision row carries a forecast_id NOR any
+    # forecast exists for the same instrument (joined via the forecast's
+    # thesis, which is NOT NULL and carries instrument_id).
     missing_forecast = _sample_ids(conn, """
-        SELECT id FROM decisions
-        WHERE forecast_id IS NULL
-        ORDER BY created_at, id
+        SELECT d.id FROM decisions d
+        WHERE d.forecast_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM forecasts f
+            JOIN theses t ON t.id = f.thesis_id
+            WHERE t.instrument_id = d.instrument_id
+          )
+        ORDER BY d.created_at, d.id
         LIMIT 5
     """)
     if missing_forecast:
@@ -436,16 +459,35 @@ def _override_outcomes_panel(conn: sqlite3.Connection) -> dict[str, Any]:
     ).fetchall()
     overridden_count = len(rows)
     decision_ids: list[str] = []
+
+    # Replace the per-row outcomes probe (one SELECT per overridden row —
+    # an N+1, bead trade-trace-yt45) with a single grouped query. For each
+    # instrument referenced by an overridden row, fetch the *latest*
+    # outcome resolved_at; a row then "has a subsequent outcome" iff that
+    # max exceeds the row's decision created_at. This is byte-identical to
+    # the old per-row `EXISTS(... resolved_at > dec_at)`: an outcome
+    # resolved after dec_at exists iff the maximum resolved_at for that
+    # instrument is > dec_at. Instruments with no outcome row are absent
+    # from the map (treated as "no subsequent outcome").
+    instrument_ids = {instr_id for _adh, _dec, instr_id, _at in rows}
+    latest_outcome_at: dict[str, str] = {}
+    if instrument_ids:
+        placeholders = ", ".join("?" for _ in instrument_ids)
+        for instr_id, max_resolved in conn.execute(
+            "SELECT instrument_id, MAX(resolved_at) FROM outcomes "
+            f"WHERE instrument_id IN ({placeholders}) "
+            "GROUP BY instrument_id",
+            tuple(instrument_ids),
+        ).fetchall():
+            if max_resolved is not None:
+                latest_outcome_at[instr_id] = max_resolved
+
     with_outcome = 0
     for _adh_id, dec_id, instr_id, dec_at in rows:
         if dec_id not in decision_ids:
             decision_ids.append(dec_id)
-        has_outcome = conn.execute(
-            "SELECT 1 FROM outcomes WHERE instrument_id = ? "
-            "AND resolved_at > ? LIMIT 1",
-            (instr_id, dec_at),
-        ).fetchone()
-        if has_outcome is not None:
+        latest = latest_outcome_at.get(instr_id)
+        if latest is not None and latest > dec_at:
             with_outcome += 1
     return {
         "overridden_count": overridden_count,

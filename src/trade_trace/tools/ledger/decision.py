@@ -32,6 +32,7 @@ from trade_trace.tools.decision_matrix import (
     allowed_decision_types,
     decision_matrix_contract,
     material_non_action_taxonomy,
+    price_convention,
     validate_decision_fields,
     validate_material_non_action,
 )
@@ -40,7 +41,27 @@ from trade_trace.tools.ledger._shared import _store_tags, examples_for
 
 
 def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    # 'type' is the field name (not 'decision_type'); a bare "type is required"
+    # leaves a caller guessing both the name and the valid values. List them.
+    if args.get("type") is None:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "type is required; one of " + ", ".join(allowed_decision_types()),
+            details={"field": "type", "allowed_decision_types": allowed_decision_types()},
+        )
     decision_type = require(args, "type")
+    # Ergonomics: forecast.add returns forecast_id (its thesis_id is easy to
+    # miss), but paper_enter and friends require thesis_id. If the caller gave
+    # forecast_id but no thesis_id, derive the thesis from the forecast so they
+    # do not have to look it up separately.
+    if not args.get("thesis_id") and args.get("forecast_id"):
+        with db_for_args(args) as _db:
+            row = _db.connection.execute(
+                "SELECT thesis_id FROM forecasts WHERE id = ?",
+                (args["forecast_id"],),
+            ).fetchone()
+        if row and row[0]:
+            args["thesis_id"] = row[0]
     validate_decision_fields(decision_type, args)
     validate_material_non_action(decision_type, args)
     reject_if_contains_secrets(args.get("reason"), field="reason")
@@ -102,13 +123,66 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             return {}
         return {"position_event_id": row[0], "position_id": row[1]}
 
+    def _already_exposed_advisory(conn, this_position_id: str | None) -> dict[str, Any] | None:
+        """Advisory-only `already_exposed` caveat for paper_enter.
+
+        Position lifecycle is intentional (trade-trace-scx8): paper_enter
+        ALWAYS opens a fresh, independent position row — it never increases
+        an existing open paper position, and exposure nets correctly at
+        report.open_positions, so this is NOT a marking bug. The hazard is
+        decision-time ergonomics for autonomous feeders: an hourly loop that
+        re-enters the same market each run silently fragments/accumulates
+        parallel same-side rows with no signal at entry. This caveat surfaces
+        that the projection ALREADY shows an open/partial position on the same
+        instrument+side at entry time so a bot can choose to skip
+        (material_non_action category=skip, materiality_reason=already_exposed,
+        the matrix reason this maps to) instead of fragmenting. It is purely
+        advisory: the entry still succeeds and the new position is still
+        opened. The detection-side mirror is report.exposure_anomalies
+        FRAGMENTED_SAME_SIDE_EXPOSURE.
+        """
+
+        instrument_id = args.get("instrument_id")
+        side = args.get("side")
+        if instrument_id is None or side is None or this_position_id is None:
+            return None
+        rows = conn.execute(
+            "SELECT id FROM positions "
+            "WHERE instrument_id = ? AND side = ? AND status IN ('open','partial') "
+            "AND id != ? ORDER BY opened_at, id",
+            (instrument_id, side, this_position_id),
+        ).fetchall()
+        existing = [row[0] for row in rows]
+        if not existing:
+            return None
+        return {
+            "code": "already_exposed",
+            "severity": "advisory",
+            "instrument_id": instrument_id,
+            "side": side,
+            "existing_open_position_ids": existing,
+            "existing_open_position_count": len(existing),
+            "message": (
+                "An open paper position already exists on this instrument+side; "
+                "paper_enter opens an independent NEW position (it does not "
+                "increase the existing one). Exposure nets in report.open_positions. "
+                "To avoid fragmenting same-side exposure, consider decision.add "
+                "type=skip with metadata_json.material_non_action="
+                "{category:'skip', materiality_reason:'already_exposed'}."
+            ),
+        }
+
     def _response(conn, decision_id: str, created_at_value: str, review_by_value: str | None) -> dict[str, Any]:
         data = {"id": decision_id, "type": decision_type,
                 "instrument_id": args.get("instrument_id"),
                 "snapshot_id": args.get("snapshot_id"), "tags": tags,
                 "created_at": created_at_value, "review_by": review_by_value}
         if decision_type == "paper_enter":
-            data.update(_linked_position_ids(conn, decision_id))
+            linked = _linked_position_ids(conn, decision_id)
+            data.update(linked)
+            advisory = _already_exposed_advisory(conn, linked.get("position_id"))
+            if advisory is not None:
+                data.setdefault("advisories", []).append(advisory)
         return data
 
     def _payload(did: str) -> dict[str, Any]:
@@ -233,15 +307,48 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
             "enum": allowed_decision_types(),
             "description": "Decision discriminator. See x-decision-matrix for per-type required/optional/forbidden fields.",
         },
-        "instrument_id": {"type": "string"},
-        "thesis_id": {"type": "string"},
+        "instrument_id": {
+            "type": "string",
+            "description": "The market_id/instrument_id returned by market.bind (e.g. 'mkt_...'); for prediction markets these are the same id used as market_id in forecast.add.",
+        },
+        "thesis_id": {
+            "type": "string",
+            "description": "Thesis behind the decision. Optional when forecast_id is supplied: it is derived from the forecast.",
+        },
         "forecast_id": {"type": "string"},
         "snapshot_id": {"type": "string"},
         "side": {"type": "string"},
         "quantity": {"type": "number"},
-        "price": {"type": "number"},
+        "price": {
+            "type": "number",
+            "description": (
+                "Side-native price you paid for the contract on `side`, NOT a "
+                "normalized YES price. For a `no` prediction-market position "
+                "this is the NO-contract price (1 - yes_price); record what you "
+                "actually paid. See x-price-convention for marking/rebuild rules."
+            ),
+        },
         "fees": {"type": "number"},
         "slippage": {"type": "number"},
+        "declared_risk_amount": {
+            "type": "number",
+            "description": (
+                "Risk you accepted at entry, in `declared_risk_unit` (e.g. the "
+                "max-loss budget for this position). Optional on entry/add "
+                "decisions; flows to the position's initial_risk_amount and is "
+                "REQUIRED for report.risk R-multiples and report.opportunity "
+                "edge thresholds. Omit it and those reports exclude the trade "
+                "(report.open_positions flags it `missing_risk_budget`). "
+                "Must be >= 0."
+            ),
+        },
+        "declared_risk_unit": {
+            "type": "string",
+            "description": (
+                "Unit for declared_risk_amount (e.g. 'dollar'). Paired with "
+                "declared_risk_amount on entry/add decisions."
+            ),
+        },
         "reason": {"type": "string"},
         "review_by": {"type": "string"},
         "tags": {"type": "array", "items": {"type": "string"}},
@@ -263,9 +370,21 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
         "for per-type required/optional/forbidden fields. For `paper_enter`, "
         "the tool appends one linked position_events.open row, refreshes "
         "positions, and returns position_id/position_event_id; actual_* and "
-        "paper_exit remain journal records only for projection purposes."
+        "paper_exit remain journal records only for projection purposes. "
+        "paper_enter ALWAYS opens a fresh, independent position — it never "
+        "increases an existing open paper position on the same instrument+side "
+        "(there is no paper `add` to a paper position). Exposure nets correctly "
+        "at report.open_positions. When the projection already shows an "
+        "open/partial position on the same instrument+side, the response "
+        "carries an advisory `already_exposed` caveat under `advisories` so an "
+        "autonomous feeder can skip (material_non_action category=skip, "
+        "materiality_reason=already_exposed) instead of fragmenting same-side "
+        "exposure; the entry still succeeds. report.exposure_anomalies "
+        "FRAGMENTED_SAME_SIDE_EXPOSURE is the post-hoc detector for the same "
+        "hazard."
     ),
     "x-decision-matrix": _DECISION_MATRIX_CONTRACT,
+    "x-price-convention": price_convention(),
     "x-material-non-action-taxonomy": material_non_action_taxonomy(),
     "x-decision-examples": {
         "skip": {
@@ -288,6 +407,8 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
             "side": "yes",
             "quantity": 100,
             "price": 0.62,
+            "declared_risk_amount": 38.0,
+            "declared_risk_unit": "dollar",
             "idempotency_key": "00000000-0000-4000-8000-000000000000",
         },
         "actual_exit": {

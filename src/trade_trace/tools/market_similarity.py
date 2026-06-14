@@ -65,7 +65,7 @@ def _fingerprint(conn: Any, market_row: tuple) -> dict[str, Any]:
 _DIMENSIONS = ("mechanism", "resolution_source", "ambiguous", "liquidity_bucket", "spread_bucket", "longshot")
 
 
-def _similarity(ref: dict[str, Any], cand: dict[str, Any]) -> tuple[float | None, list[str]]:
+def _similarity(ref: dict[str, Any], cand: dict[str, Any]) -> tuple[float | None, list[str], int]:
     comparable = 0
     matched: list[str] = []
     for dim in _DIMENSIONS:
@@ -76,8 +76,8 @@ def _similarity(ref: dict[str, Any], cand: dict[str, Any]) -> tuple[float | None
         if a == b:
             matched.append(dim)
     if comparable == 0:
-        return None, matched
-    return len(matched) / comparable, matched
+        return None, matched, 0
+    return len(matched) / comparable, matched, comparable
 
 
 def _market_find_similar(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -100,7 +100,7 @@ def _market_find_similar(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
         ).fetchall()
         scored: list[dict[str, Any]] = []
         for cid, mech, rsrc, amb, title in candidates:
-            score, matched = _similarity(ref_fp, _fingerprint(conn, (cid, mech, rsrc, amb)))
+            score, matched, comparable = _similarity(ref_fp, _fingerprint(conn, (cid, mech, rsrc, amb)))
             if score is None or score < min_score:
                 continue
             scored.append({
@@ -108,8 +108,15 @@ def _market_find_similar(args: dict[str, Any], ctx: ToolContext) -> dict[str, An
                 "title": title,
                 "score": round(score, 6),
                 "matched_dimensions": matched,
+                # Denominator behind `score` (= len(matched_dimensions)/comparable):
+                # the number of dimensions where both markets had a non-null value.
+                # A snapshot-less candidate is comparable on fewer dims, so a 1.0
+                # score over 3 comparable dims is weaker evidence than 1.0 over 6.
+                "comparable_dimensions": comparable,
             })
-        scored.sort(key=lambda r: (-r["score"], r["instrument_id"]))
+        # Rank by score, then by coverage so a fuller, more-corroborated match
+        # outranks a sparse coincidence that ties on the comparable-fraction score.
+        scored.sort(key=lambda r: (-r["score"], -r["comparable_dimensions"], r["instrument_id"]))
         return {
             "reference_instrument_id": instrument_id,
             "reference_fingerprint": ref_fp,

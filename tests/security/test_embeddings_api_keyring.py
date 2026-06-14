@@ -54,45 +54,19 @@ def test_api_embeddings_provider_is_rejected_without_keyring(monkeypatch, tmp_pa
     assert KNOWN_SECRET not in serialized
 
 
-def test_keyring_revoke_is_legacy_noop_and_secret_free(monkeypatch, tmp_path):
-    monkeypatch.setitem(sys.modules, "keyring", ExplodingKeyring())
-    home = tmp_path / "home"
-    _init_home(home)
+def test_keyring_revoke_tool_is_removed_from_catalog_and_dispatch():
+    """The legacy `keyring.revoke` no-op was removed (bead trade-trace-kepf).
 
-    preview = mcp_call(
-        "keyring.revoke",
-        {"home": str(home), "_allow_no_idempotency": True},
-    )
-    assert preview.ok, preview
-    assert preview.data == {
-        "preview_only": True,
-        "would_revoke": {"provider": "none", "credential_storage": "unsupported"},
-    }
-    assert preview.meta.preview_only is True
+    Remote embedding credentials are unsupported, so no keyring-revocation
+    tool should be dispatchable or schema-introspectable. The real
+    secret-free contract is preserved by
+    ``test_api_embeddings_provider_is_rejected_without_keyring`` above.
+    """
 
-    confirmed = mcp_call(
-        "keyring.revoke",
-        {
-            "home": str(home),
-            "_confirm": True,
-            "idempotency_key": "00000000-0000-4000-8000-keyring-noop1",
-        },
-    )
-    assert confirmed.ok, confirmed
-    assert confirmed.data == {
-        "preview_only": False,
-        "provider": "none",
-        "credential_storage": "unsupported",
-        "revoked": False,
-    }
-    assert "api_key" not in json.dumps(confirmed.model_dump(mode="json"), sort_keys=True)
-
-
-def test_keyring_revoke_tool_schema_stays_narrow_and_secret_free():
     env = mcp_call("tool.schema", {"tool": "keyring.revoke"})
-    assert env.ok, env
-    schema = env.data["json_schema"]
-    assert schema is not None
-    assert "api_key" not in json.dumps(env.model_dump(mode="json"), sort_keys=True)
-    assert set(schema.get("properties", {})) >= {"_confirm", "idempotency_key"}
-    assert "service" not in schema.get("properties", {})
+    assert not env.ok
+    assert env.error is not None
+    # tool.schema reports an unknown tool rather than returning a schema;
+    # `keyring.revoke` must not be a registered/dispatchable tool name.
+    assert env.error.code.value == "NOT_FOUND"
+    assert "keyring.revoke" not in env.error.details["known_tools"]

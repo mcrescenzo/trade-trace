@@ -7,6 +7,7 @@ rank performance, fetch external data, or provide trading advice.
 from __future__ import annotations
 
 import sqlite3
+from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
 
@@ -56,55 +57,135 @@ def _extend_filter_sql(alias: str, rf: ReportFilter, params: list[Any], *, time_
     return "".join(f" AND {clause}" for clause in clauses)
 
 
-def _ids(conn: sqlite3.Connection, sql: str, params: list[Any]) -> list[str]:
-    return [row[0] for row in conn.execute(sql, tuple(params)).fetchall()]
+def _partition_ids(
+    conn: sqlite3.Connection, sql: str, params: list[Any]
+) -> dict[str, list[str]]:
+    """Run one batch query and partition its `(strategy_id, record_id)` rows.
+
+    Each query selects ``strategy_id`` as the first column and the record id
+    as the second, ordered so that rows for a given strategy already arrive in
+    the report's required within-strategy order. Appending into a list per
+    strategy preserves that SQL ordering, so the partitioned output is
+    identical to the previous per-strategy queries that filtered on a single
+    ``strategy_id``.
+    """
+
+    out: dict[str, list[str]] = defaultdict(list)
+    for sid, record_id in conn.execute(sql, tuple(params)).fetchall():
+        out[sid].append(record_id)
+    return out
 
 
-def _strategy_group(conn: sqlite3.Connection, row: sqlite3.Row | tuple[Any, ...], rf: ReportFilter, *, as_of: str, min_sample: int) -> dict[str, Any]:
-    sid, slug, name, status = row[0], row[1], row[2], row[3]
+def _strategy_filter_sql(alias: str, strategy_ids: list[str], params: list[Any]) -> str:
+    """Append an ``alias.strategy_id IN (...)`` clause scoping to ``strategy_ids``.
 
-    params: list[Any] = [sid]
+    Callers only invoke this with a non-empty list (the empty-scope case is
+    short-circuited in :func:`_batch_signals`), so the placeholder list is
+    always non-empty and SQLite never sees an empty ``IN ()``.
+    """
+
+    placeholders = ",".join("?" for _ in strategy_ids)
+    params.extend(strategy_ids)
+    return f" AND {alias}.strategy_id IN ({placeholders})"
+
+
+def _batch_signals(
+    conn: sqlite3.Connection,
+    strategy_ids: list[str],
+    rf: ReportFilter,
+    *,
+    as_of: str,
+) -> dict[str, dict[str, list[str]]]:
+    """Compute every per-strategy signal in a small constant number of queries.
+
+    Replaces the previous ``O(strategies * 5)`` fan-out: each of the five
+    signal queries runs once across all in-scope strategies (scoped with a
+    single ``strategy_id IN (...)`` clause) and is partitioned in Python by
+    strategy. Query count is now exactly five regardless of strategy count.
+    All queries run inside the caller's pinned ``read_snapshot`` view.
+    """
+
+    empty: dict[str, dict[str, list[str]]] = {
+        "decisions": {},
+        "due": {},
+        "missing_source_thesis": {},
+        "open_forecast": {},
+        "override": {},
+    }
+    if not strategy_ids:
+        return empty
+
+    params: list[Any] = []
+    scope = _strategy_filter_sql("d", strategy_ids, params)
     decision_filter = _extend_filter_sql("d", rf, params)
-    decision_ids = _ids(conn, f"SELECT d.id FROM decisions d WHERE d.strategy_id = ?{decision_filter} ORDER BY d.created_at, d.id", params)
+    decisions = _partition_ids(conn, f"SELECT d.strategy_id, d.id FROM decisions d WHERE 1=1{scope}{decision_filter} ORDER BY d.strategy_id, d.created_at, d.id", params)
 
-    params = [sid, as_of]
-    due_ids = _ids(conn, f"""
-        SELECT d.id FROM decisions d
-        WHERE d.strategy_id = ? AND d.type IN ('watch','hold','review')
-          AND d.review_by IS NOT NULL AND d.review_by <= ?
+    params = [as_of]
+    scope = _strategy_filter_sql("d", strategy_ids, params)
+    due = _partition_ids(conn, f"""
+        SELECT d.strategy_id, d.id FROM decisions d
+        WHERE d.type IN ('watch','hold','review')
+          AND d.review_by IS NOT NULL AND d.review_by <= ?{scope}
           {_extend_filter_sql('d', rf, params)}
-        ORDER BY d.review_by, d.created_at, d.id
+        ORDER BY d.strategy_id, d.review_by, d.created_at, d.id
     """, params)
 
-    params = [sid]
+    params = []
+    scope = _strategy_filter_sql("t", strategy_ids, params)
     thesis_filter = _extend_filter_sql("t", rf, params)
-    missing_source_thesis_ids = _ids(conn, f"""
-        SELECT t.id FROM theses t
-        WHERE t.strategy_id = ? AND NOT EXISTS (
+    missing_source_thesis = _partition_ids(conn, f"""
+        SELECT t.strategy_id, t.id FROM theses t
+        WHERE NOT EXISTS (
             SELECT 1 FROM edges e
             WHERE ((e.source_kind = 'thesis' AND e.source_id = t.id)
                 OR (e.target_kind = 'thesis' AND e.target_id = t.id))
               AND (e.source_kind = 'source' OR e.target_kind = 'source')
-        ){thesis_filter}
-        ORDER BY t.created_at, t.id
+        ){scope}{thesis_filter}
+        ORDER BY t.strategy_id, t.created_at, t.id
     """, params)
 
-    params = [sid]
+    params = []
+    scope = _strategy_filter_sql("t", strategy_ids, params)
     forecast_filter = _extend_filter_sql("f", rf, params)
-    open_forecast_ids = _ids(conn, f"""
-        SELECT f.id FROM forecasts f JOIN theses t ON t.id = f.thesis_id
-        WHERE t.strategy_id = ? AND f.scoring_state IN ('pending','failed')
-          AND f.invalidated_at IS NULL{forecast_filter}
-        ORDER BY f.created_at, f.id
+    open_forecast = _partition_ids(conn, f"""
+        SELECT t.strategy_id, f.id FROM forecasts f JOIN theses t ON t.id = f.thesis_id
+        WHERE f.scoring_state IN ('pending','failed')
+          AND f.invalidated_at IS NULL{scope}{forecast_filter}
+        ORDER BY t.strategy_id, f.created_at, f.id
     """, params)
 
-    params = [sid]
-    override_ids = _ids(conn, f"""
-        SELECT DISTINCT d.id FROM decisions d
+    params = []
+    scope = _strategy_filter_sql("d", strategy_ids, params)
+    override = _partition_ids(conn, f"""
+        SELECT DISTINCT d.strategy_id, d.id FROM decisions d
         JOIN decision_playbook_rules dpr ON dpr.decision_id = d.id
-        WHERE d.strategy_id = ? AND dpr.status = 'overridden'{_extend_filter_sql('d', rf, params)}
-        ORDER BY d.created_at, d.id
+        WHERE dpr.status = 'overridden'{scope}{_extend_filter_sql('d', rf, params)}
+        ORDER BY d.strategy_id, d.created_at, d.id
     """, params)
+
+    return {
+        "decisions": decisions,
+        "due": due,
+        "missing_source_thesis": missing_source_thesis,
+        "open_forecast": open_forecast,
+        "override": override,
+    }
+
+
+def _strategy_group(
+    row: sqlite3.Row | tuple[Any, ...],
+    rf: ReportFilter,
+    signals: dict[str, dict[str, list[str]]],
+    *,
+    min_sample: int,
+) -> dict[str, Any]:
+    sid, slug, name, status = row[0], row[1], row[2], row[3]
+
+    decision_ids = signals["decisions"].get(sid, [])
+    due_ids = signals["due"].get(sid, [])
+    missing_source_thesis_ids = signals["missing_source_thesis"].get(sid, [])
+    open_forecast_ids = signals["open_forecast"].get(sid, [])
+    override_ids = signals["override"].get(sid, [])
     repeated_override_ids = override_ids if len(override_ids) >= 2 else []
 
     caveats: list[str] = []
@@ -183,7 +264,9 @@ def report_strategy_health(
             params.append(strategy_value)
         sql += " ORDER BY status, slug, id"
         strategies = conn.execute(sql, tuple(params)).fetchall()
-        groups = [_strategy_group(conn, row, rf, as_of=resolved_as_of, min_sample=min_sample) for row in strategies]
+        strategy_ids = [row[0] for row in strategies]
+        signals = _batch_signals(conn, strategy_ids, rf, as_of=resolved_as_of)
+        groups = [_strategy_group(row, rf, signals, min_sample=min_sample) for row in strategies]
     groups.sort(key=lambda g: (g["metrics"]["review_priority"], g["metrics"]["slug"], g["key"]))
 
     totals = {"review_due": 0, "low_n": 0, "open_unresolved_forecasts": 0, "source_quality_issues": 0, "repeated_overrides": 0, "policy_candidates": 0}

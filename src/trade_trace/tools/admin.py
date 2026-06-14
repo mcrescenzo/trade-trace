@@ -17,7 +17,6 @@ Embeddings admin paths:
   - model.import      (opt-in local ONNX model staging path; 89x)
   - model.warm        (lazy warm of the local embedder; 89x)
   - memory.reindex    (re-embed all nodes when provider changes; 89x)
-  - keyring.revoke    (legacy no-op; remote embeddings are unsupported)
 
 Tools that mutate state respect the `--confirm` (CLI) / `_confirm: true`
 (MCP) flag per the operability contract: without it they return
@@ -37,13 +36,14 @@ from typing import Any
 from trade_trace._permissions import chmod_user_only_dir, chmod_user_only_file
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
-from trade_trace.events.unit_of_work import UnitOfWork
+from trade_trace.events.unit_of_work import DRY_RUN_FLAG, UnitOfWork
 from trade_trace.models.embeddings import (
     LOCAL_EMBEDDINGS_DIM,
     LocalEmbeddingUnavailable,
     LocalOnnxEmbedder,
 )
 from trade_trace.storage import open_database, resolve_home
+from trade_trace.storage.database import ReadOnlyDatabaseError, open_database_readonly
 from trade_trace.storage.paths import db_path
 from trade_trace.tools._helpers import now_iso, require
 from trade_trace.tools.errors import ToolError
@@ -80,6 +80,18 @@ def _set_preview_meta(ctx: ToolContext) -> None:
     can branch on whether the call mutated state."""
 
     ctx.meta_hints["preview_only"] = True
+
+
+def _dry_run_active() -> bool:
+    """True when the request was dispatched with `_dry_run`.
+
+    Every write tool advertises `supports_dry_run=true` via tool.schema, and
+    the dispatcher honors it generically by having UnitOfWork roll back instead
+    of commit. Admin writers that bypass UnitOfWork (raw sqlite/open_database
+    commits, filesystem copies) must branch on this flag themselves or the
+    advertised dry-run silently mutates the live store."""
+
+    return DRY_RUN_FLAG.get()
 
 
 def _model_target_dir(home: Path) -> Path:
@@ -259,7 +271,17 @@ def _journal_repair(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "journal not initialized; run `tt journal init` first",
             details={"home": str(home), "db_path": str(path)},
         )
-    db = open_database(path, create_parent=False)
+    # journal.repair only runs read-only PRAGMA diagnostics (integrity_check,
+    # foreign_key_check); open the DB OS-read-only so the diagnostic path can
+    # never acquire a write lock or mutate the journal it is inspecting.
+    try:
+        db = open_database_readonly(path)
+    except ReadOnlyDatabaseError as exc:
+        raise ToolError(
+            ErrorCode.STORAGE_ERROR,
+            f"journal cannot be opened for repair diagnostics: {exc}",
+            details={"home": str(home), "db_path": str(path), "reason": exc.reason},
+        ) from exc
     try:
         integrity_rows = db.connection.execute(
             "PRAGMA integrity_check"
@@ -317,7 +339,7 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "journal not initialized; nothing to back up",
             details={"home": str(home), "db_path": str(src_db)},
         )
-    if not _confirm_requested(args):
+    if not _confirm_requested(args) or _dry_run_active():
         _set_preview_meta(ctx)
         return {
             "preview_only": True,
@@ -335,9 +357,28 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     # then copy the file.
     db = open_database(src_db, create_parent=False)
     try:
-        db.connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        # PRAGMA wal_checkpoint returns (busy, log, checkpointed). busy != 0
+        # means SQLite could not flush all WAL frames into the main DB
+        # (a concurrent reader/writer held a lock), so the copied file would
+        # capture pre-checkpoint state and silently drop committed rows. Fail
+        # loudly instead of producing a torn backup (bead trade-trace-g86k).
+        checkpoint_row = db.connection.execute(
+            "PRAGMA wal_checkpoint(TRUNCATE)"
+        ).fetchone()
     finally:
         db.close()
+    if checkpoint_row is not None and checkpoint_row[0] != 0:
+        raise ToolError(
+            ErrorCode.STORAGE_ERROR,
+            "WAL checkpoint incomplete; a concurrent connection held the "
+            "database busy. Retry the backup when the journal is idle so "
+            "the copy captures the fully checkpointed state.",
+            details={
+                "busy": checkpoint_row[0],
+                "wal_frames": checkpoint_row[1],
+                "checkpointed_frames": checkpoint_row[2],
+            },
+        )
     out_db = dest_path / src_db.name
     shutil.copy2(src_db, out_db)
     chmod_user_only_file(out_db)
@@ -349,6 +390,13 @@ def _journal_backup(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     jsonl_src = home / "export" / "jsonl"
     if jsonl_src.exists():
         for src_file in sorted(jsonl_src.rglob("*.jsonl")):
+            # Skip symlinked entries: a symlink planted under export/jsonl
+            # could point at an arbitrary file outside the journal and pull
+            # it into the backup (and thus into a later restore). The backup
+            # captures only real files the journal itself wrote
+            # (bead trade-trace-g86k).
+            if src_file.is_symlink():
+                continue
             rel = src_file.relative_to(home)
             out_file = dest_path / rel
             out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -416,6 +464,16 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             details={"src": str(src_path),
                      "manifest_path": str(manifest_path)},
         )
+    # Refuse a symlinked manifest: a hostile backup directory could point
+    # manifest.json at an arbitrary file on disk (e.g. to read content the
+    # process can reach). Only a regular file written by journal.backup is
+    # trusted (bead trade-trace-g86k).
+    if manifest_path.is_symlink():
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "manifest.json must not be a symlink",
+            details={"manifest_path": str(manifest_path), "reason": "symlink_manifest"},
+        )
     try:
         manifest = json.loads(manifest_path.read_text())
     except json.JSONDecodeError as exc:
@@ -426,7 +484,7 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         ) from exc
 
     file_count = len(manifest.get("files", []))
-    if not _confirm_requested(args):
+    if not _confirm_requested(args) or _dry_run_active():
         _set_preview_meta(ctx)
         return {
             "preview_only": True,
@@ -444,8 +502,25 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     # outside `home` with the process's permissions. Use the same generic
     # rel-path and root-containment helpers as `model.import`, then translate
     # failures into journal.restore-specific ToolError details.
+    # A tampered or hand-written manifest can omit the `files` array or
+    # individual `path` / `sha256` keys. Reject those as clean
+    # VALIDATION_ERRORs instead of letting a raw KeyError surface as an
+    # unhandled internal error (bead trade-trace-jm14).
+    manifest_files = manifest.get("files")
+    if not isinstance(manifest_files, list):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "manifest is missing a 'files' array",
+            details={"field": "files", "reason": "missing_files"},
+        )
     validated: list[tuple[dict[str, Any], Path, Path]] = []
-    for entry in manifest["files"]:
+    for entry in manifest_files:
+        if not isinstance(entry, dict) or "path" not in entry or "sha256" not in entry:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "manifest file entry must include 'path' and 'sha256'",
+                details={"field": "files", "reason": "incomplete_entry", "entry": entry},
+            )
         raw_path = entry["path"]
         try:
             rel = safe_relative_path(raw_path)
@@ -461,6 +536,24 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     "reason": "unsafe_manifest_path",
                 },
             ) from exc
+        # Reject a symlinked source entry on the UN-resolved join: an
+        # out-of-tree symlink is caught by resolve_under_root below, but an
+        # in-tree symlink would silently resolve to its (contained) target
+        # and be copied as if it were a real backup file. journal.backup
+        # only ever writes regular files, so any symlink in the source is a
+        # tampering signal — reject it before reading bytes
+        # (bead trade-trace-g86k).
+        if (src_path / rel).is_symlink():
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"backup source file {raw_path!r} is a symlink; only "
+                "regular files written by journal.backup are restored",
+                details={
+                    "field": "path",
+                    "manifest_path": raw_path,
+                    "reason": "symlink_source",
+                },
+            )
         try:
             src_file = resolve_under_root(src_path, raw_path)
         except ValueError as exc:
@@ -492,9 +585,19 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         validated.append((entry, src_file, out_file))
 
     # Verify hashes BEFORE copying anything so a corrupt source aborts
-    # cleanly.
+    # cleanly. Symlinked entries were already rejected on the un-resolved
+    # join during validation above; this resolved-path re-check is cheap
+    # defense-in-depth against a symlink swapped in at the resolved path
+    # after validation (bead trade-trace-g86k).
     for entry, src_file, _ in validated:
-        if not src_file.exists():
+        if src_file.is_symlink():
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"backup source file {entry['path']!r} is a symlink; "
+                "only regular files written by journal.backup are restored",
+                details={"candidate": str(src_file), "reason": "symlink_source"},
+            )
+        if not src_file.exists() or not src_file.is_file():
             raise ToolError(
                 ErrorCode.STORAGE_ERROR,
                 f"manifest references missing file {entry['path']!r}",
@@ -513,6 +616,20 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     chmod_user_only_dir(home)
     restored: list[str] = []
     for entry, src_file, out_file in validated:
+        # Re-assert the symlink guard immediately before the copy: the
+        # hash-verify loop above ran in a separate pass, leaving a TOCTOU
+        # window in which a concurrent attacker could swap the source for a
+        # symlink. follow_symlinks=False stops shutil from dereferencing a
+        # planted link, and the post-copy re-hash below proves the bytes we
+        # actually wrote match the manifest the hash was verified against
+        # (bead trade-trace-g86k).
+        if src_file.is_symlink():
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"backup source file {entry['path']!r} became a symlink "
+                "between verification and copy",
+                details={"candidate": str(src_file), "reason": "symlink_source_toctou"},
+            )
         out_file.parent.mkdir(parents=True, exist_ok=True)
         for parent in (out_file.parent, *out_file.parent.parents):
             if parent == home:
@@ -520,8 +637,18 @@ def _journal_restore(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 break
             if home in parent.parents:
                 chmod_user_only_dir(parent)
-        shutil.copy2(src_file, out_file)
+        shutil.copy2(src_file, out_file, follow_symlinks=False)
         chmod_user_only_file(out_file)
+        copied = hashlib.sha256(out_file.read_bytes()).hexdigest()
+        if copied != entry["sha256"]:
+            raise ToolError(
+                ErrorCode.INVARIANT_VIOLATION,
+                f"post-copy sha256 mismatch on {entry['path']!r}: the file "
+                "changed between verification and copy "
+                f"(manifest={entry['sha256']!r} copied={copied!r})",
+                details={"entry": entry, "copied_sha256": copied,
+                         "reason": "toctou_post_copy_mismatch"},
+            )
         restored.append(entry["path"])
     return {
         "preview_only": False,
@@ -580,7 +707,7 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
     # other admin tool uses (operability.md §2z7). Without --confirm
     # the call returns ok=true with meta.preview_only=true describing
     # what *would* be written; with --confirm it persists.
-    if not _confirm_requested(args):
+    if not _confirm_requested(args) or _dry_run_active():
         _set_preview_meta(ctx)
         return {
             "preview_only": True,
@@ -653,7 +780,7 @@ def _model_import(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         )
     verified = _verify_model_dir(src)
     target = _model_target_dir(home)
-    if not _confirm_requested(args):
+    if not _confirm_requested(args) or _dry_run_active():
         _set_preview_meta(ctx)
         return {
             "preview_only": True,
@@ -733,7 +860,7 @@ def _memory_reindex(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "node_count": len(nodes) if provider != "none" else 0,
             "cost_estimate": _memory_reindex_cost(provider, nodes if provider != "none" else []),
         }
-        if not _confirm_requested(args):
+        if not _confirm_requested(args) or _dry_run_active():
             _set_preview_meta(ctx)
             return {"preview_only": True, "would_reindex": plan}
         if provider == "none":
@@ -785,31 +912,6 @@ def _memory_reindex(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         }
     finally:
         conn.close()
-
-
-def _keyring_revoke(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    """Legacy no-op: remote embedding credentials are no longer supported."""
-
-    if not _confirm_requested(args):
-        _set_preview_meta(ctx)
-        return {
-            "preview_only": True,
-            "would_revoke": {
-                "provider": "none",
-                "credential_storage": "unsupported",
-            },
-        }
-
-    result = {
-        "preview_only": False,
-        "provider": "none",
-        "credential_storage": "unsupported",
-        "revoked": False,
-    }
-    if args.get("_dry_run") is True:
-        return result
-
-    return result
 
 
 def register_admin_tools(registry: ToolRegistry) -> None:
@@ -905,15 +1007,5 @@ def register_admin_tools(registry: ToolRegistry) -> None:
             "without it returns meta.preview_only=true with node count and "
             "cost estimate. Missing local embeddings dependencies or assets "
             "degrade semantic recall/reindexing without blocking journal use."
-        ),
-    )
-    registry.register(
-        "keyring.revoke",
-        _keyring_revoke,
-        is_write=True,
-        **_examples_for("keyring.revoke"),
-        description=(
-            "Legacy no-op retained for older clients. Remote embedding "
-            "credentials are unsupported; no keyring backend is imported."
         ),
     )

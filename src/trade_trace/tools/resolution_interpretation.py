@@ -22,6 +22,7 @@ from trade_trace.tools._helpers import (
     new_id,
     normalize_timestamp,
     now_iso,
+    reject_if_contains_secrets,
     require,
     store_metadata_json,
 )
@@ -66,11 +67,28 @@ def _response(conn: Any, interp_id: str) -> dict[str, Any]:
     return _row_to_response(row)
 
 
+def _interpretation_differs(existing: dict[str, Any], args: dict[str, Any]) -> bool:
+    """True when the caller supplied a value that diverges from the stored row.
+
+    Used only on the one-per-forecast collision path to decide whether to warn
+    the caller that their (different) revision was dropped.
+    """
+    for field in ("interpreted_yes_condition", "interpreted_resolution_source", "expected_outcome_label"):
+        supplied = args.get(field)
+        if supplied is not None and supplied != existing.get(field):
+            return True
+    return False
+
+
 def _interpret_resolution(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     forecast_id = require(args, "forecast_id")
     interpreted_yes_condition = require(args, "interpreted_yes_condition")
     if not isinstance(interpreted_yes_condition, str) or not interpreted_yes_condition.strip():
         raise ToolError(ErrorCode.VALIDATION_ERROR, "interpreted_yes_condition must be a non-empty string", details={"field": "interpreted_yes_condition"})
+    # interpreted_yes_condition is long-form free text (the agent's reading
+    # of the YES contract); scan it for credential-shaped substrings before
+    # it is persisted (bead trade-trace-jm14 / INV-6).
+    reject_if_contains_secrets(interpreted_yes_condition, field="interpreted_yes_condition")
     as_of = normalize_timestamp(args, "as_of", required=True)
     if as_of is None:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "as_of is required", details={"field": "as_of"})
@@ -102,7 +120,22 @@ def _interpret_resolution(args: dict[str, Any], ctx: ToolContext) -> dict[str, A
             ).fetchone()
             if existing is not None:
                 # One interpretation per forecast (the reading at forecast time).
-                return _response(conn, existing[0])
+                # Interpretations are append-only: a later call does NOT overwrite
+                # the original reading. Return the stored row but flag that it is
+                # pre-existing, and — when the caller supplied values that diverge
+                # from it — say plainly the supplied values were NOT applied, so a
+                # bot revising its interpretation does not read the ok envelope as a
+                # successful update (a silent no-op false-success). AX-052.
+                response = _response(conn, existing[0])
+                response["already_interpreted"] = True
+                if _interpretation_differs(response, args):
+                    response["caveat"] = (
+                        "forecast already has a resolution interpretation; "
+                        "interpretations are append-only (one per forecast), so the "
+                        "existing reading was returned unchanged and your supplied "
+                        "values were NOT applied"
+                    )
+                return response
             interp_id = args.get("id") or new_id("resint")
             created_at = now_iso()
             expected_label = args.get("expected_outcome_label")

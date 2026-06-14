@@ -10,7 +10,7 @@ def _call(tool: str, args: dict, *, actor_id: str = "agent:execution-quality"):
     return dispatch(tool, args, actor_id=actor_id)
 
 
-def _seed_refs(home, *, with_snapshot: bool = True, intent_as_of: str = "2026-05-28T00:10:00.000Z") -> str:
+def _seed_refs(home, *, with_snapshot: bool = True, intent_as_of: str = "2026-05-28T00:10:00.000Z", side: str = "yes") -> str:
     init = _call("journal.init", {"home": str(home)}, actor_id="agent:init")
     assert init.ok, init
     conn = sqlite3.connect(db_path(home))
@@ -25,7 +25,7 @@ def _seed_refs(home, *, with_snapshot: bool = True, intent_as_of: str = "2026-05
         conn.close()
     args = {
         "home": str(home), "semantic_key": "intent-exec-quality", "market_id": "m_1", "instrument_id": "i_1",
-        "proposed_shape": {"side": "yes", "limit_price": "0.52", "quantity": "10"},
+        "proposed_shape": {"side": side, "limit_price": "0.52", "quantity": "10"},
         "risk_budget": {"max_loss": "5.20"}, "as_of": intent_as_of, "idempotency_key": "intent-exec-quality",
     }
     if with_snapshot:
@@ -153,3 +153,35 @@ def test_report_execution_quality_stale_snapshot_cancel_stale_open_and_fill_dire
     assert provenance_summary["source_run_ids"] == ["run-1", "run-2"]
     assert provenance_summary["retrieved_at_min"] == "2026-05-28T00:05:00.000Z"
     assert provenance_summary["retrieved_at_max"] == "2026-05-28T00:13:00.000Z"
+
+
+def test_report_execution_quality_at_quote_boundary_not_spread_crossed(tmp_path):
+    # Snapshot from _seed_refs: bid=0.49, ask=0.51.
+    # A buy filled exactly at the ask is a normal market fill and must NOT be
+    # flagged SPREAD_CROSSED; only a strictly-above-ask buy crosses the spread.
+    home = tmp_path / "home"
+    intent_id = _seed_refs(home, with_snapshot=True, side="buy")
+    at_ask_id = _receipt(home, intent_id, key="buy-at-ask", state="filled", facts={"filled_quantity": "10", "order_quantity": "10", "fill_price": "0.51"})
+    above_ask_id = _receipt(home, intent_id, key="buy-above-ask", state="filled", facts={"filled_quantity": "10", "order_quantity": "10", "fill_price": "0.52"})
+
+    report = _call("report.execution_quality", {"home": str(home), "min_sample": 1})
+    assert report.ok, report
+    rows = {row["receipt_id"]: row for row in report.data["rows"]}
+    assert "SPREAD_CROSSED" not in rows[at_ask_id]["caveat_codes"]
+    assert "SPREAD_CROSSED" in rows[above_ask_id]["caveat_codes"]
+
+
+def test_report_execution_quality_sell_at_bid_boundary_not_spread_crossed(tmp_path):
+    # Snapshot from _seed_refs: bid=0.49, ask=0.51.
+    # A sell filled exactly at the bid is a normal market fill and must NOT be
+    # flagged SPREAD_CROSSED; only a strictly-below-bid sell crosses the spread.
+    home = tmp_path / "home"
+    intent_id = _seed_refs(home, with_snapshot=True, side="no")
+    at_bid_id = _receipt(home, intent_id, key="sell-at-bid", state="filled", facts={"filled_quantity": "10", "order_quantity": "10", "fill_price": "0.49"})
+    below_bid_id = _receipt(home, intent_id, key="sell-below-bid", state="filled", facts={"filled_quantity": "10", "order_quantity": "10", "fill_price": "0.48"})
+
+    report = _call("report.execution_quality", {"home": str(home), "min_sample": 1})
+    assert report.ok, report
+    rows = {row["receipt_id"]: row for row in report.data["rows"]}
+    assert "SPREAD_CROSSED" not in rows[at_bid_id]["caveat_codes"]
+    assert "SPREAD_CROSSED" in rows[below_bid_id]["caveat_codes"]

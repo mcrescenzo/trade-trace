@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import sqlite3
 
+import pytest
+
 from trade_trace.core import default_registry, dispatch
 from trade_trace.reports.lifecycle import derive_lifecycle_cases
 from trade_trace.storage.paths import db_path
@@ -144,6 +146,26 @@ def test_lifecycle_derives_outcome_score_reflection_and_adherence_states(home):
                 "test",
             ),
         )
+        # The playbook_version chain referenced by the adherence decisions
+        # must exist before those decisions are inserted (a non-NULL
+        # decisions.playbook_version_id is FK-enforced at insert time by
+        # migration 030 / trg_decisions_playbook_version_id_exists).
+        conn.execute(
+            "INSERT INTO playbooks VALUES (?,?,?,?,?,?,?)",
+            ("pb", "pb", None, None, "{}", "2026-01-01T00:00:00Z", "test"),
+        )
+        conn.execute(
+            "INSERT INTO memory_nodes (id,node_type,body,meta_json,valid_from,created_at,actor_id) VALUES (?,?,?,?,?,?,?)",
+            ("rule", "playbook_rule", "rule", "{}", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "test"),
+        )
+        conn.execute(
+            "INSERT INTO memory_nodes (id,node_type,body,meta_json,valid_from,created_at,actor_id) VALUES (?,?,?,?,?,?,?)",
+            ("refl", "reflection", "reflected", "{}", "2026-01-12T00:00:00Z", "2026-01-12T00:00:00Z", "test"),
+        )
+        conn.execute(
+            "INSERT INTO playbook_versions VALUES (?,?,?,?,?,?,?,?,?)",
+            ("pv", "pb", 1, None, "refl", None, "{}", "2026-01-01T00:00:00Z", "test"),
+        )
         _insert_decision(conn, "d-outcome", "watch", "2026-01-02T00:00:00Z")
         _insert_decision(conn, "d-score", "watch", "2026-01-02T00:01:00Z", forecast_id="fc")
         _insert_decision(conn, "d-reflected", "hold", "2026-01-02T00:02:00Z")
@@ -155,23 +177,7 @@ def test_lifecycle_derives_outcome_score_reflection_and_adherence_states(home):
             ("out", "inst", "2026-01-11T00:00:00Z", "yes", "resolved_final", "{}", "2026-01-11T00:01:00Z", "test"),
         )
         conn.execute("INSERT INTO forecast_scores VALUES (?,?,?,?,?,?,?,?)", ("score", "fc", "out", "brier", 0.1, "2026-01-11T00:02:00Z", "test", "{}"))
-        conn.execute(
-            "INSERT INTO memory_nodes (id,node_type,body,meta_json,valid_from,created_at,actor_id) VALUES (?,?,?,?,?,?,?)",
-            ("refl", "reflection", "reflected", "{}", "2026-01-12T00:00:00Z", "2026-01-12T00:00:00Z", "test"),
-        )
         conn.execute("INSERT INTO edges VALUES (?,?,?,?,?,?,?,?,?,?)", ("e-refl", "memory_node", "refl", "decision", "d-reflected", "about", None, "{}", "2026-01-12T00:01:00Z", "test"))
-        conn.execute(
-            "INSERT INTO playbooks VALUES (?,?,?,?,?,?,?)",
-            ("pb", "pb", None, None, "{}", "2026-01-01T00:00:00Z", "test"),
-        )
-        conn.execute(
-            "INSERT INTO memory_nodes (id,node_type,body,meta_json,valid_from,created_at,actor_id) VALUES (?,?,?,?,?,?,?)",
-            ("rule", "playbook_rule", "rule", "{}", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "test"),
-        )
-        conn.execute(
-            "INSERT INTO playbook_versions VALUES (?,?,?,?,?,?,?,?,?)",
-            ("pv", "pb", 1, None, "refl", None, "{}", "2026-01-01T00:00:00Z", "test"),
-        )
         conn.execute(
             "INSERT INTO decision_playbook_rules VALUES (?,?,?,?,?,?,?,?,?)",
             ("dpr", "d-adh-recorded", "pv", "rule", "followed", "ok", "{}", "2026-01-02T00:05:00Z", "test"),
@@ -225,6 +231,73 @@ def test_material_non_action_marker_and_missing_source_caveat(home):
     assert "missing_source_ref" not in case["caveat_codes"]
 
 
+def _insert_market(conn: sqlite3.Connection, market_id: str, close_at: str | None, state: str) -> None:
+    # markets.id is the instrument_id.
+    conn.execute(
+        """
+        INSERT INTO markets (id, source, external_id, title, question, url, state, mechanism,
+                             bound_via, opened_at, close_at, venue_metadata_json, metadata_json,
+                             created_at, actor_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (market_id, "polymarket", market_id, "m", "m?", "http://x", state, "clob", "adapter",
+         "2026-01-01T00:00:00Z", close_at, "{}", "{}", "2026-01-01T00:00:00Z", "test"),
+    )
+
+
+def _insert_null_resolution_forecast(conn: sqlite3.Connection, forecast_id: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO forecasts (id, thesis_id, kind, resolution_at, yes_label, resolution_rule_text,
+                               scoring_support, scoring_state, metadata_json, created_at, actor_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (forecast_id, "th", "binary", None, "yes", "caller supplies outcome", "supported", "pending", "{}", "2026-01-01T00:03:00Z", "test"),
+    )
+
+
+def test_null_resolution_at_forecast_stays_open_on_demonstrably_live_market(home):
+    # trade-trace-fe2f: resolution_at IS NULL alone must not force pending_review
+    # when the linked market is still trading (state='open', close_at in the
+    # future). The forecast stays 'open' so no spurious resolve obligation fires.
+    with _conn(home) as conn:
+        _seed_base(conn)
+        _insert_market(conn, "inst", close_at="2026-07-31T00:00:00Z", state="open")
+        _insert_null_resolution_forecast(conn, "fc-live")
+        cases = derive_lifecycle_cases(conn, as_of="2026-01-20T00:00:00Z")
+
+    case = _case(cases, "derived:forecast:fc-live:lifecycle")
+    assert case["state"] == "open"
+    assert "resolution_at_missing" not in case["reason_codes"]
+
+
+def test_null_resolution_at_forecast_is_pending_review_when_market_not_live(home):
+    # Boundary cases that MUST keep the missing-horizon review obligation
+    # (preserving trade-trace-ptyi): no market row, a past close_at, and a
+    # non-open state each leave resolution_at_missing -> pending_review intact.
+    with _conn(home) as conn:
+        _seed_base(conn)
+        _insert_null_resolution_forecast(conn, "fc-no-market")  # inst has no market row here
+
+        # Separate instruments/theses for the other two boundary forecasts.
+        conn.execute("INSERT INTO instruments (id, venue_id, title, asset_class, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", ("inst-past", "ven", "I", "equity", "{}", "2026-01-01T00:00:00Z", "test"))
+        conn.execute("INSERT INTO theses (id, instrument_id, side, body, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", ("th-past", "inst-past", "long", "b", "{}", "2026-01-01T00:01:00Z", "test"))
+        _insert_market(conn, "inst-past", close_at="2026-01-05T00:00:00Z", state="open")  # close_at in the past
+        conn.execute("INSERT INTO forecasts (id, thesis_id, kind, resolution_at, yes_label, resolution_rule_text, scoring_support, scoring_state, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)", ("fc-past", "th-past", "binary", None, "yes", "r", "supported", "pending", "{}", "2026-01-01T00:03:00Z", "test"))
+
+        conn.execute("INSERT INTO instruments (id, venue_id, title, asset_class, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", ("inst-res", "ven", "I", "equity", "{}", "2026-01-01T00:00:00Z", "test"))
+        conn.execute("INSERT INTO theses (id, instrument_id, side, body, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?)", ("th-res", "inst-res", "long", "b", "{}", "2026-01-01T00:01:00Z", "test"))
+        _insert_market(conn, "inst-res", close_at="2026-07-31T00:00:00Z", state="resolving")  # not open
+        conn.execute("INSERT INTO forecasts (id, thesis_id, kind, resolution_at, yes_label, resolution_rule_text, scoring_support, scoring_state, metadata_json, created_at, actor_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)", ("fc-res", "th-res", "binary", None, "yes", "r", "supported", "pending", "{}", "2026-01-01T00:03:00Z", "test"))
+
+        cases = derive_lifecycle_cases(conn, as_of="2026-01-20T00:00:00Z")
+
+    for fid in ("fc-no-market", "fc-past", "fc-res"):
+        case = _case(cases, f"derived:forecast:{fid}:lifecycle")
+        assert case["state"] == "pending_review", fid
+        assert "resolution_at_missing" in case["reason_codes"], fid
+
+
 def _report(home, args):
     env = dispatch("report.lifecycle", {"home": str(home), **args}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
     assert env["ok"], env
@@ -276,6 +349,84 @@ def test_report_lifecycle_surface_filters_and_links_without_writes(home):
     assert after == before
 
 
+def test_report_lifecycle_paginates_with_limit_and_stable_cursor(home):
+    """trade-trace-hv19: report.lifecycle must page (limit + cursor + next_cursor,
+    mirroring report.open_positions) so a populated journal stays under the MCP
+    token cap, while summary metrics report full-set totals."""
+    with _conn(home) as conn:
+        _seed_base(conn)
+        for i in range(5):
+            _insert_decision(conn, f"d-{i}", "hold", f"2026-01-01T00:0{i}:00Z")
+
+    # Six total cases: 5 decisions + the seeded forecast `fc`.
+    first = _report(home, {"as_of": "2026-01-20T00:00:00Z", "limit": 2})
+    assert first["summary"]["metrics"]["case_count"] == 6  # full-set total, not page
+    assert first["summary"]["metrics"]["returned_count"] == 2
+    assert len(first["lifecycle_cases"]) == 2
+    assert len(first["groups"]) == 2
+    assert first["truncated"] is True
+    assert first["next_cursor"]
+
+    # groups no longer echoes the full per-group filter (the double-serialization
+    # bloat hv19 flagged); the normalized filter lives once in summary.filter.
+    assert "filter" not in first["groups"][0]
+    assert "filter" in first["summary"]
+
+    # Walk the cursor: each page is disjoint and stable; the union covers all.
+    seen = [c["case_id"] for c in first["lifecycle_cases"]]
+    cursor = first["next_cursor"]
+    pages = 1
+    while cursor:
+        nxt = _report(home, {"as_of": "2026-01-20T00:00:00Z", "limit": 2, "cursor": cursor})
+        page_ids = [c["case_id"] for c in nxt["lifecycle_cases"]]
+        assert not set(page_ids) & set(seen)  # no overlap across pages
+        seen.extend(page_ids)
+        cursor = nxt["next_cursor"]
+        pages += 1
+        assert pages <= 6  # guard against cursor non-advance
+    assert len(seen) == 6
+    # The cursor walk reproduces the report's own stable emission order exactly
+    # (a single large-limit pull returns the same sequence the pages concatenate
+    # to), i.e. paging is order-stable and lossless.
+    whole = _report(home, {"as_of": "2026-01-20T00:00:00Z", "limit": 500})
+    assert [c["case_id"] for c in whole["lifecycle_cases"]] == seen
+
+
+def test_report_lifecycle_rejects_invalid_limit_and_cursor(home):
+    with _conn(home) as conn:
+        _seed_base(conn)
+
+    bad_limit = dispatch("report.lifecycle", {"home": str(home), "limit": 0}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
+    assert bad_limit["ok"] is False
+    assert "limit" in bad_limit["error"]["message"]
+
+    bad_cursor = dispatch("report.lifecycle", {"home": str(home), "cursor": "!!not-base64!!"}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
+    assert bad_cursor["ok"] is False
+
+
+@pytest.mark.parametrize("bad_value", [-1, True, 1.5])
+def test_report_lifecycle_rejects_invalid_stale_threshold(home, bad_value):
+    """trade-trace-upl2: stale_threshold_days must be a non-negative *integer*.
+    A negative int (-1), a bool (True — `isinstance(True, int)` is True in
+    Python, so the guard must exclude bool explicitly or it silently coerces to
+    1), and a non-integer float (1.5) must each raise VALIDATION_ERROR rather
+    than being accepted, so an agent passing a malformed threshold gets a clear
+    error instead of a silently wrong staleness window."""
+    with _conn(home) as conn:
+        _seed_base(conn)
+
+    env = dispatch(
+        "report.lifecycle",
+        {"home": str(home), "stale_threshold_days": bad_value},
+        actor_id="agent:test",
+        registry=default_registry(),
+    ).model_dump(mode="json")
+
+    assert env["ok"] is False, env
+    assert env["error"]["code"] == "VALIDATION_ERROR", env["error"]
+    assert env["error"]["details"]["field"] == "stale_threshold_days", env["error"]
+
+
 def test_report_lifecycle_status_alias_and_schema(home):
     with _conn(home) as conn:
         _seed_base(conn)
@@ -287,8 +438,57 @@ def test_report_lifecycle_status_alias_and_schema(home):
     schema_env = dispatch("tool.schema", {"tool": "report.lifecycle"}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
     assert schema_env["ok"], schema_env
     props = schema_env["data"]["json_schema"]["properties"]
-    for key in ("filter", "states", "status", "as_of", "stale_threshold_days"):
+    for key in ("filter", "states", "status", "as_of", "stale_threshold_days", "limit", "cursor"):
         assert key in props
+
+
+def test_report_lifecycle_invalid_state_error_lists_allowed_values(home):
+    """An unsupported `states` value must surface the allowed set, not just echo
+    the bad value (AX dogfood: enum-rejection errors should be self-documenting
+    so a bot need not guess valid values by trial-and-error)."""
+    with _conn(home) as conn:
+        _seed_base(conn)
+
+    env = dispatch(
+        "report.lifecycle",
+        {"home": str(home), "states": ["active"]},
+        actor_id="agent:test",
+        registry=default_registry(),
+    ).model_dump(mode="json")
+
+    assert env["ok"] is False
+    message = env["error"]["message"]
+    assert "active" in message
+    # The allowed enum members must appear so the caller can self-correct.
+    for allowed in ("open", "pending_review", "scored", "closed"):
+        assert allowed in message
+
+
+def test_report_lifecycle_due_count_excludes_future_due_at(home):
+    """AX dogfood (AX-036): summary.metrics.due_count must count only cases that
+    are actually due as of the read boundary (due_at <= as_of), not every case
+    that merely *has* a due_at. A forecast whose resolution_at is still in the
+    future is pending, not due — counting it as "due" misreads as an actionable
+    obligation hours early, and is the inverse of report.work_queue (which omits
+    future-due forecasts entirely). Mirrors watchlist.overdue_count semantics."""
+    with _conn(home) as conn:
+        _seed_base(conn)  # forecast fc: resolution_at=2026-01-10, scoring pending
+
+    # as_of BEFORE the forecast's resolution_at: the case exists but is not yet due.
+    before_due = _report(home, {
+        "as_of": "2026-01-05T00:00:00Z",
+        "filter": {"instrument": {"instrument_id": ["inst"]}},
+    })
+    fc_case = next(c for c in before_due["lifecycle_cases"] if "fc" in c["record_ids"].get("forecasts", []))
+    assert fc_case["due_at"] == "2026-01-10T00:00:00Z"  # future relative to as_of
+    assert before_due["summary"]["metrics"]["due_count"] == 0
+
+    # as_of AFTER the resolution_at: the same case is now genuinely due.
+    after_due = _report(home, {
+        "as_of": "2026-01-20T00:00:00Z",
+        "filter": {"instrument": {"instrument_id": ["inst"]}},
+    })
+    assert after_due["summary"]["metrics"]["due_count"] == 1
 
 
 def test_parse_ts_treats_naive_iso_as_utc_not_local():

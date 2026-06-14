@@ -134,6 +134,85 @@ def test_pnl_open_mark_coverage_counts_only_open_positions(home):
     assert "data_coverage" not in metrics
 
 
+def test_pnl_remarks_open_position_from_fresh_snapshot(home):
+    """Repro (AX dogfood pr2j): a position opened before its first snapshot
+    keeps positions.unrealized_pnl=NULL until an explicit rebuild, so
+    report.pnl used to count it as UNMARKED and exclude it from the
+    unrealized total — even though report.open_positions re-marks it from the
+    landed snapshot. report.pnl must apply the same read-layer re-mark.
+    """
+
+    from trade_trace.tools._helpers import new_id
+
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market", "title": "X",
+    })
+    instrument_id = inst["data"]["id"]
+    position_id = new_id("pos")
+    db = open_database(db_path(home))
+    try:
+        with db.transaction():
+            # Open position (long/yes, 100 @ 0.40), NO snapshot yet, so the
+            # projection rebuild can't mark it.
+            db.connection.execute(
+                "INSERT INTO position_events(id, position_id, instrument_id, "
+                "event_type, quantity_delta, price, fees, slippage, created_at, "
+                "actor_id) VALUES (?, ?, ?, 'open', 100, 0.40, 0, 0, ?, ?)",
+                (new_id("pev"), position_id, instrument_id,
+                 "2026-05-18T14:00:00Z", "agent:default"),
+            )
+    finally:
+        db.close()
+    _envelope(home, "journal.rebuild_projections", {"projection": "positions"})
+
+    # Precondition: with no snapshot, the open position is genuinely unmarked.
+    before = _envelope(home, "report.pnl", {})["data"]["summary"]["metrics"]
+    assert before["open_position_count"] == 1
+    assert before["open_mark_coverage"] == pytest.approx(0.0)
+
+    # A snapshot lands AFTER the rebuild — the projection column is not touched.
+    db = open_database(db_path(home))
+    try:
+        with db.transaction():
+            db.connection.execute(
+                "INSERT INTO snapshots(id, instrument_id, captured_at, source, "
+                "source_url, price, created_at, actor_id) VALUES "
+                "(?, ?, ?, 'src', 'https://e.test/m', 0.55, ?, 'agent:default')",
+                (new_id("snap"), instrument_id, "2026-05-19T00:00:00Z",
+                 "2026-05-19T00:00:00Z"),
+            )
+    finally:
+        db.close()
+
+    # report.pnl now counts the position as marked and includes its re-marked
+    # unrealized P&L: (0.55 - 0.40) * 100 = 15.0 (side-aware long/yes).
+    after = _envelope(home, "report.pnl", {})["data"]["summary"]["metrics"]
+    assert after["open_mark_coverage"] == pytest.approx(1.0)
+    assert after["unrealized_pnl"] == pytest.approx(15.0)
+
+    # Cross-surface: report.open_positions reports the SAME re-marked number.
+    op = _envelope(home, "report.open_positions", {})["data"]["open_positions"]
+    op_row = next(r for r in op if r["position_id"] == position_id)
+    assert op_row["unrealized_pnl"] == pytest.approx(15.0)
+
+    # Cross-surface: report.compare (base_report=pnl) agrees too.
+    cmp = _envelope(home, "report.compare", {"base_report": "pnl", "group_by": "instrument_id"})
+    cmp_groups = cmp["data"]["groups"]
+    cmp_unrealized = sum(g["metrics"]["unrealized_pnl"] for g in cmp_groups)
+    assert cmp_unrealized == pytest.approx(15.0)
+
+    # Cross-surface: review.bundle carries the re-marked value, not NULL.
+    bundle = _envelope(home, "review.bundle", {})["data"]
+    bundle_positions = [
+        p for p in bundle["selected"].get("positions", [])
+        if p["id"] == position_id
+    ]
+    if bundle_positions:
+        assert bundle_positions[0]["unrealized_pnl"] == pytest.approx(15.0)
+
+
 # -- report.watchlist ---------------------------------------------
 
 

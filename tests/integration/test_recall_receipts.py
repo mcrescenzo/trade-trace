@@ -52,6 +52,16 @@ def test_computed_recall_receipts_classify_use_and_caveats_without_persistence(h
     assert report["attribution_conventions"]["source_reference_direction"] == "memory_node -> source (not downstream use evidence)"
 
 
+def test_recall_receipts_is_in_default_public_catalog():
+    """Bead trade-trace-8g7t: report.recall_receipts was unfrozen out of the
+    experimental anchored-viewers cluster into the Phase-1 public catalog. It
+    must be visible in the default catalog (no opt-in) and tagged public."""
+
+    registry = default_registry()
+    assert "report.recall_receipts" in set(registry.public_names())
+    assert registry.get("report.recall_receipts").metadata()["catalog_visibility"] == "public"
+
+
 def test_recall_receipts_tool_filters_by_context_and_consumer(home):
     with _conn(home) as conn:
         _seed(conn)
@@ -142,6 +152,175 @@ def _insert_corrupt_recall_event(
             "agent", "model", "paper", "run",
         ),
     )
+
+
+def _insert_memory_node(
+    conn: sqlite3.Connection,
+    *,
+    node_id: str,
+    valid_to: str | None,
+    invalidated_at: str | None = None,
+    confidence: float = 0.7,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO memory_nodes(id, node_type, title, body, meta_json, importance,
+                                 confidence_base, valid_from, valid_to, invalidated_at,
+                                 created_at, actor_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (
+            node_id, "observation", node_id, node_id, "{}", 5,
+            confidence, "2025-01-01T00:00:00Z", valid_to, invalidated_at,
+            "2026-01-01T00:00:00Z", "actor",
+        ),
+    )
+
+
+def _insert_recall_event(
+    conn: sqlite3.Connection, *, recall_id: str, node_ids: list[str], as_of: str | None
+) -> None:
+    import json
+
+    conn.execute(
+        """
+        INSERT INTO memory_recall_events(recall_id, query, strategies_used, node_ids_returned,
+                                         context_json, limit_k, as_of, created_at, actor_id,
+                                         agent_id, model_id, environment, run_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (
+            recall_id, "future window", json.dumps(["bm25"]), json.dumps(node_ids),
+            json.dumps({}), 5, as_of, "2026-01-01T00:03:00Z", "actor",
+            "agent", "model", "test", "run",
+        ),
+    )
+
+
+def test_recall_receipts_future_valid_to_is_not_stale(home):
+    """trade-trace-uycm: a memory node with a future valid_to is not stale — it
+    simply carries a planned expiry. The STALE_OR_INVALIDATED_MEMORY caveat must
+    NOT fire, attribution_status must be 'not_attributable' (not 'stale'), and it
+    must not inflate stale_count in the memory_usefulness diagnostic."""
+    from trade_trace.reports.memory_usefulness import report_memory_usefulness
+
+    as_of = "2026-01-02T00:00:00Z"
+    with _conn(home) as conn:
+        # A node whose validity window extends well past the effective time.
+        _insert_memory_node(conn, node_id="mem-future", valid_to="2030-01-01T00:00:00Z")
+        # A genuinely expired node as a positive control for the stale path.
+        _insert_memory_node(conn, node_id="mem-expired", valid_to="2025-12-31T00:00:00Z")
+        _insert_recall_event(
+            conn, recall_id="recall-future", node_ids=["mem-future", "mem-expired"], as_of=as_of
+        )
+        conn.commit()
+
+        report = report_recall_receipts(conn, recall_id="recall-future", as_of=as_of)
+        usefulness = report_memory_usefulness(conn, recall_id="recall-future", as_of=as_of)
+
+    receipt = report["recall_receipts"][0]
+    items = {item["id"]: item for item in receipt["items"]}
+
+    future = items["mem-future"]
+    assert future["attribution_status"] == "not_attributable"
+    assert "STALE_OR_INVALIDATED_MEMORY" not in future["caveat_codes"]
+    assert "STALE_AS_OF_RECEIPT" not in future["caveat_codes"]
+
+    # The genuinely expired node still trips the caveat and is classified stale.
+    expired = items["mem-expired"]
+    assert expired["attribution_status"] == "stale"
+    assert "STALE_OR_INVALIDATED_MEMORY" in expired["caveat_codes"]
+
+    # Only the expired node contributes to stale_count, not the future-window one.
+    assert usefulness["summary"]["metrics"]["stale_count"] == 1
+    diagnostics = {d["node_id"]: d for d in usefulness["memory_diagnostics"]}
+    assert diagnostics["mem-future"]["stale"] is False
+    assert diagnostics["mem-expired"]["stale"] is True
+
+
+def test_recall_receipts_future_valid_to_without_as_of_uses_now(home):
+    """trade-trace-uycm: with no as_of supplied, the effective time defaults to
+    now_iso(); a far-future valid_to (2030) is still in the future relative to
+    'now' in tests, so the node must not be flagged stale."""
+    with _conn(home) as conn:
+        _insert_memory_node(conn, node_id="mem-future-now", valid_to="2030-01-01T00:00:00Z")
+        _insert_recall_event(
+            conn, recall_id="recall-future-now", node_ids=["mem-future-now"], as_of=None
+        )
+        conn.commit()
+        report = report_recall_receipts(conn, recall_id="recall-future-now")
+
+    item = report["recall_receipts"][0]["items"][0]
+    assert item["attribution_status"] == "not_attributable"
+    assert "STALE_OR_INVALIDATED_MEMORY" not in item["caveat_codes"]
+
+
+def _count_table_queries(conn: sqlite3.Connection) -> dict[str, int]:
+    """Install a trace callback that counts executed SELECTs against the
+    two tables report.recall_receipts reads per node. Returns the live
+    dict (mutated as queries run)."""
+
+    counts = {"memory_nodes": 0, "edges": 0}
+
+    def _trace(sql: str) -> None:
+        lowered = sql.lower()
+        # Only count read queries against the per-node tables; ignore the
+        # schema-introspection SELECTs the tests themselves issue.
+        if "from memory_nodes" in lowered:
+            counts["memory_nodes"] += 1
+        if "from edges" in lowered:
+            counts["edges"] += 1
+
+    conn.set_trace_callback(_trace)
+    return counts
+
+
+def test_recall_receipts_batches_per_node_lookups_no_n_plus_one(home):
+    """trade-trace-qf78: report.recall_receipts must not issue 3 SQL queries
+    per returned node. The fixture returns 5 nodes in one recall event; the
+    batched read path issues exactly one memory_nodes IN-query and exactly
+    two edges queries (incoming evidence + outgoing source_refs), independent
+    of the node count."""
+    with _conn(home) as conn:
+        _seed(conn)
+        counts = _count_table_queries(conn)
+        report = report_recall_receipts(conn, recall_id="recall-1", as_of="2026-01-02T00:00:00Z")
+        conn.set_trace_callback(None)
+
+    # Five returned nodes — a per-node path would issue 5 memory_nodes
+    # queries and 10 edges queries (2 per node). The batched path is fixed.
+    assert counts["memory_nodes"] == 1, counts
+    assert counts["edges"] == 2, counts
+    # Result still has all five items in returned order (shape unchanged).
+    receipt = report["recall_receipts"][0]
+    assert [item["id"] for item in receipt["items"]] == [
+        "mem-helpful", "mem-ignored", "mem-stale", "mem-contradicted", "mem-harmful",
+    ]
+
+
+def test_recall_receipts_query_count_constant_across_node_count(home):
+    """The per-table query count is independent of how many nodes are
+    returned: adding a second recall event with more nodes must NOT add
+    queries (cross-event batching), proving the N+1 is gone."""
+    with _conn(home) as conn:
+        _seed(conn)
+        # A second event returning the same nodes again plus reusing them.
+        _insert_recall_event(
+            conn,
+            recall_id="recall-extra",
+            node_ids=["mem-helpful", "mem-ignored", "mem-stale", "mem-contradicted", "mem-harmful"],
+            as_of=None,
+        )
+        conn.commit()
+        counts = _count_table_queries(conn)
+        report = report_recall_receipts(conn, as_of="2026-01-02T00:00:00Z")
+        conn.set_trace_callback(None)
+
+    # Two events, ten total returned node slots — still exactly the three
+    # batched queries (1 memory_nodes + 2 edges), not 3-per-node.
+    assert counts["memory_nodes"] == 1, counts
+    assert counts["edges"] == 2, counts
+    assert {r["recall_id"] for r in report["recall_receipts"]} == {"recall-1", "recall-extra"}
 
 
 def test_recall_receipts_handles_corrupt_json_payload(home):

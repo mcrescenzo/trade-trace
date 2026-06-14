@@ -9,7 +9,7 @@
 > [agent-continuity dogfood scorecard](agent-continuity-scorecard.md).
 
 
-Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [product-scope-v002.md](product-scope-v002.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [reports.md](reports.md), [memory-layer.md](memory-layer.md),
 [operability.md](operability.md), the
@@ -37,7 +37,7 @@ is the contract the fixture must satisfy.
 
 ### 2.1 Decision before outcome (locked)
 
-[VISION.md](../VISION.md) Principle 1 is load-bearing: a forecast
+[product-scope-v002.md](product-scope-v002.md) Principle 1 is load-bearing: a forecast
 recorded after its outcome cannot be a calibration measurement of the
 agent, only a record of imported history. The dogfood protocol
 operationalizes the principle as follows.
@@ -112,7 +112,7 @@ the property without a join.
 
 ### 2.4 Evidence / source warning policy (locked)
 
-[VISION.md](../VISION.md) Principle 9 and `memory-layer.md`
+[product-scope-v002.md](product-scope-v002.md) Principle 9 and `memory-layer.md`
 emphasize evidence capture; PRD §4.5 makes source attachment a
 first-class write. The policy:
 
@@ -357,7 +357,7 @@ The mechanism is implementation-detectable without an explicit
 - It does not specify the fixture **generator** — trade-trace-8dv does.
 - It does not specify **dogfood scoring rubrics** beyond the §5
   measurable assertions; subjective "is this a good reflection" is out
-  of scope by design (the system stores, the agent judges, per VISION
+  of scope by design (the system stores, the agent judges, per product-scope-v002.md
   Principle 10).
 - It does not specify how trade-trace-c1r consumes the protocol; that
   bead's verification harness defines the runner.

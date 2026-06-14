@@ -13,10 +13,23 @@ migration against a fresh DB:
   every table in the DB.
 
 The hashes below were captured against the current `migrations.py`
-on 2026-05-19. Any intentional schema change (a new migration or a
-column tweak) must update both literals. An *accidental* drift —
-e.g., during a refactor that splits the module into per-migration
-files — must keep them unchanged.
+on 2026-05-19; `EXPECTED_DDL_HASH` was re-pinned on 2026-06-13 when
+migration 030 added the `trg_decisions_playbook_version_id_exists`
+trigger (bead trade-trace-2kpi), and again on 2026-06-14 when
+migration 031 added the `idx_edges_supersedes` partial covering index
+(bead trade-trace-17k9), and again on 2026-06-14 when migration 032
+added the `idx_positions_opened_at` keyset index (bead trade-trace-b5hg),
+and again on 2026-06-14 when migration 033 added the
+`idx_decisions_type_created_at` composite index (bead trade-trace-ynam),
+and again on 2026-06-14 when migrations 034 and 035 added the
+`idx_edges_target_type` covering index and the
+`idx_memory_recall_events_run` / `idx_memory_recall_events_agent`
+composite indexes (bead trade-trace-yt45).
+All of these are index/trigger-only changes, so `EXPECTED_INFO_HASH` was
+unaffected by any of them. Any intentional schema change (a new
+migration or a column tweak) must update both literals.
+An *accidental* drift — e.g., during a refactor that splits the module
+into per-migration files — must keep them unchanged.
 """
 
 from __future__ import annotations
@@ -31,7 +44,7 @@ from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
 
 EXPECTED_DDL_HASH = (
-    "a5a3abc6cdcfc8dcc287c0bdb1d1aca3b2c4db098755ebca9f91e7eab6ed811c"
+    "fabf15331462480fafa5beaf03250c16782c0d1fac28efbdc425c322645916b6"
 )
 EXPECTED_INFO_HASH = (
     "bffafa475ea6c4a57b599eebaf945aa8be97faa445d282cf3325b2687d630bf7"

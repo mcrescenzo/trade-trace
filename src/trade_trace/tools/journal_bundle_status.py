@@ -65,6 +65,7 @@ class JournalBundleStatusInput(BaseModel):
     memory_node_id: str | None = None
     max_related: int = Field(default=10, ge=1, le=50)
     stale_source_days: int = Field(default=14, ge=1, le=3650)
+    current_time: str | None = Field(default=None, description="Deterministic clock for source-staleness checks; defaults to wall clock.")
     home: str | None = None
 
 
@@ -99,6 +100,7 @@ _SCHEMA: dict[str, Any] = {
         "memory_node_id": {"type": "string"},
         "max_related": {"type": "integer", "minimum": 1, "maximum": 50},
         "stale_source_days": {"type": "integer", "minimum": 1, "maximum": 3650},
+        "current_time": {"type": "string"},
         "home": {"type": "string"},
     },
     "description": (
@@ -148,7 +150,7 @@ def _journal_bundle_status(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
         seeds = _seed_ids(parsed)
         related = _walk_related(conn, seeds, limit=parsed.max_related)
         rows = _load_rows(conn, related)
-        checks = _build_checks(conn, rows, stale_source_days=parsed.stale_source_days)
+        checks = _build_checks(conn, rows, stale_source_days=parsed.stale_source_days, current_time=parsed.current_time)
         next_calls = _next_calls(checks, rows)
         provenance = _idea_capture_provenance(rows)
     finally:
@@ -325,12 +327,12 @@ def _load_rows(conn: sqlite3.Connection, ids: dict[str, set[str]]) -> dict[str, 
     return out
 
 
-def _build_checks(conn: sqlite3.Connection, rows: dict[str, list[dict[str, Any]]], *, stale_source_days: int) -> list[dict[str, Any]]:
+def _build_checks(conn: sqlite3.Connection, rows: dict[str, list[dict[str, Any]]], *, stale_source_days: int, current_time: str | None = None) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     _check(checks, "venue_recorded", rows["venue"], "venue.add")
     _check(checks, "instrument_recorded", rows["instrument"], "instrument.add")
     _check(checks, "snapshot_recorded", rows["snapshot"], "snapshot.add")
-    _check(checks, "source_attached", rows["source"], "source.add / source.attach_to_*", weak_if=_stale_sources(conn, rows["source"], stale_source_days))
+    _check(checks, "source_attached", rows["source"], "source.add / source.attach_to_*", weak_if=_stale_sources(conn, rows["source"], stale_source_days, current_time))
     _check(checks, "thesis_recorded", rows["thesis"], "thesis.add")
     _check(checks, "forecast_recorded", rows["forecast"], "forecast.add")
     _check(checks, "decision_recorded", rows["decision"], "decision.add")
@@ -376,8 +378,11 @@ def _entry(name: str, status: str, record_ids: dict[str, list[str]], call: str) 
     return {"step": name, "status": status, "record_ids": record_ids, "next_call": call}
 
 
-def _stale_sources(conn: sqlite3.Connection, sources: list[dict[str, Any]], days: int) -> list[str]:
-    rows = conn.execute("SELECT datetime('now', ?)", (f"-{days} days",)).fetchone()
+def _stale_sources(conn: sqlite3.Connection, sources: list[dict[str, Any]], days: int, current_time: str | None = None) -> list[str]:
+    if current_time:
+        rows = conn.execute("SELECT datetime(?, ?)", (current_time, f"-{days} days")).fetchone()
+    else:
+        rows = conn.execute("SELECT datetime('now', ?)", (f"-{days} days",)).fetchone()
     cutoff = rows[0] if rows else None
     stale: list[str] = []
     for src in sources:

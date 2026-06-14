@@ -248,12 +248,13 @@
     {
       "pattern": "src/trade_trace/reports/compare.py",
       "terms": [
+        "forecast_outcomes",
         "instrument_id",
         "thesis_id",
         "venue_id"
       ],
-      "category": "legacy_report_compatibility",
-      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+      "category": "pm_native_with_legacy_fallback",
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs. forecast_outcomes added per trade-trace-u7j3: the grouped scored-row loader bulk-fetches forecast_outcomes in one IN-list query (legacy-probability fallback) instead of the per-row N+1 SELECT."
     },
     {
       "pattern": "src/trade_trace/reports/execution_quality.py",
@@ -440,10 +441,11 @@
       "pattern": "src/trade_trace/reports/tool_schemas.py",
       "terms": [
         "instrument_id",
-        "meta_json"
+        "meta_json",
+        "venue_id"
       ],
       "category": "legacy_report_compatibility",
-      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs. venue_id added per AX-049: the report.compare group_by schema description enumerates the real per-base_report allowlist (which includes venue_id) so a bot picks a valid value instead of the rejected 'tag'."
     },
     {
       "pattern": "src/trade_trace/reports/unscored.py",
@@ -662,10 +664,11 @@
     {
       "pattern": "src/trade_trace/tools/risk.py",
       "terms": [
-        "instrument_id"
+        "instrument_id",
+        "thesis_id"
       ],
       "category": "legacy_tool_compatibility",
-      "reason": "Reviewed risk receipt compatibility surface uses instrument_id while legacy risk inputs and receipts remain supported."
+      "reason": "Reviewed risk receipt compatibility surface uses instrument_id while legacy risk inputs and receipts remain supported; the deterministic risk.evaluate required_links rule and intent loader read thesis_id/forecast_id/decision_id as proposed-intent link fields (trade-trace-g629)."
     },
     {
       "pattern": "src/trade_trace/tools/adapter_polymarket.py",

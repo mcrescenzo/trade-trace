@@ -63,6 +63,13 @@ def test_outcome_fetch_enabled_requires_polygon_rpc(tmp_path: Path, monkeypatch:
     assert isinstance(env, ErrorEnvelope)
     assert env.error.code == "CONFIG_REQUIRED"
     assert env.error.details["config_key"] == "network.polymarket.polygon_rpc_url"
+    # trade-trace-isqo: when polygon_rpc_url is unset, outcome.fetch must signpost
+    # the no-RPC Gamma resolution-evidence route (snapshot.fetch) instead of
+    # dead-ending an automated resolution feeder.
+    assert env.error.details["no_rpc_resolution_evidence_route"] == "snapshot.fetch"
+    hint = env.error.details["hint"]
+    assert "snapshot.fetch" in hint
+    assert "resolution.add" in hint
 
 
 def test_outcome_fetch_enabled_records_fixture_resolution_idempotently(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

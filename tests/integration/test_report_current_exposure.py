@@ -178,6 +178,25 @@ def test_current_exposure_combines_open_watch_recent_and_anomalies(home: Path) -
     assert any("Recent trade activity" in hint for hint in data["agent_answer_hints"])
 
 
+def test_current_exposure_surfaces_fragmented_same_side_anomaly(home: Path) -> None:
+    # trade-trace-scx8: two open same-side paper positions on one instrument
+    # (the cross-run fragmentation hazard) surface through the composed
+    # projection_anomalies bucket as FRAGMENTED_SAME_SIDE_EXPOSURE.
+    instrument_id = _instrument(home)
+    _insert_decision(home, decision_id="dec_frag_1", instrument_id=instrument_id, type_="paper_enter", created_at="2026-05-20T00:00:00Z")
+    _insert_decision(home, decision_id="dec_frag_2", instrument_id=instrument_id, type_="paper_enter", created_at="2026-05-21T00:00:00Z")
+    _insert_position(home, instrument_id=instrument_id, position_id="pos_frag_1", decision_id="dec_frag_1", side="yes")
+    _insert_position(home, instrument_id=instrument_id, position_id="pos_frag_2", decision_id="dec_frag_2", side="yes")
+
+    body = _call(home)
+
+    assert body["ok"] is True, body
+    frag = [r for r in body["data"]["projection_anomalies"] if r["code"] == "FRAGMENTED_SAME_SIDE_EXPOSURE"]
+    assert len(frag) == 1, frag
+    assert frag[0]["evidence"]["open_position_count"] == 2
+    assert set(frag[0]["affected_ids"]["positions"]) == {"pos_frag_1", "pos_frag_2"}
+
+
 def test_current_exposure_recent_without_open_positions_warns_not_exposure(home: Path) -> None:
     instrument_id = _instrument(home)
     _insert_decision(home, decision_id="dec_recent_only", instrument_id=instrument_id, type_="actual_enter", created_at="2026-05-21T00:00:00Z")
@@ -290,6 +309,95 @@ def test_current_exposure_filters_scope_child_buckets(home: Path) -> None:
     }
     assert "anomaly_in_scope" in kind_anomaly_decisions
     assert "recent_out_scope" not in kind_anomaly_decisions
+
+
+def test_current_exposure_limit_surfaces_truncation_and_cursor_pages_remainder(home: Path) -> None:
+    # Three open positions, one per instrument. A limited current_exposure call
+    # must NOT silently drop the rows beyond the page: it has to surface
+    # truncated=true + a next_cursor (mirroring report.open_positions), and that
+    # cursor must page the remaining exposure. Regression for trade-trace-lszg
+    # (AX-034): current_exposure previously discarded open_positions' truncated/
+    # next_cursor, so a bot under-read its own exposure with no signal.
+    ids = ["a", "b", "c"]
+    for tag in ids:
+        instrument_id = _instrument(home)
+        _insert_decision(
+            home,
+            decision_id=f"dec_open_{tag}",
+            instrument_id=instrument_id,
+            type_="paper_enter",
+            created_at="2026-05-20T00:00:00Z",
+        )
+        _insert_position(
+            home,
+            instrument_id=instrument_id,
+            position_id=f"pos_trunc_{tag}",
+            decision_id=f"dec_open_{tag}",
+        )
+
+    page1 = _call(home, {"limit": 2})
+    assert page1["ok"] is True, page1
+    data1 = page1["data"]
+    assert len(data1["open_positions"]) == 2
+    assert data1["truncated"] is True
+    assert data1["next_cursor"], "limited current_exposure must surface a next_cursor"
+
+    page2 = _call(home, {"limit": 2, "cursor": data1["next_cursor"]})
+    assert page2["ok"] is True, page2
+    data2 = page2["data"]
+    assert len(data2["open_positions"]) == 1
+    assert data2["truncated"] is False
+    assert data2["next_cursor"] is None
+
+    seen = {row["position_id"] for row in data1["open_positions"]} | {
+        row["position_id"] for row in data2["open_positions"]
+    }
+    assert seen == {"pos_trunc_a", "pos_trunc_b", "pos_trunc_c"}
+
+
+def test_current_exposure_default_no_limit_call_is_bounded_by_transport_default(home: Path) -> None:
+    # The documented default exposure call (no limit) must NOT page the full
+    # open-position set: open-position rows are heavy (each embeds two 78-digit
+    # CLOB token IDs), so the old 100-row default overflowed the MCP token cap
+    # once positions accumulated (trade-trace-lszg / AX-034 observed ~69KB at
+    # N=9). The default call is now bounded to the small transport default and
+    # signals truncated=true + a next_cursor so callers can walk the rest.
+    from trade_trace.reports.tool_handlers.portfolio_exposure import (
+        OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT,
+    )
+
+    seeded = OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT + 1
+    for idx in range(seeded):
+        instrument_id = _instrument(home)
+        _insert_decision(
+            home,
+            decision_id=f"dec_default_{idx}",
+            instrument_id=instrument_id,
+            type_="paper_enter",
+            created_at="2026-05-20T00:00:00Z",
+        )
+        _insert_position(
+            home,
+            instrument_id=instrument_id,
+            position_id=f"pos_default_{idx}",
+            decision_id=f"dec_default_{idx}",
+        )
+
+    body = _call(home)
+    assert body["ok"] is True, body
+    data = body["data"]
+    assert len(data["open_positions"]) == OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT
+    assert data["summary"]["filter"]["limit"] == OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT
+    assert data["truncated"] is True
+    assert data["next_cursor"], "bounded default exposure call must page the rest via next_cursor"
+
+
+def test_current_exposure_schema_advertises_limit_and_cursor() -> None:
+    reg = __import__("trade_trace.core", fromlist=["default_registry"]).default_registry()
+    registration = reg.get("report.current_exposure")
+    props = registration.json_schema.get("properties", {})
+    assert "limit" in props, "current_exposure must advertise limit so pagination is discoverable"
+    assert "cursor" in props, "current_exposure must advertise cursor for safe paging"
 
 
 def test_current_exposure_schema_mentions_recommended_packet() -> None:

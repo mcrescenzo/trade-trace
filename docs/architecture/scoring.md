@@ -13,7 +13,7 @@ pending categorical/scalar forecasts against the current non-superseded
 diagnostics (bead trade-trace-jzn) are embedded under
 `report.calibration.data.integrity_diagnostics`.
 
-Companion docs: [PRD.md](../PRD.md), [VISION.md](../VISION.md),
+Companion docs: [PRD.md](../PRD.md), [product-scope-v002.md](product-scope-v002.md),
 [memory-layer.md](memory-layer.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md).
 
@@ -203,7 +203,10 @@ Values:
 - `scoring_state != 'pending'` requires `scoring_support = 'supported'`.
 - An `unsupported` forecast stays in `scoring_state = 'pending'` forever
   unless a future migration upgrades the scorer registry and triggers a
-  one-shot rescan. The rescan is a P1 admin command, not part of MVP.
+  one-shot rescan. The categorical/scalar `scoring_support` flags were
+  upgraded in the P1 scoring upgrade (shipped); `journal.rescan_scoring`
+  (now a legacy alias for `journal.rebuild_projections`) backfills the
+  pending rows.
 - `scoring_state = 'scored'` requires a `forecast_scores` row with
   `score IS NOT NULL`.
 - `scoring_state = 'failed'` requires a `forecast_scores` row with

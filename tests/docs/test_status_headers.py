@@ -11,6 +11,9 @@ of the file and is one of:
   shipped; the note must call out which section is live.
 - `> Status: **decision document for trade-trace-<id>** ...` — per-bead
   findings docs.
+- `> Status: **legacy** ...` — docs whose tool/surface was once
+  shipped but has since been folded/renamed/removed from the public
+  catalog and survives only as a backward-compat dispatchable alias.
 
 The test fails when a new doc is added without the header.
 """
@@ -34,6 +37,12 @@ STATUS_LINE_RE = re.compile(
     # corresponding tool/table/CLI ships. Tracked in docs-taxonomy.md.
     r"|contract precursor"
     r"|contract draft"
+    # `legacy` covers docs whose tool/surface was once shipped but has
+    # since been folded/renamed/removed from the public catalog and
+    # survives only as a backward-compat dispatchable alias (e.g.
+    # market-scan-contract.md → market.bind). Tracked in
+    # docs-taxonomy.md.
+    r"|legacy"
     r")\*\*",
 )
 
