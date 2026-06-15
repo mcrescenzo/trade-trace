@@ -56,7 +56,7 @@ def test_rescan_preview_confirm_idempotent_noop_for_already_scored_binary(home):
     f = _call(home, "forecast.add", {"thesis_id": thesis, "kind": "binary", "yes_label": "yes", "outcomes": [
         {"outcome_label": "yes", "probability": 0.25}, {"outcome_label": "no", "probability": 0.75}
     ]})["data"]["id"]
-    _call(home, "outcome.add", {"instrument_id": inst, "resolved_at": "2026-05-19T00:00:00Z", "outcome_label": "no", "status": "resolved_final", "confidence": 0.99})
+    _call(home, "resolution.add", {"instrument_id": inst, "resolved_at": "2026-05-19T00:00:00Z", "outcome_label": "no", "status": "resolved_final", "confidence": 0.99})
 
     preview = _call(home, "journal.rescan_scoring", {"mode": "preview"})
     assert preview["ok"] is True
@@ -80,7 +80,7 @@ def test_binary_brier_regression_preserved(home):
     f = _call(home, "forecast.add", {"thesis_id": thesis, "kind": "binary", "yes_label": "YES", "outcomes": [
         {"outcome_label": "YES", "probability": 0.7}, {"outcome_label": "NO", "probability": 0.3}
     ]})["data"]["id"]
-    _call(home, "outcome.add", {"instrument_id": inst, "resolved_at": "2026-05-19T00:00:00Z", "outcome_label": "NO", "status": "resolved_final", "confidence": 0.99})
+    _call(home, "resolution.add", {"instrument_id": inst, "resolved_at": "2026-05-19T00:00:00Z", "outcome_label": "NO", "status": "resolved_final", "confidence": 0.99})
     metric, score, _ = _score_row(home, f)
     assert metric == "brier_binary"
     assert score == pytest.approx(0.49)

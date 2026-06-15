@@ -675,10 +675,10 @@ def register_strategy_tools(registry: ToolRegistry) -> None:
         return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
 
     registry.register(
-        "strategy.create",
+        "strategy.upsert",
         _strategy_create,
         is_write=True,
-        **_examples_for("strategy.create"),
+        **_examples_for("strategy.upsert"),
         json_schema=_STRATEGY_CREATE_SCHEMA,
         description=(
             "Create a first-class strategy row (not a tag). Required: "

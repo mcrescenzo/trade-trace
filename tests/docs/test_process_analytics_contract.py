@@ -14,19 +14,22 @@ REPORTS_DOC = ROOT / "docs" / "architecture" / "reports.md"
 
 def _section() -> str:
     text = REPORTS_DOC.read_text(encoding="utf-8")
-    start = text.index("## 6A. Target contract: `report.process_analytics`")
+    start = text.index("## 6A. Shipped partial + target contract: `report.process_analytics`")
     end = text.index("## 7. Bucketing Policies")
     return text[start:end]
 
 
-def test_process_analytics_contract_section_exists_and_is_target_only():
+def test_process_analytics_contract_section_exists_and_is_shipped_partial():
     section = _section()
 
     required_terms = [
-        "Status: **target / not implemented**",
+        "Status: **shipped / partial**",
+        "decision-tags-only",
+        "tag frequency and tag-pair co-occurrence",
+        "runtime reports as unsupported",
         "read-only backend/reporting contract",
-        "does not describe shipped runtime behavior",
-        "distinct target report contract",
+        "shipped partial behavior",
+        "distinct report contract",
         "not a broadening of `report.mistakes` or `report.strengths`",
         "ReportFilter-compatible scope",
         "dimensions",

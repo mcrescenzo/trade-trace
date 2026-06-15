@@ -142,8 +142,6 @@ OPEN_ENUMS: dict[str, frozenset[str]] = {
             "account_snapshot.imported",
             "replay_evaluation_artifact.recorded",
             "paper_fill.recorded",
-            "autonomous_run.recorded",
-            "autonomous_incident.recorded",
             "abstention.recorded",
             "forecast.blind_committed",
             "forecast.independence_revealed",

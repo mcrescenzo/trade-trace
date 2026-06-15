@@ -32,8 +32,6 @@ _OPEN_APPROVAL_STATES = {"pending_external_review"}
 # 'not_requested' (the default) with a NULL ref is normal and must NOT be
 # flagged — otherwise the approvals section is permanently in 'attention'.
 _CLAIMED_EXTERNAL_APPROVAL_STATES = {"approved_elsewhere", "waived_elsewhere"}
-_BAD_RUN_STATUSES = {"failed", "blocked", "timed_out"}
-_OPEN_INCIDENT_RESOLUTION = {"unresolved", "monitoring"}
 _STALE_SNAPSHOT_STATUSES = {"stale", "missing", "unknown"}
 _UNRESOLVED_RECONCILIATION = {"unresolved", "accepted_caveat"}
 
@@ -225,29 +223,7 @@ def _build(conn: sqlite3.Connection, args: dict[str, Any]) -> dict[str, Any]:
             rows.append({"id": r[0], "status": "attention" if codes else "healthy", "codes": codes, "risk_status": r[1], "outcome": r[2], "contributing_ids": {"risk_check_receipts": [r[0]], "snapshots": [r[6]] if r[6] else []}})
         sections["risk_checks"] = _section("risk_checks", rows, missing_code="MISSING_RISK_CHECK_INPUTS")
 
-    # runs/incidents
-    run_rows = []
-    if _has_table(conn, "autonomous_run_records"):
-        where, params = _where(_cols(conn, "autonomous_run_records"), rf)
-        for r in conn.execute(f"SELECT id, run_status, run_id, started_at, ended_at, as_of FROM autonomous_run_records{where} ORDER BY as_of DESC, id DESC LIMIT ?", (*params, limit)).fetchall():
-            codes = ["FAILED_RUN_INPUT"] if r[1] in _BAD_RUN_STATUSES else []
-            run_rows.append({"id": r[0], "status": "attention" if codes else "healthy", "codes": codes, "run_status": r[1], "run_id": r[2], "contributing_ids": {"autonomous_run_records": [r[0]]}})
-    else:
-        missing_tables.append("autonomous_run_records")
-    if _has_table(conn, "autonomous_incident_records"):
-        where, params = _where(_cols(conn, "autonomous_incident_records"), rf)
-        for r in conn.execute(f"SELECT id, incident_type, severity, resolution_status, run_record_id, run_id, evidence_state, occurred_at FROM autonomous_incident_records{where} ORDER BY occurred_at DESC, id DESC LIMIT ?", (*params, limit)).fetchall():
-            codes = []
-            if r[3] in _OPEN_INCIDENT_RESOLUTION:
-                codes.append("UNREVIEWED_INCIDENT_INPUT")
-            if r[6] in {"sparse", "missing", "unknown"}:
-                codes.append("MISSING_OR_SPARSE_INCIDENT_EVIDENCE")
-            run_rows.append({"id": r[0], "status": "attention" if codes else "healthy", "codes": codes, "incident_type": r[1], "severity": r[2], "resolution_status": r[3], "evidence_state": r[6], "contributing_ids": {"autonomous_incident_records": [r[0]], "autonomous_run_records": [r[4]] if r[4] else []}})
-    else:
-        missing_tables.append("autonomous_incident_records")
-    sections["runs_incidents"] = _section("runs_incidents", run_rows, missing_code="MISSING_RUN_INCIDENT_INPUTS")
-
-    # sources/evidence: local source rows plus evidence states from incidents
+    # sources/evidence: local source rows
     evidence_rows = []
     if _has_table(conn, "sources"):
         cols = _cols(conn, "sources")

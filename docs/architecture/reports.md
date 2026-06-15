@@ -10,7 +10,7 @@ report.calibration_integrity, report.calibration_advisory,
 report.forecast_diagnostics,
 report.book, report.risk, report.audit, report.lifecycle,
 report.recall, report.work_queue, report.bootstrap, report.coach,
-report.strategy_health, report.compare, report.policy_candidates,
+report.strategy_health, report.process_analytics, report.compare, report.policy_candidates,
 report.filter_schema, report.market_lifecycle,
 report.resolution_quality, report.recall_receipts,
 report.memory_usefulness, report.decision_velocity, and
@@ -1261,14 +1261,19 @@ Mandatory section contract:
   introduces no `tt console serve`, `trade_trace.console`, browser dashboard,
   or frontend scope.
 
-## 6A. Target contract: `report.process_analytics`
+## 6A. Shipped partial + target contract: `report.process_analytics`
 
-> Status: **target / not implemented**. This section defines the
-> read-only backend/reporting contract a future `report.process_analytics`
-> implementation MUST satisfy before any non-UI consumer claims tag
-> frequency, tag-pair co-occurrence, review classification, process-cost, or
-> cost-coverage analytics. It does not describe shipped runtime behavior.
-> It is a distinct target report contract, not a broadening of `report.mistakes` or `report.strengths`.
+> Status: **shipped / partial**. The live `report.process_analytics`
+> implementation is read-only, local-only, and decision-tags-only: it ships
+> tag frequency and tag-pair co-occurrence over filtered decision rows with
+> coverage, metric definitions, examples, caveats, and contributing decision
+> ids. Review classification, process-cost, cost-coverage, P&L, R-multiple,
+> fees/slippage, and opportunity-path analytics remain explicit target-only
+> dimensions/features that the runtime reports as unsupported rather than
+> silently inventing. This section defines both the shipped partial behavior and
+> the broader read-only backend/reporting contract that future implementations MUST
+> satisfy before any non-UI consumer claims the unsupported dimensions. It is a
+> distinct report contract, not a broadening of `report.mistakes` or `report.strengths`.
 
 ### 6A.1 Inputs
 

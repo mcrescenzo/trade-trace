@@ -46,7 +46,7 @@ def _forecast(home: Path, inst: str) -> str:
 
 
 def _resolve(home: Path, inst: str, label: str = "yes") -> None:
-    _envelope(home, "outcome.add", {"instrument_id": inst, "resolved_at": "2027-01-12T00:00:00Z", "outcome_label": label, "status": "resolved_final", "confidence": 0.99})
+    _envelope(home, "resolution.add", {"instrument_id": inst, "resolved_at": "2027-01-12T00:00:00Z", "outcome_label": label, "status": "resolved_final", "confidence": 0.99})
 
 
 def _interpret(home: Path, forecast_id: str, **extra):

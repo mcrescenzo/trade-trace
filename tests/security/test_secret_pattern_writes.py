@@ -19,6 +19,7 @@ import pytest
 
 import trade_trace
 from tests._mcp_helpers import mcp_default as _mcp
+from trade_trace.core import build_registry
 from trade_trace.security import (
     list_patterns,
     redact_for_log,
@@ -203,13 +204,42 @@ def test_forecast_resolution_rule_text_rejects_secret(home):
     assert env.error.details["field"] == "resolution_rule_text"
 
 
+@pytest.mark.parametrize(
+    "field",
+    ["rationale_body", "falsification_criteria", "exit_triggers", "risk_notes"],
+)
+def test_forecast_folded_thesis_free_text_rejects_secret(home, field):
+    """forecast.add can create the folded thesis prerequisite; those persisted
+    thesis free-text fields need the same scan as thesis.add."""
+
+    _venue, inst = _seed_instrument(home)
+    args = {
+        "instrument_id": inst,
+        "kind": "binary",
+        "rationale_body": "clean rationale",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.5},
+            {"outcome_label": "no", "probability": 0.5},
+        ],
+        "idempotency_key": f"folded-{field}",
+    }
+    args[field] = f"folded path leaked {SECRET_FIXTURES['api_key']}"
+
+    env = _mcp(home, "forecast.add", args)
+
+    assert env.ok is False, env
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == field
+    assert env.error.details["pattern_kind"] == "api_key"
+
+
 @pytest.mark.parametrize("field", ["description", "hypothesis"])
 def test_strategy_long_form_fields_reject_secrets(home, field):
     """strategy.description and strategy.hypothesis are long-form free
     text per bead trade-trace-7j1l."""
 
     secret = SECRET_FIXTURES["api_key"]
-    env = _mcp(home, "strategy.create", {
+    env = _mcp(home, "strategy.upsert", {
         "slug": "strat", "name": "Strat",
         field: f"includes {secret}",
     })
@@ -221,7 +251,7 @@ def test_strategy_long_form_fields_reject_secrets(home, field):
 def test_strategy_update_description_rejects_secret(home):
     """strategy.update applies the same scan when description changes."""
 
-    created = _mcp(home, "strategy.create", {
+    created = _mcp(home, "strategy.upsert", {
         "slug": "strat", "name": "Strat",
     })
     assert created.ok, created
@@ -240,7 +270,7 @@ def test_playbook_description_rejects_secret(home):
     trade-trace-7j1l."""
 
     secret = SECRET_FIXTURES["api_key"]
-    env = _mcp(home, "playbook.create", {
+    env = _mcp(home, "playbook.upsert", {
         "name": "PB",
         "description": f"playbook spec: {secret}",
     })
@@ -280,7 +310,7 @@ def test_strategy_create_meta_json_rejects_secret(home):
     """strategy.create.meta_json must run the same dual-layer guard as
     ledger metadata_json (bead trade-trace-21q4)."""
 
-    env = _mcp(home, "strategy.create", {
+    env = _mcp(home, "strategy.upsert", {
         "name": "Range Trader", "slug": "range-trader",
         "meta_json": {"notes": SECRET_FIXTURES["api_key"]},
     })
@@ -291,7 +321,7 @@ def test_strategy_create_meta_json_rejects_secret(home):
 
 
 def test_strategy_create_meta_json_rejects_credential_key(home):
-    env = _mcp(home, "strategy.create", {
+    env = _mcp(home, "strategy.upsert", {
         "name": "Range Trader", "slug": "range-trader",
         "meta_json": {"broker": {"api_key": "anything"}},
     })
@@ -302,7 +332,7 @@ def test_strategy_create_meta_json_rejects_credential_key(home):
 
 
 def test_strategy_update_meta_json_rejects_secret(home):
-    created = _mcp(home, "strategy.create", {
+    created = _mcp(home, "strategy.upsert", {
         "name": "S", "slug": "s-1",
     })
     assert created.ok, created
@@ -317,7 +347,7 @@ def test_strategy_update_meta_json_rejects_secret(home):
 
 
 def test_playbook_create_metadata_json_rejects_secret(home):
-    env = _mcp(home, "playbook.create", {
+    env = _mcp(home, "playbook.upsert", {
         "name": "PB",
         "metadata_json": {"deep": {"creds": SECRET_FIXTURES["jwt"]}},
     })
@@ -328,7 +358,7 @@ def test_playbook_create_metadata_json_rejects_secret(home):
 
 
 def test_playbook_create_metadata_json_rejects_credential_key(home):
-    env = _mcp(home, "playbook.create", {
+    env = _mcp(home, "playbook.upsert", {
         "name": "PB",
         "metadata_json": {"private_key": "not-stored"},
     })
@@ -1096,16 +1126,22 @@ _SECURITY_MD = _SRC_ROOT.parent.parent / "docs" / "architecture" / "security.md"
 # Tools whose free-text field lives in a specific handler module. The static
 # check confirms the field is wired to a scan call in that module's source.
 _TOOL_SOURCE: dict[str, str] = {
+    "account_snapshot.import": "tools/account_snapshots.py",
+    "approval.record": "tools/approval.py",
     "thesis.add": "tools/ledger/thesis.py",
     "decision.add": "tools/ledger/decision.py",
     "decision.record_adherence": "tools/playbook.py",
+    "external_receipt.import": "tools/external_receipts.py",
     "instrument.add": "tools/ledger/instrument.py",
     "forecast.add": "tools/ledger/forecast.py",
     "source.add": "tools/ledger/source.py",
     "strategy.create": "tools/strategy.py",
+    "strategy.upsert": "tools/strategy.py",
     "strategy.update": "tools/strategy.py",
     "playbook.create": "tools/playbook.py",
+    "playbook.upsert": "tools/playbook.py",
     "playbook.propose_version": "tools/playbook.py",
+    "playbook.record_adherence": "tools/playbook.py",
     "memory.retain": "tools/memory.py",
     "memory.reflect": "tools/memory.py",
     "abstention.record": "tools/abstention.py",
@@ -1113,6 +1149,14 @@ _TOOL_SOURCE: dict[str, str] = {
     "pretrade_intent.record": "tools/pretrade_intent.py",
     "idea.capture": "tools/ideas.py",
     "market.bind": "tools/market_bind.py",
+    "risk.check_record": "tools/risk.py",
+}
+
+_SCAN_HELPER_NAMES = {
+    "reject_if_contains_secrets",
+    "_guard_text",
+    "_safe_text",
+    "_text_arg",
 }
 
 
@@ -1130,25 +1174,74 @@ def _scanned_fields_in_source(path: Path) -> set[str]:
             if kw.arg == "field" and isinstance(kw.value, ast.Constant) \
                     and isinstance(kw.value.value, str):
                 return kw.value.value
+        if isinstance(call.func, ast.Name) and call.func.id in {"_safe_text", "_text_arg"} \
+                and len(call.args) >= 2 and isinstance(call.args[1], ast.Constant) \
+                and isinstance(call.args[1].value, str):
+            return call.args[1].value
         return None
 
+    def _is_scan_call(call: ast.Call) -> bool:
+        return isinstance(call.func, ast.Name) and call.func.id in _SCAN_HELPER_NAMES
+
+    def _literal_strings(node: ast.AST) -> set[str]:
+        if not isinstance(node, (ast.Tuple, ast.List)):
+            return set()
+        return {
+            elt.value for elt in node.elts
+            if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+        }
+
+    def _scan_comprehension_fields(node: ast.AST) -> set[str]:
+        fields: set[str] = set()
+        if not isinstance(node, (ast.DictComp, ast.ListComp, ast.SetComp, ast.GeneratorExp)):
+            return fields
+        if isinstance(node, ast.DictComp):
+            scan_calls = [
+                c for c in ast.walk(node.key)
+                if isinstance(c, ast.Call) and _is_scan_call(c)
+            ]
+            scan_calls.extend(
+                c for c in ast.walk(node.value)
+                if isinstance(c, ast.Call) and _is_scan_call(c)
+            )
+        else:
+            scan_calls = [
+                c for c in ast.walk(node.elt)
+                if isinstance(c, ast.Call) and _is_scan_call(c)
+            ]
+        for gen in node.generators:
+            if not isinstance(gen.target, ast.Name):
+                continue
+            target = gen.target.id
+            iter_fields = _literal_strings(gen.iter)
+            if not iter_fields:
+                continue
+            for call in scan_calls:
+                uses_target = any(
+                    isinstance(arg, ast.Name) and arg.id == target
+                    for arg in call.args
+                ) or any(
+                    kw.arg == "field" and isinstance(kw.value, ast.Name) and kw.value.id == target
+                    for kw in call.keywords
+                )
+                if uses_target:
+                    fields.update(iter_fields)
+        return fields
+
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
-                and node.func.id == "reject_if_contains_secrets":
+        if isinstance(node, ast.Call) and _is_scan_call(node):
             literal = _call_field_literal(node)
             if literal is not None:
                 fields.add(literal)
         # Loop form: `for field in (<literals>): reject_if_contains_secrets(...)`
         if isinstance(node, ast.For):
             has_scan = any(
-                isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
-                and c.func.id == "reject_if_contains_secrets"
+                isinstance(c, ast.Call) and _is_scan_call(c)
                 for c in ast.walk(node)
             )
-            if has_scan and isinstance(node.iter, (ast.Tuple, ast.List)):
-                for elt in node.iter.elts:
-                    if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
-                        fields.add(elt.value)
+            if has_scan:
+                fields.update(_literal_strings(node.iter))
+        fields.update(_scan_comprehension_fields(node))
     return fields
 
 
@@ -1225,3 +1318,88 @@ def test_scan_table_lists_jm14_fields():
         ("market.bind", "resolution_rule_text"),
     ]:
         assert expected in pairs, f"§6.5 table no longer lists {expected}"
+
+
+_FREE_TEXT_NAME_TOKENS = (
+    "body", "reason", "description", "hypothesis", "note", "excerpt",
+    "text", "summary", "title", "question", "thought", "criteria",
+    "triggers", "condition",
+)
+
+_EXEMPT_FIELD_NAMES = {
+    "asset_class", "actor_id", "actor_id_recorded", "agent_id", "ambiguity_kind",
+    "approval_ref_id", "approval_state", "artifact_hash", "at", "bound_via",
+    "close_at", "closed_for_trading_at", "confidence_label", "condition_id",
+    "content_hash", "currency_or_collateral", "current_time", "decision",
+    "decision_actor_id", "depth_provenance", "diff_severity", "environment",
+    "environment_label", "event_slug", "evidence_mode", "evidence_state",
+    "external_event_ref", "external_event_type", "external_fill_ref",
+    "external_id", "external_order_ref", "fill_status", "from",
+    "gamma_event_id", "gamma_market_id", "hash_algorithm", "home", "id",
+    "idempotency_key", "incident_type", "kind", "lifecycle_state", "mark_as_of",
+    "mark_source", "market_slug", "material_hash", "media_type", "mechanism",
+    "mode", "model_id", "node_type", "opened_at", "outcome_label",
+    "outcome_side", "policy_hash", "policy_key", "policy_version",
+    "policy_version_id", "provider_id", "publish_status", "record_type",
+    "redacted_artifact_ref", "redaction_profile", "redaction_status", "ref",
+    "request_id", "resolution_source", "resolution_source_url", "resolution_status",
+    "resolved_at", "resolving_at", "retrieved_at", "review_by", "run_id",
+    "run_status", "schema_version", "scoring_state", "scoring_support", "session_id",
+    "severity", "side", "slug", "source", "source_author", "source_run_id",
+    "source_system", "stance", "state", "status", "storage_kind", "strategy_version",
+    "symbol", "time_horizon_at", "to", "type", "uri", "url", "valid_from",
+    "valid_to", "version", "voided_at", "waiver_class", "waived_by", "yes_label",
+}
+
+
+def _schema_types(schema: object) -> set[str]:
+    if not isinstance(schema, dict):
+        return set()
+    raw = schema.get("type")
+    if isinstance(raw, str):
+        return {raw}
+    if isinstance(raw, list):
+        return {value for value in raw if isinstance(value, str)}
+    return set()
+
+
+def _looks_like_free_text(field: str, schema: object) -> bool:
+    if field.startswith("_") or field in _EXEMPT_FIELD_NAMES:
+        return False
+    if field.endswith("_id") or field.endswith("_ids") or field.endswith("_at"):
+        return False
+    if field.endswith("_ref") or field.endswith("_refs") or field.endswith("_hash"):
+        return False
+    if "string" not in _schema_types(schema):
+        return False
+    description = ""
+    if isinstance(schema, dict):
+        description = str(schema.get("description") or "").lower()
+    return "free-text" in description or "free text" in description \
+        or any(token in field for token in _FREE_TEXT_NAME_TOKENS)
+
+
+def test_write_tool_free_text_schema_fields_are_registered_in_security_policy():
+    """Every registered write-tool free-text schema field is listed in §6.5.
+
+    `test_scan_table_completeness` checks the table has backing code. This
+    inverse check catches a new schema field that would otherwise be exposed
+    without a scan-table row or an explicit exemption.
+    """
+
+    pairs = set(_parse_scan_table())
+    missing: list[str] = []
+    for tool, entry in sorted(build_registry().by_name.items()):
+        if not entry.is_write or not isinstance(entry.json_schema, dict):
+            continue
+        properties = entry.json_schema.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        for field, schema in sorted(properties.items()):
+            if _looks_like_free_text(field, schema) and (tool, field) not in pairs:
+                missing.append(f"{tool}.{field}")
+
+    assert not missing, (
+        "write-tool free-text schema fields missing from security.md §6.5 "
+        "scan policy or exemption text:\n  " + "\n  ".join(missing)
+    )

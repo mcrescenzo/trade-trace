@@ -208,7 +208,7 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         lambda args, ctx: report_operational_health(args),
         description=(
             "Read-only local operational health report over trader-intelligence inputs: imported snapshots, "
-            "reconciliations, external receipts, approvals, risk-check receipts, autonomous run/incident records, "
+            "reconciliations, external receipts, approvals, risk-check receipts, "
             "source evidence, and work-queue obligations. Surfaces stale/missing/sparse/unresolved inputs with stable "
             "codes and contributing local record ids. No fetch, scheduling, alerting, supervision, execution, "
             "remediation, advice, alpha, or profit claims."

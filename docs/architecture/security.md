@@ -125,15 +125,20 @@ Scanned write-time:
 | `decision.add`                  | `reason`                                  |
 | `decision.record_adherence`     | `reason`                                  |
 | `instrument.add`                | `title`, `resolution_criteria_text`       |
-| `forecast.add`                  | `resolution_rule_text`                    |
+| `forecast.add`                  | `rationale_body`, `resolution_rule_text`, `falsification_criteria`, `exit_triggers`, `risk_notes` |
 | `source.add`                    | `title`, `note`, `excerpt`, `extracted_text`, `summary` |
-| `strategy.create` / `strategy.update` | `description`, `hypothesis`         |
-| `playbook.create`               | `description`                             |
+| `strategy.create` / `strategy.upsert` / `strategy.update` | `description`, `hypothesis` |
+| `playbook.create` / `playbook.upsert` | `description`                      |
 | `playbook.propose_version`      | `description`                             |
+| `playbook.record_adherence`     | `reason`                                  |
 | `memory.retain` / `memory.reflect` | `body`, `title`                        |
 | `abstention.record`             | `reason`                                  |
+| `account_snapshot.import`       | `quarantine_reason`                       |
+| `approval.record`               | `reason`, `revocation_reason`             |
+| `external_receipt.import`       | `quarantine_reason`                       |
 | `forecast.interpret_resolution` | `interpreted_yes_condition`               |
 | `pretrade_intent.record`        | `semantic_key`                            |
+| `risk.check_record`             | `waiver_reason`                           |
 | `idea.capture`                  | `thought`, `title`                        |
 | `market.bind`                   | `title`, `question`, `resolution_rule_text` (flat or `resolution_rule.text`) |
 | Every write tool                | `metadata_json` (recursively, including raw JSON strings, incl. `memory.link`) |

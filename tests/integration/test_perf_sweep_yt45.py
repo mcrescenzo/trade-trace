@@ -200,7 +200,7 @@ def _seed_override(home: Path, *, suffix: str, with_outcome: bool) -> None:
         "side": "yes", "quantity": 1, "price": 0.5,
         "idempotency_key": f"00000000-0000-4000-8000-yt45-co-d-{suffix}",
     }).data["id"]
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": f"PB-{suffix}",
         "idempotency_key": f"00000000-0000-4000-8000-yt45-co-pb-{suffix}",
     }).data["id"]
@@ -222,7 +222,7 @@ def _seed_override(home: Path, *, suffix: str, with_outcome: bool) -> None:
         "idempotency_key": f"00000000-0000-4000-8000-yt45-co-ad-{suffix}",
     })
     if with_outcome:
-        _mcp(home, "outcome.add", {
+        _mcp(home, "resolution.add", {
             "instrument_id": inst, "resolved_at": "2099-01-01T00:00:00Z",
             "outcome_label": "yes", "status": "resolved_final",
             "idempotency_key": f"00000000-0000-4000-8000-yt45-co-oc-{suffix}",

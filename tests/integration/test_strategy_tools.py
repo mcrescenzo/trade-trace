@@ -25,7 +25,7 @@ from trade_trace.storage.paths import db_path
 
 def test_strategy_tools_registered():
     names = default_registry().names()
-    for tool in ("strategy.create", "strategy.list", "strategy.show",
+    for tool in ("strategy.upsert", "strategy.list", "strategy.show",
                  "strategy.update"):
         assert tool in names
 
@@ -45,7 +45,7 @@ def test_strategy_show_runtime_schema_exposes_public_inputs():
 
 
 def test_strategy_create_happy_path(home):
-    env = _mcp(home, "strategy.create", {
+    env = _mcp(home, "strategy.upsert", {
         "name": "Earnings momentum",
         "slug": "earnings-momentum",
         "description": "Ride post-earnings drift.",
@@ -63,9 +63,9 @@ def test_strategy_create_duplicate_slug_rejected(home):
         "name": "First", "slug": "shared-slug",
         "idempotency_key": "00000000-0000-4000-8000-strat-dup-1",
     }
-    first = _mcp(home, "strategy.create", base)
+    first = _mcp(home, "strategy.upsert", base)
     assert first.ok
-    second = _mcp(home, "strategy.create", {
+    second = _mcp(home, "strategy.upsert", {
         **base, "name": "Second",
         "idempotency_key": "00000000-0000-4000-8000-strat-dup-2",
     })
@@ -75,7 +75,7 @@ def test_strategy_create_duplicate_slug_rejected(home):
 
 
 def test_strategy_create_rejects_invalid_slug(home):
-    env = _mcp(home, "strategy.create", {
+    env = _mcp(home, "strategy.upsert", {
         "name": "Bad", "slug": "Has UPPERCASE",
     })
     assert env.ok is False
@@ -88,7 +88,7 @@ def test_strategy_create_rejects_invalid_slug(home):
 
 def test_strategy_list_returns_active_by_default(home):
     for i, slug in enumerate(("alpha", "bravo", "charlie")):
-        _mcp(home, "strategy.create", {
+        _mcp(home, "strategy.upsert", {
             "name": slug.title(), "slug": slug,
             "idempotency_key": f"00000000-0000-4000-8000-strat-l-{i:04d}",
         })
@@ -105,7 +105,7 @@ def test_strategy_list_returns_active_by_default(home):
 
 
 def test_strategy_list_with_archived_filter(home):
-    _mcp(home, "strategy.create", {
+    _mcp(home, "strategy.upsert", {
         "name": "A", "slug": "a-strat", "status": "archived",
         "idempotency_key": "00000000-0000-4000-8000-strat-larc-1",
     })
@@ -130,7 +130,7 @@ def test_strategy_list_rejects_non_integer_limit(home, bad_limit):
 
 
 def test_strategy_show_by_slug(home):
-    created = _mcp(home, "strategy.create", {
+    created = _mcp(home, "strategy.upsert", {
         "name": "Show by slug", "slug": "show-by-slug",
         "idempotency_key": "00000000-0000-4000-8000-strat-show01",
     }).data
@@ -147,7 +147,7 @@ def test_strategy_show_not_found(home):
 
 
 def test_strategy_show_includes_deterministic_health_summary(home):
-    sid = _mcp(home, "strategy.create", {
+    sid = _mcp(home, "strategy.upsert", {
         "name": "Health summary", "slug": "health-summary",
         "idempotency_key": "00000000-0000-4000-8000-strat-health-01",
     }).data["id"]
@@ -276,7 +276,7 @@ def test_strategy_show_rejects_non_integer_stale_threshold(home, stale_threshold
 
 
 def test_strategy_update_partial_fields(home):
-    sid = _mcp(home, "strategy.create", {
+    sid = _mcp(home, "strategy.upsert", {
         "name": "Update target", "slug": "update-target",
         "description": "old",
         "idempotency_key": "00000000-0000-4000-8000-strat-upd-01",
@@ -291,7 +291,7 @@ def test_strategy_update_partial_fields(home):
 
 
 def test_strategy_update_replays_original_result_after_intervening_update(home):
-    sid = _mcp(home, "strategy.create", {
+    sid = _mcp(home, "strategy.upsert", {
         "name": "Replay target", "slug": "replay-target",
         "description": "old",
         "idempotency_key": "00000000-0000-4000-8000-strat-rup-01",
@@ -335,7 +335,7 @@ def test_strategy_update_replays_original_result_after_intervening_update(home):
 
 
 def test_strategy_update_idempotency_key_conflict_does_not_mutate(home):
-    sid = _mcp(home, "strategy.create", {
+    sid = _mcp(home, "strategy.upsert", {
         "name": "Conflict target", "slug": "conflict-target",
         "description": "old",
         "idempotency_key": "00000000-0000-4000-8000-strat-cnf-01",
@@ -373,7 +373,7 @@ def test_strategy_update_idempotency_key_conflict_does_not_mutate(home):
 
 
 def test_strategy_update_rejects_name_or_slug_change(home):
-    sid = _mcp(home, "strategy.create", {
+    sid = _mcp(home, "strategy.upsert", {
         "name": "Immutable", "slug": "immutable-strat",
         "idempotency_key": "00000000-0000-4000-8000-strat-imm-01",
     }).data["id"]
@@ -387,7 +387,7 @@ def test_strategy_update_rejects_name_or_slug_change(home):
 
 
 def test_strategy_archive_via_update_status(home):
-    sid = _mcp(home, "strategy.create", {
+    sid = _mcp(home, "strategy.upsert", {
         "name": "Archive me", "slug": "archive-me",
         "idempotency_key": "00000000-0000-4000-8000-strat-arc-01",
     }).data["id"]
@@ -407,7 +407,7 @@ def test_archived_strategy_still_readable_via_decision_reference(home):
     decisions. Create strategy → archive → confirm a decision tagged
     with strategy_id still reads back through strategy.show."""
 
-    sid = _mcp(home, "strategy.create", {
+    sid = _mcp(home, "strategy.upsert", {
         "name": "Soft archive", "slug": "soft-archive",
         "idempotency_key": "00000000-0000-4000-8000-strat-sft-01",
     }).data["id"]
@@ -432,7 +432,7 @@ def test_memory_recall_context_strategy_improves_on_strat_rank(home):
     being applied.
     """
 
-    sid = _mcp(home, "strategy.create", {
+    sid = _mcp(home, "strategy.upsert", {
         "name": "Recall scope", "slug": "recall-scope",
         "idempotency_key": "00000000-0000-4000-8000-strat-rc-01",
     }).data["id"]
@@ -503,7 +503,7 @@ def test_memory_recall_context_strategy_scopes_via_decision_and_thesis(home):
     into bare id-order with everything else, failing this assertion.
     """
 
-    sid = _mcp(home, "strategy.create", {
+    sid = _mcp(home, "strategy.upsert", {
         "name": "Indirect scope", "slug": "indirect-scope",
         "idempotency_key": "00000000-0000-4000-8000-strat-ix-01",
     }).data["id"]

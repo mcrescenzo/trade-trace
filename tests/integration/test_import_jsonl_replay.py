@@ -214,6 +214,85 @@ def test_import_commit_dry_run_does_not_write(tmp_path: Path):
     assert _count(home, "venues") == 0
 
 
+def test_import_parse_rows_strips_transport_keys_inside_args(tmp_path: Path):
+    file = tmp_path / "events.jsonl"
+    _write_jsonl(file, [{
+        "tool": "venue.add",
+        "args": {
+            "name": "Polymarket",
+            "kind": "prediction_market",
+            "idempotency_key": "transport-parse",
+            "_dry_run": True,
+            "_allow_no_idempotency": True,
+            "_event_id": 12,
+        },
+    }])
+
+    rows, errors, truncated = imports._parse_rows({"path": str(file)}, max_errors=10)
+
+    assert errors == []
+    assert truncated is False
+    assert len(rows) == 1
+    assert rows[0].args == {
+        "name": "Polymarket",
+        "kind": "prediction_market",
+        "idempotency_key": "transport-parse",
+    }
+
+
+def test_import_dispatch_strips_caller_transport_keys_but_keeps_internal_opt_out(
+    tmp_path: Path, monkeypatch,
+):
+    captured: list[tuple[str, dict, str]] = []
+
+    def fake_dispatch(tool: str, args: dict, actor_id: str):
+        captured.append((tool, args, actor_id))
+
+        class _Result:
+            def model_dump(self, *, mode: str, exclude_none: bool):
+                return {"ok": True, "data": {"tool": tool}}
+
+        return _Result()
+
+    monkeypatch.setattr("trade_trace.core.dispatch", fake_dispatch)
+
+    imports._dispatch_row(
+        imports.ParsedRow(
+            str(tmp_path / "events.jsonl"),
+            1,
+            "venue.add",
+            {
+                "name": "Polymarket",
+                "kind": "prediction_market",
+                "idempotency_key": "transport-dispatch",
+                "_dry_run": True,
+                "_allow_no_idempotency": True,
+            },
+        ),
+        str(tmp_path / "home"),
+        "agent:test",
+    )
+    imports._dispatch_row(
+        imports.ParsedRow(
+            str(tmp_path / "events.jsonl"),
+            2,
+            "venue.add",
+            {"name": "Polymarket", "kind": "prediction_market", "_dry_run": True},
+        ),
+        str(tmp_path / "home"),
+        "agent:test",
+    )
+
+    with_key_args = captured[0][1]
+    assert with_key_args["idempotency_key"] == "transport-dispatch"
+    assert "_dry_run" not in with_key_args
+    assert "_allow_no_idempotency" not in with_key_args
+
+    without_key_args = captured[1][1]
+    assert "_dry_run" not in without_key_args
+    assert without_key_args["_allow_no_idempotency"] is True
+
+
 def test_import_rejects_legacy_001rc3_contract_version_with_actionable_error(tmp_path: Path):
     home = tmp_path / "home"
     _init(home)
@@ -424,6 +503,16 @@ def test_import_skips_bucket_d_diagnostic_events_with_separate_counter(tmp_path:
             "args": {"id": "mem_ignored", "reason": "stale"},
             "idempotency_key": "node-invalidated-1",
         },
+        {
+            "tool": "autonomous_run.recorded",
+            "args": {"id": "run_ignored", "semantic_key": "old-run"},
+            "idempotency_key": "old-run-1",
+        },
+        {
+            "tool": "autonomous_incident.recorded",
+            "args": {"id": "incident_ignored", "semantic_key": "old-incident"},
+            "idempotency_key": "old-incident-1",
+        },
     ])
 
     env = _call("import.commit", {
@@ -433,7 +522,7 @@ def test_import_skips_bucket_d_diagnostic_events_with_separate_counter(tmp_path:
     })
     assert env["ok"] is True, env
     data = env["data"]
-    assert data["diagnostic_skipped"] == 2, data
+    assert data["diagnostic_skipped"] == 4, data
     assert data["cascaded_skipped"] == 0, data
     assert data["committed_count"] == 1
     assert _count(home, "signals") == 0
@@ -515,7 +604,7 @@ def test_journal_export_replays_m3_m4_writes_into_fresh_home(tmp_path: Path):
     # fields like `name`/`slug` into the JSONL payload, which is an
     # exporter contract change outside ths0's scope.
     _call("memory.retain", {"home": str(source), "node_type": "observation", "body": "ths0 round-trip memory", "idempotency_key": "ths0-rt-mem"})
-    strat = _call("strategy.create", {"home": str(source), "name": "ths0-rt", "slug": "ths0-rt", "description": "round-trip strategy", "idempotency_key": "ths0-rt-strat"})
+    strat = _call("strategy.upsert", {"home": str(source), "name": "ths0-rt", "slug": "ths0-rt", "description": "round-trip strategy", "idempotency_key": "ths0-rt-strat"})
     assert strat["ok"], strat
 
     # The exporter is currently a library function (not yet an MCP tool —
@@ -568,7 +657,7 @@ def test_importer_filters_payload_to_receiving_tool_schema_for_strategy_update(t
     cfg = _call("journal.config_set", {"home": str(source), "key": "outbox.jsonl_enabled", "value": "true", "_confirm": True, "idempotency_key": "qtfs-cfg"})
     assert cfg["ok"], cfg
 
-    strat = _call("strategy.create", {"home": str(source), "name": "qtfs-s", "slug": "qtfs-s", "description": "orig", "idempotency_key": "qtfs-create"})
+    strat = _call("strategy.upsert", {"home": str(source), "name": "qtfs-s", "slug": "qtfs-s", "description": "orig", "idempotency_key": "qtfs-create"})
     assert strat["ok"], strat
     strategy_id = strat["data"]["id"]
     upd = _call("strategy.update", {"home": str(source), "strategy_id": strategy_id, "description": "rewritten", "idempotency_key": "qtfs-update"})
@@ -616,7 +705,7 @@ def test_journal_export_replays_playbook_writes_into_fresh_home(tmp_path: Path):
     cfg = _call("journal.config_set", {"home": str(source), "key": "outbox.jsonl_enabled", "value": "true", "_confirm": True, "idempotency_key": "qtfs-pb-cfg"})
     assert cfg["ok"], cfg
 
-    pb = _call("playbook.create", {"home": str(source), "name": "qtfs-pb", "description": "round-trip", "idempotency_key": "qtfs-pb-create"})
+    pb = _call("playbook.upsert", {"home": str(source), "name": "qtfs-pb", "description": "round-trip", "idempotency_key": "qtfs-pb-create"})
     assert pb["ok"], pb
     pb_id = pb["data"]["id"]
     mem = _call("memory.retain", {"home": str(source), "node_type": "reflection", "body": "rationale", "idempotency_key": "qtfs-pb-mem"})

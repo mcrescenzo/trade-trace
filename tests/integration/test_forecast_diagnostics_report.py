@@ -71,7 +71,7 @@ def _seed_binary_case(
     if decision_type not in {"skip", "review"}:
         decision_args["side"] = "yes"
     decision = _envelope(home, "decision.add", decision_args)
-    outcome = _envelope(home, "outcome.add", {"instrument_id": inst["data"]["id"], "resolved_at": "2026-06-30T00:00:00Z", "outcome_label": "yes", "status": "resolved_final", "confidence": 0.99})
+    outcome = _envelope(home, "resolution.add", {"instrument_id": inst["data"]["id"], "resolved_at": "2026-06-30T00:00:00Z", "outcome_label": "yes", "status": "resolved_final", "confidence": 0.99})
     return {"instrument": inst["data"]["id"], "forecast": forecast["data"]["id"], "thesis": thesis["data"]["id"], "decision": decision["data"]["id"], "snapshot": snap["data"]["id"], "outcome": outcome["data"]["id"]}
 
 
@@ -139,7 +139,7 @@ def test_multiple_decisions_do_not_duplicate_forecast_metrics(tmp_path):
 
 def test_strategy_slug_filter_matches_strategy_id_filter(tmp_path):
     home = _init_home(tmp_path)
-    strategy = _envelope(home, "strategy.create", {"name": "Diagnostic Strategy", "slug": "diagnostic-strategy"})
+    strategy = _envelope(home, "strategy.upsert", {"name": "Diagnostic Strategy", "slug": "diagnostic-strategy"})
     ids = _seed_binary_case(home, implied_probability=0.55, strategy_id=strategy["data"]["id"])
 
     by_id = _envelope(home, "report.forecast_diagnostics", {"filter": {"strategy": {"strategy_id": strategy["data"]["id"]}}, "min_sample": 1})["data"]

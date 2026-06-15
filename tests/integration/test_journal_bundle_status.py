@@ -472,7 +472,7 @@ def test_journal_bundle_status_expands_thesis_to_forecasts_and_weak_unresolved(h
     assert checks["unresolved_forecasts"]["status"] == "weak"
     assert checks["unresolved_forecasts"]["record_ids"]["forecasts"] == [forecast.data["id"]]
     assert "forecast.score" not in checks["unresolved_forecasts"]["next_call"]
-    assert "outcome.add" in checks["unresolved_forecasts"]["next_call"]
+    assert "resolution.add" in checks["unresolved_forecasts"]["next_call"]
 
 
 def test_journal_bundle_status_playbook_adherence_guidance_uses_registered_tool(home):

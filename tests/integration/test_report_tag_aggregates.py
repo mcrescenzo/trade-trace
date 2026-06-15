@@ -70,7 +70,7 @@ def _seed_tagged_decision_with_scored_forecast(
         "type": "paper_enter", "side": "yes", "quantity": 100, "price": p_yes,
         "tags": [tag],
     })
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",

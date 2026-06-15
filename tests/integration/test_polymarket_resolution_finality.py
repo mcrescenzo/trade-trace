@@ -55,7 +55,7 @@ def test_polymarket_finality_statuses_are_local_evidence_and_reported(tmp_path):
     assert mcp_call("journal.init", {"home": home}, actor_id="agent:test").ok
     instrument_id = _seed_pm_market(home)
 
-    provisional = _mcp(home, "outcome.add", {
+    provisional = _mcp(home, "resolution.add", {
         "instrument_id": instrument_id,
         "resolved_at": "2020-01-02T00:00:00Z",
         "outcome_label": "yes",
@@ -73,7 +73,7 @@ def test_polymarket_finality_statuses_are_local_evidence_and_reported(tmp_path):
     assert provisional["auto_scored_forecasts"] == []
     assert provisional["auto_scoreable"] is False
 
-    imported = _mcp(home, "outcome.add", {
+    imported = _mcp(home, "resolution.add", {
         "instrument_id": instrument_id,
         "resolved_at": "2020-01-03T00:00:00Z",
         "outcome_label": "yes",
@@ -103,7 +103,7 @@ def test_resolved_final_requires_explicit_high_confidence_to_auto_score(tmp_path
     instrument_id = _seed_pm_market(home, "pm-finality-confidence")
     forecast_id = _seed_binary_forecast(home, instrument_id)
 
-    missing_conf = _mcp(home, "outcome.add", {
+    missing_conf = _mcp(home, "resolution.add", {
         "instrument_id": instrument_id,
         "resolved_at": "2020-01-02T00:00:00Z",
         "outcome_label": "yes",
@@ -119,7 +119,7 @@ def test_resolved_final_requires_explicit_high_confidence_to_auto_score(tmp_path
     pending = _mcp(home, "resolve.pending", {}).data
     assert forecast_id in {item["forecast_id"] for item in pending["items"]}
 
-    low_conf = _mcp(home, "outcome.add", {
+    low_conf = _mcp(home, "resolution.add", {
         "instrument_id": instrument_id,
         "resolved_at": "2020-01-03T00:00:00Z",
         "outcome_label": "yes",
@@ -131,7 +131,7 @@ def test_resolved_final_requires_explicit_high_confidence_to_auto_score(tmp_path
     assert low_conf["auto_scored_forecasts"] == []
     assert "below the 0.9 auto-score threshold" in low_conf["auto_score_skipped_reason"]
 
-    high_conf = _mcp(home, "outcome.add", {
+    high_conf = _mcp(home, "resolution.add", {
         "instrument_id": instrument_id,
         "resolved_at": "2020-01-04T00:00:00Z",
         "outcome_label": "yes",
@@ -237,7 +237,7 @@ def test_resolve_pending_excludes_already_scored_forecast(tmp_path):
     # An evidence-only, non-auto-scoreable resolved outcome: the Python
     # instrument-level guard in _resolve_pending will NOT exclude either
     # forecast on its own.
-    outcome = _mcp(home, "outcome.add", {
+    outcome = _mcp(home, "resolution.add", {
         "instrument_id": instrument_id,
         "resolved_at": "2020-01-03T00:00:00Z",
         "outcome_label": "yes",
@@ -295,8 +295,8 @@ def test_outcome_add_idempotent_replay_preserves_finality_shape(tmp_path):
         "idempotency_key": "finality-replay",
     }
 
-    first = _mcp(home, "outcome.add", args).data
-    replay = _mcp(home, "outcome.add", args).data
+    first = _mcp(home, "resolution.add", args).data
+    replay = _mcp(home, "resolution.add", args).data
     assert replay["id"] == first["id"]
     assert replay["auto_scoreable"] == first["auto_scoreable"] is True
     assert replay["finality_uncertain"] == first["finality_uncertain"] is False
@@ -395,7 +395,7 @@ def test_resolve_pending_suppresses_auto_scoreable_final_outcome(tmp_path):
     assert high_supported in pending_before_ids
     assert high_unscored in pending_before_ids
 
-    high_outcome = _mcp(home, "outcome.add", {
+    high_outcome = _mcp(home, "resolution.add", {
         "instrument_id": high_instrument,
         "resolved_at": "2020-01-02T00:00:00Z",
         "outcome_label": "yes",
@@ -425,7 +425,7 @@ def test_resolve_pending_suppresses_auto_scoreable_final_outcome(tmp_path):
     # instrument → that forecast still appears in resolve.pending.
     low_instrument = _seed_pm_market(home, "pm-finality-suppress-low")
     low_forecast = _seed_binary_forecast(home, low_instrument)
-    low_outcome = _mcp(home, "outcome.add", {
+    low_outcome = _mcp(home, "resolution.add", {
         "instrument_id": low_instrument,
         "resolved_at": "2020-01-02T00:00:00Z",
         "outcome_label": "yes",

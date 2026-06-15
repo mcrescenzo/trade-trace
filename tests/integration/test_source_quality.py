@@ -631,7 +631,7 @@ def test_expanded_stance_sources_attach_to_resolution_market_records(home):
         "captured_at": "2026-05-20T12:00:00Z",
         "idempotency_key": "00000000-0000-4000-8000-xku0snap001",
     }).data["id"]
-    out = _mcp(home, "outcome.add", {
+    out = _mcp(home, "resolution.add", {
         "instrument_id": seeds["instrument"],
         "resolved_at": "2026-05-22T20:30:00Z",
         "outcome_label": "yes",

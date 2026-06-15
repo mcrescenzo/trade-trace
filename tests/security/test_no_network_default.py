@@ -117,8 +117,8 @@ _NO_NETWORK_SMOKE_ROWS: list[tuple[str, str]] = [
     ("memory.retain", "memory"),
     ("memory.recall", "memory_recall"),
     # Strategies, playbooks, signals
-    ("strategy.create", "strategy"),
-    ("playbook.create", "playbook"),
+    ("strategy.upsert", "strategy"),
+    ("playbook.upsert", "playbook"),
     ("signal.scan", "noop"),
     # Adapter discovery writes/reads. Under the *default* (adapter-disabled)
     # config these must fail closed with ADAPTER_DISABLED *without* touching
@@ -169,9 +169,9 @@ def _make_kwargs(tool: str, home: Path, seed: dict[str, str]) -> dict:
                 "body": "smoke memory body"}
     if tool == "memory.recall":
         return {**base, "query": "smoke"}
-    if tool == "strategy.create":
+    if tool == "strategy.upsert":
         return {**base, "slug": "smoke-strat", "name": "Smoke"}
-    if tool == "playbook.create":
+    if tool == "playbook.upsert":
         return {**base, "slug": "smoke-pb", "name": "Smoke"}
     if tool == "tool.schema":
         return {**base, "tool": "journal.init"}

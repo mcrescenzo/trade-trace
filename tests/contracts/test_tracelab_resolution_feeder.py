@@ -176,7 +176,7 @@ def test_integration_feed_writes_forecast_scores_row(home):
 
 def test_feeder_emits_resolved_but_unfed_count(home):
     instrument_id, _thesis_id = _setup_market(home)
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instrument_id,
         "resolved_at": "2026-06-29T00:00:00Z",
         "outcome_label": "yes",

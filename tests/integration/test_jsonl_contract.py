@@ -75,12 +75,27 @@ def test_import_ready_writers_registered():
     expected = {
         "venue.add", "instrument.add", "snapshot.add",
         "thesis.add", "forecast.add", "forecast.supersede",
-        "decision.add", "outcome.add", "resolve.record",
+        "decision.add", "resolution.add", "outcome.add", "resolve.record",
         "source.add",
         "source.attach_to_thesis", "source.attach_to_decision",
-        "source.attach_to_forecast",
+        "source.attach_to_forecast", "playbook.upsert", "playbook.create",
+        "strategy.upsert", "strategy.create",
     }
     assert expected.issubset(writers)
+
+
+def test_legacy_renamed_writers_remain_hidden_dispatch_aliases():
+    registry = default_registry()
+    public = set(registry.public_names())
+    for old, canonical in {
+        "outcome.add": "resolution.add",
+        "strategy.create": "strategy.upsert",
+        "playbook.create": "playbook.upsert",
+    }.items():
+        assert old in registry.names()
+        assert canonical in public
+        assert old not in public
+        assert registry.get(old).handler is registry.get(canonical).handler
 
 
 def test_jsonl_envelope_replay_through_core(tmp_path: Path):

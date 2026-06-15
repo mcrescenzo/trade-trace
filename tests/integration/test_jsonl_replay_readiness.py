@@ -205,7 +205,7 @@ def test_full_ledger_round_trip_no_fk_errors(tmp_path: Path):
             },
         },
         {
-            "tool": "outcome.add",
+            "tool": "resolution.add",
             "args": {
                 "id": outcome_id,
                 "instrument_id": instr_id,

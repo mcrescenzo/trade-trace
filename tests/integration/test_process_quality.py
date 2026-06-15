@@ -108,7 +108,7 @@ def test_wrong_outcome_is_ignored_invariant(home: Path):
 
     out = _envelope(
         home,
-        "outcome.add",
+        "resolution.add",
         {
             "instrument_id": instrument_id,
             "resolved_at": "2026-06-30T00:00:00Z",

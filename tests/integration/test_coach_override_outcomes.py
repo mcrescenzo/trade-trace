@@ -40,7 +40,7 @@ def _seed_decision_with_override(home: Path, *, suffix: str,
         "quantity": 1, "price": 0.5,
         "idempotency_key": f"00000000-0000-4000-8000-co-d-{suffix}",
     }).data["id"]
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": f"PB-Co-{suffix}",
         "idempotency_key": f"00000000-0000-4000-8000-co-pb-{suffix}",
     }).data["id"]
@@ -64,7 +64,7 @@ def _seed_decision_with_override(home: Path, *, suffix: str,
         "idempotency_key": f"00000000-0000-4000-8000-co-ad-{suffix}",
     })
     if with_outcome:
-        _mcp(home, "outcome.add", {
+        _mcp(home, "resolution.add", {
             "instrument_id": inst,
             "resolved_at": "2099-01-01T00:00:00Z",
             "outcome_label": "yes", "status": "resolved_final",
@@ -152,7 +152,7 @@ def test_record_adherence_rejects_observation_node_as_rule(home):
         "quantity": 1, "price": 0.5,
         "idempotency_key": "00000000-0000-4000-8000-qc-fk-d01",
     }).data["id"]
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-FK", "idempotency_key": "00000000-0000-4000-8000-qc-fk-pb01",
     }).data["id"]
     ref = _mcp(home, "memory.retain", {
@@ -201,7 +201,7 @@ def test_record_adherence_rejects_missing_rule_node(home):
         "quantity": 1, "price": 0.5,
         "idempotency_key": "00000000-0000-4000-8000-qc-nf-d01",
     }).data["id"]
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-NF", "idempotency_key": "00000000-0000-4000-8000-qc-nf-pb01",
     }).data["id"]
     ref = _mcp(home, "memory.retain", {

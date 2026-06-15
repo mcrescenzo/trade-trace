@@ -232,15 +232,15 @@ def test_snapshot_add_schema_advertises_optional_market_state_fields():
 # clients can call the tools without surprises.
 
 
-def test_strategy_create_schema_requires_name_and_slug_only():
-    schema = _schema_for("strategy.create")
+def test_strategy_upsert_schema_requires_name_and_slug_only():
+    schema = _schema_for("strategy.upsert")
     required = schema.get("required", [])
 
     # Runtime mandates: name, slug, idempotency_key. Drift would silently
     # break schema-validating MCP clients.
     for runtime_required in ("name", "slug", "idempotency_key"):
         assert runtime_required in required, (
-            f"runtime requires {runtime_required!r} for strategy.create; "
+            f"runtime requires {runtime_required!r} for strategy.upsert; "
             "schema must list it (check tools/_examples.py minimal payload)."
         )
 
@@ -524,8 +524,8 @@ def test_memory_link_schema_advertises_endpoint_and_edge_enums():
     assert properties["edge_type"]["enum"] == list(EDGE_TYPES)
 
 
-def test_outcome_add_schema_advertises_status_enum_and_confidence():
-    """outcome.add (and its resolve.record / resolution.add aliases) validates
+def test_resolution_add_schema_advertises_status_enum_and_confidence():
+    """resolution.add (and its outcome.add / resolve.record aliases) validates
     status against _OUTCOME_STATUSES at runtime with a self-documenting error,
     but the schema auto-derived from example_minimal exposed status as a bare
     string and omitted the auto-score-gating confidence field from properties
@@ -533,7 +533,7 @@ def test_outcome_add_schema_advertises_status_enum_and_confidence():
     runtime allowlist and confidence must be discoverable."""
     from trade_trace.tools.ledger.outcome import _OUTCOME_STATUSES
 
-    for tool_name in ("outcome.add", "resolve.record", "resolution.add"):
+    for tool_name in ("resolution.add", "outcome.add", "resolve.record"):
         schema = _schema_for(tool_name)
         properties = schema.get("properties", {})
         assert properties["status"]["enum"] == sorted(_OUTCOME_STATUSES), (
@@ -548,8 +548,8 @@ def test_outcome_add_schema_advertises_status_enum_and_confidence():
             )
 
 
-def test_strategy_create_schema_advertises_status_enum_and_optional_fields():
-    """strategy.create (the public strategy.upsert create-mode) validates
+def test_strategy_upsert_schema_advertises_status_enum_and_optional_fields():
+    """strategy.upsert (and its strategy.create legacy alias) validates
     status against _STATUS_VALUES at runtime with a self-documenting error and
     accepts description/hypothesis/meta_json, but the schema auto-derived from
     example_minimal exposed only name/slug/idempotency_key (AX-055, the
@@ -557,7 +557,7 @@ def test_strategy_create_schema_advertises_status_enum_and_optional_fields():
     allowlist and the optional fields must be discoverable."""
     from trade_trace.tools.strategy import _STATUS_VALUES
 
-    for tool_name in ("strategy.create", "strategy.upsert"):
+    for tool_name in ("strategy.upsert", "strategy.create"):
         schema = _schema_for(tool_name)
         properties = schema.get("properties", {})
         assert properties["status"]["enum"] == list(_STATUS_VALUES), (
@@ -755,7 +755,7 @@ def test_strategy_list_accepts_documented_all_alias_at_runtime(tmp_path):
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok
     assert mcp_call(
-        "strategy.create",
+        "strategy.upsert",
         {
             "home": home,
             "name": "Active strategy",
@@ -764,7 +764,7 @@ def test_strategy_list_accepts_documented_all_alias_at_runtime(tmp_path):
         },
     ).ok
     archived = mcp_call(
-        "strategy.create",
+        "strategy.upsert",
         {
             "home": home,
             "name": "Archived strategy",

@@ -70,7 +70,7 @@ def _seed_venue_instrument(home: Path) -> tuple[str, str]:
 
 WRITE_TOOLS_WITH_EXAMPLES = [
     "venue.add", "instrument.add", "thesis.add", "forecast.add",
-    "decision.add", "outcome.add", "source.add",
+    "decision.add", "resolution.add", "source.add",
 ]
 
 
@@ -112,7 +112,10 @@ def test_tool_schema_catalog_lists_default_public_catalog(home):
                      # its consumer (trade-trace-47tp).
                      "playbook.propose_version"):
         assert required in names
-    for legacy_hidden in ("venue.add", "thesis.add", "outcome.add"):
+    for legacy_hidden in (
+        "venue.add", "thesis.add", "outcome.add",
+        "strategy.create", "playbook.create",
+    ):
         assert legacy_hidden not in names
 
 
@@ -246,7 +249,7 @@ def test_validation_error_includes_expected_format_for_timestamps(home):
     agent can repair the call without docs."""
 
     _venue_id, inst_id = _seed_venue_instrument(home)
-    env = _mcp(home, "outcome.add", {
+    env = _mcp(home, "resolution.add", {
         "instrument_id": inst_id,
         "resolved_at": "yesterday-ish",  # not ISO 8601
         "outcome_label": "yes",
@@ -346,7 +349,7 @@ def test_exit_code_two_on_validation_error(home):
     _venue_id, inst_id = _seed_venue_instrument(home)
     result = _cli(
         home,
-        "outcome", "add",
+        "resolution", "add",
         "--instrument-id", inst_id,
         "--resolved-at", "not-a-timestamp",
         "--outcome-label", "yes",

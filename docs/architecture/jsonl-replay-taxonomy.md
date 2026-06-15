@@ -62,13 +62,6 @@ The `events` table currently emits these `event_type` values
 - Reconciliation: `reconciliation.recorded` (local derived comparison of Trade
   Trace projection with imported external facts; evidence only for external
   operators, not remediation or execution).
-- Autonomous run/session audit: `autonomous_run.recorded` (local profile-owned
-  run/session lifecycle evidence only; not runtime supervision, scheduling,
-  agent hosting, alerting, or execution).
-- Autonomous incident audit: `autonomous_incident.recorded` (local or imported
-  incident/blocked-action fact evidence only; kill-switch, cancel-only, and
-  blocked-action entries are facts about external systems, not Trade Trace
-  control-plane behavior or remediation).
 - Signal: `signal.emitted` (lazy-emitted by `signal.scan` /
   `report.coach`).
 - Market re-sync: `market.refreshed` (emitted by `market.refresh` when it
@@ -102,7 +95,7 @@ row.
 - `forecast.created` → `forecast.add`
 - `forecast.superseded` → `forecast.supersede`
 - `forecast.anchored_to_snapshot` → `forecast.anchor_to_snapshot`
-- `outcome.recorded` → `outcome.add`
+- `outcome.recorded` → `resolution.add` (`outcome.add` remains a hidden legacy dispatch alias)
 - `risk_policy_version.created` → `risk.policy_version_add`
 - `risk_check_receipt.recorded` → `risk.check_record`
 - `pretrade_intent.recorded` → `pretrade_intent.record` (local,
@@ -144,14 +137,6 @@ row.
   reconciliation result over imported/account/paper/projection evidence; replay
   performs no private fetch, order action, cancellation, settlement, fund
   movement, or remediation).
-- `autonomous_run.recorded` → `autonomous_run.record` (local append-only
-  run/session lifecycle evidence; replay records durable status only and performs
-  no runtime supervision, scheduling, hosting, fetching, alerts, execution, or
-  remediation).
-- `autonomous_incident.recorded` → `autonomous_incident.record` (local
-  append-only incident evidence with links/caveats; blocked-action, kill-switch,
-  and cancel-only entries replay as imported facts only, never as Trade Trace
-  control actions).
 - `memory_node.retained` → `memory.retain` / `memory.reflect`
   (the import path is `memory.retain` for both; `memory.reflect`
   also writes the about-edge but the canonical replay surface for
@@ -174,8 +159,8 @@ standalone write surface. Replay happens by replaying the parent.
   `forecast.supersede` (supersedes edge), `memory.reflect` (about
   edge), `memory.link` (explicit edge), `source.attach_to_*` (provenance
   edge), `playbook.adherence` (followed/overridden flags),
-  `strategy.create` (no edges; strategy.created is its own line).
-- `forecast.scored`: cascaded from `outcome.add` /
+  `strategy.upsert` (no edges; strategy.created is its own line).
+- `forecast.scored`: cascaded from `resolution.add` /
   `journal.rescan_scoring`. Has no direct write tool.
 - `playbook_rule.followed` / `playbook_rule.overridden`: cascaded from
   `decision.record_adherence` (or directly from a `decision.add` that
@@ -193,8 +178,8 @@ result makes it observable.
 Events emitted as edges that DO have a direct write surface:
 
 - `playbook.proposed_version` → `playbook.propose_version`
-- `playbook.created` → `playbook.create`
-- `strategy.created` → `strategy.create`
+- `playbook.created` → `playbook.upsert`
+- `strategy.created` → `strategy.upsert`
 - `strategy.updated` → `strategy.update`
 
 Move these to **bucket A** in the implementation: the JSONL `{tool,
@@ -223,6 +208,10 @@ for restore — restores want the *original* observation timestamp.
   import-ready (replay would re-fetch live), so the importer skips it
   and a restored journal regenerates it on demand by re-running
   `market.refresh`. (The initial `market.bound` write IS bucket A.)
+- `autonomous_run.recorded` / `autonomous_incident.recorded`: historical
+  audit events from the cut autonomous run/incident cluster. The write tools
+  were removed, so restore does not dispatch these events; existing JSONL keeps
+  the original audit facts for archival inspection.
 
 **Replay policy:** importer recognizes these in the manifest, increments
 a `diagnostic_skipped` counter, does not call `dispatch()`. A future

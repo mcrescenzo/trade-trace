@@ -49,7 +49,7 @@ def _seed_bad_forecast(home: Path, idx: int, tag: str, *, probability: float, re
          "side": "yes", "reason": "test", "tags": [tag]},
     )
     _envelope(
-        home, "outcome.add",
+        home, "resolution.add",
         {"instrument_id": inst, "resolved_at": "2027-01-12T00:00:00Z",
          "outcome_label": "yes" if resolves_yes else "no", "status": "resolved_final", "confidence": 0.99},
     )

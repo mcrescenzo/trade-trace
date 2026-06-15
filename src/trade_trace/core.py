@@ -35,7 +35,6 @@ from trade_trace.tools.account_snapshots import register_account_snapshot_tools
 from trade_trace.tools.adapter_polymarket import register_adapter_polymarket_tools
 from trade_trace.tools.admin import register_admin_tools
 from trade_trace.tools.approval import register_approval_tools
-from trade_trace.tools.autonomous_records import register_autonomous_record_tools
 from trade_trace.tools.csv_import import register_csv_import
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.export import register_export_tools
@@ -154,7 +153,8 @@ def _apply_v002_catalog_overlay(registry: ToolRegistry) -> None:
 
     register_market_bind_tool(registry)
     register_adapter_polymarket_tools(registry)
-    registry.alias("resolution.add", "outcome.add", legacy_name="outcome.add")
+    registry.alias("outcome.add", "resolution.add", catalog_visibility="legacy")
+    registry.alias("resolve.record", "resolution.add", catalog_visibility="legacy")
     # playbook.record_adherence is the canonical registered name (playbook.py).
     # The legacy decision.record_adherence name is retained ONLY as a dispatch
     # alias so historic JSONL exports / import.commit replay carrying
@@ -167,24 +167,14 @@ def _apply_v002_catalog_overlay(registry: ToolRegistry) -> None:
         legacy_name="decision.record_adherence",
     )
     registry.alias(
-        "strategy.upsert",
         "strategy.create",
-        legacy_name="strategy.create",
-        description=(
-            "Create/update strategy surface for the v0.0.2 catalog. The current "
-            "additive implementation delegates create-mode to the legacy handler; "
-            "update/read cleanup remains guarded by legacy redirect metadata."
-        ),
+        "strategy.upsert",
+        catalog_visibility="legacy",
     )
     registry.alias(
-        "playbook.upsert",
         "playbook.create",
-        legacy_name="playbook.create",
-        description=(
-            "Create/propose playbook surface for the v0.0.2 catalog. The current "
-            "additive implementation delegates create-mode to the legacy handler; "
-            "version/read cleanup remains guarded by legacy redirect metadata."
-        ),
+        "playbook.upsert",
+        catalog_visibility="legacy",
     )
 
     for old, new in V002_RENAMED_TO.items():
@@ -245,10 +235,6 @@ EXPERIMENTAL_AUTONOMOUS_OPS: frozenset[str] = frozenset({
     # audit-only and credential-blind, so it is safe in the public catalog. A
     # freeze-state regression test pins this so a future re-freeze is caught
     # (tests/integration/test_report_risk.py::test_risk_cluster_is_not_frozen).
-    "autonomous_run.record",
-    "autonomous_run.get",
-    "autonomous_incident.record",
-    "autonomous_incident.report",
 })
 
 EXPERIMENTAL_RECONCILIATION: frozenset[str] = frozenset({
@@ -342,8 +328,6 @@ EXPERIMENTAL_RECONCILIATION: frozenset[str] = frozenset({
     # and non-executing, so it is safe in the default public catalog. A freeze-state
     # regression test pins this so a future re-freeze is caught
     # (tests/integration/test_account_snapshots.py::test_account_snapshot_cluster_is_not_frozen).
-    "report.execution_quality",
-    "report.operational_health",
 })
 
 # Anchored-calibration unit. The standalone anchor WRITER
@@ -430,7 +414,6 @@ def build_registry() -> ToolRegistry:
     register_account_snapshot_tools(registry)
     register_admin_tools(registry)
     register_approval_tools(registry)
-    register_autonomous_record_tools(registry)
     register_external_receipt_tools(registry)
     register_export_tools(registry)
     register_fixture_tools(registry)

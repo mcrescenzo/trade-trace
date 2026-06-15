@@ -347,12 +347,14 @@ SHIPPED_REPORTS = {
     "report.coach",
     "report.compare",
     "report.current_exposure",
+    "report.execution_quality",
     "report.exposure_anomalies",
     "report.filter_schema",
     "report.forecast_diagnostics",
     "report.lifecycle",
     "report.work_queue",
     "report.open_positions",
+    "report.operational_health",
     # Unfrozen into the public Phase-2 catalog (bead trade-trace-xwox): the
     # paper-only exposure/P&L report. It aggregates ONLY filled paper_fill rows
     # into a cost-basis/exposure view carrying mark_source + as_of and explicitly
@@ -471,10 +473,7 @@ EXPERIMENTAL_AUTONOMOUS_OPS = {
     # risk.check_record / risk.policy_version_add / risk.evaluate were UNFROZEN
     # into the public catalog (bead trade-trace-ur8w) and moved to
     # SHIPPED_PUBLIC_TOOLS above; they are no longer part of the frozen cluster.
-    "autonomous_run.record",
-    "autonomous_run.get",
-    "autonomous_incident.record",
-    "autonomous_incident.report",
+    # autonomous_run.* and autonomous_incident.* were CUT entirely (trade-trace-irgs).
 }
 
 
@@ -497,7 +496,23 @@ def test_frozen_autonomous_ops_cluster_is_experimental_but_dispatchable():
         assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
 
 
-EXPERIMENTAL_RECONCILIATION = {
+REMOVED_AUTONOMOUS_RUN_INCIDENT_TOOLS = {
+    "autonomous_run.record",
+    "autonomous_run.get",
+    "autonomous_incident.record",
+    "autonomous_incident.report",
+}
+
+
+def test_autonomous_run_incident_cluster_is_cut_from_registry():
+    registry = default_registry()
+    names = set(registry.names())
+    public = set(registry.public_names(include_experimental=True, include_legacy=True))
+    assert REMOVED_AUTONOMOUS_RUN_INCIDENT_TOOLS.isdisjoint(names)
+    assert REMOVED_AUTONOMOUS_RUN_INCIDENT_TOOLS.isdisjoint(public)
+
+
+EXPERIMENTAL_RECONCILIATION = frozenset({
     # paper_fill.record/get/list and report.paper_exposure were UNFROZEN into
     # the public Phase-2 catalog (bead trade-trace-xwox) and moved to
     # SHIPPED_PUBLIC_TOOLS / SHIPPED_REPORTS above; they are no longer part of
@@ -518,12 +533,10 @@ EXPERIMENTAL_RECONCILIATION = {
     # account_snapshot.import/get/list/report were UNFROZEN into the public
     # Phase-2 catalog (bead trade-trace-qfn8) and moved to SHIPPED_PUBLIC_TOOLS
     # above; their public-catalog membership is pinned by
-    # test_unfrozen_account_snapshot_cluster_is_public below. Only
-    # report.execution_quality and report.operational_health stay frozen behind
-    # the experimental shelf.
-    "report.execution_quality",
-    "report.operational_health",
-}
+    # test_unfrozen_account_snapshot_cluster_is_public below. The process reports
+    # report.execution_quality and report.operational_health were also UNFROZEN
+    # (trade-trace-2umy) and are pinned by test_unfrozen_process_reports_are_public.
+})
 
 
 def test_frozen_reconciliation_cluster_is_experimental_but_dispatchable():
@@ -545,16 +558,29 @@ def test_frozen_reconciliation_cluster_is_experimental_but_dispatchable():
         assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
 
 
+UNFROZEN_PROCESS_REPORTS = {
+    "report.execution_quality",
+    "report.operational_health",
+}
+
+
+def test_unfrozen_process_reports_are_public():
+    registry = default_registry()
+    public = set(registry.public_names())
+    assert UNFROZEN_PROCESS_REPORTS.issubset(public)
+    assert UNFROZEN_PROCESS_REPORTS.isdisjoint(EXPERIMENTAL_RECONCILIATION)
+    for tool in UNFROZEN_PROCESS_REPORTS:
+        assert registry.get(tool).metadata()["catalog_visibility"] == "public"
+
+
 # paper_fill.record/get/list and report.paper_exposure were UNFROZEN out of
 # EXPERIMENTAL_RECONCILIATION into the public Phase-2 catalog (bead
 # trade-trace-xwox). They are the local paper-fill ledger: a deterministic
 # conservative limit/depth fill engine plus an aggregating exposure report, all
 # local-evidence-only and credential-blind (no venue client, no account fetch,
-# no signing/placement/cancellation/fund movement). The rest of the
-# reconciliation/execution-truth cluster (report.execution_quality/
-# operational_health) stays frozen; external_receipt.*, account_snapshot.*, and
-# reconciliation.* have since been unfrozen (see the dedicated unfrozen-cluster
-# tests below).
+# no signing/placement/cancellation/fund movement). The imported-truth and
+# process-report surfaces have since been unfrozen (see the dedicated tests
+# below).
 UNFROZEN_PAPER_FILL_LEDGER = {
     "paper_fill.record",
     "paper_fill.get",
@@ -585,10 +611,9 @@ def test_unfrozen_paper_fill_ledger_is_public():
 # append-only local + imported tables and emits a reproducible mismatch-code set;
 # caller-supplied codes are confined to a separate `manually_flagged` channel.
 # The cluster is local-evidence-only, credential-blind, and non-executing (no
-# fetch/sign/place/cancel/settle/fund-move/remediate). The remaining
-# reconciliation/execution-truth cluster (report.execution_quality/
-# operational_health) stays frozen; external_receipt.* and account_snapshot.*
-# have since been unfrozen (see the dedicated unfrozen-cluster tests below).
+# fetch/sign/place/cancel/settle/fund-move/remediate). The imported-truth and
+# process-report surfaces have since been unfrozen (see the dedicated tests
+# below).
 UNFROZEN_RECONCILIATION_CLUSTER = {
     "reconciliation.record",
     "reconciliation.get",
@@ -622,8 +647,7 @@ def test_unfrozen_reconciliation_cluster_is_public():
 # remediation; malformed / secret-bearing / credential-shaped / impossible
 # payloads are quarantined at the boundary. These rows feed
 # reconciliation._build_derived's ORPHAN_EXTERNAL_* / DUPLICATE_FILL /
-# REJECTED_APPROVED_INTENT derivation. Only report.execution_quality and
-# report.operational_health stay frozen.
+# REJECTED_APPROVED_INTENT derivation.
 UNFROZEN_EXTERNAL_RECEIPT_CLUSTER = {
     "external_receipt.import",
     "external_receipt.get",
@@ -659,8 +683,7 @@ def test_unfrozen_external_receipt_cluster_is_public():
 # movement, or remediation; malformed / secret-bearing / credential-shaped /
 # impossible payloads are quarantined at the boundary. These rows feed
 # reconciliation._latest_snapshot / _build_derived's STALE_SNAPSHOT /
-# POSITION_MISMATCH / BALANCE_MISMATCH derivation. Only report.execution_quality
-# and report.operational_health stay frozen.
+# POSITION_MISMATCH / BALANCE_MISMATCH derivation.
 UNFROZEN_ACCOUNT_SNAPSHOT_CLUSTER = {
     "account_snapshot.import",
     "account_snapshot.get",

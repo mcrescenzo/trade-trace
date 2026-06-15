@@ -56,14 +56,14 @@ def _seed_resolved_binary_forecast(
             ],
             "scoring_support": scoring_support,
         }).data["id"]
-        _mcp(home, "outcome.add", {
+        _mcp(home, "resolution.add", {
             "instrument_id": inst,
             "resolved_at": resolved_at,
             "outcome_label": resolved_label, "status": status,
             **({"confidence": 0.99} if status == "resolved_final" else {}),
         })
     else:
-        _mcp(home, "outcome.add", {
+        _mcp(home, "resolution.add", {
             "instrument_id": inst,
             "resolved_at": resolved_at,
             "outcome_label": resolved_label, "status": status,
@@ -176,7 +176,7 @@ def test_ambiguous_rate_fires_on_ambiguous_outcome(home):
     it and surfaces the outcome id."""
 
     inst = _seed_instrument(home)
-    out = _mcp(home, "outcome.add", {
+    out = _mcp(home, "resolution.add", {
         "instrument_id": inst,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "ambiguous",
@@ -199,7 +199,7 @@ def test_ambiguous_rate_silent_on_clean_data(home):
 
 def test_disputed_rate_fires_on_disputed_outcome(home):
     inst = _seed_instrument(home)
-    out = _mcp(home, "outcome.add", {
+    out = _mcp(home, "resolution.add", {
         "instrument_id": inst,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "disputed",
@@ -222,13 +222,13 @@ def test_disputed_rate_silent_on_clean_data(home):
 
 def test_void_cancelled_rate_fires_on_void_or_cancelled(home):
     inst = _seed_instrument(home)
-    out_void = _mcp(home, "outcome.add", {
+    out_void = _mcp(home, "resolution.add", {
         "instrument_id": inst,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "void",
     }).data["id"]
     inst2 = _seed_instrument(home)
-    out_cancelled = _mcp(home, "outcome.add", {
+    out_cancelled = _mcp(home, "resolution.add", {
         "instrument_id": inst2,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "no", "status": "cancelled",

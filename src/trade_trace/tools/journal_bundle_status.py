@@ -339,7 +339,7 @@ def _build_checks(conn: sqlite3.Connection, rows: dict[str, list[dict[str, Any]]
 
     complete_paper_enter_only_arc = _is_complete_paper_enter_only_arc(rows["decision"])
     unresolved = [f["id"] for f in rows["forecast"] if f.get("scoring_state") == "pending"]
-    checks.append(_entry("unresolved_forecasts", "weak" if unresolved and not complete_paper_enter_only_arc else "ok", {"forecasts": unresolved}, "outcome.add when resolution is known"))
+    checks.append(_entry("unresolved_forecasts", "weak" if unresolved and not complete_paper_enter_only_arc else "ok", {"forecasts": unresolved}, "resolution.add when resolution is known"))
 
     decision_ids = [d["id"] for d in rows["decision"]]
     reflected = _has_reflection(conn, decision_ids)

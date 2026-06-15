@@ -346,10 +346,11 @@ error.
 
 The full list of "retryable writes" covers the §4.0 core write tools
 (PRD): `venue.add`, `instrument.add`, `snapshot.add`, `thesis.add`,
-`forecast.add`, `forecast.supersede`, `decision.add`, `outcome.add` /
-`resolve.record`, plus `memory.retain`, `memory.reflect`, `memory.link`,
-`source.add`, `source.attach_to_*`, `playbook.create`,
-`playbook.propose_version`, `strategy.create`, `strategy.update`,
+`forecast.add`, `forecast.supersede`, `decision.add`, `resolution.add`
+(`outcome.add` / `resolve.record` legacy aliases), plus `memory.retain`,
+`memory.reflect`, `memory.link`, `source.add`, `source.attach_to_*`,
+`playbook.upsert` (`playbook.create` legacy alias),
+`playbook.propose_version`, `strategy.upsert` (`strategy.create` legacy alias), `strategy.update`,
 `import.commit`.
 
 ## 6. Transaction Boundaries

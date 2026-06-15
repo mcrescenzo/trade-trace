@@ -24,7 +24,7 @@ The live test must be interpreted against these source-of-truth documents:
 
 - [`docs/architecture/operability.md` §3, Multi-Process Concurrency](architecture/operability.md#3-multi-process-concurrency)
 - [`docs/architecture/persistence.md` §2, SQLite as Source of Truth](architecture/persistence.md#2-sqlite-as-source-of-truth)
-- [`docs/architecture/reports.md` §6A, Target contract: `report.process_analytics`](architecture/reports.md#6a-target-contract-reportprocess_analytics)
+- [`docs/architecture/reports.md` §6A, Shipped partial + target contract: `report.process_analytics`](architecture/reports.md#6a-shipped-partial-target-contract-reportprocess_analytics)
 
 Program context: Phase 2 reporting work piggybacks on the existing **trade-trace-mxip** reporting program. This charter only links that reporting context to Phase 5 evidence expectations; it does not implement or broaden reporting.
 

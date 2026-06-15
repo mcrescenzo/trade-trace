@@ -66,7 +66,7 @@ def _seed_scored_forecast(home: Path, market_id: str, *, probability: float = 0.
     )["data"]["id"]
     _envelope(
         home,
-        "outcome.add",
+        "resolution.add",
         {
             "instrument_id": market_id,
             "resolved_at": "2027-01-12T00:00:00Z",
@@ -147,7 +147,7 @@ def test_resolution_quality_counts_ambiguous_like_statuses(home: Path):
     )
     _envelope(
         home,
-        "outcome.add",
+        "resolution.add",
         {
             "instrument_id": market_id,
             "resolved_at": "2027-01-12T00:00:00Z",

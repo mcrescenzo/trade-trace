@@ -71,7 +71,7 @@ def test_unscored_forecasts_resolved_removes_from_list(home):
         inst_id = db.connection.execute("SELECT id FROM instruments").fetchone()[0]
     finally:
         db.close()
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": inst_id,
         "resolved_at": "2026-06-01T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",

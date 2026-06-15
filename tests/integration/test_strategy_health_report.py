@@ -48,7 +48,7 @@ def test_strategy_health_registered_and_schema():
 
 
 def test_strategy_health_does_not_open_network_and_keeps_low_n_skip_watch_local(home, monkeypatch):
-    active_env = _mcp(home, "strategy.create", {"name": "Local Health", "slug": "local-health", "idempotency_key": "00000000-0000-4000-8000-health-net"})
+    active_env = _mcp(home, "strategy.upsert", {"name": "Local Health", "slug": "local-health", "idempotency_key": "00000000-0000-4000-8000-health-net"})
     assert active_env.ok
     active = active_env.data["id"]
     conn = sqlite3.connect(db_path(home))
@@ -81,8 +81,8 @@ def test_strategy_health_does_not_open_network_and_keeps_low_n_skip_watch_local(
 
 
 def test_strategy_health_surfaces_process_signals_and_filters(home):
-    active_env = _mcp(home, "strategy.create", {"name": "Alpha", "slug": "alpha-health", "idempotency_key": "00000000-0000-4000-8000-health-a"})
-    archived_env = _mcp(home, "strategy.create", {"name": "Bravo", "slug": "bravo-health", "status": "archived", "idempotency_key": "00000000-0000-4000-8000-health-b"})
+    active_env = _mcp(home, "strategy.upsert", {"name": "Alpha", "slug": "alpha-health", "idempotency_key": "00000000-0000-4000-8000-health-a"})
+    archived_env = _mcp(home, "strategy.upsert", {"name": "Bravo", "slug": "bravo-health", "status": "archived", "idempotency_key": "00000000-0000-4000-8000-health-b"})
     assert active_env.ok and archived_env.ok
     active = active_env.data["id"]
     archived = archived_env.data["id"]
@@ -132,7 +132,7 @@ def test_strategy_health_surfaces_process_signals_and_filters(home):
 
 
 def test_strategy_health_repeated_overrides_requires_two(home):
-    active_env = _mcp(home, "strategy.create", {"name": "Charlie", "slug": "charlie-health", "idempotency_key": "00000000-0000-4000-8000-health-c"})
+    active_env = _mcp(home, "strategy.upsert", {"name": "Charlie", "slug": "charlie-health", "idempotency_key": "00000000-0000-4000-8000-health-c"})
     assert active_env.ok
     active = active_env.data["id"]
     conn = sqlite3.connect(db_path(home))
@@ -182,7 +182,7 @@ def _seed_strategies(home, count: int, *, ns: str = "a") -> list[str]:
 
     ids: list[str] = []
     for i in range(count):
-        env = _mcp(home, "strategy.create", {
+        env = _mcp(home, "strategy.upsert", {
             "name": f"Fan {ns} {i}", "slug": f"fan-{ns}-{i:03d}",
             "idempotency_key": f"00000000-0000-4000-8000-fan{ns}{i:05d}",
         })

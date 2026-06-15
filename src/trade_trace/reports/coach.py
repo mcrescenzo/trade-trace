@@ -4,8 +4,8 @@ The coach aggregates outputs from the existing reports and signal.scan
 into a single packet the agent can consult at decision time:
 
 - recurring mistake/strength tags (from report.mistakes + report.strengths)
-- calibration drift signals (placeholder until the M2 drift detector lands)
-- override-outcome counts (placeholder; ties to playbook adherence in M3)
+- calibration drift signals (recent vs older scored-forecast Brier)
+- override-outcome counts (from playbook adherence rows)
 - stale watches (from report.watchlist mode=stale)
 - sample-size warnings (from any report whose sample_size < its threshold)
 - unscored forecasts (mirror of signal.scan output)
@@ -28,6 +28,12 @@ from typing import Any
 
 from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.reports._filter_support import process_filter
+from trade_trace.reports.calibration import (
+    DEFAULT_MIN_SAMPLE,
+    _compute_metrics,
+    _load_scored_rows,
+    _ScoredRow,
+)
 from trade_trace.reports.integrity import report_calibration_integrity
 from trade_trace.reports.source_quality import report_source_quality
 from trade_trace.reports.tag_aggregates import load_mistakes_and_strengths
@@ -44,6 +50,9 @@ FORBIDDEN_PHRASES = (
 )
 """Output policy per ux0 acceptance. The coach is a calibration/journal
 substrate, never a trading recommender."""
+
+
+DRIFT_SAMPLE_FORECAST_LIMIT = 5
 
 
 _FORBIDDEN_RE = re.compile(
@@ -157,11 +166,15 @@ def report_coach(
             "scored forecasts) — review the calibration on this pattern."
         )
 
-    # Placeholder field the M3 drift detector will populate.
-    calibration_drift = {
-        "status": "not_yet_detected",
-        "note": "calibration drift signal landing with the M3 drift detector",
-    }
+    calibration_drift = _calibration_drift_panel(conn, rf)
+    if (
+        calibration_drift["status"] == "comparison_available"
+        and calibration_drift["bucket"] != "unchanged"
+    ):
+        callouts.append(
+            "calibration_drift: recent Brier differs from the older window; "
+            "inspect sample IDs."
+        )
 
     # Override-outcome panel (M4, bead fbq + Test QC 722). When a
     # decision had a playbook rule marked `overridden`, downstream
@@ -320,6 +333,80 @@ def _low_sample_context(conn: sqlite3.Connection, *, min_sample: int) -> dict[st
             "skill or pattern conclusions."
         ) if count < min_sample else None,
         "scored_forecast_ids": [r[0] for r in rows[:5]],
+    }
+
+
+def _calibration_drift_panel(
+    conn: sqlite3.Connection,
+    rf: ReportFilter,
+    *,
+    min_window_sample: int = DEFAULT_MIN_SAMPLE,
+) -> dict[str, Any]:
+    rows = _load_scored_rows(conn, rf)
+    if rf.outcome.include_late_recorded:
+        late_recorded_excluded = 0
+        included_rows = rows
+    else:
+        late_recorded_excluded = sum(1 for row in rows if row.late_recorded)
+        included_rows = [row for row in rows if not row.late_recorded]
+
+    ordered_rows = sorted(
+        included_rows,
+        key=lambda row: (row.scored_at or "", row.score_id),
+    )
+    split_at = len(ordered_rows) // 2
+    older_rows = ordered_rows[:split_at]
+    recent_rows = ordered_rows[split_at:]
+    older_window = _calibration_drift_window(older_rows)
+    recent_window = _calibration_drift_window(recent_rows)
+    enough_data = (
+        older_window["sample_size"] >= min_window_sample
+        and recent_window["sample_size"] >= min_window_sample
+    )
+
+    sample_warning = None
+    bucket = "insufficient_data"
+    brier_delta = None
+    status = "insufficient_data"
+    if enough_data:
+        older_brier = older_window["mean_brier"]
+        recent_brier = recent_window["mean_brier"]
+        brier_delta = round(recent_brier - older_brier, 6)
+        if brier_delta > 0:
+            bucket = "recent_higher_brier"
+        elif brier_delta < 0:
+            bucket = "recent_lower_brier"
+        else:
+            bucket = "unchanged"
+        status = "comparison_available"
+    else:
+        sample_warning = (
+            f"only {len(ordered_rows)} scored forecast(s); calibration drift "
+            f"comparison needs at least {min_window_sample} per window"
+        )
+
+    return {
+        "status": status,
+        "bucket": bucket,
+        "sample_size": len(ordered_rows),
+        "min_window_sample": min_window_sample,
+        "window_policy": "chronological_halves_by_score_time",
+        "ordered_by": ["forecast_scores.scored_at", "forecast_scores.id"],
+        "late_recorded_excluded": late_recorded_excluded,
+        "older_window": older_window,
+        "recent_window": recent_window,
+        "brier_delta": brier_delta,
+        "sample_warning": sample_warning,
+    }
+
+
+def _calibration_drift_window(rows: list[_ScoredRow]) -> dict[str, Any]:
+    return {
+        "sample_size": len(rows),
+        "mean_brier": _compute_metrics(rows)["brier"] if rows else None,
+        "sample_forecast_ids": [
+            row.forecast_id for row in rows[:DRIFT_SAMPLE_FORECAST_LIMIT]
+        ],
     }
 
 

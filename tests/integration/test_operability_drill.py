@@ -59,7 +59,7 @@ def _populate(home: Path) -> dict[str, int]:
         "side": "yes", "quantity": 1, "price": 0.6,
         "idempotency_key": "00000000-0000-4000-8000-bwv-d-1",
     })
-    _mcp(home, "outcome.add", {
+    _mcp(home, "resolution.add", {
         "instrument_id": inst,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",

@@ -28,6 +28,9 @@ def _isolated_log_env(tmp_path, monkeypatch):
     # `get_logger` rebuilds with the test env vars.
     import sys
 
+    existing = sys.modules.get("trade_trace.logging")
+    if existing is not None:
+        existing._CONFIGURED.clear()
     sys.modules.pop("trade_trace.logging", None)
     for name in list(logging.Logger.manager.loggerDict):
         if name.startswith("trade_trace"):
@@ -211,3 +214,79 @@ def test_drain_outbox_emits_operational_logs_end_to_end(tmp_path: Path):
     # At least the start and completion records.
     assert any("starting" in r.get("message", "") for r in drain_records), drain_records
     assert any("completed" in r.get("message", "") for r in drain_records), drain_records
+
+
+def test_core_write_tool_sites_emit_operational_logs(tmp_path: Path):
+    """Backfill coverage for journal.init, forecast.add, outcome/resolution.add,
+    and memory.retain. Log lines carry operational ids only, not free-text bodies."""
+
+    from trade_trace.mcp_server import mcp_call
+
+    home = tmp_path / "home"
+    assert mcp_call("journal.init", {"home": str(home)}, actor_id="agent:logger").ok
+    venue = mcp_call(
+        "venue.add",
+        {"home": str(home), "name": "PM", "kind": "prediction_market"},
+        actor_id="agent:logger",
+    ).data["id"]
+    inst = mcp_call(
+        "instrument.add",
+        {"home": str(home), "venue_id": venue, "asset_class": "prediction_market", "title": "X"},
+        actor_id="agent:logger",
+    ).data["id"]
+    thesis = mcp_call(
+        "thesis.add",
+        {"home": str(home), "instrument_id": inst, "side": "yes", "body": "Clean thesis body"},
+        actor_id="agent:logger",
+    ).data["id"]
+    forecast = mcp_call(
+        "forecast.add",
+        {
+            "home": str(home),
+            "thesis_id": thesis,
+            "kind": "binary",
+            "outcomes": [
+                {"outcome_label": "yes", "probability": 0.5},
+                {"outcome_label": "no", "probability": 0.5},
+            ],
+            "idempotency_key": "log-forecast",
+        },
+        actor_id="agent:logger",
+    )
+    assert forecast.ok, forecast
+    outcome = mcp_call(
+        "resolution.add",
+        {
+            "home": str(home),
+            "instrument_id": inst,
+            "resolved_at": "2026-06-01T00:00:00Z",
+            "outcome_label": "yes",
+            "status": "resolved_final",
+            "confidence": 0.99,
+            "idempotency_key": "log-resolution",
+        },
+        actor_id="agent:logger",
+    )
+    assert outcome.ok, outcome
+    memory = mcp_call(
+        "memory.retain",
+        {
+            "home": str(home),
+            "node_type": "observation",
+            "body": "Private operational body should not be logged",
+            "idempotency_key": "log-memory",
+        },
+        actor_id="agent:logger",
+    )
+    assert memory.ok, memory
+
+    records = _read_lines(_log_file(tmp_path))
+    by_tool = {record.get("tool"): record for record in records}
+    assert set(by_tool) >= {"journal.init", "forecast.add", "resolution.add", "memory.retain"}
+    assert by_tool["journal.init"]["verb"] == "init"
+    assert by_tool["forecast.add"]["record_id"] == forecast.data["id"]
+    assert by_tool["resolution.add"]["record_id"] == outcome.data["id"]
+    assert by_tool["memory.retain"]["record_id"] == memory.data["id"]
+    dumped = json.dumps(records)
+    assert "Clean thesis body" not in dumped
+    assert "Private operational body should not be logged" not in dumped

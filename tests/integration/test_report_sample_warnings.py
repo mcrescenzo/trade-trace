@@ -39,7 +39,7 @@ def _seed_decision_with_tag(home: Path, tag: str, n: int) -> None:
                 {"outcome_label": "no", "probability": 0.4},
             ],
         }).data["id"]
-        _mcp(home, "outcome.add", {
+        _mcp(home, "resolution.add", {
             "instrument_id": inst,
             "resolved_at": f"2026-06-{i + 1:02d}T00:00:00Z",
             "outcome_label": "yes", "status": "resolved_final",

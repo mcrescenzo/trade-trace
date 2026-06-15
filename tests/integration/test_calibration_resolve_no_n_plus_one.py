@@ -73,7 +73,7 @@ def _seed_one_scored_forecast(
             {"outcome_label": "no", "probability": 1.0 - p_yes},
         ],
     })
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": resolved_label, "status": "resolved_final",

@@ -184,7 +184,7 @@ def test_blind_committed_without_independence_blocks_autoscoring(home: Path):
 
     # -- Phase 1: a safe, auto-scoreable final outcome lands -----------------
     out1 = _call(
-        home, "outcome.add",
+        home, "resolution.add",
         {
             "instrument_id": inst,
             "resolved_at": "2027-02-01T00:00:00Z",
@@ -220,7 +220,7 @@ def test_blind_committed_without_independence_blocks_autoscoring(home: Path):
     # re-triggers _autoscore_pending_forecasts. Now that independence is
     # proven the forecast passes the gate and scores.
     out2 = _call(
-        home, "outcome.add",
+        home, "resolution.add",
         {
             "instrument_id": inst,
             "resolved_at": "2027-02-01T00:00:00Z",

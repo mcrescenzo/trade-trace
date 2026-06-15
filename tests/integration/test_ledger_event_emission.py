@@ -156,7 +156,7 @@ def test_outcome_add_emits_event(home):
     inst = _envelope(home, "instrument.add", {
         "venue_id": venue["data"]["id"], "asset_class": "prediction_market", "title": "X",
     })
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
@@ -183,7 +183,7 @@ def test_outcome_add_auto_scores_emits_forecast_scored(home):
             {"outcome_label": "no", "probability": 0.4},
         ],
     })
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",

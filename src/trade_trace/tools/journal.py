@@ -110,6 +110,18 @@ def _journal_init(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     finally:
         db.close()
 
+    from trade_trace.logging import get_logger
+
+    get_logger("trade_trace.tools.journal").info(
+        "journal initialized",
+        extra={
+            "actor": ctx.actor_id,
+            "tool": ctx.tool,
+            "subject": "journal",
+            "verb": "init",
+            "record_id": str(home),
+        },
+    )
     return {
         "home": str(home),
         "db_path": str(path),

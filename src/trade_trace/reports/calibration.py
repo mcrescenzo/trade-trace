@@ -55,6 +55,7 @@ class _ScoredRow:
     y: int  # 0 or 1
     late_recorded: bool
     baseline_probability: float | None = None
+    scored_at: str | None = None
 
 
 def report_calibration(
@@ -536,6 +537,7 @@ def _materialize_scored_row(
     yes_label: str | None,
     outcome_label: str | None,
     baseline_probability: float | None = None,
+    scored_at: str | None = None,
     canonical_probability: Any = _UNSET,
     outcome_rows: list[tuple[Any, Any]] | None = None,
 ) -> _ScoredRow | None:
@@ -571,6 +573,7 @@ def _materialize_scored_row(
         y=y,
         late_recorded=late,
         baseline_probability=baseline_probability,
+        scored_at=scored_at,
     )
 
 
@@ -587,7 +590,7 @@ def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_Score
     # added to the SELECT so the common case resolves with zero extra queries.
     sql = f"""
         SELECT fs.id, fs.forecast_id, fs.outcome_id, fs.score, fs.metadata_json,
-               f.yes_label, f.probability,
+               f.yes_label, f.probability, fs.scored_at,
                o.outcome_label
         FROM forecast_scores fs
         JOIN forecasts f ON f.id = fs.forecast_id
@@ -603,7 +606,10 @@ def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_Score
         conn, {row[1] for row in fetched},
     )
     rows: list[_ScoredRow] = []
-    for score_id, forecast_id, outcome_id, _score, metadata_json, yes_label, canonical_probability, outcome_label in fetched:
+    for (
+        score_id, forecast_id, outcome_id, _score, metadata_json,
+        yes_label, canonical_probability, scored_at, outcome_label,
+    ) in fetched:
         materialized = _materialize_scored_row(
             conn,
             score_id=score_id,
@@ -612,6 +618,7 @@ def _load_scored_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[_Score
             metadata_json=metadata_json,
             yes_label=yes_label,
             outcome_label=outcome_label,
+            scored_at=scored_at,
             canonical_probability=canonical_probability,
             outcome_rows=outcomes_by_forecast.get(forecast_id, []),
         )

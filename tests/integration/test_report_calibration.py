@@ -61,7 +61,7 @@ def _seed_one_scored_forecast(
             {"outcome_label": "no", "probability": 1.0 - p_yes},
         ],
     })
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": resolved_label, "status": "resolved_final",
@@ -162,7 +162,7 @@ def test_late_recorded_excluded_by_default(home):
         "instrument_id": inst["data"]["id"], "side": "yes", "body": "...",
     })
     # outcome FIRST → forecast is late
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
@@ -193,7 +193,7 @@ def test_late_recorded_included_on_opt_in(home):
     thesis = _envelope(home, "thesis.add", {
         "instrument_id": inst["data"]["id"], "side": "yes", "body": "...",
     })
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
@@ -303,7 +303,7 @@ def _seed_scored_forecast_for_actor(
             {"outcome_label": "no", "probability": 1.0 - p_yes},
         ],
     }, actor_id=actor_id).model_dump(mode="json", exclude_none=True)
-    mcp_call("outcome.add", {
+    mcp_call("resolution.add", {
         "home": str(home), "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",

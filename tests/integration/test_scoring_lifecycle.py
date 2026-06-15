@@ -97,7 +97,7 @@ def test_transition_pending_to_scored(home):
             {"outcome_label": "no", "probability": 0.4},
         ],
     })
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
@@ -132,7 +132,7 @@ def test_transition_pending_to_failed_yes_label_ambiguous(home):
             {"outcome_label": "green", "probability": 0.4},
         ],
     })
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "purple",  # neither label matches → both heuristics fail
@@ -164,7 +164,7 @@ def test_transition_pending_to_failed_label_mismatch(home):
             {"outcome_label": "no", "probability": 0.4},
         ],
     })
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "maybe",  # neither yes nor no
@@ -213,7 +213,7 @@ def test_transition_pending_to_failed_yes_label_ambiguous_writes_score_row(home)
     forecast_id = f["data"]["id"]
     # Resolve with a BINARY label so is_auto_scoreable_final() is True and
     # the autoscorer actually runs (yet yes_norm stays unresolvable).
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
@@ -284,7 +284,7 @@ def test_transition_pending_to_failed_label_mismatch_writes_score_row(home):
         db.close()
 
     # Resolve with a BINARY label ('yes') that is NOT in {red, blue}.
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
@@ -395,7 +395,7 @@ def test_legacy_null_outcome_label_scores_yes_label_ambiguous(home):
     # Corrupt one outcome label to NULL on disk to reach the legacy guard.
     _null_one_forecast_outcome_label(home, forecast_id)
 
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
@@ -492,7 +492,7 @@ def test_superseded_forecast_not_autoscored_when_outcome_lands(home):
     replacement_id = replacement["data"]["id"]
     assert replacement_id != prior_id
 
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
@@ -558,7 +558,7 @@ def test_preexisting_superseded_forecast_score_excluded_from_calibration(home):
     })
     assert replacement["ok"] is True
 
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
@@ -616,7 +616,7 @@ def test_non_resolved_final_does_not_autoscore(home, status):
             {"outcome_label": "no", "probability": 0.5},
         ],
     })
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
@@ -654,7 +654,7 @@ def test_yes_label_heuristic_static_matches(home, labels, yes_norm):
             {"outcome_label": labels[1][0], "probability": labels[1][1]},
         ],
     })
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": labels[0][0],  # resolved to whichever is YES-side
@@ -692,7 +692,7 @@ def test_outcome_supersession_does_not_retroactively_double_score(home):
             {"outcome_label": "no", "probability": 0.4},
         ],
     })
-    first = _envelope(home, "outcome.add", {
+    first = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
@@ -705,7 +705,7 @@ def test_outcome_supersession_does_not_retroactively_double_score(home):
 
     # Simulate a correction: a NEW resolved_final outcome (different label)
     # supersedes the prior one via a supersedes edge.
-    second = _envelope(home, "outcome.add", {
+    second = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "no",
@@ -768,7 +768,7 @@ def test_autoscore_does_not_double_fire_for_same_outcome(home):
             {"outcome_label": "no", "probability": 0.4},
         ],
     })
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
@@ -817,7 +817,7 @@ def test_late_forecast_against_existing_resolved_final_autoscores_with_flag(home
 
     instr_id, thesis_id = _setup_venue_instr_thesis(home)
     # Resolution happens FIRST — no forecast yet.
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes",
@@ -1059,7 +1059,7 @@ def test_categorical_kind_rejected_and_not_auto_scored(home):
     assert f["ok"] is False
     assert f["error"]["code"] == "VALIDATION_ERROR"
 
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": instr_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "a",

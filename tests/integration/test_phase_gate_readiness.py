@@ -84,7 +84,7 @@ def _seed_resolved_forecast(
     )
     _env(
         home,
-        "outcome.add",
+        "resolution.add",
         {
             "instrument_id": inst,
             "resolved_at": "2027-01-12T00:00:00Z",

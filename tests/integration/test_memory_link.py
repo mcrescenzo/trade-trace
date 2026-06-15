@@ -228,7 +228,7 @@ def _seed_playbook_version(home: Path) -> str:
     """Create a playbook + a version via propose_version (which requires
     a provenance reflection node) and return the version id."""
 
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "40dz-fixture", "description": "fixture playbook",
         "idempotency_key": "40dz-playbook-create",
     })

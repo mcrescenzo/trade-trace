@@ -72,7 +72,7 @@ def _seed_scored_forecasts(
                 {"outcome_label": "no", "probability": 1.0 - p},
             ],
         })
-        _envelope_dict(home, "outcome.add", {
+        _envelope_dict(home, "resolution.add", {
             "instrument_id": inst["data"]["id"],
             "resolved_at": f"2026-06-{i + 1:02d}T00:00:00Z",
             "outcome_label": "yes", "status": "resolved_final",

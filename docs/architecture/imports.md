@@ -40,11 +40,11 @@ Required fields:
 
 - `tool`: the canonical MCP tool name for an import-ready writer. Current
   allowlist: `venue.add`, `instrument.add`, `snapshot.add`, `thesis.add`,
-  `forecast.add`, `forecast.supersede`, `decision.add`, `outcome.add`,
-  `resolve.record`, `source.add`, `source.attach_to_thesis`,
+  `forecast.add`, `forecast.supersede`, `decision.add`, `resolution.add`,
+  `outcome.add`, `resolve.record`, `source.add`, `source.attach_to_thesis`,
   `source.attach_to_decision`, `source.attach_to_forecast`,
-  `playbook.create`, `playbook.propose_version`, `strategy.create`,
-  `strategy.update`. Recursive import tools, read/report/admin/journal
+  `playbook.upsert`, `playbook.create`, `playbook.propose_version`,
+  `strategy.upsert`, `strategy.create`, `strategy.update`. Recursive import tools, read/report/admin/journal
   tools, and other non-allowlisted tools are rejected with
   `VALIDATION_ERROR`.
 - `args`: the tool's args object, identical to the in-process call.

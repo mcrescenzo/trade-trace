@@ -14,6 +14,15 @@ from pathlib import Path
 
 import pytest
 
+from tests._direct_sql_builders import (
+    insert_forecast,
+    insert_forecast_outcome,
+    insert_forecast_score,
+    insert_instrument,
+    insert_outcome,
+    insert_thesis,
+    insert_venue,
+)
 from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
@@ -32,6 +41,64 @@ def home(tmp_path):
     env = mcp_call("journal.init", {"home": str(h)})
     assert env.model_dump(mode="json")["ok"] is True
     return h
+
+
+def _seed_calibration_drift_case(home: Path) -> None:
+    """Seed 20 older low-Brier rows followed by 20 recent high-Brier rows."""
+
+    with sqlite3.connect(db_path(home)) as conn:
+        insert_venue(conn, venue_id="v_drift", name="PM drift", kind="prediction_market")
+        insert_instrument(
+            conn,
+            instrument_id="i_drift",
+            venue_id="v_drift",
+            title="Drift Case",
+        )
+        insert_thesis(conn, thesis_id="t_drift", instrument_id="i_drift")
+        for idx in range(40):
+            forecast_id = f"f_drift_{idx:02d}"
+            outcome_id = f"o_drift_{idx:02d}"
+            score_id = f"fs_drift_{idx:02d}"
+            resolves_yes = idx < 20
+            outcome_label = "yes" if resolves_yes else "no"
+            y = 1 if resolves_yes else 0
+            p_yes = 0.9
+            insert_forecast(
+                conn,
+                forecast_id=forecast_id,
+                thesis_id="t_drift",
+                created_at=f"2026-05-01T00:{idx:02d}:00Z",
+            )
+            insert_forecast_outcome(
+                conn,
+                fo_id=f"fo_drift_yes_{idx:02d}",
+                forecast_id=forecast_id,
+                outcome_label="yes",
+                probability=p_yes,
+            )
+            insert_forecast_outcome(
+                conn,
+                fo_id=f"fo_drift_no_{idx:02d}",
+                forecast_id=forecast_id,
+                outcome_label="no",
+                probability=1.0 - p_yes,
+            )
+            insert_outcome(
+                conn,
+                outcome_id=outcome_id,
+                instrument_id="i_drift",
+                resolved_at=f"2026-06-01T00:{idx:02d}:00Z",
+                outcome_label=outcome_label,
+            )
+            insert_forecast_score(
+                conn,
+                fs_id=score_id,
+                forecast_id=forecast_id,
+                outcome_id=outcome_id,
+                score=(p_yes - y) ** 2,
+                scored_at=f"2026-07-01T00:{idx:02d}:00Z",
+            )
+        conn.commit()
 
 
 # -- registration --------------------------------------------------------
@@ -56,6 +123,31 @@ def test_coach_empty_db_returns_advisory_packet(home):
     ):
         assert key in data, f"missing coach packet field {key!r}"
     assert data["is_advisory_only"] is True
+    assert data["calibration_drift"]["status"] == "insufficient_data"
+    assert data["calibration_drift"]["brier_delta"] is None
+
+
+def test_coach_calibration_drift_compares_recent_to_older_brier(home):
+    _seed_calibration_drift_case(home)
+
+    env = _envelope(home, "report.coach", {})
+    assert env["ok"] is True
+    data = env["data"]
+    panel = data["calibration_drift"]
+    assert panel["status"] == "comparison_available"
+    assert panel["bucket"] == "recent_higher_brier"
+    assert panel["sample_size"] == 40
+    assert panel["min_window_sample"] == 20
+    assert panel["older_window"]["sample_size"] == 20
+    assert panel["older_window"]["mean_brier"] == pytest.approx(0.01)
+    assert panel["older_window"]["sample_forecast_ids"] == [
+        "f_drift_00", "f_drift_01", "f_drift_02", "f_drift_03", "f_drift_04",
+    ]
+    assert panel["recent_window"]["sample_size"] == 20
+    assert panel["recent_window"]["mean_brier"] == pytest.approx(0.81)
+    assert panel["brier_delta"] == pytest.approx(0.8)
+    assert panel["sample_warning"] is None
+    assert any("calibration_drift" in callout for callout in data["callouts"])
 
 
 # -- forbidden-phrase scan --------------------------------------------
@@ -101,7 +193,7 @@ def test_coach_packet_with_data_remains_clean(home):
         "type": "paper_enter", "side": "yes", "quantity": 100, "price": 0.6,
         "tags": ["pattern-a"],
     })
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
@@ -304,7 +396,7 @@ def test_coach_low_sample_separates_caveat_from_process_actions(home):
         "instrument_id": inst["data"]["id"], "type": "watch",
         "reason": "needs a dated revisit",
     })
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
@@ -378,7 +470,7 @@ def test_coach_runs_tag_brier_join_exactly_once(home):
         "type": "paper_enter", "side": "yes", "quantity": 100, "price": 0.6,
         "tags": ["pattern-a"],
     })
-    _seed(home, "outcome.add", {
+    _seed(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",

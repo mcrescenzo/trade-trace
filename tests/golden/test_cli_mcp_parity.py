@@ -145,21 +145,21 @@ def test_parity_invariant_violation_binary_forecast(home):
 # transport hints so the only thing being asserted is contract surface.
 
 
-def test_parity_strategy_create(home):
-    mcp = _mcp(home, "strategy.create", {
+def test_parity_strategy_upsert(home):
+    mcp = _mcp(home, "strategy.upsert", {
         "name": "Parity Strategy",
         "slug": "parity-strategy",
         "idempotency_key": "00000000-0000-4000-8000-strat-par-mcp1",
     })
     rc, cli = _cli(home, [
-        "strategy", "create",
+        "strategy", "upsert",
         "--name", "Parity Strategy CLI",
         "--slug", "parity-strategy-cli",
         "--idempotency-key", "00000000-0000-4000-8000-strat-par-cli1",
     ])
     assert rc == 0
-    assert mcp["meta"]["tool"] == cli["meta"]["tool"] == "strategy.create"
-    # Different slugs because strategy.create is uniqueness-constrained, but the
+    assert mcp["meta"]["tool"] == cli["meta"]["tool"] == "strategy.upsert"
+    # Different slugs because strategy.upsert is uniqueness-constrained, but the
     # envelope shape must match: same data keys and meta tool.
     assert set(mcp["data"]) == set(cli["data"])
 

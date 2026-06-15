@@ -191,7 +191,7 @@ def _seed_scored_forecast_with_strategy(home: Path, *, strategy_slug: str) -> tu
             {"outcome_label": "no", "probability": 0.4},
         ],
     })["data"]["id"]
-    _env(home, "outcome.add", {
+    _env(home, "resolution.add", {
         "instrument_id": inst, "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final", "confidence": 0.99,
     })
@@ -495,7 +495,7 @@ def _seed_scored_forecast_resolved_at(
             {"outcome_label": "no", "probability": round(1.0 - probability, 6)},
         ],
     })["data"]["id"]
-    _env(home, "outcome.add", {
+    _env(home, "resolution.add", {
         "instrument_id": inst, "resolved_at": resolved_at,
         "outcome_label": outcome_label, "status": "resolved_final", "confidence": 0.99,
     })

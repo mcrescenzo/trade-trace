@@ -640,7 +640,7 @@ def test_outcome_add_creates_row(home):
         "asset_class": "prediction_market",
         "title": "Test",
     })
-    env = _envelope(home, "outcome.add", {
+    env = _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "YES",
@@ -668,7 +668,7 @@ def test_resolved_final_does_not_close_open_paper_position(home):
     assert decision["ok"] is True, decision
     position_id = decision["data"]["position_id"]
 
-    outcome = _envelope(home, "outcome.add", {
+    outcome = _envelope(home, "resolution.add", {
         "instrument_id": inst_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "YES",
@@ -842,7 +842,7 @@ def test_outcome_add_rejects_whitespace_only_label(home):
     # trade-trace-1k5d: a whitespace-only outcome_label must be rejected at
     # write time rather than persisted as a meaningless append-only row.
     inst_id = _seed_instrument(home)
-    env = _envelope(home, "outcome.add", {
+    env = _envelope(home, "resolution.add", {
         "instrument_id": inst_id,
         "resolved_at": "2026-06-01T00:00:00Z",
         "outcome_label": "   ",
@@ -858,7 +858,7 @@ def test_outcome_add_strips_padded_label(home):
     # persisted, so the stored label is clean and a resolved_final binary
     # outcome still auto-scores.
     inst_id = _seed_instrument(home)
-    env = _envelope(home, "outcome.add", {
+    env = _envelope(home, "resolution.add", {
         "instrument_id": inst_id,
         "resolved_at": "2026-06-01T00:00:00Z",
         "outcome_label": "  yes  ",
@@ -1033,7 +1033,7 @@ def test_manual_end_to_end_auto_scores(home):
         "quantity": 100,
         "price": 0.37,
     })
-    outcome = _envelope(home, "outcome.add", {
+    outcome = _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "YES",
@@ -1075,7 +1075,7 @@ def test_outcome_provisional_does_not_autoscore(home):
             {"outcome_label": "NO", "probability": 0.5},
         ],
     })
-    out = _envelope(home, "outcome.add", {
+    out = _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "YES",
@@ -1214,7 +1214,7 @@ def test_forecast_supersede_auto_scores_against_existing_resolved_final(home):
     })
 
     # Resolve the outcome on the original forecast first.
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": inst_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "YES",
@@ -1261,7 +1261,7 @@ def test_forecast_supersede_event_order_with_late_auto_score(home):
             {"outcome_label": "NO", "probability": 0.5},
         ],
     })
-    _envelope(home, "outcome.add", {
+    _envelope(home, "resolution.add", {
         "instrument_id": inst_id,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "YES",

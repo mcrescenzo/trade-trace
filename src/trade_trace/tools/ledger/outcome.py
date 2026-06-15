@@ -138,6 +138,18 @@ def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     (outcome_id,),
                 ).fetchone()
                 row_instrument_id, row_resolved_at, row_label, row_status, row_confidence, row_created_at = row
+                from trade_trace.logging import get_logger
+
+                get_logger("trade_trace.tools.ledger.outcome").info(
+                    "outcome add idempotent replay",
+                    extra={
+                        "actor": ctx.actor_id,
+                        "tool": ctx.tool,
+                        "subject": "outcome",
+                        "verb": "add",
+                        "record_id": outcome_id,
+                    },
+                )
                 return {"id": outcome_id, "instrument_id": row_instrument_id,
                         "status": row_status, "resolved_at": row_resolved_at,
                         "auto_scored_forecasts": [],
@@ -191,6 +203,19 @@ def _outcome_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                         uow, score, actor_id=ctx.actor_id, ctx=ctx,
                         scored_at=created_at,
                     )
+    from trade_trace.logging import get_logger
+
+    get_logger("trade_trace.tools.ledger.outcome").info(
+        "outcome added",
+        extra={
+            "actor": ctx.actor_id,
+            "tool": ctx.tool,
+            "subject": "outcome",
+            "verb": "add",
+            "record_id": outcome_id,
+            "auto_scored_count": len(auto_scored),
+        },
+    )
     return {"id": outcome_id, "instrument_id": instrument_id, "status": status,
             "resolved_at": resolved_at, "auto_scored_forecasts": auto_scored,
             "auto_scoreable": _is_auto_scoreable_final(status=status, confidence=args.get("confidence"), outcome_label=outcome_label),
@@ -281,14 +306,8 @@ def _resolve_pending(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 def register_outcome_tools(registry: ToolRegistry) -> None:
     registry.register(
-        "outcome.add", _outcome_add, is_write=True,
+        "resolution.add", _outcome_add, is_write=True,
         json_schema=_OUTCOME_ADD_SCHEMA,
-        **examples_for("outcome.add"),
-    )
-    # resolve.record is an alias for outcome.add (PRD §4.4).
-    registry.register(
-        "resolve.record", _outcome_add, is_write=True,
-        json_schema=_OUTCOME_ADD_SCHEMA,
-        **examples_for("outcome.add"),
+        **examples_for("resolution.add"),
     )
     registry.register("resolve.pending", _resolve_pending)

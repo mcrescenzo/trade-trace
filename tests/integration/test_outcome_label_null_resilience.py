@@ -54,7 +54,7 @@ def _seed_scored_binary(home: Path) -> dict[str, str]:
         "forecast_id": forecast["data"]["id"], "snapshot_id": snap["data"]["id"],
         "type": "skip", "reason": "diagnostic fixture",
     })
-    outcome = _envelope(home, "outcome.add", {
+    outcome = _envelope(home, "resolution.add", {
         "instrument_id": inst["data"]["id"],
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",

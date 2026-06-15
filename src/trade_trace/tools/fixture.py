@@ -132,14 +132,14 @@ _ID_PREFIX_BY_TOOL: dict[str, str] = {
     "thesis.add": "th",
     "forecast.add": "fc",
     "decision.add": "dec",
-    "outcome.add": "out",
+    "resolution.add": "out",
     "source.add": "src",
     "memory.retain": "mem",
     "memory.reflect": "mem",
     "memory.link": "edg",
     "market.bind": "mkt",
-    "strategy.create": "strat",
-    "playbook.create": "pbk",
+    "strategy.upsert": "strat",
+    "playbook.upsert": "pbk",
     "playbook.propose_version": "pbv",
     "playbook.record_adherence": "adh",
     "source.attach_to_thesis": "edg",
@@ -219,11 +219,11 @@ def _seed_mvp_eval(*, home: str | None, registry: Any) -> dict[str, int]:
     }, suffix="venue-2").get("id")
     counts["venues"] = 2
 
-    strat_active = _call(home, "strategy.create", {
+    strat_active = _call(home, "strategy.upsert", {
         "name": "Earnings momentum", "slug": "earnings-momentum",
         "hypothesis": "Post-earnings drift on AI demand surprises.",
     }, suffix="strat-active").get("id")
-    strat_archived = _call(home, "strategy.create", {
+    strat_archived = _call(home, "strategy.upsert", {
         "name": "Retired liquidity edge", "slug": "retired-liquidity",
         "hypothesis": "Pre-resolution mispricing on thin markets.",
         "status": "active",
@@ -285,7 +285,7 @@ def _seed_mvp_eval(*, home: str | None, registry: Any) -> dict[str, int]:
         outcome_now = _ANCHOR + timedelta(days=7 + i)
         token2 = CLOCK_OVERRIDE.set(outcome_now)
         try:
-            _call(home, "outcome.add", {
+            _call(home, "resolution.add", {
                 "instrument_id": instrument_for_thesis[thesis],
                 "resolved_at": (_ANCHOR + timedelta(days=14 + i)).isoformat(),
                 "outcome_label": "yes" if i % 2 == 0 else "no",
@@ -304,7 +304,7 @@ def _seed_mvp_eval(*, home: str | None, registry: Any) -> dict[str, int]:
         ("resolved_provisional", "prov"),
         ("void", "void"),
     ):
-        _call(home, "outcome.add", {
+        _call(home, "resolution.add", {
             "instrument_id": instruments[5],
             "resolved_at": (_ANCHOR + timedelta(days=30)).isoformat(),
             "outcome_label": "yes", "status": status,
@@ -396,7 +396,7 @@ def _seed_mvp_eval(*, home: str | None, registry: Any) -> dict[str, int]:
     }, suffix="attach-sensitive")
 
     # 1 playbook with 1 version + 1 rule + adherence on a decision.
-    playbook = _call(home, "playbook.create", {
+    playbook = _call(home, "playbook.upsert", {
         "name": "Fixture Playbook", "description": "Eval-harness playbook.",
     }, suffix="playbook-1").get("id")
     counts["playbooks"] = 1
@@ -542,7 +542,7 @@ def _seed_mvp_eval_rich_overlay(
     finally:
         db.close()
 
-    rich_strategy = _call(home, "strategy.create", {
+    rich_strategy = _call(home, "strategy.upsert", {
         "name": "Rich-only single", "slug": "rich-only-n1",
         "hypothesis": "Low-N group used to exercise sample-warning paths.",
     }, suffix="rich-strategy").get("id")
@@ -943,7 +943,7 @@ def _build_mvp_eval_pm_loop(
     venue = _call(ctx.home, "venue.add", {
         "name": "Polymarket Trading", "kind": "prediction_market",
     }, suffix="pm-trading-venue").get("id")
-    strat = _call(ctx.home, "strategy.create", {
+    strat = _call(ctx.home, "strategy.upsert", {
         "name": "PM fixture trading loop",
         "slug": "pm-fixture-trading-loop",
         "hypothesis": "Local-only Polymarket binary markets can be evaluated via disciplined forecasts and paper decisions.",

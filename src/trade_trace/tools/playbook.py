@@ -769,10 +769,10 @@ def register_playbook_tools(registry: ToolRegistry) -> None:
         return {"example_minimal": ex.get("minimal"), "example_rich": ex.get("rich")}
 
     registry.register(
-        "playbook.create",
+        "playbook.upsert",
         _playbook_create,
         is_write=True,
-        **_examples_for("playbook.create"),
+        **_examples_for("playbook.upsert"),
         description=(
             "Register a named playbook. `name` is unique; duplicate "
             "raises VALIDATION_ERROR with details.field='name'. Optional "

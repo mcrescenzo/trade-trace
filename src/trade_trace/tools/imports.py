@@ -135,6 +135,11 @@ _DIAGNOSTIC_EVENT_TOOLS = {
     # live). On restore, regenerate on demand by re-running market.refresh.
     # Bucket D per jsonl-replay-taxonomy.md (AX-068).
     "market.refreshed",
+    # Historical events from the cut autonomous run/incident cluster
+    # (trade-trace-irgs). No write surface remains, so restores skip them as
+    # archival audit facts rather than failing or re-dispatching.
+    "autonomous_run.recorded",
+    "autonomous_incident.recorded",
 }
 
 _LEGACY_HARD_BREAK_CONTRACT_VERSIONS = {"0.0.1", "0.0.1rc3", "0.0.1-rc3"}
@@ -168,6 +173,7 @@ _IMPORT_READY_WRITERS = {
     "forecast.supersede",
     "forecast.anchor_to_snapshot",
     "decision.add",
+    "resolution.add",
     "outcome.add",
     "resolve.record",
     "source.add",
@@ -175,16 +181,16 @@ _IMPORT_READY_WRITERS = {
     "source.attach_to_decision",
     "source.attach_to_forecast",
     "source.attach_to_memory_node",
+    "playbook.upsert",
     "playbook.create",
     "playbook.propose_version",
+    "strategy.upsert",
     "strategy.create",
     "strategy.update",
     "memory.retain",
     "memory.reflect",
     "memory.link",
     "market.bind",
-    "autonomous_run.record",
-    "autonomous_incident.record",
 }
 
 
@@ -309,7 +315,13 @@ def _parse_rows(args: dict[str, Any], *, max_errors: int) -> tuple[list[ParsedRo
                 except ValidationError as exc:
                     truncated = not _add_error(errors, max_errors, {"code": str(ErrorCode.VALIDATION_ERROR), "message": "invalid import line shape", "details": {"file": str(file), "line": lineno, "validation_errors": exc.errors()}}) or truncated
                     continue
-                rows.append(ParsedRow(str(file), lineno, line.tool, dict(line.args), contract_version if isinstance(contract_version, str) else None))
+                rows.append(ParsedRow(
+                    str(file),
+                    lineno,
+                    line.tool,
+                    strip_transport_keys(dict(line.args)),
+                    contract_version if isinstance(contract_version, str) else None,
+                ))
     return rows, errors, truncated
 
 
@@ -372,7 +384,7 @@ def _strip_immutable_replay_keys(tool: str, args: dict[str, Any]) -> dict[str, A
 def _dispatch_row(row: ParsedRow, home: str | None, actor_id: str):
     from trade_trace.core import dispatch
 
-    row_args = dict(row.args)
+    row_args = strip_transport_keys(dict(row.args))
     if home is not None:
         row_args.setdefault("home", home)
     # Translate event-type aliases (trade-trace-ths0). The JSONL `tool`

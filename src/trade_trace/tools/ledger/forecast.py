@@ -387,6 +387,18 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 row = uow.conn.execute(
                     "SELECT created_at FROM forecasts WHERE id = ?", (forecast_id,)
                 ).fetchone()
+                from trade_trace.logging import get_logger
+
+                get_logger("trade_trace.tools.ledger.forecast").info(
+                    "forecast add idempotent replay",
+                    extra={
+                        "actor": ctx.actor_id,
+                        "tool": ctx.tool,
+                        "subject": "forecast",
+                        "verb": "add",
+                        "record_id": forecast_id,
+                    },
+                )
                 return {"id": forecast_id, "thesis_id": thesis_id, "kind": kind,
                         "scoring_state": "pending", "created_at": row[0]}
 
@@ -427,6 +439,8 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 ).fetchone() is None:
                     raise ToolError(ErrorCode.NOT_FOUND, "instrument_id not found", details={"instrument_id": instrument_id})
                 reject_if_contains_secrets(body, field="rationale_body")
+                for field in ("falsification_criteria", "exit_triggers", "risk_notes"):
+                    reject_if_contains_secrets(args.get(field), field=field)
                 validate_confidence_label(args.get("confidence_label"))
                 thesis_id = args.get("thesis_id") or new_id("th")
                 thesis_valid_from = normalize_timestamp(args, "valid_from") or created_at
@@ -551,6 +565,19 @@ def _forecast_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         result["auto_scored"] = auto_scored
     if 'anchor_payload' in locals() and anchor_payload is not None:
         result["snapshot_anchor"] = anchor_payload
+    from trade_trace.logging import get_logger
+
+    get_logger("trade_trace.tools.ledger.forecast").info(
+        "forecast added",
+        extra={
+            "actor": ctx.actor_id,
+            "tool": ctx.tool,
+            "subject": "forecast",
+            "verb": "add",
+            "record_id": forecast_id,
+            "auto_scored": auto_scored is not None,
+        },
+    )
     return result
 
 

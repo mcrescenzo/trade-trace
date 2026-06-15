@@ -35,7 +35,7 @@ def _seeded_home(tmp_path: Path) -> Path:
     assert init.ok
     # A handful of writes so the DB has content the read paths can hit.
     mcp_call("memory.retain", {"home": str(home), "node_type": "observation", "body": "rd-probe", "idempotency_key": "rd-1"}, actor_id="agent:default")
-    mcp_call("strategy.create", {"home": str(home), "name": "rd-strat", "slug": "rd-strat", "description": "d", "idempotency_key": "rd-2"}, actor_id="agent:default")
+    mcp_call("strategy.upsert", {"home": str(home), "name": "rd-strat", "slug": "rd-strat", "description": "d", "idempotency_key": "rd-2"}, actor_id="agent:default")
     return home
 
 

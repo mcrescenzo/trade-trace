@@ -88,7 +88,7 @@ def _seed_rule_node(
 def test_playbook_tools_registered():
     names = default_registry().names()
     for tool in (
-        "playbook.create", "playbook.list", "playbook.show",
+        "playbook.upsert", "playbook.list", "playbook.show",
         "playbook.list_versions", "playbook.propose_version",
         "playbook.adherence", "playbook.record_adherence",
         "report.playbook_adherence",
@@ -100,7 +100,7 @@ def test_playbook_tools_registered():
 
 
 def test_playbook_create_happy_path(home):
-    env = _mcp(home, "playbook.create", {
+    env = _mcp(home, "playbook.upsert", {
         "name": "Risk Management",
         "description": "Spread + liquidity guardrails.",
         "idempotency_key": "00000000-0000-4000-8000-pb-create-1",
@@ -114,9 +114,9 @@ def test_playbook_create_duplicate_name_rejected(home):
     base = {
         "name": "Shared", "idempotency_key": "00000000-0000-4000-8000-pb-dup1",
     }
-    first = _mcp(home, "playbook.create", base)
+    first = _mcp(home, "playbook.upsert", base)
     assert first.ok
-    second = _mcp(home, "playbook.create", {
+    second = _mcp(home, "playbook.upsert", {
         **base, "idempotency_key": "00000000-0000-4000-8000-pb-dup2",
     })
     assert second.ok is False
@@ -128,7 +128,7 @@ def test_playbook_create_duplicate_name_rejected(home):
 
 
 def test_propose_version_requires_reflection_node(home):
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-Ref", "idempotency_key": "00000000-0000-4000-8000-pb-ref01",
     }).data["id"]
     ref = _seed_reflection(home, idem_suffix="propose1")
@@ -144,7 +144,7 @@ def test_propose_version_requires_reflection_node(home):
 
 
 def test_propose_version_rejects_non_reflection_node(home):
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-BadRef", "idempotency_key": "00000000-0000-4000-8000-pb-br-1",
     }).data["id"]
     # Use a playbook_rule node instead of a reflection.
@@ -174,7 +174,7 @@ def test_propose_version_endpoint_errors_are_exact_and_ordered(home):
         "playbook_id": "pbk_missing_for_propose",
     }
 
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-MissingRef", "idempotency_key": "00000000-0000-4000-8000-pb-mr-1",
     }).data["id"]
     missing_ref = _mcp(home, "playbook.propose_version", {
@@ -192,7 +192,7 @@ def test_propose_version_endpoint_errors_are_exact_and_ordered(home):
 
 
 def test_propose_version_rejects_rules_json_without_creating_bare_version(home):
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-RulesJson", "idempotency_key": "00000000-0000-4000-8000-pb-rj-1",
     }).data["id"]
     ref = _seed_reflection(home, idem_suffix="rulesjson")
@@ -237,7 +237,7 @@ def test_propose_version_rejects_unsupported_extra_fields(home):
 
 
 def test_propose_version_allows_cli_confirm_transport_controls(home):
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-Confirm", "idempotency_key": "00000000-0000-4000-8000-pb-cf-1",
     }).data["id"]
     ref = _seed_reflection(home, idem_suffix="confirm")
@@ -256,7 +256,7 @@ def test_propose_version_allows_cli_confirm_transport_controls(home):
 
 
 def test_propose_version_increments_and_links_parent(home):
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-Chain", "idempotency_key": "00000000-0000-4000-8000-pb-ch-01",
     }).data["id"]
     ref1 = _seed_reflection(home, idem_suffix="chain1")
@@ -274,7 +274,7 @@ def test_propose_version_increments_and_links_parent(home):
 
 
 def test_show_returns_version_history(home):
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-Show", "idempotency_key": "00000000-0000-4000-8000-pb-sh-01",
     }).data["id"]
     ref = _seed_reflection(home, idem_suffix="show1")
@@ -290,7 +290,7 @@ def test_show_returns_version_history(home):
 
 
 def test_show_and_list_versions_include_linked_rule_summaries_and_guidance(home):
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-RuleDiscover", "idempotency_key": "00000000-0000-4000-8000-pb-rd-pb1",
     }).data["id"]
     ref = _seed_reflection(home, idem_suffix="rd1")
@@ -324,7 +324,7 @@ def test_show_and_list_versions_include_linked_rule_summaries_and_guidance(home)
 
 
 def test_propose_version_returns_empty_rule_discoverability_on_create_and_replay(home):
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-ProposeGuidance", "idempotency_key": "00000000-0000-4000-8000-pb-pg-pb1",
     }).data["id"]
     ref = _seed_reflection(home, idem_suffix="pg1")
@@ -362,7 +362,7 @@ def adherence_setup(home):
     """One playbook, one version, one rule, one decision — enough to
     exercise every adherence status."""
 
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-Adh", "idempotency_key": "00000000-0000-4000-8000-pb-adh-1",
     }).data["id"]
     ref = _seed_reflection(home, idem_suffix="adh1")
@@ -651,7 +651,7 @@ def test_report_playbook_adherence_predicate_audit_is_read_only(home, adherence_
 
 def test_report_playbook_adherence_filter_by_playbook(home, adherence_setup):
     # Add a second playbook with its own adherence row.
-    pb2 = _mcp(home, "playbook.create", {
+    pb2 = _mcp(home, "playbook.upsert", {
         "name": "PB-Adh-2", "idempotency_key": "00000000-0000-4000-8000-pb-rep-pb2",
     }).data["id"]
     ref2 = _seed_reflection(home, idem_suffix="rep2")
@@ -694,7 +694,7 @@ def test_report_playbook_adherence_missing_playbook_id_is_not_found(home):
 
 
 def test_report_playbook_adherence_valid_empty_playbook_is_success(home):
-    playbook_id = _mcp(home, "playbook.create", {
+    playbook_id = _mcp(home, "playbook.upsert", {
         "name": "PB Empty Adherence",
         "idempotency_key": "00000000-0000-4000-8000-pb-empty-adh",
     }).data["id"]
@@ -738,11 +738,11 @@ def test_playbook_adherence_missing_playbook_error_is_exact(home):
 def test_report_playbook_adherence_filter_by_strategy(home):
     """Decisions carry strategy_id; the report filters by it."""
 
-    strat = _mcp(home, "strategy.create", {
+    strat = _mcp(home, "strategy.upsert", {
         "name": "PB-Strat", "slug": "pb-strat",
         "idempotency_key": "00000000-0000-4000-8000-pb-strat-1",
     }).data["id"]
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-FStrat",
         "idempotency_key": "00000000-0000-4000-8000-pb-fst-pb1",
     }).data["id"]
@@ -790,7 +790,7 @@ def test_playbook_adherence_wrapper_scopes_to_one_playbook(home, adherence_setup
 
 
 def test_decision_with_strategy_and_no_playbook_is_valid(home):
-    strat = _mcp(home, "strategy.create", {
+    strat = _mcp(home, "strategy.upsert", {
         "name": "Orth-S", "slug": "orth-s",
         "idempotency_key": "00000000-0000-4000-8000-pb-orth-s1",
     }).data["id"]
@@ -849,7 +849,7 @@ def test_provenance_chain_traceable(home):
     playbook_versions.provenance_reflection_node_id and the resulting
     adherence row on a later decision."""
 
-    pb = _mcp(home, "playbook.create", {
+    pb = _mcp(home, "playbook.upsert", {
         "name": "PB-Prov", "idempotency_key": "00000000-0000-4000-8000-pb-prov-1",
     }).data["id"]
     ref = _seed_reflection(home, idem_suffix="prov1")

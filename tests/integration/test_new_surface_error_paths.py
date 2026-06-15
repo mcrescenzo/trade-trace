@@ -18,7 +18,7 @@ from tests._mcp_helpers import mcp_default as _mcp
 
 
 def test_strategy_create_rejects_missing_required_fields(home):
-    env = _mcp(home, "strategy.create", {
+    env = _mcp(home, "strategy.upsert", {
         "idempotency_key": "00000000-0000-4000-8000-strat-missing-1",
     })
     assert env.ok is False, env
@@ -27,7 +27,7 @@ def test_strategy_create_rejects_missing_required_fields(home):
 
 
 def test_strategy_create_rejects_missing_slug_only(home):
-    env = _mcp(home, "strategy.create", {
+    env = _mcp(home, "strategy.upsert", {
         "name": "No Slug Test",
         "idempotency_key": "00000000-0000-4000-8000-strat-missing-2",
     })

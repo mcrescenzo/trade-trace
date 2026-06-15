@@ -119,7 +119,7 @@ def _resolve(
 ) -> None:
     """Append a resolved_final outcome; the auto-scorer scores the forecast."""
 
-    env = _envelope(home, "outcome.add", {
+    env = _envelope(home, "resolution.add", {
         "instrument_id": market_id,
         "resolved_at": resolved_at,
         "outcome_label": resolved_label,

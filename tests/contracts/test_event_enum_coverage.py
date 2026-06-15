@@ -116,7 +116,7 @@ def test_decision_created_event_emitted(home):
 
 def test_outcome_recorded_event_emitted(home):
     _venue, inst = _seed_venue_instrument(home)
-    _mcp(home, "outcome.add", {
+    _mcp(home, "resolution.add", {
         "instrument_id": inst,
         "resolved_at": "2026-05-18T16:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
@@ -141,7 +141,7 @@ def test_forecast_scored_event_emitted_on_resolution(home):
             {"outcome_label": "no", "probability": 0.4},
         ],
     })
-    _mcp(home, "outcome.add", {
+    _mcp(home, "resolution.add", {
         "instrument_id": inst,
         "resolved_at": "2026-05-18T16:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
@@ -229,7 +229,7 @@ def test_edge_created_event_emitted_by_memory_link(home):
 
 
 def test_strategy_created_event_emitted(home):
-    _mcp(home, "strategy.create", {
+    _mcp(home, "strategy.upsert", {
         "name": "Strat", "slug": "strat-event",
         "idempotency_key": "00000000-0000-4000-8000-event-stra01",
     })
@@ -237,7 +237,7 @@ def test_strategy_created_event_emitted(home):
 
 
 def test_strategy_updated_event_emitted(home):
-    sid = _mcp(home, "strategy.create", {
+    sid = _mcp(home, "strategy.upsert", {
         "name": "Strat", "slug": "strat-upd-event",
         "idempotency_key": "00000000-0000-4000-8000-event-stra02",
     }).data["id"]

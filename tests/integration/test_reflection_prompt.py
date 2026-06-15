@@ -27,7 +27,7 @@ def _seed_resolved_forecast(home: Path) -> str:
             {"outcome_label": "no", "probability": 0.4},
         ],
     })
-    outcome = _mcp(home, "outcome.add", {
+    outcome = _mcp(home, "resolution.add", {
         "instrument_id": inst,
         "resolved_at": "2026-05-22T20:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",
@@ -168,7 +168,7 @@ def test_packet_selects_forecast_scored_by_outcome_not_earliest(home):
     # Resolve the outcome. Auto-scoring should score both forecasts
     # against the resolution; each gets its own forecast_scores row
     # keyed on the same outcome_id.
-    outcome = _mcp(home, "outcome.add", {
+    outcome = _mcp(home, "resolution.add", {
         "instrument_id": inst,
         "resolved_at": "2026-05-22T20:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",

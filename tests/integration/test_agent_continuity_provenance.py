@@ -84,7 +84,7 @@ def _scored_forecast(home: Path, suffix: str, *, agent_id: str, run_id: str) -> 
         },
     )
     _ok(
-        "outcome.add",
+        "resolution.add",
         {
             **common,
             "instrument_id": instrument_id,

@@ -69,7 +69,7 @@ def populated_home(tmp_path, frozen_clock):
         "quantity": 1, "price": 0.5, "tags": ["repro-test"],
         "idempotency_key": "00000000-0000-4000-8000-rep-d-1",
     })
-    mcp_call("outcome.add", {
+    mcp_call("resolution.add", {
         "home": str(h), "instrument_id": inst,
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "resolved_final",

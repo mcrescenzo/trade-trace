@@ -53,12 +53,6 @@ SEMANTIC_KEYS: dict[str, SemanticKeySpec] = {
     "paper_fill.recorded": SemanticKeySpec(
         structural_fields=frozenset({"semantic_key", "material_hash"}),
     ),
-    "autonomous_run.recorded": SemanticKeySpec(
-        structural_fields=frozenset({"semantic_key", "material_hash"}),
-    ),
-    "autonomous_incident.recorded": SemanticKeySpec(
-        structural_fields=frozenset({"semantic_key", "material_hash"}),
-    ),
     "abstention.recorded": SemanticKeySpec(
         structural_fields=frozenset(
             {"instrument_id", "thesis_id", "considered_probability", "as_of", "run_id"}
@@ -437,12 +431,14 @@ TOOL_PRIMARY_EVENT_TYPE: dict[str, str] = {
     "decision.add":           "decision.created",
     "resolution.add":         "outcome.recorded",
     "outcome.add":            "outcome.recorded",
-    "resolve.record":         "outcome.recorded",  # alias of outcome.add
+    "resolve.record":         "outcome.recorded",  # alias of resolution.add
     "source.add":             "source.added",
     # Strategy
+    "strategy.upsert":        "strategy.created",
     "strategy.create":        "strategy.created",
     "strategy.update":        "strategy.updated",
     # Playbook
+    "playbook.upsert":            "playbook.created",
     "playbook.create":            "playbook.created",
     "playbook.propose_version":   "playbook.proposed_version",
     # decision.record_adherence emits `playbook_rule.followed` or

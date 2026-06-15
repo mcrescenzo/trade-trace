@@ -39,7 +39,7 @@ def _seed_case(home: Path, thesis_overrides: dict | None = None, forecast_overri
         CLOCK_OVERRIDE.reset(token)
     token = CLOCK_OVERRIDE.set(datetime(2026, 5, 21, 14, 0, 0, tzinfo=UTC))
     try:
-        outcome = _envelope(home, "outcome.add", {"instrument_id": inst["data"]["id"], "resolved_at": "2026-06-02T00:00:00Z", "outcome_label": "yes", "status": "resolved_final", "confidence": 0.99})
+        outcome = _envelope(home, "resolution.add", {"instrument_id": inst["data"]["id"], "resolved_at": "2026-06-02T00:00:00Z", "outcome_label": "yes", "status": "resolved_final", "confidence": 0.99})
     finally:
         CLOCK_OVERRIDE.reset(token)
     return {"instrument": inst["data"]["id"], "snapshot": snap["data"]["id"], "thesis": thesis["data"]["id"], "forecast": forecast["data"]["id"], "decision": decision["data"]["id"], "source": source["data"]["id"], "outcome": outcome["data"]["id"]}

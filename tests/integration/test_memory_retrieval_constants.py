@@ -21,8 +21,12 @@ from trade_trace.tools._helpers import CLOCK_OVERRIDE
 from trade_trace.tools.memory import (
     IMPORTANCE_BOOST_SLOPE,
     K_RRF,
+    MIN_RECALL_RANKING_CANDIDATES,
+    RECALL_RANKING_CANDIDATE_MULTIPLIER,
     SUPERSESSION_DISCOUNT,
+    _recall_candidate_limit,
     _rrf_combine,
+    _temporal_rank,
 )
 
 # -- 1. pinned constant values ------------------------------------
@@ -38,6 +42,14 @@ def test_importance_boost_slope_locked():
 
 def test_supersession_discount_locked_at_quarter():
     assert SUPERSESSION_DISCOUNT == 0.25
+
+
+def test_recall_candidate_window_constants_locked():
+    assert MIN_RECALL_RANKING_CANDIDATES == 100
+    assert RECALL_RANKING_CANDIDATE_MULTIPLIER == 10
+    assert _recall_candidate_limit(k=1, corpus_size=1000) == 100
+    assert _recall_candidate_limit(k=25, corpus_size=1000) == 250
+    assert _recall_candidate_limit(k=25, corpus_size=40) == 40
 
 
 # -- 2. importance boost at boundaries ----------------------------
@@ -112,6 +124,31 @@ def test_rrf_combine_empty_rankings_returns_empty():
     assert _rrf_combine({}) == []
     assert _rrf_combine({"bm25": []}) == []
     assert _rrf_combine({"bm25": [], "temporal": [], "graph": []}) == []
+
+
+def test_rrf_combine_limit_returns_deterministic_top_k():
+    rankings = {
+        "bm25": ["n1", "n2", "n3", "n4"],
+        "temporal": ["n4", "n2", "n3", "n1"],
+    }
+
+    limited = _rrf_combine(rankings, limit=2)
+    full = _rrf_combine(rankings)
+
+    assert limited == full[:2]
+
+
+def test_temporal_rank_limit_returns_deterministic_top_k():
+    rows = {
+        "old": {"created_at": "2026-01-01T00:00:00Z"},
+        "near-b": {"created_at": "2026-01-03T00:00:00Z"},
+        "near-a": {"created_at": "2026-01-03T00:00:00Z"},
+        "future": {"created_at": "2026-01-05T00:00:00Z"},
+    }
+
+    ranked = _temporal_rank(rows, as_of="2026-01-03T00:00:00Z", limit=2)
+
+    assert ranked == ["near-a", "near-b"]
 
 
 # -- 4. supersession discount: relative score effect --------------

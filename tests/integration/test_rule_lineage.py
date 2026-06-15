@@ -86,7 +86,7 @@ def _seed_full_lineage(home: Path, *, suffix: str) -> dict[str, str]:
         "edge_type": "supports",
         "idempotency_key": f"00000000-0000-4000-8000-rl-use-{suffix}",
     })
-    playbook = _mcp(home, "playbook.create", {
+    playbook = _mcp(home, "playbook.upsert", {
         "name": f"PB-{suffix}",
         "idempotency_key": f"00000000-0000-4000-8000-rl-pb-{suffix}",
     }).data["id"]
@@ -203,7 +203,7 @@ def test_version_with_unused_reflection_declares_downstream_gaps(home):
         "node_type": "reflection", "body": "Reflection with no links.",
         "idempotency_key": "00000000-0000-4000-8000-rl-lonely-ref",
     }).data["id"]
-    playbook = _mcp(home, "playbook.create", {
+    playbook = _mcp(home, "playbook.upsert", {
         "name": "PB-lonely",
         "idempotency_key": "00000000-0000-4000-8000-rl-lonely-pb",
     }).data["id"]

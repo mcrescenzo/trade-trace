@@ -25,6 +25,7 @@ embeddings opt-in path is the subject of bead ubp.
 
 from __future__ import annotations
 
+import heapq
 import json
 import math
 import re
@@ -62,6 +63,12 @@ importance=10 → 1.25; importance=1 → 0.80."""
 
 SUPERSESSION_DISCOUNT: Final[float] = 0.25
 """Multiplier applied to nodes that have been superseded but not invalidated."""
+
+MIN_RECALL_RANKING_CANDIDATES: Final[int] = 100
+"""Minimum per-strategy rank window retained before fused top-k scoring."""
+
+RECALL_RANKING_CANDIDATE_MULTIPLIER: Final[int] = 10
+"""Per-strategy candidate multiplier over requested recall k."""
 
 _EMBEDDING_IN_CLAUSE_CHUNK: Final[int] = 900
 """Max node_ids per `node_id IN (...)` chunk in `_semantic_rank` so the
@@ -409,7 +416,21 @@ def _memory_retain(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     node_type = require(args, "node_type")
     with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
-            return _memory_retain_in_uow(args, ctx, uow, node_type=node_type)
+            result = _memory_retain_in_uow(args, ctx, uow, node_type=node_type)
+    from trade_trace.logging import get_logger
+
+    get_logger("trade_trace.tools.memory").info(
+        "memory retained",
+        extra={
+            "actor": ctx.actor_id,
+            "tool": ctx.tool,
+            "subject": "memory_node",
+            "verb": "retain",
+            "record_id": result["id"],
+            "node_type": node_type,
+        },
+    )
+    return result
 
 
 def _memory_retain_in_uow(
@@ -1073,7 +1094,10 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             db.connection, as_of=options.as_of, node_types=options.node_types,
         )
         rankings = _build_recall_rankings(db.connection, options, in_scope_rows, provider)
-        scored = _score_ranked_nodes(db.connection, rankings, in_scope_rows, as_of=options.as_of)
+        scored = _score_ranked_nodes(
+            db.connection, rankings, in_scope_rows,
+            as_of=options.as_of, limit=options.limit_k,
+        )
         items, _chars_used = _shape_recall_items(
             db.connection, scored[:options.limit_k], in_scope_rows, options,
         )
@@ -1126,23 +1150,42 @@ def _parse_recall_options(args: dict[str, Any]) -> RecallOptions:
     return RecallOptions(query, limit_k, max_chars, compact, include_body, include_provenance, min_confidence, node_types, mode, as_of, requested_strategies, context)
 
 
+def _recall_candidate_limit(*, k: int, corpus_size: int) -> int:
+    return min(
+        corpus_size,
+        max(MIN_RECALL_RANKING_CANDIDATES, k * RECALL_RANKING_CANDIDATE_MULTIPLIER),
+    )
+
+
 def _build_recall_rankings(conn: sqlite3.Connection, options: RecallOptions, in_scope_rows: dict[str, dict[str, Any]], provider: str) -> dict[str, list[str]]:
     rankings: dict[str, list[str]] = {}
+    candidate_limit = _recall_candidate_limit(
+        k=options.limit_k, corpus_size=len(in_scope_rows),
+    )
     if "bm25" in options.requested_strategies:
-        rankings["bm25"] = _bm25_rank(conn, options.query, in_scope_rows)
+        rankings["bm25"] = _bm25_rank(conn, options.query, in_scope_rows)[:candidate_limit]
     if "temporal" in options.requested_strategies:
-        rankings["temporal"] = _temporal_rank(in_scope_rows, as_of=options.as_of)
+        rankings["temporal"] = _temporal_rank(
+            in_scope_rows, as_of=options.as_of, limit=candidate_limit,
+        )
     if "graph" in options.requested_strategies:
-        rankings["graph"] = _graph_rank(conn, context=options.context, in_scope_rows=in_scope_rows)
+        rankings["graph"] = _graph_rank(
+            conn, context=options.context, in_scope_rows=in_scope_rows,
+        )[:candidate_limit]
     if "semantic" in options.requested_strategies and provider != "none":
         semantic_ranked = _semantic_rank(conn, options.query, provider, in_scope_rows)
         if semantic_ranked:
-            rankings["semantic"] = semantic_ranked
+            rankings["semantic"] = semantic_ranked[:candidate_limit]
     return rankings
 
 
-def _score_ranked_nodes(conn: sqlite3.Connection, rankings: dict[str, list[str]], in_scope_rows: dict[str, dict[str, Any]], *, as_of: str | None = None) -> list[tuple[str, float, dict[str, list[int]]]]:
-    combined = _rrf_combine(rankings)
+def _score_ranked_nodes(conn: sqlite3.Connection, rankings: dict[str, list[str]], in_scope_rows: dict[str, dict[str, Any]], *, as_of: str | None = None, limit: int | None = None) -> list[tuple[str, float, dict[str, list[int]]]]:
+    rrf_limit = None
+    if limit is not None:
+        rrf_limit = _recall_candidate_limit(
+            k=limit, corpus_size=sum(len(ranked) for ranked in rankings.values()),
+        )
+    combined = _rrf_combine(rankings, limit=rrf_limit)
     superseded = _superseded_node_ids(conn, as_of=as_of)
     scored: list[tuple[str, float, dict[str, list[int]]]] = []
     for node_id, base_score, provenance in combined:
@@ -1154,8 +1197,10 @@ def _score_ranked_nodes(conn: sqlite3.Connection, rankings: dict[str, list[str]]
         if node_id in superseded:
             boost *= SUPERSESSION_DISCOUNT
         scored.append((node_id, base_score * boost, provenance))
-    scored.sort(key=lambda r: (-r[1], r[0]))
-    return scored
+    if limit is None:
+        scored.sort(key=lambda r: (-r[1], r[0]))
+        return scored
+    return heapq.nsmallest(limit, scored, key=lambda r: (-r[1], r[0]))
 
 
 def _effective_confidence(row: dict[str, Any], *, as_of_iso: str) -> float:
@@ -1469,13 +1514,13 @@ def _or_token_query(query: str) -> str | None:
 
 
 def _temporal_rank(
-    in_scope: dict[str, dict[str, Any]], *, as_of: str | None,
+    in_scope: dict[str, dict[str, Any]], *, as_of: str | None, limit: int | None = None,
 ) -> list[str]:
     """Rank in-scope nodes by recency relative to `as_of` (or now)."""
 
     effective = as_of or now_iso()
     effective_dt = datetime.fromisoformat(effective.replace("Z", "+00:00"))
-    scored: list[tuple[str, float]] = []
+    scored = []
     for node_id, row in in_scope.items():
         created_dt = datetime.fromisoformat(
             row["created_at"].replace("Z", "+00:00")
@@ -1483,7 +1528,10 @@ def _temporal_rank(
         delta = abs((effective_dt - created_dt).total_seconds())
         # Smaller delta = better.
         scored.append((node_id, delta))
-    scored.sort(key=lambda r: (r[1], r[0]))
+    if limit is not None:
+        scored = heapq.nsmallest(limit, scored, key=lambda r: (r[1], r[0]))
+    else:
+        scored.sort(key=lambda r: (r[1], r[0]))
     return [r[0] for r in scored]
 
 
@@ -1721,7 +1769,7 @@ def _semantic_rank(
 
 
 def _rrf_combine(
-    rankings: dict[str, list[str]],
+    rankings: dict[str, list[str]], *, limit: int | None = None,
 ) -> list[tuple[str, float, dict[str, list[int]]]]:
     """Reciprocal-rank-fusion combine. Returns `(node_id, score,
     provenance)` triples where `provenance[strategy]` is the
@@ -1739,6 +1787,8 @@ def _rrf_combine(
             provenance[node_id][strategy] = [rank]
     out = [(node_id, accumulated[node_id], provenance.get(node_id, {}))
            for node_id in accumulated]
+    if limit is not None:
+        return heapq.nsmallest(limit, out, key=lambda r: (-r[1], r[0]))
     out.sort(key=lambda r: (-r[1], r[0]))
     return out
 

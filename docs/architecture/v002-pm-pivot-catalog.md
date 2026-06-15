@@ -1,6 +1,6 @@
 # v0.0.2 PM-pivot tool/report catalog reconciliation
 
-> Status: **shipped** as of 2026-05-25; scope reined in + decision-time features added 2026-05-29 (epic trade-trace-4kec). The default public registry now exposes **70** tools, generated from `build_registry().public_names()`. The scope-reignin half froze **40** Product-B tools behind the experimental tier (`public_names(include_experimental=True)`; see §4.6) and removed **3** redundant report tools (KEEP 56 / FREEZE 40 / CUT 3 of the prior 99); the build half then reinvested the freed budget into **13** decision-time D1–D5 tools (§1.3), taking the default catalog to 69, and `market.search` (read-only live market discovery, bead trade-trace-663l) then took it to 70. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
+> Status: **shipped** and refreshed 2026-06-15 from `build_registry().public_names()`. The default public registry now exposes **103** non-admin entries. The remaining experimental tier has **5** entries (`approval.*` plus the superseded `forecast.anchor_to_snapshot`); the autonomous run/incident cluster has been cut rather than kept experimental. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
 
 ## Why this exists
 
@@ -10,7 +10,7 @@
 This document originally reconciled those planning numbers against the
 then-current 89-tool registry. The pivot has since landed and the scope
 was reined in by epic trade-trace-4kec; the runtime registry now reports
-**56 public tools** in the default catalog, with 40 Product-B tools frozen
+**103 public non-admin entries** in the default catalog, with 5 entries frozen
 behind the experimental tier.
 
 This doc pins the **authoritative runtime baseline** (Section 1),
@@ -26,27 +26,25 @@ authoritative source the v0.0.2 implementation beads cite.
 
 ---
 
-## 1. Current runtime baseline (2026-05-25)
+## 1. Current runtime baseline (2026-06-15)
 
-Generated from `build_registry().public_names()` for the default public catalog: 70 tools. (The scope-reignin freeze/cut landed the surface at 56; epic trade-trace-4kec then reinvested the budget into 13 decision-time D1–D5 tools — see §1.3 — for 69; `market.search` then added the read-only live market discovery surface for 70.)
+Generated from `build_registry().public_names()` for the default public catalog: 103 non-admin entries.
 
-`abstention.get`, `abstention.list`, `abstention.record`, `decision.add`, `export.drain`, `forecast.add`, `forecast.commit_blind`, `forecast.independence`, `forecast.interpret_resolution`, `forecast.resolution_interpretation`, `forecast.reveal_snapshot`, `import.commit`, `journal.backup`, `journal.config_set`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.find_similar`, `market.refresh`, `market.search`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `playbook.record_adherence`, `playbook.upsert`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_advisory`, `report.calibration_integrity`, `report.coach`, `report.compare`, `report.current_exposure`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.mistake_tripwire`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.process_quality`, `report.resolution_misreads`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `snapshot.add`, `snapshot.fetch`, `strategy.upsert`, `tool.schema`.
+`abstention.get`, `abstention.list`, `abstention.record`, `account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `decision.add`, `export.drain`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.add`, `forecast.commit_blind`, `forecast.independence`, `forecast.interpret_resolution`, `forecast.resolution_interpretation`, `forecast.reveal_snapshot`, `import.commit`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.find_similar`, `market.refresh`, `market.search`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `playbook.propose_version`, `playbook.record_adherence`, `playbook.upsert`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.autonomy_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_advisory`, `report.calibration_anchored`, `report.calibration_integrity`, `report.calibration_terminal`, `report.coach`, `report.compare`, `report.current_exposure`, `report.decision_velocity`, `report.execution_quality`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.market_lifecycle`, `report.memory_usefulness`, `report.mistake_tripwire`, `report.mistakes`, `report.open_positions`, `report.operational_health`, `report.opportunity`, `report.paper_exposure`, `report.phase_gate_readiness`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.process_quality`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.resolution_misreads`, `report.resolution_quality`, `report.risk`, `report.rule_lineage`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `risk.check_record`, `risk.evaluate`, `risk.policy_version_add`, `snapshot.add`, `snapshot.fetch`, `snapshot.fetch_series`, `strategy.upsert`, `tool.schema`.
 
 ### Frozen Product-B surface (experimental tier, epic trade-trace-4kec)
 
-40 tools are registered and dispatchable but hidden from the default catalog
+5 tools are registered and dispatchable but hidden from the default catalog
 behind the experimental tier (`public_names(include_experimental=True)` /
-`MCP_INCLUDE_EXPERIMENTAL=1`; see §4.6). They are the autonomous-ops cluster,
-the reconciliation/execution-truth cluster, and the anchored-calibration unit
-plus speculative viewers:
+`MCP_INCLUDE_EXPERIMENTAL=1`; see §4.6):
 
-`account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `approval.get`, `approval.list`, `approval.record`, `approval.report`, `autonomous_incident.record`, `autonomous_incident.report`, `autonomous_run.get`, `autonomous_run.record`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.anchor_to_snapshot`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `report.calibration_anchored`, `report.calibration_terminal`, `report.decision_velocity`, `report.execution_quality`, `report.market_lifecycle`, `report.memory_usefulness`, `report.operational_health`, `report.paper_exposure`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.resolution_quality`, `risk.check_record`, `risk.policy_version_add`, `snapshot.fetch_series`.
+`approval.get`, `approval.list`, `approval.record`, `approval.report`, `forecast.anchor_to_snapshot`.
 
 The 3 removed redundant report tools (`report.calibration_trajectory`,
 `report.strategy_performance`, `report.amm_slippage`) are gone from the
 registry entirely, not frozen.
 
-Renamed public tools expose `legacy_name` metadata: `resolution.add` has legacy `outcome.add`, `playbook.record_adherence` has legacy `decision.record_adherence`, `playbook.upsert` has legacy `playbook.create`, and `strategy.upsert` has legacy `strategy.create`. `tool.schema` and MCP tool metadata also provide removed-tool/deprecation hints for legacy callers.
+Renamed tools expose compatibility metadata on the hidden legacy aliases: `outcome.add` redirects to `resolution.add`, `decision.record_adherence` redirects to `playbook.record_adherence`, `playbook.create` redirects to `playbook.upsert`, and `strategy.create` redirects to `strategy.upsert`. `tool.schema` and MCP tool metadata also provide removed-tool/deprecation hints for legacy callers.
 
 ### Historical planning baseline (2026-05-23)
 
@@ -107,16 +105,16 @@ since reined in to the 56-tool public catalog in §1 by epic
 trade-trace-4kec. Treat the 89 → 45 language below as the historical
 reduction target, not the current runtime truth.
 
-### 1.2 Shipped reports (30 public)
+### 1.2 Shipped reports (44 public)
 
 Pinned by `SHIPPED_REPORTS` in
 `tests/security/test_mvp_boundary_audit.py`. The names below are
 authoritative; any addition must update that pin and this doc in the
-same commit. Eleven report tools were frozen behind the experimental
-tier and three were removed by epic trade-trace-4kec — see §1's frozen
-list and the cut note — and four decision-time reports were added (§1.3).
+same commit. The current set includes the Phase-1 diagnostics plus the
+Phase-2 process reports (`report.execution_quality`,
+`report.operational_health`) now unfrozen into the public catalog.
 
-`report.audit_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_advisory`, `report.calibration_integrity`, `report.coach`, `report.compare`, `report.current_exposure`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.mistake_tripwire`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.process_quality`, `report.resolution_misreads`, `report.risk`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`.
+`report.audit_readiness`, `report.autonomy_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_advisory`, `report.calibration_anchored`, `report.calibration_integrity`, `report.calibration_terminal`, `report.coach`, `report.compare`, `report.current_exposure`, `report.decision_velocity`, `report.execution_quality`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.market_lifecycle`, `report.memory_usefulness`, `report.mistake_tripwire`, `report.mistakes`, `report.open_positions`, `report.operational_health`, `report.opportunity`, `report.paper_exposure`, `report.phase_gate_readiness`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.process_quality`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.resolution_misreads`, `report.resolution_quality`, `report.risk`, `report.rule_lineage`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`.
 
 ### 1.3 Decision-time D1–D5 tools (13, epic trade-trace-4kec build half)
 
@@ -494,14 +492,13 @@ a new fetch/scheduler/broker capability.
 These pin the boundary that the catalog/transport gate
 (`trade-trace-lznx`) verifies before adapter/report work proceeds.
 
-### 4.1 `legacy_name` metadata on renamed public tools
+### 4.1 Rename metadata on hidden legacy aliases
 
 The default public catalog exposes canonical v0.0.2 names. Tool metadata
-carries compatibility hints for legacy callers: `resolution.add` has
-`legacy_name = "outcome.add"`, `playbook.record_adherence` has
-`legacy_name = "decision.record_adherence"`, `playbook.upsert` has
-`legacy_name = "playbook.create"`, and `strategy.upsert` has
-`legacy_name = "strategy.create"`. These hints are visible through
+carries compatibility hints on hidden legacy aliases: `outcome.add` has
+`renamed_to = "resolution.add"`, while `playbook.create` and
+`strategy.create` have `redirect = "playbook.upsert"` and
+`redirect = "strategy.upsert"`. These hints are visible through
 `tool.schema` and MCP tool specs, not as caller-controlled payload data.
 
 ### 4.2 Legacy names remain hidden but dispatchable during the additive slice

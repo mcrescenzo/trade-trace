@@ -36,7 +36,7 @@ def _instrument(home: Path) -> str:
 
 def _strategy(home: Path, slug: str) -> str:
     strategy = dump_envelope(mcp_call(
-        "strategy.create",
+        "strategy.upsert",
         {"home": str(home), "name": slug, "slug": slug, "idempotency_key": f"test-{slug}"},
     ))
     assert strategy["ok"] is True, strategy

@@ -116,7 +116,7 @@ _STATIC_EVENT_TOOL_MAP: dict[str, str] = {
     "thesis.created": "thesis.add",
     "source.added": "source.add",
     "decision.created": "decision.add",
-    "outcome.recorded": "outcome.add",
+    "outcome.recorded": "resolution.add",
     "forecast.created": "forecast.add",
     "forecast.superseded": "forecast.supersede",
     "forecast.anchored_to_snapshot": "forecast.anchor_to_snapshot",
@@ -126,12 +126,10 @@ _STATIC_EVENT_TOOL_MAP: dict[str, str] = {
     # exporter emits a replayable line; the importer dispatches them
     # rather than skipping as a cascaded alias.
     "memory_node.retained": "memory.retain",
-    "strategy.created": "strategy.create",
+    "strategy.created": "strategy.upsert",
     "strategy.updated": "strategy.update",
-    "playbook.created": "playbook.create",
+    "playbook.created": "playbook.upsert",
     "playbook.proposed_version": "playbook.propose_version",
-    "autonomous_run.recorded": "autonomous_run.record",
-    "autonomous_incident.recorded": "autonomous_incident.record",
     # `forecast.scored` and `signal.emitted` are system-emitted; the
     # importer treats them as audit-only records and does not redispatch.
     # `import.row_committed` is internal bookkeeping for the importer.
