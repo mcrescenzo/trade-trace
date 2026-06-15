@@ -226,6 +226,14 @@
       "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
     },
     {
+      "pattern": "src/trade_trace/reports/autonomy_readiness.py",
+      "terms": [
+        "forecast_outcomes"
+      ],
+      "category": "pm_native_with_legacy_fallback",
+      "reason": "Autonomy readiness reuses calibration's bulk forecast_outcomes fallback to compute resolution-window trend evidence while the legacy outcome table remains present."
+    },
+    {
       "pattern": "src/trade_trace/reports/calibration.py",
       "terms": [
         "forecast_outcomes",
