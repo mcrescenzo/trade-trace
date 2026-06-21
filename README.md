@@ -83,7 +83,7 @@ Optional vector recall support is available from source with:
 python3 -m pip install -e '.[embeddings]'
 ```
 
-The embeddings extra adds the optional local ONNX/tokenizers runtime. It does not enable vectors, download model weights, or send memory text to an API provider. In v0.0.2 the supported provider enum is `none|local`; local model assets must be imported explicitly with `tt --confirm model import --path <pre-staged-dir> --idempotency-key <key>`, and remote/API embedding providers are unsupported.
+The embeddings extra adds the optional local ONNX/tokenizers runtime. It does not enable vectors, download model weights, or send memory text to an API provider. In v0.0.2 the supported provider enum is `none|local`; local model assets must be imported explicitly with the admin-tier, legacy (catalog-hidden) `tt --confirm model import --path <pre-staged-dir> --idempotency-key <key>` command (not part of the default agent catalog), and remote/API embedding providers are unsupported.
 
 Intel Mac note: current `onnxruntime` releases do not ship macOS x86_64 wheels. Intel Mac users should either use BM25 recall or manually pin a compatible older `onnxruntime` (for example 1.19) in their local environment.
 
@@ -124,7 +124,7 @@ See [`docs/AI_AGENT_MCP_GETTING_STARTED.md`](./docs/AI_AGENT_MCP_GETTING_STARTED
 
 ## Use the CLI
 
-The CLI mirrors the MCP catalog by replacing dots in MCP tool names with spaces (for example, `market.bind` becomes `tt market bind`). It emits JSON by default; streaming list/read paths use NDJSON envelopes. The current default public catalog contains 70 registry-generated tools (the scope-reignin freeze/cut landed it at 56, then 13 decision-time tools plus `market.search` were added); `tool.schema` / `build_registry().public_names()` is the live count. A further 40 Product-B tools (autonomous-ops, reconciliation/execution-truth, and the anchored-calibration unit) are frozen behind an experimental tier — hidden from the default catalog but still dispatchable via `MCP_INCLUDE_EXPERIMENTAL=1` or `tool.schema {"include_experimental": true}`. `tool.schema` is the source of truth and includes compatibility metadata such as `legacy_name` for renamed tools and hints for removed legacy callers.
+The CLI mirrors the MCP catalog by replacing dots in MCP tool names with spaces (for example, `market.bind` becomes `tt market bind`). It emits JSON by default; streaming list/read paths use NDJSON envelopes. The current default public catalog contains 103 registry-generated tools; `tool.schema` / `build_registry().public_names()` is the live count (this number updates as the catalog changes). A further 5 tools (the `approval.*` cluster plus the superseded `forecast.anchor_to_snapshot`) are frozen behind an experimental tier — hidden from the default catalog but still dispatchable via `MCP_INCLUDE_EXPERIMENTAL=1` or `tool.schema {"include_experimental": true}`. `tool.schema` is the source of truth and includes compatibility metadata such as `legacy_name` for renamed tools and hints for removed legacy callers.
 
 ```bash
 tt journal init

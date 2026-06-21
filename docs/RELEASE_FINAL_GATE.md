@@ -19,7 +19,7 @@ Use `docs/RELEASE_CHECKLIST.md` as the canonical command checklist. Before any t
 1. Static checks pass: `ruff check src tests`, `mypy src`.
 2. Full tests pass from current HEAD: `PYTHONPATH=src pytest -q`.
 3. Docs/security release gates pass, including docs truth tests, boundary audit, no-network default, endpoint policy, and URL scrubbing tests.
-4. Public tool catalog is verified against runtime/schema expectations and documented as 65 public tools.
+4. Public tool catalog is verified against runtime/schema expectations and documented as 103 public tools (the live `build_registry().public_names()` count; update this gate when the catalog count changes).
 5. Fresh journal and offline market-bind smoke have been exercised.
 6. Live Polymarket smoke is either completed with sanitized evidence or explicitly deferred because no disposable Polygon RPC URL / real test condition was provided. If deferred, release notes must say live-adapter smoke was not exercised.
 7. Package build and fresh wheel smoke pass.

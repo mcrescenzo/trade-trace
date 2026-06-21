@@ -100,10 +100,11 @@ correct for that moment but missed:
   audit snapshot.
 
 The "84" number in next-steps.md was therefore stale during planning;
-the implementation ultimately landed with the 65-tool public catalog,
-since reined in to the 56-tool public catalog in §1 by epic
-trade-trace-4kec. Treat the 89 → 45 language below as the historical
-reduction target, not the current runtime truth.
+the implementation ultimately landed with 65 public tools, reined in to
+56 by epic trade-trace-4kec and since grown back to the **103**
+non-admin entries documented in §1 as Phase-2 clusters were unfrozen.
+Treat the 89 → 45 language below as the historical reduction target, not
+the current runtime truth.
 
 ### 1.2 Shipped reports (44 public)
 
@@ -522,7 +523,7 @@ removed tools via `renamed_to`, `redirect`, and `removed_in`.
 The default surface a normal agent sees omits legacy tools and admin-only
 tools (`signal.scan`, `journal.rebuild_projections`, `journal.repair`).
 Admin and legacy surfaces are opt-in inspection modes; current quickstarts
-should point agents at the 60-tool public catalog and `tool.schema` for
+should point agents at the 103-tool public catalog and `tool.schema` for
 runtime truth.
 
 ### 4.6 Experimental tier (frozen Product-B surface)
@@ -562,13 +563,13 @@ update those pins and docs together.
 PYTHONPATH=src python -c \
   "from trade_trace.core import default_registry; \
    print(len(default_registry().public_names()))"
-# Expected: 70
+# Expected: 103
 
 # 1b. Frozen experimental Product-B surface (epic trade-trace-4kec)
 PYTHONPATH=src python -c \
   "from trade_trace.core import default_registry as r; \
    print(len(r().public_names(include_experimental=True)) - len(r().public_names()))"
-# Expected: 40
+# Expected: 5
 
 # 2. Shipped public catalog, legacy metadata, admin filtering, reports pin, and freezes
 PYTHONPATH=src pytest \
