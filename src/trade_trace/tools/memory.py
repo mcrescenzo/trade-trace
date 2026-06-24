@@ -46,6 +46,8 @@ from trade_trace.tools._helpers import (
     new_id,
     normalize_timestamp,
     now_iso,
+    parse_int_arg,
+    reject_credential_metadata,
     reject_if_contains_secrets,
     require,
     store_metadata_json,
@@ -471,12 +473,24 @@ def _memory_retain_in_uow(
     decay_rate_per_day = args.get("decay_rate_per_day")
     valid_from = normalize_timestamp(args, "valid_from")
     valid_to = normalize_timestamp(args, "valid_to")
+    if valid_from is not None and valid_to is not None and valid_to < valid_from:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "valid_to must be greater than or equal to valid_from",
+            details={
+                "field": "valid_to",
+                "valid_to": valid_to,
+                "valid_from": valid_from,
+                "reason": "invalid_interval",
+            },
+        )
     # Validate meta_json shape at the direct retain boundary per
     # trade-trace-arcx. Adjacent normalization (memory.reflect ergonomics)
     # already enforces this, but the raw retain path used to `json.dumps`
     # whatever was passed, so a list/scalar would persist and confuse
     # downstream consumers that assume object-shaped metadata.
     meta_input = _parse_memory_meta_json_object(args.get("meta_json"))
+    reject_credential_metadata(meta_input, field="meta_json")
     _validate_policy_candidate_meta(meta_input, node_type=node_type)
     meta_json = json.dumps(meta_input, sort_keys=True)
     title = args.get("title")
@@ -1116,9 +1130,14 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 def _parse_recall_options(args: dict[str, Any]) -> RecallOptions:
     query = require(args, "query")
-    limit_k = int(args.get("k", 10))
-    if limit_k < 1 or limit_k > 100:
-        raise ToolError(ErrorCode.VALIDATION_ERROR, "k must be an integer in [1, 100]", details={"field": "k", "value": limit_k})
+    limit_k = parse_int_arg(
+        args,
+        "k",
+        10,
+        minimum=1,
+        maximum=100,
+        message="k must be an integer in [1, 100]",
+    )
     max_chars = args.get("max_chars")
     if max_chars is not None and (not isinstance(max_chars, int) or max_chars < 1):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "max_chars must be a positive integer when set", details={"field": "max_chars", "value": max_chars})

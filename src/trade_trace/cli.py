@@ -65,13 +65,19 @@ class StrayPositionalArgsError(Exception):
         )
 
 
-def _parse_kv_args(unknown: list[str]) -> dict[str, Any]:
+def _parse_kv_args(
+    unknown: list[str],
+    *,
+    schema_fields: set[str] | None = None,
+) -> dict[str, Any]:
     """Parse `--key value` pairs into a dict per docs/architecture/contracts.md §2.1.
 
     - `--flag` (no value) → True.
     - `--key-with-dashes` → `key_with_dashes`.
-    - `--foo-json '<json>'` parses the JSON and assigns to `foo` (without the
-      `_json` suffix; the suffix is the transport hint, not the domain key).
+    - `--foo-json '<json>'` parses the JSON and usually assigns to `foo`
+      (without the `_json` suffix; the suffix is the transport hint).
+      When the selected tool schema contains the literal field `foo_json`,
+      schema-aware dispatch preserves that domain key.
     - Repeated `--key v1 --key v2 …` accumulates into `[v1, v2, …]`
       per trade-trace-pybt; the same coercion (true/false/int/float)
       runs on each value independently.
@@ -104,7 +110,9 @@ def _parse_kv_args(unknown: list[str]) -> dict[str, Any]:
             continue
         key = token[2:].replace("-", "_")
         is_json = key.endswith("_json")
-        domain_key = key[: -len("_json")] if is_json else key
+        domain_key = key
+        if is_json and (schema_fields is None or key not in schema_fields):
+            domain_key = key[: -len("_json")]
         # peek
         if i + 1 < len(unknown) and not unknown[i + 1].startswith("--"):
             raw_value = unknown[i + 1]
@@ -383,7 +391,9 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
         _print_command_help(parser, tool_name, registry)
         return 0
     try:
-        tool_args = _parse_kv_args(remaining)
+        schema = registry.get(tool_name).json_schema or {}
+        schema_fields = set((schema.get("properties") or {}).keys())
+        tool_args = _parse_kv_args(remaining, schema_fields=schema_fields)
     except MalformedJsonArgError as exc:
         return _emit_cli_error(
             tool=tool_name,
@@ -441,12 +451,12 @@ def main(argv: list[str] | None = None, *, registry: ToolRegistry | None = None)
     # (bead trade-trace-cms2). Required/type/enum failures still fall through
     # to handlers which have friendlier prose.
     registration = registry.by_name.get(tool_name)
-    schema = registration.json_schema if registration is not None else None
-    if schema:
+    validation_schema = registration.json_schema if registration is not None else None
+    if validation_schema:
         validation_error = reportable_schema_validation_error(
             tool=tool_name,
             instance=tool_args,
-            schema=schema,
+            schema=validation_schema,
             policy=CLI_NUMERIC_BOUNDS_ONLY,
             validator=registration.compiled_validator
             if registration is not None

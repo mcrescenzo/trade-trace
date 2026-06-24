@@ -60,7 +60,7 @@ def test_rescan_preview_confirm_idempotent_noop_for_already_scored_binary(home):
 
     preview = _call(home, "journal.rescan_scoring", {"mode": "preview"})
     assert preview["ok"] is True
-    assert preview["data"]["affected_rows"] in (0, 1)
+    assert preview["data"]["affected_rows"] == 0
     assert preview["data"]["would_score_rows"] == 0
     confirm = _call(home, "journal.rescan_scoring", {"mode": "confirm"})
     assert confirm["ok"] is True

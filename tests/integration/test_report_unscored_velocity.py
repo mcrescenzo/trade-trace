@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
+from trade_trace.storage.paths import db_path
 
 
 @pytest.fixture
@@ -37,6 +39,20 @@ def _seed_unscored(home: Path) -> str:
         ],
     })
     return f["data"]["id"]
+
+
+def _set_decision_created_at(home: Path, decision_id: str, created_at: str) -> None:
+    conn = sqlite3.connect(db_path(home))
+    try:
+        triggers = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'decisions' AND sql LIKE '%UPDATE%'"
+        ).fetchall()
+        for (name,) in triggers:
+            conn.execute(f'DROP TRIGGER "{name}"')
+        conn.execute("UPDATE decisions SET created_at = ? WHERE id = ?", (created_at, decision_id))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # -- report.unscored_forecasts -----------------------------------------
@@ -116,6 +132,36 @@ def test_decision_velocity_counts_per_day(home):
     group = env["data"]["groups"][0]
     assert group["metrics"]["count"] == 2
     assert group["metrics"]["by_type"] == {"skip": 2}
+
+
+def test_decision_velocity_bucket_group_filter_round_trips_to_bucket(home):
+    venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
+    inst = _envelope(home, "instrument.add", {
+        "venue_id": venue["data"]["id"],
+        "asset_class": "prediction_market", "title": "X",
+    })
+    first = _envelope(home, "decision.add", {
+        "instrument_id": inst["data"]["id"], "type": "skip", "reason": "a",
+        "idempotency_key": "test:decision-velocity-bucket-a",
+    })["data"]["id"]
+    second = _envelope(home, "decision.add", {
+        "instrument_id": inst["data"]["id"], "type": "skip", "reason": "b",
+        "idempotency_key": "test:decision-velocity-bucket-b",
+    })["data"]["id"]
+    _set_decision_created_at(home, first, "2026-01-01T12:00:00Z")
+    _set_decision_created_at(home, second, "2026-01-02T12:00:00Z")
+
+    env = _envelope(home, "report.decision_velocity", {"bucket": "day"})
+    groups = env["data"]["groups"]
+    assert [group["record_ids"]["decisions"] for group in groups] == [[first], [second]]
+
+    first_bucket = _envelope(home, "report.decision_velocity", {
+        "bucket": "day",
+        "filter": groups[0]["filter"],
+    })
+
+    assert first_bucket["data"]["summary"]["sample_size"] == 1
+    assert first_bucket["data"]["groups"][0]["record_ids"]["decisions"] == [first]
 
 
 def test_decision_velocity_bucket_validation(home):

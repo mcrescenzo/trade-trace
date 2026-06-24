@@ -96,6 +96,7 @@ def test_migration_contract_expectations_pin_schema_gates():
     assert "forward-only" in joined
     assert "_MIGRATION_TABLES_CREATED" in joined
     assert "_MIGRATION_COLUMNS_ADDED" in joined
+    assert "_MIGRATION_INDEXES_CREATED" in joined
     assert "schema hash" in joined
 
 

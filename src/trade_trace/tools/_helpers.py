@@ -5,6 +5,7 @@ metadata extraction. The boilerplate that every M1 ledger tool needs.
 from __future__ import annotations
 
 import json
+import math
 import secrets
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -159,6 +160,66 @@ def require(args: dict[str, Any], field: str) -> Any:
             details={"field": field},
         )
     return args[field]
+
+
+def parse_int_arg(
+    args: dict[str, Any],
+    field: str,
+    default: int,
+    *,
+    minimum: int | None = None,
+    maximum: int | None = None,
+    message: str | None = None,
+    range_message: str | None = None,
+) -> int:
+    raw = args.get(field, default)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            message or f"{field} must be an integer",
+            details={"field": field, "value": raw},
+        ) from exc
+    if (minimum is not None and value < minimum) or (
+        maximum is not None and value > maximum
+    ):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            range_message or message or f"{field} is out of range",
+            details={"field": field, "value": value},
+        )
+    return value
+
+
+def parse_float_arg(
+    args: dict[str, Any],
+    field: str,
+    default: float,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+    message: str | None = None,
+    range_message: str | None = None,
+) -> float:
+    raw = args.get(field, default)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            message or f"{field} must be a number",
+            details={"field": field, "value": raw},
+        ) from exc
+    if not math.isfinite(value) or (
+        minimum is not None and value < minimum
+    ) or (maximum is not None and value > maximum):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            range_message or message or f"{field} is out of range",
+            details={"field": field, "value": raw},
+        )
+    return value
 
 
 def forbidden(args: dict[str, Any], field: str) -> None:
@@ -413,4 +474,3 @@ def emit_event(
         ctx.meta_hints.setdefault("event_id", record.id)
         if record.idempotent_replay:
             ctx.meta_hints["idempotent_replay"] = True
-

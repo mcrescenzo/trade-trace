@@ -368,18 +368,10 @@ def _tool_schema(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 def _journal_rescan_scoring(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`journal.rescan_scoring` — preview/confirm scorer upgrade rescan.
 
-    The rescan is idempotent: it appends a score only when no score exists
-    yet for the forecast/head outcome pair. It never mutates events,
-    outcomes, forecast_outcomes, forecasts, or forecast_scores rows.
+    Current v0.0.2 scoring is binary-only, so this compatibility surface is a
+    no-op until a future scorer upgrade exists. It never writes unsupported
+    categorical/scalar score rows.
     """
-
-    from trade_trace.events.unit_of_work import UnitOfWork
-    from trade_trace.tools._helpers import now_iso
-    from trade_trace.tools.ledger import (
-        _current_resolved_final_outcome,
-        _emit_forecast_scored,
-        _score_one_forecast,
-    )
 
     mode = args.get("mode") or ("confirm" if args.get("confirm") is True else "preview")
     if mode not in ("preview", "confirm"):
@@ -392,63 +384,20 @@ def _journal_rescan_scoring(args: dict[str, Any], ctx: ToolContext) -> dict[str,
 
     db = open_database(path, create_parent=False)
     try:
-        # NOTE: forecasts.scoring_state is append-only (m003/m014 trigger
-        # forbids UPDATE) and never leaves 'pending' on disk, so a
-        # `WHERE f.scoring_state = 'pending'` filter would be a no-op
-        # (trade-trace-2b0z). This rescan intentionally enumerates EVERY
-        # categorical/scalar forecast and decides per-row whether a score
-        # already exists for the current head outcome (see the
-        # `already_scored_head` / `will_score` computation below), so we
-        # do not filter on the (logical) scoring state in SQL at all.
-        rows = db.connection.execute(
-            """
-            SELECT f.id, f.kind, f.scoring_support, f.yes_label, f.resolution_at,
-                   f.created_at, t.instrument_id
-            FROM forecasts f
-            JOIN theses t ON t.id = f.thesis_id
-            WHERE f.kind IN ('categorical','scalar')
-            ORDER BY f.created_at, f.id
-            """
-        ).fetchall()
-        candidates: list[dict[str, Any]] = []
-        for r in rows:
-            head = _current_resolved_final_outcome(db.connection, instrument_id=r[6])
-            already = False
-            if head is not None:
-                already = db.connection.execute(
-                    "SELECT 1 FROM forecast_scores WHERE forecast_id = ? AND outcome_id = ?",
-                    (r[0], head[0]),
-                ).fetchone() is not None
-            candidates.append({
-                "forecast_id": r[0], "kind": r[1], "prior_scoring_support": r[2],
-                "instrument_id": r[6], "head_outcome_id": head[0] if head else None,
-                "will_score": bool(head is not None and not already),
-                "already_scored_head": already,
-            })
+        ignored_unsupported_rows = db.connection.execute(
+            "SELECT COUNT(*) FROM forecasts WHERE kind IN ('categorical','scalar')"
+        ).fetchone()[0]
+        base = {
+            "mode": mode,
+            "affected_rows": 0,
+            "would_score_rows": 0,
+            "candidates": [],
+            "ignored_unsupported_rows": ignored_unsupported_rows,
+            "scoring_scope": "binary_only",
+        }
         if mode == "preview":
-            return {"mode": mode, "affected_rows": len(candidates), "would_score_rows": sum(1 for c in candidates if c["will_score"]), "candidates": candidates}
-
-        scored: list[dict[str, Any]] = []
-        with UnitOfWork(db.connection) as uow:
-            for r, c in zip(rows, candidates, strict=True):
-                if not c["will_score"]:
-                    continue
-                outcome = uow.conn.execute(
-                    "SELECT id, outcome_label FROM outcomes WHERE id = ?",
-                    (c["head_outcome_id"],),
-                ).fetchone()
-                if outcome is None:
-                    continue
-                scored_at = now_iso()
-                score = _score_one_forecast(
-                    uow.conn,
-                    forecast_row=(r[0], r[1], "supported", r[3], r[4], r[5]),
-                    outcome_id=outcome[0], outcome_label=outcome[1],
-                    actor_id=ctx.actor_id, scored_at=scored_at,
-                )
-                _emit_forecast_scored(uow, score, actor_id=ctx.actor_id, ctx=ctx, scored_at=scored_at)
-                scored.append(score)
-        return {"mode": mode, "affected_rows": len(candidates), "scored_rows": len(scored), "scores": scored, "candidates": candidates}
+            return base
+        return {**base, "scored_rows": 0, "scores": []}
     finally:
         db.close()
 
@@ -487,18 +436,10 @@ def register_journal_tools(registry: ToolRegistry) -> None:
         "journal.rescan_scoring",
         _journal_rescan_scoring,
         description=(
-            "Re-score legacy pending categorical/scalar forecasts against the "
-            "current resolved_final head outcome. Two modes: `preview` (default) "
-            "reports `affected_rows` and `would_score_rows` without writing; "
-            "`confirm` appends a forecast_scores row per unscored forecast/head "
-            "pair. Idempotent — it never re-scores a pair that already has a "
-            "score and never mutates existing events/outcomes/forecasts. "
-            "Because the shipped scorer (`_score_one_forecast`) implements only "
-            "binary Brier, each categorical/scalar row scores with "
-            "`failure_reason=unsupported_kind` (a recorded `failed` score, not "
-            "an UNSUPPORTED_CAPABILITY envelope error). Binary forecasts are "
-            "scored at outcome time and are not enumerated here. See "
-            "scoring.md §4.3 / §7."
+            "Compatibility no-op for scorer-upgrade rescans. v0.0.2 scoring is "
+            "binary-only: binary forecasts score at outcome time, while legacy "
+            "categorical/scalar rows are reported as ignored_unsupported_rows "
+            "and are never converted into forecast_scores rows."
         ),
     )
     registry.register(

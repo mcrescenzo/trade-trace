@@ -368,6 +368,30 @@ def test_playbook_create_metadata_json_rejects_credential_key(home):
     assert env.error.details["credential_key"] == "private_key"
 
 
+def test_memory_retain_meta_json_rejects_secret(home):
+    env = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "clean memory body",
+        "meta_json": {"notes": SECRET_FIXTURES["api_key"]},
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "meta_json"
+    assert env.error.details["pattern_kind"] == "api_key"
+
+
+def test_memory_retain_meta_json_rejects_credential_key(home):
+    env = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "clean memory body",
+        "meta_json": {"broker": {"api_key": "not-stored"}},
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "meta_json"
+    assert env.error.details["credential_key"] == "api_key"
+
+
 # -- 2. log-output redaction ---------------------------------------
 
 

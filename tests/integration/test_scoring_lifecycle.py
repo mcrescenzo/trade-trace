@@ -749,6 +749,56 @@ def test_outcome_supersession_does_not_retroactively_double_score(home):
     assert state == "scored"  # the NEW outcome's score is the current head
 
 
+def test_resolve_pending_ignores_superseded_resolved_final_outcomes(home):
+    instr_id, thesis_id = _setup_venue_instr_thesis(home)
+    forecast = _envelope(home, "forecast.add", {
+        "thesis_id": thesis_id,
+        "kind": "binary",
+        "yes_label": "yes",
+        "resolution_at": "2026-01-30T00:00:00Z",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.6},
+            {"outcome_label": "no", "probability": 0.4},
+        ],
+    })["data"]["id"]
+    final = _envelope(home, "resolution.add", {
+        "instrument_id": instr_id,
+        "resolved_at": "2026-01-30T00:00:00Z",
+        "outcome_label": "yes",
+        "status": "resolved_final",
+        "confidence": 0.99,
+    })
+    assert final["data"]["auto_scored_forecasts"][0]["forecast_id"] == forecast
+    correction = _envelope(home, "resolution.add", {
+        "instrument_id": instr_id,
+        "resolved_at": "2026-01-31T00:00:00Z",
+        "outcome_label": "ambiguous",
+        "status": "disputed",
+    })
+
+    db = open_database(db_path(home))
+    try:
+        from trade_trace.tools._helpers import new_id as gen_id
+        db.connection.execute(
+            "INSERT INTO edges(id, source_kind, source_id, target_kind, target_id, "
+            "edge_type, created_at, actor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                gen_id("edg"), "outcome", correction["data"]["id"], "outcome",
+                final["data"]["id"], "supersedes", "2026-01-31T01:00:00Z",
+                "agent:default",
+            ),
+        )
+        db.connection.commit()
+        assert derive_scoring_state(db.connection, forecast) == "pending"
+    finally:
+        db.close()
+
+    pending = _envelope(home, "resolve.pending", {"limit": 10})
+
+    assert pending["ok"] is True, pending
+    assert [item["forecast_id"] for item in pending["data"]["items"]] == [forecast]
+
+
 # -- same-outcome idempotency --------------------------------------------
 
 

@@ -56,3 +56,25 @@ def test_json_flag_after_repeated_scalar_still_lists():
         ["--tags", "alpha", "--tags-json", '["beta", "gamma"]'],
     )
     assert parsed == {"tags": ["alpha", ["beta", "gamma"]]}
+
+
+def test_schema_literal_json_field_is_preserved():
+    parsed = _parse_kv_args(
+        [
+            "--metadata-json", '{"source": "cli"}',
+            "--liquidity-depth-json", '{"bids": [[0.4, 12]]}',
+        ],
+        schema_fields={"metadata_json", "liquidity_depth_json"},
+    )
+    assert parsed == {
+        "metadata_json": {"source": "cli"},
+        "liquidity_depth_json": {"bids": [[0.4, 12]]},
+    }
+
+
+def test_json_transport_hint_still_strips_for_non_json_schema_field():
+    parsed = _parse_kv_args(
+        ["--filter-json", '{"status": "active"}'],
+        schema_fields={"filter"},
+    )
+    assert parsed == {"filter": {"status": "active"}}

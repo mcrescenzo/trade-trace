@@ -111,6 +111,7 @@ MIGRATION_CONTRACT_EXPECTATIONS: Final[tuple[str, ...]] = (
     "new autonomous substrate tables/columns are forward-only migrations appended to MIGRATIONS",
     "new tables are listed in _MIGRATION_TABLES_CREATED at the creating version",
     "column-only additions are listed in _MIGRATION_COLUMNS_ADDED at the adding version",
+    "index-only additions are listed in _MIGRATION_INDEXES_CREATED at the adding version",
     "schema-meta diagnostics must detect stale meta rows before DDL runs",
     "schema hash coverage must be updated for intentional schema changes",
 )

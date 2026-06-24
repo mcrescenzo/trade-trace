@@ -153,9 +153,10 @@ MIGRATIONS: list[Migration] = [
 # Tables each migration is the FIRST to create. Used by
 # `_assert_schema_matches_meta` (bead trade-trace-0ib) to detect a
 # stale/lost `meta.schema_version` against the actual on-disk schema.
-# Migrations that only add columns/triggers (004, 010) appear with an
-# empty list; column drift is detected separately via
-# `_MIGRATION_COLUMNS_ADDED` (trade-trace-n1mm). Trigger drift is
+# Migrations that only add columns/indexes/triggers appear with an
+# empty list; column and index drift are detected separately via
+# `_MIGRATION_COLUMNS_ADDED` (trade-trace-n1mm) and
+# `_MIGRATION_INDEXES_CREATED` (trade-trace-o6qw). Trigger drift is
 # explicitly out of scope per
 # `docs/architecture/schema-meta-diagnostics.md`.
 _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
@@ -274,12 +275,60 @@ _MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
 ]
 
 
+# Indexes each index-only migration adds. Used by
+# `_assert_schema_matches_meta` (trade-trace-o6qw) to surface a typed
+# diagnostic when a stale `meta.schema_version` row hides the fact that
+# an index-only migration already ran. Earlier migrations that create or
+# alter tables/columns are covered by the table/column fingerprints.
+_MIGRATION_INDEXES_CREATED: list[tuple[int, list[str]]] = [
+    (1, []),
+    (2, []),
+    (3, []),
+    (4, []),
+    (5, []),
+    (6, []),
+    (7, []),
+    (8, []),
+    (9, []),
+    (10, []),
+    (11, []),
+    (12, []),
+    (13, []),
+    (14, []),
+    (15, []),
+    (16, []),
+    (17, []),
+    (18, []),
+    (19, []),
+    (20, []),
+    (21, []),
+    (22, []),
+    (23, []),
+    (24, []),
+    (25, []),
+    (26, []),
+    (27, []),
+    (28, []),
+    (29, []),
+    (30, []),
+    (31, ["idx_edges_supersedes"]),
+    (32, ["idx_positions_opened_at"]),
+    (33, ["idx_decisions_type_created_at"]),
+    (34, ["idx_edges_target_type"]),
+    (35, [
+        "idx_memory_recall_events_run",
+        "idx_memory_recall_events_agent",
+    ]),
+]
+
+
 __all__ = [
     "FTS5UnavailableError",
     "MIGRATIONS",
     "Migration",
     "SchemaMetaMismatchError",
     "_MIGRATION_COLUMNS_ADDED",
+    "_MIGRATION_INDEXES_CREATED",
     "_MIGRATION_TABLES_CREATED",
     "_assert_schema_matches_meta",
     "_migration_001_meta_table",

@@ -3,14 +3,14 @@
 > Status: **shipped**. Binary Brier scoring + the lifecycle/failure_reason enum match the live `resolution.add` → auto-score path.
 
 
-**Implementation status (M0-M4 MVP + P1 scoring upgrade):** binary Brier + log-score + ECE
+**Implementation status (M0-M4 MVP + v0.0.2):** binary Brier + log-score + ECE
 (equal-width 0.1 bins) + sharpness + baseline (prevalence /
 Brier-baseline / log-score-baseline / skill) + reliability bins ship.
-Categorical and normalized scalar auto-scoring now ship. `journal.rescan_scoring`
-supports `mode="preview"` and `mode="confirm"` for idempotent replay of
-pending categorical/scalar forecasts against the current non-superseded
-`resolved_final` outcome. Anti-goodhart integrity
-diagnostics (bead trade-trace-jzn) are embedded under
+Categorical and normalized scalar auto-scoring do not ship in v0.0.2;
+`forecast.add` rejects those kinds and `journal.rescan_scoring` is a
+compatibility no-op that reports legacy non-binary rows as ignored rather than
+writing `unsupported_kind` score rows. Anti-goodhart integrity diagnostics
+(bead trade-trace-jzn) are embedded under
 `report.calibration.data.integrity_diagnostics`.
 
 Companion docs: [PRD.md](../PRD.md), [product-scope-v002.md](product-scope-v002.md),
@@ -24,12 +24,12 @@ nails down the Brier formula forms, forecast invariants, the lifecycle of a
 forecast row from `pending` to `scored`, the resolution status enum on
 outcomes, and the rules for when auto-scoring is allowed to fire.
 
-Supported scoring scope is binary, categorical/multiclass, and normalized
-scalar forecasts. The v0.0.2 PM schema transition adds canonical
+Supported scoring scope is binary forecasts. The v0.0.2 PM schema transition adds canonical
 `forecasts.probability` for binary YES probability; binary scorers and reports
 prefer that value when present and keep guarded fallback to legacy
-`forecast_outcomes` rows. Categorical and scalar forecasts still use the
-existing append-only outcome-row representation. Score events are appended to
+`forecast_outcomes` rows. Categorical and scalar rows may exist in legacy or
+direct-storage data, but public write/scoring surfaces treat them as unsupported.
+Score events are appended to
 `forecast_scores`, and immutable source rows are not rewritten.
 
 ## 2. Binary Forecast Invariants
@@ -107,18 +107,19 @@ heuristic on resolution:
    forecast's `scoring_state = 'superseded'` via the supersedes-edge
    invalidation path (§4.2).
 
-### 3.3 Categorical / multiclass scoring
+### 3.3 Future categorical / multiclass scoring
 
-A forecast with `kind = 'categorical'` is a probability distribution over two
-or more named labels. It uses the existing `forecast_outcomes` table: each
-row stores one category label and its probability. Invariants on write:
+Categorical scoring is a future scorer family, not a v0.0.2 shipped runtime
+capability. A future forecast with `kind = 'categorical'` would be a probability
+distribution over two or more named labels, using `forecast_outcomes` rows for
+category labels and probabilities. Expected future invariants:
 
 - At least two rows.
 - Distinct labels after case-insensitive trim/lower normalization.
 - Each probability is in `[0, 1]`.
 - Probabilities sum to `1.0` within tolerance `1e-6`.
 
-The scorer metric is `brier_multiclass`, using the multiclass Brier form:
+The likely scorer metric is `brier_multiclass`, using the multiclass Brier form:
 
 ```
 score = Σ_i (p_i - o_i)^2
@@ -128,22 +129,25 @@ where `o_i = 1` for the resolved label and `0` for every other category.
 Labels are matched case-insensitively with leading/trailing whitespace
 stripped. A resolved label that is not one of the forecast categories appends
 a failed score row with `metadata_json.failure_reason = "label_mismatch"`.
-Lower is better; a perfect categorical forecast scores `0`.
+Lower is better; a perfect categorical forecast scores `0`. This section is a
+target contract only until the runtime explicitly registers the scorer.
 
-### 3.4 Scalar scoring
+### 3.4 Future scalar scoring
 
-A forecast with `kind = 'scalar'` is a normalized point forecast on `[0, 1]`.
+Scalar scoring is a future scorer family, not a v0.0.2 shipped runtime
+capability. A future forecast with `kind = 'scalar'` would be a normalized point
+forecast on `[0, 1]`.
 Schema-transition note: `forecasts.probability` is currently the canonical PM
 binary YES probability, not a general scalar-prediction column. Scalar point
 estimates therefore remain stored in the single `forecast_outcomes.probability`
-value until a later non-PM scoring pass changes that representation. The
+value if/when a later non-PM scoring pass changes that representation. The
 `outcome_label` may be any non-empty label (callers commonly use `"value"`).
-Invariants on write:
+Expected future invariants:
 
 - Exactly one `forecast_outcomes` row.
 - The row's `probability` is numeric and in `[0, 1]`.
 
-The scorer metric is `squared_error_scalar`:
+The likely scorer metric is `squared_error_scalar`:
 
 ```
 score = (prediction - realized_value)^2
@@ -151,8 +155,10 @@ score = (prediction - realized_value)^2
 
 The realized value is read from `outcomes.outcome_value` when present;
 otherwise the scorer attempts to parse `outcomes.outcome_label` as a number.
-If neither is numeric, the score row is appended with `score = NULL` and
-`metadata_json.failure_reason = "scalar_value_invalid"`. Lower is better.
+If neither is numeric, the future scorer would append a score row with
+`score = NULL` and `metadata_json.failure_reason = "scalar_value_invalid"`.
+Lower is better. This section is a target contract only until the runtime
+explicitly registers the scorer.
 
 ## 4. Status Fields
 
@@ -203,10 +209,9 @@ Values:
 - `scoring_state != 'pending'` requires `scoring_support = 'supported'`.
 - An `unsupported` forecast stays in `scoring_state = 'pending'` forever
   unless a future migration upgrades the scorer registry and triggers a
-  one-shot rescan. The categorical/scalar `scoring_support` flags were
-  upgraded in the P1 scoring upgrade (shipped); `journal.rescan_scoring`
-  (now a legacy alias for `journal.rebuild_projections`) backfills the
-  pending rows.
+  one-shot rescan. In v0.0.2, `journal.rescan_scoring` is a compatibility
+  no-op for this future upgrade path; it reports legacy non-binary rows as
+  ignored and does not write score rows for them.
 - `scoring_state = 'scored'` requires a `forecast_scores` row with
   `score IS NOT NULL`.
 - `scoring_state = 'failed'` requires a `forecast_scores` row with
@@ -242,11 +247,11 @@ contract version bump):
 | `yes_label_ambiguous` | YES label could not be inferred at scoring time (§3.2 heuristic exhausted). Recovery: `forecast.supersede` with explicit `yes_label`. |
 | `label_mismatch` | Neither outcome label matched the resolved `outcomes.outcome_label` after case-insensitive whitespace-stripped comparison (§2). Recovery: agent reviews; if the outcome row is wrong, write a corrected outcome via supersedes; if the forecast labels are wrong, `forecast.supersede` with corrected labels. |
 | `outcome_superseded_mid_score` | The targeted `outcomes` row was superseded after the scoring transaction began but before it committed. Recovery: scoring re-fires on the new `resolved_final` outcome (§5.1). |
-| `scalar_value_invalid` | A scalar forecast resolved to an outcome whose `outcome_value` (or fallback `outcome_label`) was not numeric. Recovery: append a corrected outcome row with a numeric value/label. |
+| `scalar_value_invalid` | Reserved for a future scalar scorer; not emitted by the v0.0.2 binary-only runtime. |
 | `unsupported_kind` | Defensive guard for a scorer invoked on a kind not registered by this build. |
 
-Additional values may be added in P1 when categorical/scalar scorers
-ship; each requires a contract version bump per `operability.md` §4.3.
+Additional values may be added when categorical/scalar scorers ship; each
+requires a contract version bump per `operability.md` §4.3.
 
 ## 5. Resolution Status
 

@@ -22,6 +22,7 @@ from trade_trace.tools._helpers import (
     new_id,
     normalize_timestamp,
     now_iso,
+    parse_int_arg,
     reject_credential_metadata,
     reject_if_contains_secrets,
     require,
@@ -182,7 +183,7 @@ def _get(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 def _list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
-    limit = min(int(args.get("limit", 50)), 200)
+    limit = min(parse_int_arg(args, "limit", 50, minimum=1), 200)
     where: list[str] = []
     params: list[Any] = []
     for field in ("artifact_type", "evidence_mode", "dataset_hash", "strategy_id", "strategy_version"):

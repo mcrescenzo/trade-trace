@@ -7,6 +7,8 @@ are represented as unsupported/insufficient metadata rather than fabricated.
 
 from __future__ import annotations
 
+import base64
+import copy
 import itertools
 import sqlite3
 from collections import defaultdict
@@ -41,6 +43,7 @@ class ProcessAnalyticsRequest(BaseModel):
     min_sample: int = Field(default=DEFAULT_MIN_SAMPLE, ge=1)
     max_groups: int = Field(default=DEFAULT_MAX_GROUPS, ge=1)
     max_record_ids_per_group: int = Field(default=DEFAULT_MAX_RECORD_IDS_PER_GROUP, ge=1)
+    cursor: str | None = None
     as_of: str | None = None
 
 
@@ -67,13 +70,19 @@ def report_process_analytics(conn: sqlite3.Connection, *, request: dict[str, Any
     unsupported_features = _unsupported_request_metadata(req)
     group_by = [g for g in req.group_by if g in SUPPORTED_GROUP_BY] or ["tag_frequency"]
     primary_grouping = group_by[0]
-    groups = (
+    all_groups = (
         _tag_frequency_groups(decisions, eligible_count, req)
         if primary_grouping == "tag_frequency"
         else _tag_pair_groups(decisions, eligible_count, req)
     )
-    truncated = len(groups) > req.max_groups
-    groups = groups[: req.max_groups]
+    start_index = _cursor_start_index(all_groups, req.cursor, primary_grouping)
+    groups = all_groups[start_index: start_index + req.max_groups]
+    truncated = start_index + req.max_groups < len(all_groups)
+    next_cursor = (
+        _encode_group_cursor(primary_grouping, groups[-1]["key"])
+        if truncated and groups
+        else None
+    )
 
     caveat_codes = ["LOCAL_ROWS_ONLY", "DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM"]
     if eligible_count < req.min_sample:
@@ -98,6 +107,7 @@ def report_process_analytics(conn: sqlite3.Connection, *, request: dict[str, Any
             "min_sample": req.min_sample,
             "max_groups": req.max_groups,
             "max_record_ids_per_group": req.max_record_ids_per_group,
+            "cursor": req.cursor,
             "as_of": req.as_of,
         },
         "applied_scope": {
@@ -124,7 +134,7 @@ def report_process_analytics(conn: sqlite3.Connection, *, request: dict[str, Any
         "filter": applied_filter,
         "metrics": {"eligible_decision_count": eligible_count, "grouping": primary_grouping},
     }
-    return standard_report_result(summary=summary, groups=groups, truncated=truncated, next_cursor=None, extra=extra)
+    return standard_report_result(summary=summary, groups=groups, truncated=truncated, next_cursor=next_cursor, extra=extra)
 
 
 def _decision_tag_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[sqlite3.Row]:
@@ -164,6 +174,47 @@ def _decision_tag_rows(conn: sqlite3.Connection, rf: ReportFilter) -> list[sqlit
         conn.row_factory = previous_row_factory
 
 
+def _cursor_start_index(groups: list[dict[str, Any]], cursor: str | None, grouping: str) -> int:
+    if not cursor:
+        return 0
+    after_key = _decode_group_cursor(grouping, cursor)
+    if after_key is None:
+        return 0
+    for index, group in enumerate(groups):
+        if group["key"] == after_key:
+            return index + 1
+    return 0
+
+
+def _encode_group_cursor(grouping: str, key: str) -> str:
+    raw = f"{grouping}\n{key}".encode()
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _decode_group_cursor(grouping: str, cursor: str) -> str | None:
+    try:
+        padding = "=" * ((4 - len(cursor) % 4) % 4)
+        raw = base64.urlsafe_b64decode(cursor + padding).decode("utf-8")
+        cursor_grouping, key = raw.split("\n", 1)
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if cursor_grouping != grouping:
+        return None
+    return key
+
+
+def _merge_group_filter(base_filter: dict[str, Any] | None, group_filter: dict[str, Any]) -> dict[str, Any]:
+    merged = copy.deepcopy(base_filter or {})
+    for section, values in group_filter.items():
+        target = merged.setdefault(section, {})
+        for key, value in values.items():
+            if isinstance(value, list) and isinstance(target.get(key), list):
+                target[key] = list(dict.fromkeys([*target[key], *value]))
+            else:
+                target[key] = copy.deepcopy(value)
+    return merged
+
+
 def _tag_frequency_groups(decisions: list[dict[str, Any]], eligible_count: int, req: ProcessAnalyticsRequest) -> list[dict[str, Any]]:
     ids_by_tag: dict[str, list[str]] = defaultdict(list)
     for d in decisions:
@@ -173,7 +224,7 @@ def _tag_frequency_groups(decisions: list[dict[str, Any]], eligible_count: int, 
     for tag, ids in ids_by_tag.items():
         ids = sorted(set(ids))
         metrics = {"decision_count": len(ids), "review_count": 0, "tag_count": len(ids), "pair_count": None, "support": _ratio(len(ids), eligible_count), "jaccard": None}
-        groups.append(_group(tag, f"Decisions tagged {tag!r}", {"tag": tag}, metrics, {"decision": {"tags_all": [tag]}}, ids, eligible_count, req))
+        groups.append(_group(tag, f"Decisions tagged {tag!r}", {"tag": tag}, metrics, _merge_group_filter(req.filter, {"decision": {"tags_all": [tag]}}), ids, eligible_count, req))
     groups.sort(key=lambda g: (-g["metrics"]["tag_count"], g["key"]))
     return groups
 
@@ -191,7 +242,7 @@ def _tag_pair_groups(decisions: list[dict[str, Any]], eligible_count: int, req: 
         ids = sorted(set(ids))
         union_count = len(ids_by_tag[a] | ids_by_tag[b])
         metrics = {"decision_count": len(ids), "review_count": 0, "tag_count": None, "pair_count": len(ids), "support": _ratio(len(ids), eligible_count), "jaccard": _ratio(len(ids), union_count)}
-        groups.append(_group(f"{a}|{b}", f"Tag pair {a} + {b}", {"tag_a": a, "tag_b": b}, metrics, {"decision": {"tags_all": [a, b]}}, ids, eligible_count, req))
+        groups.append(_group(f"{a}|{b}", f"Tag pair {a} + {b}", {"tag_a": a, "tag_b": b}, metrics, _merge_group_filter(req.filter, {"decision": {"tags_all": [a, b]}}), ids, eligible_count, req))
     groups.sort(key=lambda g: (-g["metrics"]["pair_count"], g["key"]))
     return groups
 

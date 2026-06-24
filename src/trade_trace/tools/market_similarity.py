@@ -19,7 +19,7 @@ from typing import Any
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.reports.buckets import liquidity_bucket, spread_bucket
-from trade_trace.tools._helpers import db_for_args, require
+from trade_trace.tools._helpers import db_for_args, parse_float_arg, parse_int_arg, require
 from trade_trace.tools.errors import ToolError
 
 _AMBIGUOUS_SOURCES = {"manual_review", "arbitration"}
@@ -83,8 +83,15 @@ def _similarity(ref: dict[str, Any], cand: dict[str, Any]) -> tuple[float | None
 def _market_find_similar(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
     instrument_id = require(args, "instrument_id")
-    limit = min(int(args.get("limit", 10)), 100)
-    min_score = float(args.get("min_score", 0.0))
+    limit = min(parse_int_arg(args, "limit", 10, minimum=1), 100)
+    min_score = parse_float_arg(
+        args,
+        "min_score",
+        0.0,
+        minimum=0.0,
+        maximum=1.0,
+        message="min_score must be a float in [0.0, 1.0]",
+    )
     with db_for_args(args) as db:
         conn = db.connection
         ref_row = conn.execute(

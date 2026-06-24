@@ -43,6 +43,15 @@ def _count(home: Path, table: str) -> int:
         db.close()
 
 
+def _venue_names(home: Path) -> set[str]:
+    db = open_database(db_path(home))
+    try:
+        rows = db.connection.execute("SELECT name FROM venues").fetchall()
+    finally:
+        db.close()
+    return {row[0] for row in rows}
+
+
 def test_import_validate_file_and_directory_no_write_and_underscore_metadata(tmp_path: Path):
     home = tmp_path / "home"
     _init(home)
@@ -196,6 +205,47 @@ def test_import_commit_idempotent_replay(tmp_path: Path):
     assert second["data"]["committed_count"] == 1
     assert second["data"]["would_replay"] == 1
     assert _count(home, "venues") == 1
+
+
+def test_import_commit_single_refuses_stale_staged_replace(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    _init(home)
+    file = tmp_path / "events.jsonl"
+    _write_jsonl(file, [_venue_line(key="import-staged", venue_id="ven_import_staged")])
+    original_dispatch = imports._dispatch_row
+    concurrent_written = False
+
+    def dispatch_then_concurrent_write(row, row_home, actor_id):
+        nonlocal concurrent_written
+        env = original_dispatch(row, row_home, actor_id)
+        if (
+            row_home is not None
+            and Path(row_home).name.startswith("trade-trace-import-commit-")
+            and not concurrent_written
+        ):
+            concurrent_written = True
+            concurrent = _call("venue.add", {
+                "home": str(home),
+                "name": "Concurrent Venue",
+                "kind": "prediction_market",
+                "idempotency_key": "concurrent-live-write",
+            })
+            assert concurrent["ok"] is True, concurrent
+        return env
+
+    monkeypatch.setattr(imports, "_dispatch_row", dispatch_then_concurrent_write)
+
+    env = _call("import.commit", {
+        "home": str(home),
+        "path": str(file),
+        "transaction_mode": "single",
+    })
+
+    assert env["ok"] is True, env
+    assert env["data"]["committed_count"] == 0
+    assert env["data"]["errors"][0]["code"] == "STORAGE_ERROR"
+    assert env["data"]["errors"][0]["details"]["reason"] == "stale_staged_import"
+    assert _venue_names(home) == {"Concurrent Venue"}
 
 
 def test_import_commit_dry_run_does_not_write(tmp_path: Path):

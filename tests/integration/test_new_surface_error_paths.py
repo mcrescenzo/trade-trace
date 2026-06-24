@@ -127,3 +127,26 @@ def test_report_forecast_diagnostics_rejects_unsupported_filter_key(home):
     assert env.ok is False, env
     err = env.error.model_dump(mode="json")
     assert err["code"] == "VALIDATION_ERROR"
+
+
+# -- numeric parser envelope regressions -----------------------------
+
+
+@pytest.mark.parametrize(
+    "tool,args,field",
+    [
+        ("memory.recall", {"query": "x", "k": "abc"}, "k"),
+        ("playbook.list", {"limit": "abc"}, "limit"),
+        ("replay_artifact.list", {"limit": "abc"}, "limit"),
+        ("market.find_similar", {"instrument_id": "mkt_missing", "limit": "abc"}, "limit"),
+        ("market.find_similar", {"instrument_id": "mkt_missing", "min_score": "abc"}, "min_score"),
+        ("replay_artifact.list", {"limit": 0}, "limit"),
+        ("market.find_similar", {"instrument_id": "mkt_missing", "min_score": 2.0}, "min_score"),
+    ],
+)
+def test_malformed_numeric_args_return_validation_envelopes(home, tool, args, field):
+    env = _mcp(home, tool, args)
+    assert env.ok is False, env
+    err = env.error.model_dump(mode="json")
+    assert err["code"] == "VALIDATION_ERROR"
+    assert err["details"]["field"] == field

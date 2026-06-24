@@ -45,3 +45,4 @@ trade-trace.sqlite
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+.repo-review/

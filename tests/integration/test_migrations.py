@@ -1138,3 +1138,38 @@ def test_schema_meta_mismatch_detects_column_drift_from_migration_004(tmp_path: 
         assert "schema/meta mismatch" in msg
     finally:
         db.close()
+
+
+def test_schema_meta_mismatch_detects_index_drift_from_migration_031(tmp_path: Path):
+    """A stale meta row after an index-only migration must raise the
+    typed schema/meta diagnostic before SQLite can surface a raw
+    duplicate-index DDL error.
+    """
+
+    from trade_trace.storage.migrations import SchemaMetaMismatchError
+
+    db = _open(tmp_path)
+    try:
+        # Bring the DB up to migration 31 (which creates
+        # idx_edges_supersedes), then rewind meta.schema_version to 30 so
+        # the runner thinks the index-only migration is still pending.
+        apply_pending_migrations(db.connection, target_version=31)
+        assert current_version(db.connection) == 31
+        db.connection.execute(
+            "UPDATE meta SET value = '30' WHERE key = 'schema_version'"
+        )
+        assert current_version(db.connection) == 30
+
+        with pytest.raises(SchemaMetaMismatchError) as exc:
+            apply_pending_migrations(db.connection)
+
+        err = exc.value
+        assert err.current_version == 30
+        assert "idx_edges_supersedes" in err.unexpected_indexes
+        msg = str(err)
+        assert "schema/meta mismatch" in msg
+        assert "idx_edges_supersedes" in msg
+        assert "index idx_edges_supersedes already exists" not in msg.lower()
+        assert current_version(db.connection) == 30
+    finally:
+        db.close()

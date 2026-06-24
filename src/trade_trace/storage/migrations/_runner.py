@@ -59,11 +59,13 @@ def _registry() -> tuple[
     list[Migration],
     list[tuple[int, list[str]]],
     list[tuple[int, dict[str, list[str]]]],
+    list[tuple[int, list[str]]],
 ]:
     """Late-bind the registry to break the _runner → __init__ cycle.
 
     The migration registry (`MIGRATIONS`) and fingerprint constants
-    (`_MIGRATION_TABLES_CREATED`, `_MIGRATION_COLUMNS_ADDED`) live in
+    (`_MIGRATION_TABLES_CREATED`, `_MIGRATION_COLUMNS_ADDED`,
+    `_MIGRATION_INDEXES_CREATED`) live in
     the package `__init__.py` so the per-migration modules can be read
     as the canonical per-version source. `_runner.py` imports them
     lazily here so the import order is `__init__.py → _runner.py →
@@ -72,22 +74,28 @@ def _registry() -> tuple[
 
     from trade_trace.storage.migrations import (
         _MIGRATION_COLUMNS_ADDED,
+        _MIGRATION_INDEXES_CREATED,
         _MIGRATION_TABLES_CREATED,
         MIGRATIONS,
     )
-    return MIGRATIONS, _MIGRATION_TABLES_CREATED, _MIGRATION_COLUMNS_ADDED
+    return (
+        MIGRATIONS,
+        _MIGRATION_TABLES_CREATED,
+        _MIGRATION_COLUMNS_ADDED,
+        _MIGRATION_INDEXES_CREATED,
+    )
 
 
 
 class SchemaMetaMismatchError(RuntimeError):
-    """The DB's `meta.schema_version` disagrees with the tables or
-    columns that actually exist on disk
+    """The DB's `meta.schema_version` disagrees with schema objects
+    that actually exist on disk
     (bead trade-trace-0ib / DEBT-015; column-drift coverage added in
-    trade-trace-n1mm).
+    trade-trace-n1mm; index-drift coverage added in trade-trace-o6qw).
 
     Raised before any migration runs so an opaque DDL failure ("table
-    X already exists" / "duplicate column name") is replaced with an
-    actionable diagnostic.
+    X already exists" / "duplicate column name" / "index X already
+    exists") is replaced with an actionable diagnostic.
     """
 
     def __init__(
@@ -95,6 +103,7 @@ class SchemaMetaMismatchError(RuntimeError):
         current_version: int,
         unexpected_tables: list[str] | None = None,
         unexpected_columns: dict[str, list[str]] | None = None,
+        unexpected_indexes: list[str] | None = None,
     ) -> None:
         self.current_version = current_version
         self.unexpected_tables = sorted(unexpected_tables or [])
@@ -102,6 +111,7 @@ class SchemaMetaMismatchError(RuntimeError):
             table: sorted(cols)
             for table, cols in sorted((unexpected_columns or {}).items())
         }
+        self.unexpected_indexes = sorted(unexpected_indexes or [])
         parts = [f"schema/meta mismatch: meta.schema_version={current_version}"]
         if self.unexpected_tables:
             parts.append(
@@ -112,6 +122,11 @@ class SchemaMetaMismatchError(RuntimeError):
             parts.append(
                 f"these column(s) already exist on disk: "
                 f"{self.unexpected_columns!r}"
+            )
+        if self.unexpected_indexes:
+            parts.append(
+                f"these index(es) already exist on disk: "
+                f"{self.unexpected_indexes!r}"
             )
         parts.append(
             "This usually means a prior migration committed without "
@@ -130,9 +145,10 @@ def _assert_schema_matches_meta(
 ) -> None:
     """Detect a schema/meta mismatch before the migration loop starts.
 
-    Walks `_MIGRATION_TABLES_CREATED` AND `_MIGRATION_COLUMNS_ADDED`
+    Walks `_MIGRATION_TABLES_CREATED`, `_MIGRATION_COLUMNS_ADDED`, and
+    `_MIGRATION_INDEXES_CREATED`
     for migrations the meta row claims have NOT yet run and asserts
-    none of those tables or columns already exist on disk. If any do,
+    none of those tables, columns, or indexes already exist on disk. If any do,
     raise `SchemaMetaMismatchError` with the offending names so the
     operator can recover deliberately instead of debugging an
     "table X already exists" or "duplicate column name" error mid-loop.
@@ -147,8 +163,13 @@ def _assert_schema_matches_meta(
         "AND name NOT LIKE 'sqlite_%'"
     ).fetchall()
     existing_tables = {r[0] for r in rows}
+    rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' "
+        "AND name NOT LIKE 'sqlite_%'"
+    ).fetchall()
+    existing_indexes = {r[0] for r in rows}
 
-    _, tables_fp, columns_fp = _registry()
+    _, tables_fp, columns_fp, indexes_fp = _registry()
 
     unexpected_tables: list[str] = []
     for version, tables in tables_fp:
@@ -175,11 +196,20 @@ def _assert_schema_matches_meta(
                 if column in present:
                     unexpected_columns.setdefault(table, []).append(column)
 
-    if unexpected_tables or unexpected_columns:
+    unexpected_indexes: list[str] = []
+    for version, indexes in indexes_fp:
+        if version <= current_version:
+            continue
+        for index in indexes:
+            if index in existing_indexes:
+                unexpected_indexes.append(index)
+
+    if unexpected_tables or unexpected_columns or unexpected_indexes:
         raise SchemaMetaMismatchError(
             current_version,
             unexpected_tables=unexpected_tables,
             unexpected_columns=unexpected_columns,
+            unexpected_indexes=unexpected_indexes,
         )
 
 
@@ -210,7 +240,7 @@ def apply_pending_migrations(
     to_version). The migration loop runs inside one SQLite transaction so a
     crash mid-loop leaves the schema_version unchanged."""
 
-    migrations, _tables_fp, _columns_fp = _registry()
+    migrations, _tables_fp, _columns_fp, _indexes_fp = _registry()
     end = len(migrations) if target_version is None else target_version
     if end > len(migrations):
         raise ValueError(
@@ -227,7 +257,7 @@ def apply_pending_migrations(
 
     # Schema/meta consistency check (bead trade-trace-0ib): raise a
     # typed SchemaMetaMismatchError BEFORE running migrations if the
-    # meta version disagrees with the tables on disk.
+    # meta version disagrees with the schema objects on disk.
     _assert_schema_matches_meta(conn, start)
 
     conn.execute("BEGIN")

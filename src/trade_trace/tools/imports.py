@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -204,6 +205,19 @@ def _resolve_import_tool(tool: str) -> str:
 
     return _STATIC_EVENT_TOOL_MAP.get(tool, tool)
 _DB_SUFFIXES = ("", "-wal", "-shm")
+
+
+def _db_files_fingerprint(home: Path) -> dict[str, tuple[int, str] | None]:
+    db = db_path(home)
+    fingerprint: dict[str, tuple[int, str] | None] = {}
+    for suffix in _DB_SUFFIXES:
+        path = Path(str(db) + suffix)
+        if not path.exists():
+            fingerprint[suffix] = None
+            continue
+        data = path.read_bytes()
+        fingerprint[suffix] = (len(data), hashlib.sha256(data).hexdigest())
+    return fingerprint
 
 
 def _max_errors(args: dict[str, Any]) -> int:
@@ -586,9 +600,29 @@ def _import_commit(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
     if transaction_mode == "single":
         real_home = _effective_home(args)
+        live_fingerprint = _db_files_fingerprint(real_home)
         with tempfile.TemporaryDirectory(prefix="trade-trace-import-commit-") as tmp:
             staged_home = Path(tmp)
             _copy_db_files(real_home, staged_home)
+            copied_fingerprint = _db_files_fingerprint(real_home)
+            if copied_fingerprint != live_fingerprint:
+                _add_error(
+                    out.errors,
+                    max_errors,
+                    _error(
+                        None,
+                        ErrorCode.STORAGE_ERROR,
+                        "live journal changed while staging import.commit(single); refusing to replace database files",
+                        {
+                            "reason": "stale_staged_import",
+                            "transaction_mode": "single",
+                            "stage": "copy",
+                        },
+                    ),
+                )
+                out.committed_count = 0
+                out.committed_event_ids = []
+                return out.model_dump(mode="json")
             for row in rows:
                 if row.tool in _CASCADED_EVENT_TOOLS or row.tool in _DIAGNOSTIC_EVENT_TOOLS:
                     # validation already counted these into
@@ -603,6 +637,24 @@ def _import_commit(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     continue
                 e = env.get("error", {})
                 _add_error(out.errors, max_errors, _error(row, e.get("code", ErrorCode.VALIDATION_ERROR), e.get("message", "commit failed"), e.get("details", {})))
+                out.committed_count = 0
+                out.committed_event_ids = []
+                return out.model_dump(mode="json")
+            if _db_files_fingerprint(real_home) != live_fingerprint:
+                _add_error(
+                    out.errors,
+                    max_errors,
+                    _error(
+                        None,
+                        ErrorCode.STORAGE_ERROR,
+                        "live journal changed during import.commit(single); refusing to replace database files",
+                        {
+                            "reason": "stale_staged_import",
+                            "transaction_mode": "single",
+                            "stage": "replace",
+                        },
+                    ),
+                )
                 out.committed_count = 0
                 out.committed_event_ids = []
                 return out.model_dump(mode="json")

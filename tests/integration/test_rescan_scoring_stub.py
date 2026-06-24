@@ -33,12 +33,13 @@ def test_rescan_scoring_preview_empty_db(home):
     assert env["data"]["would_score_rows"] == 0
 
 
-def test_rescan_scoring_preview_counts_pending_categorical_scalar(home):
+def test_rescan_scoring_ignores_legacy_categorical_scalar_without_writing_scores(home):
     venue = _envelope(home, "venue.add", {"name": "PM", "kind": "prediction_market"})
     inst = _envelope(home, "instrument.add", {"venue_id": venue["data"]["id"], "asset_class": "prediction_market", "title": "X"})
     thesis = _envelope(home, "thesis.add", {"instrument_id": inst["data"]["id"], "side": "yes", "body": "..."})
-    # forecast.add is intentionally binary-only in v0.0.2. Rescan still needs to
-    # identify legacy pending categorical/scalar rows already present in journals.
+    # forecast.add is intentionally binary-only in v0.0.2. Legacy
+    # categorical/scalar rows may exist in older journals, but rescan must not
+    # turn them into failed unsupported_kind score rows.
     with sqlite3.connect(db_path(home)) as conn:
         conn.executemany(
             """
@@ -53,9 +54,16 @@ def test_rescan_scoring_preview_counts_pending_categorical_scalar(home):
     _envelope(home, "forecast.add", {"thesis_id": thesis["data"]["id"], "kind": "binary", "yes_label": "yes", "outcomes": [
         {"outcome_label": "yes", "probability": 0.6}, {"outcome_label": "no", "probability": 0.4}
     ]})
-    env = _envelope(home, "journal.rescan_scoring", {})
-    assert env["ok"] is True
-    assert env["data"]["affected_rows"] == 2
+    preview = _envelope(home, "journal.rescan_scoring", {})
+    assert preview["ok"] is True
+    assert preview["data"]["affected_rows"] == 0
+    assert preview["data"]["would_score_rows"] == 0
+    assert preview["data"]["ignored_unsupported_rows"] == 2
+    confirm = _envelope(home, "journal.rescan_scoring", {"mode": "confirm"})
+    assert confirm["ok"] is True
+    assert confirm["data"]["scored_rows"] == 0
+    with sqlite3.connect(db_path(home)) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM forecast_scores").fetchone()[0] == 0
 
 
 def test_rescan_scoring_invalid_mode(home):
@@ -66,4 +74,4 @@ def test_rescan_scoring_invalid_mode(home):
 
 def test_rescan_scoring_schema_introspectable():
     reg = default_registry().get("journal.rescan_scoring")
-    assert "Re-score" in reg.description or "re-score" in reg.description.lower()
+    assert "binary-only" in reg.description

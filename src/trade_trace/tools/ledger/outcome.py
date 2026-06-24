@@ -281,8 +281,13 @@ def _resolve_pending(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             safe_final = db.connection.execute(
                 """
                 SELECT status, confidence, outcome_label
-                FROM outcomes
-                WHERE instrument_id = ? AND status = 'resolved_final'
+                FROM outcomes o
+                WHERE o.instrument_id = ? AND o.status = 'resolved_final'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM edges e
+                    WHERE e.source_kind = 'outcome' AND e.target_kind = 'outcome'
+                      AND e.edge_type = 'supersedes' AND e.target_id = o.id
+                  )
                 ORDER BY resolved_at DESC, created_at DESC, id DESC
                 """,
                 (row[4],),

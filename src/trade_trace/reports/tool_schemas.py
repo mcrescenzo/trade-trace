@@ -406,6 +406,7 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "min_sample": {"type": "integer", "minimum": 1},
             "max_groups": {"type": "integer", "minimum": 1},
             "max_record_ids_per_group": {"type": "integer", "minimum": 1},
+            "cursor": {"type": "string"},
             "as_of": {"type": "string"},
         },
         description=(

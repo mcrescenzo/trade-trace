@@ -187,6 +187,29 @@ def test_strategy_time_window_and_tags_all_filters(home):
     assert {g["key"]: g["record_ids"]["decisions"] for g in env["data"]["groups"]} == {"alpha": [keep], "beta": [keep]}
 
 
+def test_group_drilldown_filter_preserves_caller_scope(home):
+    keep = _decision(home, title="keep", tags=["shared"], strategy_id="strat-a")
+    _decision(home, title="outside-scope", tags=["shared"], strategy_id="strat-b")
+
+    env = _envelope(home, "report.process_analytics", {
+        "filter": {"strategy": {"strategy_id": "strat-a"}},
+        "min_sample": 1,
+    })
+    shared = next(group for group in env["data"]["groups"] if group["key"] == "shared")
+    assert shared["filter"] == {
+        "strategy": {"strategy_id": "strat-a"},
+        "decision": {"tags_all": ["shared"]},
+    }
+
+    drilldown = _envelope(home, "report.process_analytics", {
+        "filter": shared["filter"],
+        "min_sample": 1,
+    })
+
+    assert drilldown["data"]["summary"]["sample_size"] == 1
+    assert drilldown["data"]["groups"][0]["record_ids"]["decisions"] == [keep]
+
+
 def test_unknown_top_level_request_field_rejected(home):
     bad = mcp_call("report.process_analytics", {"home": str(home), "unexpected": True}).model_dump(mode="json")
 
@@ -194,7 +217,7 @@ def test_unknown_top_level_request_field_rejected(home):
     assert bad["error"]["code"] == "VALIDATION_ERROR"
 
 
-def test_group_and_record_id_truncation_uses_flags_without_cursor(home):
+def test_group_and_record_id_truncation_uses_flags_and_cursor(home):
     for tag in ["alpha", "beta", "gamma"]:
         _decision(home, title=f"{tag}-1", tags=[tag])
         _decision(home, title=f"{tag}-2", tags=[tag])
@@ -203,10 +226,21 @@ def test_group_and_record_id_truncation_uses_flags_without_cursor(home):
     data = env["data"]
 
     assert data["truncated"] is True
-    assert data["next_cursor"] is None
+    assert data["next_cursor"] is not None
     assert len(data["groups"]) == 2
     assert all(group["truncated"] is True for group in data["groups"])
     assert all(len(group["record_ids"]["decisions"]) == 1 for group in data["groups"])
+
+    next_page = _envelope(home, "report.process_analytics", {
+        "max_groups": 2,
+        "max_record_ids_per_group": 1,
+        "min_sample": 1,
+        "cursor": data["next_cursor"],
+    })["data"]
+
+    assert next_page["truncated"] is False
+    assert next_page["next_cursor"] is None
+    assert [group["key"] for group in next_page["groups"]] == ["gamma"]
 
 
 def test_unsupported_group_by_falls_back_to_tag_frequency_with_metadata(home):

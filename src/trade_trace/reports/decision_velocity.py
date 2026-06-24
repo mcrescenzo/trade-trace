@@ -7,6 +7,7 @@ and as a denominator for downstream reports like pnl coverage.
 
 from __future__ import annotations
 
+import copy
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -68,6 +69,7 @@ def report_decision_velocity(
     groups: list[dict[str, Any]] = []
     for key in sorted(buckets):
         bucket_rows = buckets[key]
+        bucket_lo, bucket_hi = _bucket_bounds(key, bucket=bucket)
         groups.append({
             "key": key,
             "label": f"{bucket} starting {key}",
@@ -75,7 +77,7 @@ def report_decision_velocity(
                 "count": len(bucket_rows),
                 "by_type": _count_by_type(bucket_rows),
             },
-            "filter": filter_view,
+            "filter": _bucket_filter(filter_view, bucket_lo, bucket_hi, lo, hi),
             "record_ids": {"decisions": [r[0] for r in bucket_rows]},
             "examples": [],
             "sample_size": len(bucket_rows),
@@ -110,6 +112,34 @@ def _bucket_key(created_at: str, *, bucket: str) -> str:
     # week: ISO week starting Monday
     monday = ts - timedelta(days=ts.weekday())
     return monday.date().isoformat()
+
+
+def _bucket_bounds(key: str, *, bucket: str) -> tuple[str, str]:
+    start = datetime.fromisoformat(key).replace(tzinfo=UTC)
+    end = start + (timedelta(days=1) if bucket == "day" else timedelta(days=7))
+    return _format_utc(start), _format_utc(end)
+
+
+def _format_utc(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _bucket_filter(
+    base_filter: dict[str, Any],
+    bucket_lo: str,
+    bucket_hi: str,
+    caller_lo: str | None,
+    caller_hi: str | None,
+) -> dict[str, Any]:
+    merged = copy.deepcopy(base_filter)
+    time_window = merged.setdefault("time_window", {})
+    time_window["decision_at_gte"] = max(
+        value for value in (caller_lo, bucket_lo) if value is not None
+    )
+    time_window["decision_at_lt"] = min(
+        value for value in (caller_hi, bucket_hi) if value is not None
+    )
+    return merged
 
 
 def _count_by_type(rows: list[tuple[str, str]]) -> dict[str, int]:

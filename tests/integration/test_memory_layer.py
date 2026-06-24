@@ -93,6 +93,19 @@ def test_memory_retain_rejects_invalid_importance(home):
         assert env.error.code.value == "VALIDATION_ERROR"
 
 
+def test_memory_retain_rejects_valid_to_before_valid_from(home):
+    env = _mcp(home, "memory.retain", {
+        "node_type": "observation",
+        "body": "invalid temporal interval",
+        "valid_from": "2026-01-02T00:00:00Z",
+        "valid_to": "2026-01-01T00:00:00Z",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "valid_to"
+    assert env.error.details["reason"] == "invalid_interval"
+
+
 # -- 2. memory.reflect: reflection + about edge atomic ------------
 
 
@@ -183,6 +196,20 @@ def test_memory_reflect_accepts_readme_sugar_shape(home):
         "good-skip", "good-liquidity-discipline",
     }
     assert edge == ("decision", seeds["decision"])
+
+
+def test_memory_reflect_rejects_valid_to_before_valid_from(home):
+    seeds = _seed_decision(home)
+    env = _mcp(home, "memory.reflect", {
+        "target": {"kind": "decision", "id": seeds["decision"]},
+        "insight": "invalid temporal interval",
+        "valid_from": "2026-01-02T00:00:00Z",
+        "valid_to": "2026-01-01T00:00:00Z",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "valid_to"
+    assert env.error.details["reason"] == "invalid_interval"
 
 
 def test_memory_reflect_target_object_conflicts_with_target_kind(home):

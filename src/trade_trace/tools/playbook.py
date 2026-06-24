@@ -42,6 +42,7 @@ from trade_trace.tools._helpers import (
     emit_event,
     new_id,
     now_iso,
+    parse_int_arg,
     reject_if_contains_secrets,
     require,
     store_metadata_json,
@@ -335,13 +336,15 @@ def _playbook_create(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 
 def _playbook_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    limit = int(args.get("limit", 100))
-    if limit < 1 or limit > 1000:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "limit must be in [1, 1000]",
-            details={"field": "limit", "value": limit},
-        )
+    limit = parse_int_arg(
+        args,
+        "limit",
+        100,
+        minimum=1,
+        maximum=1000,
+        message="limit must be an integer in [1, 1000]",
+        range_message="limit must be in [1, 1000]",
+    )
     with db_for_args(args) as db:
         rows = db.connection.execute(
             "SELECT id, name, description, status, created_at "
