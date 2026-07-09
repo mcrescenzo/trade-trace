@@ -1,10 +1,7 @@
 """Resolution-criteria interpretation as a first-class field (trade-trace-4kec.12).
 
 `forecast.interpret_resolution` records the agent's READING of how a market will
-resolve, at forecast time. `report.resolution_misreads` (in reports/) later
-compares that reading to the actual resolution source, surfacing
-"right about the world, wrong about the contract" as a distinct error class.
-Append-only and idempotent.
+resolve, at forecast time. Append-only and idempotent.
 """
 
 from __future__ import annotations
@@ -30,8 +27,7 @@ from trade_trace.tools.errors import ToolError
 
 _EVENT = "forecast.resolution_interpreted"
 
-# Interpreted source uses the same taxonomy markets resolve under, so the
-# misread diagnostic compares like-for-like (market_bind._ALLOWED_RESOLUTION_SOURCES).
+# Interpreted source uses the same taxonomy markets resolve under.
 _ALLOWED_RESOLUTION_SOURCES = {"market_contract", "oracle_feed", "manual_review", "arbitration"}
 
 _SELECT = (
@@ -170,10 +166,8 @@ def register_resolution_interpretation_tools(registry: ToolRegistry) -> None:
         is_write=True,
         description=(
             "Record the agent's reading of how a market will resolve, at forecast "
-            "time (interpreted resolution source + YES condition). Later checked by "
-            "report.resolution_misreads against the actual resolution source so "
-            "'right about the world, wrong about the contract' is measurable. "
-            "Append-only, idempotent; one interpretation per forecast."
+            "time (interpreted resolution source + YES condition). Append-only, "
+            "idempotent; one interpretation per forecast."
         ),
         example_minimal={
             "forecast_id": "fc_FORECAST_ID_HERE",

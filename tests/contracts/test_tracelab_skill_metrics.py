@@ -17,8 +17,6 @@ def _write_trace(path: Path) -> None:
         {"tool": "report.work_queue", "actor_id": "agent:a", "ok": True},
         {"tool": "report.work_queue", "actor_id": "agent:a", "ok": False},
         {"tool": "report.coach", "actor_id": "agent:b", "ok": True},
-        {"tool": "report.mistake_tripwire", "actor_id": "agent:b", "ok": True},
-        {"tool": "report.calibration_advisory", "actor_id": "agent:b", "ok": True},
         {"tool": "forecast.commit", "actor_id": "agent:a", "ok": True},
     ]
     path.write_text("\n".join(json.dumps(r) for r in records), encoding="utf-8")
@@ -37,7 +35,6 @@ def _seed_db(path: Path) -> None:
                 id TEXT PRIMARY KEY, forecast_id TEXT, side TEXT, quantity REAL, price REAL,
                 type TEXT, actor_id TEXT NOT NULL
             );
-            CREATE TABLE resolution_interpretations (id TEXT PRIMARY KEY, forecast_id TEXT, actor_id TEXT NOT NULL);
             CREATE TABLE positions (
                 id TEXT PRIMARY KEY, status TEXT, realized_pnl REAL, unrealized_pnl REAL, actor_id TEXT NOT NULL
             );
@@ -60,7 +57,6 @@ def _seed_db(path: Path) -> None:
             "INSERT INTO decisions VALUES (?, ?, ?, ?, ?, ?, ?)",
             [("d-a1", "f-a1", "yes", 10, 0.55, "paper_enter", "agent:a")],
         )
-        conn.execute("INSERT INTO resolution_interpretations VALUES ('ri-a1', 'f-a1', 'agent:a')")
         conn.execute("INSERT INTO positions VALUES ('p-a1', 'closed', 1.25, NULL, 'agent:a')")
         conn.executemany(
             "INSERT INTO forecast_independence_locks VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -85,8 +81,6 @@ def test_trace_fixture_counts_read_rail_calls_per_actor_and_tool(tmp_path: Path)
     assert result["per_actor"]["agent:a"]["work_queue"] == 2
     assert result["per_actor"]["agent:a"]["total"] == 3
     assert result["per_actor"]["agent:b"]["coach"] == 1
-    assert result["per_actor"]["agent:b"]["mistake_tripwire"] == 1
-    assert result["per_actor"]["agent:b"]["calibration_advisory"] == 1
 
 
 def test_output_labels_read_rail_counts_observational_trace_only_not_replay(tmp_path: Path):
@@ -134,10 +128,9 @@ def test_per_actor_skill_metric_buckets_are_produced(tmp_path: Path):
     output = build_skill_metrics(db, trace)
     agent_a = output["skill_metrics"]["agent:a"]
 
-    assert set(agent_a) == {"calibration", "process_quality", "resolution_misreads", "pnl"}
+    assert set(agent_a) == {"calibration", "process_quality", "pnl"}
     assert agent_a["calibration"]["sample_size"] == 1
     assert agent_a["calibration"]["mean_brier_score"] == 0.09
     assert agent_a["process_quality"]["sample_size"] == 1
     assert agent_a["process_quality"]["direction_consistency_rate"] == 1.0
-    assert agent_a["resolution_misreads"]["sample_size"] == 1
     assert agent_a["pnl"]["realized_pnl"] == 1.25

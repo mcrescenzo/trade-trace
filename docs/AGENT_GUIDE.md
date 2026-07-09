@@ -15,7 +15,7 @@ For a fresh/stateless run, start with the local bootstrap packet before creating
 1. Inspect the current schema for `report.bootstrap` before calling it.
 2. Call `report.bootstrap` with a fixed `as_of`, the narrowest supported `filter`, and explicit `sections`/`budgets` when the packet could be large.
 3. Inspect `truncation`, `omitted_counts`, `caveats`, `source_refs`, and `suggested_process_calls`. If a section is partial or omitted, do not treat missing items as absent.
-4. Before any new write, make targeted local read calls such as `report.lifecycle`, `report.work_queue`, `report.recall_receipts`, `review.bundle`, or another specific report/drilldown suggested by the packet.
+4. Before any new write, make targeted local read calls such as `report.work_queue`, `agent.next_actions`, `report.recall_receipts`, `review.bundle`, or another specific public report/drilldown suggested by the packet.
 5. Only then write new thesis/decision/outcome/reflection rows, and only when supported by local evidence or caller-supplied evidence that you can cite with source IDs.
 
 On a **truly empty journal** (zero forecasts, positions, and obligations — e.g. the very first run after `journal init`), the continuity/read `suggested_process_calls` (`report.work_queue`, `agent.next_actions`, `report.recall_receipts`, `strategy.show`) all return empty, so there is nothing yet to orient on. In that cold-start case only, `report.bootstrap` additionally surfaces a first-run onboarding breadcrumb in `suggested_process_calls` pointing at the entry sequence that *begins* the loop: `market.search` → `market.bind` → `snapshot.fetch` → `forecast.add`. These are process-call hints, not advice or fetches — `market.search` is read-only adapter discovery (it names/ranks no market), nothing is invoked for you, and the `no_market_data_fetch` / `no_financial_advice` hard constraints are unchanged. As soon as the journal has any obligation, position, forecast, strategy, or recalled memory, the breadcrumb disappears and the packet is unchanged. Acting on the breadcrumb still requires caller-supplied thesis/probability when you reach `forecast.add`.
@@ -42,9 +42,9 @@ tt report bootstrap --home <journal-home> \
 After reading the packet, use targeted process/read surfaces rather than jumping straight to writes:
 
 ```bash
-tt report lifecycle --home <journal-home> --as-of 2026-05-22T00:00:00Z --states-json '["pending_review","stale","reflection_due","adherence_due"]'
 tt report work_queue --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["resolve_due_forecast","record_reflection"]'
 tt report work_queue --home <journal-home> --as-of 2026-05-22T00:00:00Z --kinds-json '["review_due_watch","record_playbook_adherence"]'
+tt agent next_actions --home <journal-home> --as-of 2026-05-22T00:00:00Z
 tt report recall_receipts --home <journal-home> --as-of 2026-05-22T00:00:00Z --run-id run-2026-05-22 --limit 25
 tt review bundle --home <journal-home> --filter-json '{"strategy":{"strategy_id":"strat-a"}}' --max-records 25
 ```
@@ -72,14 +72,14 @@ Use returned `source_refs`, `allowed_actions`, `forbidden_actions`, `closure_con
 
 Anti-patterns for bootstrap and continuity reports:
 
-- Do not interpret bootstrap, lifecycle, work queue, next actions, recall receipts, or review bundles as trading advice, a market ranking, or a return claim.
+- Do not interpret bootstrap, work queue, next actions, recall receipts, or review bundles as trading advice, a market ranking, or a return claim.
 - Do not ask these surfaces to fetch market prices, broker/exchange/wallet state, source content, or outcome truth; they summarize only local caller-supplied rows.
 - Do not schedule, assign, claim, notify, retry, route orders, prepare orders, sign, or execute from `suggested_process_calls` or work-queue items.
 - Do not assume an item is absent when `truncation.is_partial=true`, a section has omitted counts, counts are unavailable, or a section was not requested.
-- Do not start a stateless run with writes; inspect bootstrap, lifecycle/work-queue, and targeted recall/review/report drilldowns first.
+- Do not start a stateless run with writes; inspect bootstrap, work-queue/next-actions, and targeted recall/review/report drilldowns first.
 - Do not invent memory, citations, outcomes, or lessons not backed by returned `source_refs`, recall IDs, memory node IDs, or caller-supplied evidence.
 
-When a run is partially complete, use `report.lifecycle`, `report.work_queue`, `review.bundle`, and `tool.schema` to identify the next local journal step; do not use removed draft/bundle helper names as current commands.
+When a run is partially complete, use `report.work_queue`, `agent.next_actions`, `review.bundle`, and `tool.schema` to identify the next local journal step; do not use removed draft/bundle helper names as current commands.
 
 1. `market.bind` — create or identify the market metadata row for the external market/instrument.
 
@@ -136,7 +136,7 @@ When a run is partially complete, use `report.lifecycle`, `report.work_queue`, `
 - Idempotency keys: provide `idempotency_key` on every write. A retry with the same semantic payload replays safely; a retry with the same key but different payload returns `IDEMPOTENCY_CONFLICT`. Use stable keys such as `<run-id>:<tool>:<external-market-id>:<version>`.
 - Free-text fields and replays: certain long-form fields are explicitly *free-text* per `semantic-key-policy.md` §3 and are ignored when comparing payloads under the same idempotency key. The notable one is `decision.reason` (per bead trade-trace-uu0b): retrying `decision.add` with the same key and a rephrased `reason` returns the original row with `meta.idempotent_replay=true`, NOT `IDEMPOTENCY_CONFLICT`. This is the contract — LLM agents that regenerate rationale on retry stay replay-safe. See `SEMANTIC_KEYS['decision.created'].free_text_fields` for the canonical list.
 - `_dry_run`: set `"_dry_run": true` on supported write calls to validate and preview without committing. The envelope echoes meta dry_run.
-- Source freshness: when recording evidence with `source.add`, set `freshness_at` to when the evidence itself was current (publication time, data as-of time, or quote timestamp) if you want `report.source_quality` stale-source diagnostics to evaluate it. `retrieved_at` is only when you fetched/recorded the source for provenance; stale diagnostics do not use it as a fallback.
+- Source freshness: `source.add` is a legacy-visible compatibility writer. For current evidence writes, call `tool.schema` for the tool you are using and populate its inline source fields; when a schema accepts `freshness_at`, set it to when the evidence itself was current (publication time, data as-of time, or quote timestamp) so embedded source-quality diagnostics in `report.coach`/`report.audit_readiness` can evaluate staleness. `retrieved_at` is only when you fetched/recorded the source for provenance; stale diagnostics do not use it as a fallback.
 - `_confirm`: use `"_confirm": true` only when a schema or tool description requires explicit confirmation for a risky path. If absent from a tool schema, do not invent it.
 - Envelope handling: success has `data` plus `meta`; errors have code, message, details, and `meta`. See [contracts.md](./architecture/contracts.md) for the canonical shape.
 
@@ -173,6 +173,6 @@ Use `tool.schema` for self-discovery instead of relying on stale examples. Omit 
 {"tool":"tool.schema","args":{"tool":"forecast.add"}}
 ```
 
-Per bead trade-trace-dgdq, catalog mode mirrors MCP `list_tools` for the current 103-tool public catalog: each row carries `name`, `cli_invocation`, `is_write`, `has_example`, and `json_schema` (None when no example/explicit schema). Agents can discover the full call shape for every tool in one round-trip without N drilldowns. Per-tool drilldown still adds `description`, `example_minimal`, `example_rich`, and `required_metadata`. Renamed surfaces expose `legacy_name` metadata (for example `resolution.add` for legacy `outcome.add`) and removed-tool hints so legacy callers get a clear migration path instead of stale current examples.
+Per bead trade-trace-dgdq, catalog mode mirrors MCP `list_tools` for the current 82-tool public catalog: each row carries `name`, `cli_invocation`, `is_write`, `has_example`, and `json_schema` (None when no example/explicit schema). Agents can discover the full call shape for every tool in one round-trip without N drilldowns. Per-tool drilldown still adds `description`, `example_minimal`, `example_rich`, and `required_metadata`. Renamed surfaces expose `legacy_name` metadata (for example `resolution.add` for legacy `outcome.add`) and removed-tool hints so legacy callers get a clear migration path instead of stale current examples.
 
 For validation, compare the loop against PRD §10 dogfood criteria: the agent should create a complete journal trail, resolve outcomes, review reports, write reflections, update a playbook when warranted, and recall those lessons before the next decision. For beta/workbench dogfood runs, retain only sanitized public evidence in tracked docs and keep raw/private transcripts ignored per [agent-workbench-dogfood-evidence.md](./architecture/agent-workbench-dogfood-evidence.md).

@@ -137,9 +137,9 @@ def test_stdio_list_tools_exposes_all_registered_tools_with_input_schema(tmp_pat
         server.close()
 
 
-def test_stdio_tools_call_report_filter_schema_matches_in_process_mcp_call(tmp_path: Path):
+def test_stdio_tools_call_journal_schema_matches_in_process_mcp_call(tmp_path: Path):
     expected = mcp_call(
-        "report.filter_schema",
+        "journal.schema",
         {},
         actor_id="agent:stdio-test",
     ).model_dump(mode="json", exclude_none=True)
@@ -148,7 +148,7 @@ def test_stdio_tools_call_report_filter_schema_matches_in_process_mcp_call(tmp_p
     try:
         result = server.request(
             "tools/call",
-            {"name": "report.filter_schema", "arguments": {}},
+            {"name": "journal.schema", "arguments": {}},
         )
         assert result["structuredContent"]["data"] == expected["data"]
         assert result["structuredContent"]["ok"] == expected["ok"]

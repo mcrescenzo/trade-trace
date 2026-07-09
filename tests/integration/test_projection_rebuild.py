@@ -6,9 +6,8 @@ their source append-only tables. The load-bearing invariant
 produces byte-identical state, and a rebuild against a fixture event log
 matches the live state.
 
-For M1: `positions` is the only live projection. `memory_node_stats` is
-deferred until M3; the rebuild is a no-op that surfaces in the result
-envelope so an operator can confirm the path exists.
+`positions` and `memory_node_stats` are live projections. Rebuilding
+`memory_node_stats` on a fresh home is implemented but yields zero rows.
 """
 
 from __future__ import annotations
@@ -284,12 +283,11 @@ def test_atomic_rebuild_rollback_on_error(home):
     assert snap_after == snap_before
 
 
-# -- memory_node_stats deferred ------------------------------------------
+# -- memory_node_stats empty-home rebuild --------------------------------
 
 
-def test_memory_node_stats_rebuild_is_noop(home):
-    """Until M3 ships, the rebuild is a no-op that still surfaces in the
-    result envelope so operators can confirm the path exists."""
+def test_memory_node_stats_rebuild_on_empty_home_yields_zero_rows(home):
+    """The rebuild is implemented; a fresh home simply has no recall rows."""
 
     env = _envelope(home, "journal.rebuild_projections", {"projection": "memory_node_stats"})
     assert env["ok"] is True

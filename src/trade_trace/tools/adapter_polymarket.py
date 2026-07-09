@@ -156,7 +156,7 @@ def _parse_ts(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return datetime.fromisoformat(value)
     except ValueError:
         return None
 
@@ -256,8 +256,8 @@ def _resolution_source(raw: dict[str, Any], out: dict[str, Any], state: str) -> 
       judgement / market-rules-unclear path), or an explicit venue value.
     * ``oracle_feed`` — every other (non-disputed, non-ambiguous) Polymarket
       market: the UMA optimistic oracle is the resolver. This is the faithful
-      default and lets ``report.resolution_misreads`` record ``aligned`` for an
-      agent that reads a UMA-over-Binance crypto strike as ``oracle_feed``.
+      default for an agent that reads a UMA-over-Binance crypto strike as
+      ``oracle_feed``.
 
     A venue-supplied ``out["resolution_source"]`` that is already a valid enum
     value always wins, so a future Gamma field (or a faithful test fixture)

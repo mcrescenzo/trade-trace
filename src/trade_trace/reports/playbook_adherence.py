@@ -23,6 +23,9 @@ from trade_trace.reports._filter_support import process_filter
 DEFAULT_ADHERENCE_MIN_SAMPLE = 10
 """reports.md §3.2: min 10 decisions with adherence rows."""
 
+REPORT_NAME = "report.playbook_adherence"
+REPORT_FILTER_SUPPORT: frozenset[str] = frozenset()
+
 
 _STATUSES = ("considered", "followed", "overridden", "not_applicable")
 
@@ -120,7 +123,7 @@ def report_playbook_adherence(
     """
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    filter_dict = process_filter(rf, report="report.playbook_adherence")
+    filter_dict = process_filter(rf, report=REPORT_NAME)
 
     sql = (
         "SELECT dpr.id, dpr.decision_id, dpr.playbook_version_id, "

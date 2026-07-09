@@ -15,6 +15,7 @@ Imported by `ledger/forecast.py` (late-forecast trigger #2 inside
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 from trade_trace.contracts.tool_registry import ToolContext
@@ -313,21 +314,20 @@ def _late_recorded_calc(
     late (max of the two over-by deltas, 0 otherwise)."""
 
     try:
-        from datetime import datetime as _dt
-        fc_ts = _dt.fromisoformat(forecast_created_at.replace("Z", "+00:00"))
-        out_ts = _dt.fromisoformat(outcome_created_at.replace("Z", "+00:00"))
+        fc_ts = datetime.fromisoformat(forecast_created_at)
+        out_ts = datetime.fromisoformat(outcome_created_at)
         deltas = []
         late = fc_ts >= out_ts
         if late:
             deltas.append(int((fc_ts - out_ts).total_seconds()))
         if resolution_at:
-            res_ts = _dt.fromisoformat(resolution_at.replace("Z", "+00:00"))
+            res_ts = datetime.fromisoformat(resolution_at)
             if fc_ts > res_ts:
                 late = True
                 deltas.append(int((fc_ts - res_ts).total_seconds()))
         late_by = max(deltas) if deltas else None
         return late, late_by
-    except Exception:
+    except Exception:  # noqa: BLE001 - malformed timestamps fall back to not-late
         return False, None
 
 

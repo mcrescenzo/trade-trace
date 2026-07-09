@@ -16,6 +16,9 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 from trade_trace.tools._helpers import (
+    canonical_json as _canonical_json,
+)
+from trade_trace.tools._helpers import (
     check_idempotency_replay,
     db_for_args,
     emit_event,
@@ -35,10 +38,6 @@ _ARTIFACT_TYPES = {"historical_simulation", "paper", "imported_live", "evaluatio
 _EVIDENCE_MODES = {"historical_simulation", "paper", "imported_live", "other"}
 _JSON_FIELDS = ("parameters", "assumptions", "fill_model", "slippage_model", "result_summary", "provenance")
 _SELECT = "id, schema_version, semantic_key, material_hash, artifact_type, evidence_mode, dataset_hash, strategy_id, strategy_version, parameters_json, assumptions_json, fill_model_json, slippage_model_json, result_summary_json, sample_size, source_links_json, provenance_json, caveats_json, redaction_profile, redacted_artifact_ref, as_of, evaluated_at, imported_at, idempotency_key, actor_id"
-
-
-def _canonical_json(value: Any) -> str:
-    return json.dumps(value if value is not None else {}, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _json_arg(args: dict[str, Any], field: str, default: Any) -> Any:

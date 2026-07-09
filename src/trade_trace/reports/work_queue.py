@@ -24,6 +24,13 @@ from trade_trace.reports.watchlist import DEFAULT_STALE_THRESHOLD_DAYS
 from trade_trace.timestamps import to_utc_iso8601
 from trade_trace.tools._helpers import now_iso
 
+REPORT_NAME = "report.work_queue"
+REPORT_FILTER_SUPPORT = frozenset({
+    "actors.run_id",
+    "instrument.instrument_id",
+    "strategy.strategy_id",
+})
+
 # Transport-facing default page size for report.work_queue / agent.next_actions.
 # Each obligation is a HEAVY row (~3.5KB serialized: allowed_actions,
 # forbidden_actions x10, closure_condition, trigger_evidence, source_refs,
@@ -126,7 +133,7 @@ def report_work_queue(
     transient projections with closure conditions, not durable tasks.
 
     The obligation list is paginated (``limit`` + opaque ``cursor`` keyset,
-    mirroring ``report.lifecycle`` / ``report.open_positions``). Summary metrics
+    mirroring the internal lifecycle substrate / ``report.open_positions``). Summary metrics
     (``item_count``, ``kind_counts``, ``priority_counts``) are computed over the
     FULL filtered set so a bot sees true backlog totals, while ``groups``,
     ``extra.work_queue`` and ``extra.next_actions`` carry only the current page;
@@ -160,7 +167,7 @@ def report_work_queue(
 
     resolved_as_of = to_utc_iso8601(as_of or now_iso(), field="as_of")
     rf = ReportFilter.model_validate(raw_filter or {})
-    filter_view = process_filter(rf, report="report.work_queue")
+    filter_view = process_filter(rf, report=REPORT_NAME)
 
     lifecycle_cases = derive_lifecycle_cases(conn, as_of=resolved_as_of, stale_threshold_days=stale_threshold_days)
     items: list[dict[str, Any]] = []
@@ -289,7 +296,7 @@ def _item_from_case(case: dict[str, Any], as_of: str) -> dict[str, Any] | None:
         "required_external_input": kind == "resolve_due_forecast",
         "due_at": case.get("due_at"),
         "as_of": as_of,
-        "trigger_evidence": {"report": "report.lifecycle", "case_id": case["case_id"], "state": state, "reason_codes": case.get("reason_codes", [])},
+        "trigger_evidence": {"source": "internal.lifecycle", "case_id": case["case_id"], "state": state, "reason_codes": case.get("reason_codes", [])},
         "record_ids": _record_ids(refs),
     }
 

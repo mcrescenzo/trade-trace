@@ -27,6 +27,20 @@ REPORT_NAME = "report.calibration"
 name once removes the drift risk of three separate string literals
 disagreeing on the report's identity."""
 
+REPORT_FILTER_SUPPORT = frozenset({
+    # Scored forecasts are scoped through the forecast/thesis/instrument chain
+    # for these public/security-contract filters; `outcome.include_late_recorded`
+    # swaps the dogfood default.
+    "actors.actor_id",
+    "actors.agent_id",
+    "actors.model_id",
+    "actors.environment",
+    "actors.run_id",
+    "instrument.venue_id",
+    "strategy.strategy_id",
+    "outcome.include_late_recorded",
+})
+
 _UNSET: Any = object()
 """Sentinel distinguishing "caller did not supply a pre-fetched canonical
 probability" from a genuine `None` canonical probability (trade-trace-u7j3).
@@ -147,7 +161,7 @@ def report_calibration(
 
 
 
-def report_calibration_anchored(
+def _market_baseline_anchored(
     conn: sqlite3.Connection,
     *,
     raw_filter: dict[str, Any] | None = None,
@@ -156,248 +170,9 @@ def report_calibration_anchored(
     return _market_baseline_report(conn, raw_filter=raw_filter, min_sample=min_sample, mode="anchored")
 
 
-def report_calibration_terminal(
-    conn: sqlite3.Connection,
-    *,
-    raw_filter: dict[str, Any] | None = None,
-    min_sample: int = DEFAULT_MIN_SAMPLE,
-) -> dict[str, Any]:
-    return _market_baseline_report(conn, raw_filter=raw_filter, min_sample=min_sample, mode="terminal")
-
-
-ADVISORY_REPORT_NAME = "report.calibration_advisory"
-"""Forward-facing, decision-time recalibration surface (trade-trace-4kec.7).
-
-Unlike the backward-facing `report.calibration*` panels, this answers a
-prospective question: "given a forecast I am about to commit at probability p,
-how did my past forecasts in this band actually resolve, and what calibration
-adjustment does that imply?" It is read-only, deterministic, and emits no trade
-advice — only the caller's own historical resolution rate and the
-calibration-derived recalibration of the candidate probability."""
-
-ADVISORY_BIN_POLICY = "equal_width_0.1"
-"""Bin policy the advisory uses for its band assignment. Fixed equal-width 0.1
-bands so a candidate probability maps to a stable, predictable band edge."""
-
-ADVISORY_BIN_POLICY_NOTE = (
-    f"Advisory bands use {ADVISORY_BIN_POLICY} (fixed 0.1-wide edges); the main "
-    f"report.calibration ECE/reliability_bins use bin_policy={DEFAULT_BIN_POLICY!r} "
-    "(data-driven, quantile bins). Bin boundaries therefore differ, so an advisory "
-    "band's observed_frequency is NOT directly comparable bin-to-bin with a "
-    "report.calibration reliability_bins entry — treat the cross-reference as a "
-    "rough read. For an exact comparison, re-run report.calibration with "
-    f"bin_policy={ADVISORY_BIN_POLICY!r}."
-)
-"""Cross-reference caveat (trade-trace-j2kz). The advisory partitions scored rows
-into equal-width 0.1 bands while report.calibration's ECE uses the equal_mass
-(quantile) default, so the two reports' bins do not line up. This note ships in
-the advisory output (`summary.bin_policy_note`, `caveats`, and `extra`) so an
-agent cross-referencing `summary.band` against `report.calibration`'s
-`reliability_bins` knows the boundaries differ."""
-
-
-def _band_for_probability(probability: float) -> dict[str, Any]:
-    """Equal-width 0.1 band the candidate probability falls into, matching the
-    `equal_width_0.1` reliability-bin assignment in `_ece_and_bins`
-    (lower edge belongs to the upper bin; the top band is closed on the right)."""
-
-    idx = min(int(probability * 10), 9)
-    lower = idx / 10.0
-    upper = (idx + 1) / 10.0
-    return {
-        "bin_index": idx,
-        "lower": lower,
-        "upper": upper,
-        "bin_midpoint": (lower + upper) / 2.0,
-    }
-
-
-def report_calibration_advisory(
-    conn: sqlite3.Connection,
-    *,
-    probability: Any,
-    raw_filter: dict[str, Any] | None = None,
-    min_sample: int = DEFAULT_MIN_SAMPLE,
-) -> dict[str, Any]:
-    """Decision-time recalibration for a candidate forecast probability.
-
-    Returns the caller's historical resolution rate for the equal-width 0.1
-    band the candidate falls into, the raw `calibration_gap`
-    (`observed_frequency - mean_probability` in that band), the resulting
-    clamped `suggested_probability`, and `suggested_adjustment` — the effective
-    post-clamp delta such that probability + suggested_adjustment ==
-    suggested_probability. Deterministic and read-only; no trade advice.
-
-    Contract — `recalibration_reliable` (trade-trace-suit). The field shape of
-    `suggested_probability` is asymmetric across the sub-threshold band: it is
-    `null` when N=0 (no prior forecasts) but a fully-populated, precise-looking
-    low-N artifact when N is in `1..min_sample-1` (alongside a `sample_warning`
-    string). A naive feeder reading only `suggested_probability` cannot
-    distinguish "reliable" from "unreliable" by null-checking that field.
-    `summary.recalibration_reliable` is the unambiguous single gate: it is
-    `True` iff `sample_size >= min_sample`, so both sub-threshold cases collapse
-    to `False`. Autonomous consumers MUST gate on this boolean rather than
-    parsing `sample_warning` free-text or null-checking `suggested_probability`.
-    The transparency fields (`observed_frequency`, `calibration_gap`,
-    `suggested_probability`) remain populated at low N so an operator can still
-    inspect the raw band gap; they are simply not safe to apply when
-    `recalibration_reliable` is `False`."""
-
-    if not isinstance(probability, (int, float)) or isinstance(probability, bool):
-        raise ValueError("probability must be a number in [0, 1]")
-    if not (0.0 <= float(probability) <= 1.0):
-        raise ValueError("probability must be in [0, 1]")
-    probability = float(probability)
-
-    rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report=ADVISORY_REPORT_NAME)
-    rows = _load_scored_rows(conn, rf)
-    if rf.outcome.include_late_recorded:
-        excluded_late = 0
-    else:
-        excluded_late = sum(1 for r in rows if r.late_recorded)
-        rows = [r for r in rows if not r.late_recorded]
-
-    band = _band_for_probability(probability)
-    band_rows = [r for r in rows if min(int(r.p_yes * 10), 9) == band["bin_index"]]
-
-    sample_size = len(band_rows)
-    caveats: list[str] = [
-        "Recalibration is derived only from the caller's own past resolved "
-        "forecasts in this probability band; it is not trade advice, a signal, "
-        "or an edge/profit claim.",
-        ADVISORY_BIN_POLICY_NOTE,
-    ]
-    if excluded_late > 0:
-        caveats.append(
-            f"excluded {excluded_late} late-recorded forecast(s) per "
-            "dogfood-protocol.md §2.2; pass outcome.include_late_recorded=true to include."
-        )
-
-    observed_frequency: float | None
-    mean_probability: float | None
-    calibration_gap: float | None
-    suggested_probability: float | None
-    sample_warning: str | None
-    # Single explicit gate for autonomous feeders (trade-trace-suit). The
-    # advisory is asymmetric by field shape — `suggested_probability` is null
-    # at N=0 but a confidently-precise low-N artifact at 1..min_sample-1 — so a
-    # consumer cannot tell "trustworthy" from "unreliable" by null-checking that
-    # field. `recalibration_reliable` collapses both sub-threshold cases (N=0 and
-    # 1..min_sample-1) to a single boolean a feeder gates on without parsing the
-    # `sample_warning` free-text. We deliberately keep the transparency fields
-    # populated at low N (option (a) + (c) in the bead) rather than nulling them
-    # (option (b)), so an operator can still inspect the raw band gap.
-    recalibration_reliable = sample_size >= min_sample
-    if sample_size == 0:
-        observed_frequency = None
-        mean_probability = None
-        calibration_gap = None
-        suggested_probability = None
-        sample_warning = (
-            f"no prior resolved forecasts in band {band['lower']}–{band['upper']}; "
-            "no calibration adjustment available"
-        )
-    else:
-        observed_frequency = sum(r.y for r in band_rows) / sample_size
-        mean_probability = sum(r.p_yes for r in band_rows) / sample_size
-        calibration_gap = observed_frequency - mean_probability
-        suggested_probability = min(1.0, max(0.0, probability + calibration_gap))
-        sample_warning = (
-            f"only {sample_size} prior forecast(s) in this band; recalibration "
-            f"is unreliable below {min_sample}"
-            if sample_size < min_sample
-            else None
-        )
-
-    summary = {
-        "probability": probability,
-        "band": band,
-        # trade-trace-j2kz: advisory bands are equal_width_0.1 while
-        # report.calibration's ECE bins default to equal_mass, so the two
-        # reports' bin boundaries do not align. This note makes the mismatch
-        # explicit so a consumer cross-referencing summary.band against
-        # report.calibration's reliability_bins treats it as a rough read.
-        "bin_policy": ADVISORY_BIN_POLICY,
-        "bin_policy_note": ADVISORY_BIN_POLICY_NOTE,
-        "sample_size": sample_size,
-        # True only when sample_size >= min_sample. Autonomous feeders MUST gate
-        # on this single field rather than null-checking suggested_probability or
-        # parsing sample_warning (trade-trace-suit). When False, suggested_*
-        # values (if present) are low-N artifacts and should not be applied.
-        "recalibration_reliable": recalibration_reliable,
-        "observed_frequency": (
-            round(observed_frequency, 6) if observed_frequency is not None else None
-        ),
-        "mean_probability": (
-            round(mean_probability, 6) if mean_probability is not None else None
-        ),
-        "calibration_gap": (
-            round(calibration_gap, 6) if calibration_gap is not None else None
-        ),
-        "suggested_probability": (
-            round(suggested_probability, 6) if suggested_probability is not None else None
-        ),
-        # The effective adjustment to apply to the candidate probability, i.e.
-        # the post-clamp delta so that probability + suggested_adjustment ==
-        # suggested_probability always holds. This differs from calibration_gap
-        # (the raw observed_frequency - mean_probability band gap) whenever the
-        # candidate + gap would fall outside [0, 1] and is clamped (e.g. a 0.97
-        # candidate with a +0.05 gap yields suggested_probability 1.0 and a
-        # suggested_adjustment of 0.03, not the raw 0.05).
-        "suggested_adjustment": (
-            round(suggested_probability - probability, 6)
-            if suggested_probability is not None
-            else None
-        ),
-        "filter": applied_filter_view(rf, report=ADVISORY_REPORT_NAME),
-        "sample_warning": sample_warning,
-        "caveats": caveats,
-        "late_recorded_excluded": excluded_late,
-    }
-    record_ids = {
-        "forecasts": sorted({r.forecast_id for r in band_rows}),
-        "forecast_scores": sorted({r.score_id for r in band_rows}),
-        "outcomes": sorted({r.outcome_id for r in band_rows}),
-    }
-    groups = [
-        {
-            "key": f"band_{band['bin_index']}",
-            "label": (
-                f"Prior resolved forecasts in probability band "
-                f"{band['lower']}–{band['upper']}"
-            ),
-            "metrics": {
-                "sample_size": sample_size,
-                "recalibration_reliable": recalibration_reliable,
-                "observed_frequency": summary["observed_frequency"],
-                "mean_probability": summary["mean_probability"],
-                "calibration_gap": summary["calibration_gap"],
-                "suggested_probability": summary["suggested_probability"],
-            },
-            "filter": applied_filter_view(rf, report=ADVISORY_REPORT_NAME),
-            "record_ids": record_ids,
-            "examples": _build_examples(conn, band_rows, max_examples=3),
-            "sample_size": sample_size,
-            "sample_warning": sample_warning,
-            "truncated": False,
-        }
-    ]
-    return standard_report_result(
-        summary=summary,
-        groups=groups,
-        # trade-trace-j2kz: surface the bin-policy mismatch note alongside the
-        # policy id so the envelope meta carries the cross-reference caveat too.
-        extra={
-            "bin_policy": ADVISORY_BIN_POLICY,
-            "bin_policy_note": ADVISORY_BIN_POLICY_NOTE,
-        },
-    )
-
-
 def _market_baseline_report(conn: sqlite3.Connection, *, raw_filter: dict[str, Any] | None, min_sample: int, mode: str) -> dict[str, Any]:
     rf = ReportFilter.model_validate(raw_filter or {})
-    enforce_supported_filter(rf, report=f"report.calibration_{mode}")
+    enforce_supported_filter(rf, report=REPORT_NAME)
     all_rows, unanchored = _load_market_baseline_rows(conn, rf, mode=mode)
     if rf.outcome.include_late_recorded:
         excluded_late = 0
@@ -413,7 +188,7 @@ def _market_baseline_report(conn: sqlite3.Connection, *, raw_filter: dict[str, A
     caveats = []
     if unanchored:
         caveats.append(f"{unanchored} scored forecast(s) lacked a {mode} market baseline and were excluded from market-baseline metrics.")
-    summary = {"sample_size": sample_size, "sample_warning": sample_warning, "filter": applied_filter_view(rf, report=f"report.calibration_{mode}"), "metrics": metrics, "caveats": caveats, "late_recorded_excluded": excluded_late, "unanchored_forecast_count": unanchored}
+    summary = {"sample_size": sample_size, "sample_warning": sample_warning, "filter": applied_filter_view(rf, report=REPORT_NAME), "metrics": metrics, "caveats": caveats, "late_recorded_excluded": excluded_late, "unanchored_forecast_count": unanchored}
     groups = [{"key": "all", "label": f"All scored binary forecasts with {mode} market baseline", "metrics": metrics, "filter": summary["filter"], "record_ids": {"forecasts": sorted({r.forecast_id for r in rows}), "forecast_scores": sorted({r.score_id for r in rows}), "outcomes": sorted({r.outcome_id for r in rows})}, "examples": _build_examples(conn, rows, max_examples=3), "sample_size": sample_size, "sample_warning": sample_warning, "truncated": False}]
     return standard_report_result(summary=summary, groups=groups, extra={"bin_policy": DEFAULT_BIN_POLICY, "baseline_mode": mode})
 
@@ -477,9 +252,7 @@ def _load_market_baseline_rows(conn: sqlite3.Connection, rf: ReportFilter, *, mo
 
 def _scored_row_base_where() -> list[str]:
     """The base WHERE clauses every scored-row loader applies
-    (trade-trace-qnxt). Shared between `_load_scored_rows` (calibration)
-    and `_load_grouped_scored_rows` (compare). Returns a fresh list so
-    callers can extend it freely."""
+    (trade-trace-qnxt). Returns a fresh list so callers can extend it freely."""
 
     return [
         "fs.metric = 'brier_binary'",
@@ -494,7 +267,7 @@ def _scored_row_base_where() -> list[str]:
         # superseded by a newer forecast (forecast->forecast supersedes
         # edge). Mirrors the auto-scorer guard so any pre-existing
         # superseded-forecast score rows never inflate N or distort
-        # Brier/ECE/skill in report.calibration / report.compare.
+        # Brier/ECE/skill in report.calibration.
         """NOT EXISTS (
             SELECT 1 FROM edges e
             WHERE e.source_kind = 'forecast' AND e.target_kind = 'forecast'

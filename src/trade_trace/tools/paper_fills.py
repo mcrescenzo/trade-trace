@@ -18,6 +18,9 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 from trade_trace.tools._helpers import (
+    canonical_json as _canonical_json,
+)
+from trade_trace.tools._helpers import (
     check_idempotency_replay,
     db_for_args,
     emit_event,
@@ -36,10 +39,6 @@ _SCHEMA_VERSION = "paper_fill.v1"
 _CONFIDENCE = {"low", "medium", "high", "unknown"}
 _STALENESS = {"fresh", "stale", "missing", "unknown"}
 _SELECT = "id, schema_version, semantic_key, material_hash, environment_label, account_label, market_id, instrument_id, pretrade_intent_id, side, outcome_side, requested_quantity, filled_quantity, remaining_quantity, limit_price, average_fill_price, fee_amount, slippage_cap_bps, quote_id, book_id, snapshot_id, snapshot_as_of, order_as_of, freshness_status, fill_status, conservative_fill_model, mark_source, mark_as_of, confidence_label, staleness_status, source_precedence, caveats_json, evidence_json, provenance_json, recorded_at, idempotency_key, actor_id"
-
-
-def _canonical_json(value: Any) -> str:
-    return json.dumps(value if value is not None else {}, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _json_arg(args: dict[str, Any], field: str, default: Any) -> Any:
@@ -121,7 +120,7 @@ def _non_negative_int(value: Any, field: str, *, default: int | None = None) -> 
 def _dt(text: str | None) -> datetime | None:
     if not text:
         return None
-    return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(UTC)
+    return datetime.fromisoformat(text).astimezone(UTC)
 
 
 def _hash_material(material: dict[str, Any]) -> str:
@@ -137,7 +136,7 @@ def _model_fill(args: dict[str, Any], caveats: list[Any]) -> tuple[Decimal, Deci
     levels = _list_arg(args, "book_levels")
     if not levels:
         caveats.append({"code": "missing_depth_no_fill", "message": "No caller-supplied depth; conservative paper model records no fill."})
-        return Decimal("0"), None, "no_fill", "missing"
+        return Decimal(0), None, "no_fill", "missing"
     snapshot_as_of = normalize_timestamp(args, "snapshot_as_of")
     order_as_of = normalize_timestamp(args, "order_as_of", required=True)
     freshness = "unknown"
@@ -150,9 +149,9 @@ def _model_fill(args: dict[str, Any], caveats: list[Any]) -> tuple[Decimal, Deci
             freshness = "fresh" if age <= max_age else "stale"
         if freshness == "stale":
             caveats.append({"code": "stale_depth_no_fill", "message": "Depth snapshot is stale; conservative paper model records no fill."})
-            return Decimal("0"), None, "no_fill", freshness
-    filled = Decimal("0")
-    notional = Decimal("0")
+            return Decimal(0), None, "no_fill", freshness
+    filled = Decimal(0)
+    notional = Decimal(0)
     for level in levels:
         if not isinstance(level, dict):
             raise ToolError(ErrorCode.VALIDATION_ERROR, "book_levels entries must be objects")
@@ -175,10 +174,10 @@ def _model_fill(args: dict[str, Any], caveats: list[Any]) -> tuple[Decimal, Deci
     ref = _decimal(args.get("reference_mid_price"), "reference_mid_price", required=False)
     cap = _non_negative_decimal(args.get("slippage_cap_bps"), "slippage_cap_bps", required=False)
     if ref and cap is not None and ref > 0:
-        bps = ((avg - ref) / ref * Decimal("10000")) if side == "buy" else ((ref - avg) / ref * Decimal("10000"))
+        bps = ((avg - ref) / ref * Decimal(10000)) if side == "buy" else ((ref - avg) / ref * Decimal(10000))
         if bps > cap:
             caveats.append({"code": "slippage_cap_exceeded_conservative_fill", "message": "Computed paper fill exceeded caller slippage cap; conservative model records no fill."})
-            return Decimal("0"), None, "no_fill", freshness
+            return Decimal(0), None, "no_fill", freshness
     status = "full" if filled == qty else "partial"
     if status == "partial":
         caveats.append({"code": "insufficient_depth_partial_fill", "message": "Caller-supplied depth supported only a partial conservative paper fill."})
@@ -219,7 +218,7 @@ def _paper_fill_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]
     snapshot_as_of = normalize_timestamp(args, "snapshot_as_of")
     caveats = _list_arg(args, "caveats")
     filled, avg, fill_status, freshness = _model_fill(args, caveats)
-    qty = _decimal(args.get("requested_quantity"), "requested_quantity") or Decimal("0")
+    qty = _decimal(args.get("requested_quantity"), "requested_quantity") or Decimal(0)
     remaining = qty - filled
     confidence = str(args.get("confidence_label") or ("medium" if fill_status != "no_fill" and freshness == "fresh" else "low"))
     staleness = str(args.get("staleness_status") or freshness)

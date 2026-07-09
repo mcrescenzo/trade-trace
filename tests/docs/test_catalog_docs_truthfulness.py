@@ -128,7 +128,7 @@ LEGACY_OPERATOR_TOOLS = (
 # row") are deliberately excluded so a bullet cannot pass on narrative alone.
 CAVEAT_RE = re.compile(
     r"legacy|alias|back-?compat|deprecat|renamed|folded|hidden|admin|consolidat",
-    re.I,
+    re.IGNORECASE,
 )
 
 

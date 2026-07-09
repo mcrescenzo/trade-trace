@@ -116,25 +116,6 @@ def test_injection_payload_in_instrument_filter_does_not_execute(home, payload):
         }
 
 
-# -- 2b. injection payload coverage for other filter-bearing reports ----
-
-
-@pytest.mark.parametrize("payload", INJECTION_PAYLOADS)
-def test_decision_velocity_injection_payload_in_decision_type_does_not_execute(home, payload):
-    """report.decision_velocity also dynamically constructs SQL from
-    filter inputs; prove the same parameter-binding contract holds."""
-
-    env = _mcp(home, "report.decision_velocity", {
-        "filter": {"decision": {"decision_type": [payload]}},
-    })
-    if env.ok:
-        assert env.data["summary"]["sample_size"] == 0
-    else:
-        assert env.error.code.value in {
-            "VALIDATION_ERROR", "STORAGE_ERROR", "INVARIANT_VIOLATION",
-        }
-
-
 @pytest.mark.parametrize("payload", INJECTION_PAYLOADS)
 def test_review_bundle_injection_payload_in_actor_filter_does_not_execute(home, payload):
     """review.bundle dynamically constructs SQL from filter inputs;

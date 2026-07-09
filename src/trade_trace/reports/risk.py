@@ -11,6 +11,8 @@ from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 
 DEFAULT_RISK_MIN_SAMPLE = 10
+REPORT_NAME = "report.risk"
+REPORT_FILTER_SUPPORT: frozenset[str] = frozenset()
 _R_BINS = [float("-inf"), -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0, float("inf")]
 
 # One decision collapses to one position via position_events, NOT via the
@@ -18,8 +20,7 @@ _R_BINS = [float("-inf"), -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0, float("inf")]
 # landed a decision in both the R histogram and the pending caveat —
 # trade-trace-rtxy). The CTE picks the lowest position_id per decision for
 # determinism so the SELECT yields exactly one row per decision. Used by both
-# `report.risk` (point-in-time) and `report.compare(base_report='risk')`
-# (the longitudinal / per-strategy expectancy series — trade-trace-62fj).
+# `report.risk` point-in-time aggregation.
 _RISK_DECISION_SQL = """
     WITH decision_position AS (
         SELECT pe.decision_id AS decision_id, MIN(p.id) AS position_id
@@ -214,7 +215,7 @@ def report_risk(
     """
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    filter_view = process_filter(rf, report="report.risk")
+    filter_view = process_filter(rf, report=REPORT_NAME)
 
     rows = conn.execute(_RISK_DECISION_SQL).fetchall()
     classified = _classify_risk_rows(rows)
@@ -304,10 +305,7 @@ def report_risk(
         "missing_risk_count": len(missing_risk_ids),
         "pending_risk_count": len(pending_ids),
         "decisions_missing_risk_sample": missing_risk_ids[:10],
-        "longitudinal_expectancy_report": (
-            "report.compare(base_report='risk', group_by='period'|'strategy_id'|"
-            "'decision_type') for an over-time / per-strategy expectancy series."
-        ),
+        "longitudinal_expectancy_report": None,
         "risk_policy_versions": policy_summary,
         "risk_check_receipts": receipt_summary,
         "audit_only_note": "Risk receipts are recorded audit evidence only; this report gives no trading advice and performs no execution action.",

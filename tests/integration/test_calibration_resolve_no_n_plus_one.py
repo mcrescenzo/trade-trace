@@ -28,9 +28,7 @@ from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.contracts.report_filter import ReportFilter
 from trade_trace.mcp_server import mcp_call
 from trade_trace.reports import calibration as calib
-from trade_trace.reports import compare as cmp_mod
 from trade_trace.reports.calibration import _load_scored_rows, _resolve_p_yes_and_y
-from trade_trace.reports.compare import _load_grouped_scored_rows
 from trade_trace.storage.paths import db_path
 
 _SEED_COUNTER = count(1)
@@ -120,25 +118,6 @@ def test_load_scored_rows_has_no_per_row_queries(home):
     # No per-row canonical-probability lookup keyed by a single forecast id.
     assert trace.count_substr("FROM forecasts WHERE id = ?") == 0
     # At most one bulk IN-list fetch of forecast_outcomes for the whole set.
-    assert trace.count_substr("forecast_outcomes WHERE forecast_id IN") == 1
-
-
-def test_load_grouped_scored_rows_has_no_per_row_queries(home):
-    _seed_n(home, 6)
-    with sqlite3.connect(db_path(home)) as conn:
-        trace = _QueryTrace()
-        conn.set_trace_callback(trace)
-        grouped = list(
-            _load_grouped_scored_rows(
-                conn, ReportFilter.model_validate({}),
-                cmp_mod.CALIBRATION_GROUP_SQL["instrument_id"],
-            )
-        )
-        conn.set_trace_callback(None)
-
-    assert len(grouped) >= 6
-    assert trace.count_substr("forecast_outcomes WHERE forecast_id = ?") == 0
-    assert trace.count_substr("FROM forecasts WHERE id = ?") == 0
     assert trace.count_substr("forecast_outcomes WHERE forecast_id IN") == 1
 
 
@@ -240,7 +219,7 @@ def test_canonical_fast_path_zero_extra_queries_when_probability_present(home):
 
 
 def test_calib_module_exposes_bulk_helper():
-    """The bulk-fetch helper is the shared seam all three callers import."""
+    """The bulk-fetch helper is the shared seam report callers import."""
 
     assert hasattr(calib, "_bulk_fetch_forecast_outcomes")
     assert hasattr(calib, "_resolve_p_yes_and_y_from_data")

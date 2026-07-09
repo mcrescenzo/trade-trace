@@ -6,7 +6,7 @@ Covers ≥6 named tests:
   `neutral`).
 - Unknown stance / source kind rejected with VALIDATION_ERROR.
 - Unknown endpoint target rejected with NOT_FOUND.
-- report.source_quality + report.coach surface each of the five
+- the internal source-quality panel + report.coach surface each of the five
   diagnostics: missing on actual_enter, stale, contradictory,
   duplicated, sensitive.
 """
@@ -14,10 +14,40 @@ Covers ≥6 named tests:
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from tests._mcp_helpers import mcp_default as _mcp
+from trade_trace.contracts.tool_registry import ToolContext
+from trade_trace.reports.tool_handlers.audit_quality import _report_source_quality
+from trade_trace.tools.errors import ToolError
+
+
+def _source_quality(home: Path, args: dict | None = None):
+    payload = {"home": str(home), **(args or {})}
+    ctx = ToolContext(
+        tool="internal.source_quality",
+        actor_id="agent:default",
+        request_id="internal-source-quality-test",
+        raw_args=payload,
+    )
+    try:
+        return SimpleNamespace(
+            ok=True,
+            data=_report_source_quality(payload, ctx),
+            error=None,
+        )
+    except ToolError as exc:
+        return SimpleNamespace(
+            ok=False,
+            data=None,
+            error=SimpleNamespace(
+                code=exc.code,
+                details=exc.details,
+                message=exc.message,
+            ),
+        )
 
 
 def _seed_thesis_and_decision(
@@ -185,7 +215,7 @@ def test_missing_sources_on_actual_enter_fires(home):
     attachments surfaces in the diagnostic."""
 
     seeds = _seed_thesis_and_decision(home, decision_type="actual_enter")
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     assert env.ok, env
     diag = env.data["diagnostics"]["missing_sources_on_actual_enter"]
     assert diag["count"] == 1
@@ -204,7 +234,7 @@ def test_missing_sources_silent_when_source_attached(home):
         "source_id": src, "target_id": seeds["thesis"],
         "idempotency_key": "00000000-0000-4000-8000-200000000002",
     })
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     diag = env.data["diagnostics"]["missing_sources_on_actual_enter"]
     assert diag["count"] == 0
 
@@ -220,7 +250,7 @@ def test_missing_sources_silent_when_source_attached_directly_to_pm_records(home
         "idempotency_key": "00000000-0000-4000-8000-200000000102",
     })
 
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     diag = env.data["diagnostics"]["missing_sources_on_actual_enter"]
     assert diag["count"] == 0
 
@@ -243,7 +273,7 @@ def test_stale_sources_fires_when_freshness_predates_decision(home):
         "source_id": src, "target_id": seeds["thesis"],
         "idempotency_key": "00000000-0000-4000-8000-300000000002",
     })
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     diag = env.data["diagnostics"]["stale_sources"]
     assert diag["count"] >= 1
     sample = next(s for s in diag["samples"] if s["id"] == src)
@@ -266,7 +296,7 @@ def test_stale_sources_include_direct_decision_attachment_and_deduplicate(home):
         "idempotency_key": "00000000-0000-4000-8000-300000000103",
     })
 
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     diag = env.data["diagnostics"]["stale_sources"]
     matches = [s for s in diag["samples"] if s["id"] == src and s["decision_id"] == seeds["decision"]]
     assert len(matches) == 1
@@ -305,7 +335,7 @@ def test_stale_sources_silent_when_freshness_recent(home):
         "source_id": src, "target_id": seeds["thesis"],
         "idempotency_key": "00000000-0000-4000-8000-300000000004",
     })
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     diag = env.data["diagnostics"]["stale_sources"]
     assert diag["count"] == 0
 
@@ -336,7 +366,7 @@ def test_contradictory_sources_fires_when_same_kind_disagrees(home):
         "source_id": con, "target_id": seeds["thesis"],
         "idempotency_key": "00000000-0000-4000-8000-400000000004",
     })
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     diag = env.data["diagnostics"]["contradictory_sources"]
     assert diag["count"] == 1
     sample = diag["samples"][0]
@@ -357,7 +387,7 @@ def test_contradictory_sources_silent_with_only_supports(home):
         "source_id": src, "target_id": seeds["thesis"],
         "idempotency_key": "00000000-0000-4000-8000-400000000011",
     })
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     assert env.data["diagnostics"]["contradictory_sources"]["count"] == 0
 
 
@@ -387,7 +417,7 @@ def test_duplicated_sources_fires_on_repeated_content_hash(home):
         "source_id": src2, "target_id": seeds["thesis"],
         "idempotency_key": "00000000-0000-4000-8000-500000000004",
     })
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     diag = env.data["diagnostics"]["duplicated_sources"]
     assert diag["count"] == 1
     sample = diag["samples"][0]
@@ -408,7 +438,7 @@ def test_duplicated_sources_silent_when_hashes_differ(home):
             "source_id": src, "target_id": seeds["thesis"],
             "idempotency_key": f"00000000-0000-4000-8000-50000000002{i}",
         })
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     assert env.data["diagnostics"]["duplicated_sources"]["count"] == 0
 
 
@@ -426,7 +456,7 @@ def test_sensitive_sources_fires_for_redacted_attachment(home):
         "source_id": src, "target_id": seeds["thesis"],
         "idempotency_key": "00000000-0000-4000-8000-600000000002",
     })
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     diag = env.data["diagnostics"]["sensitive_sources"]
     assert diag["count"] == 1
     assert src in diag["sample_ids"]["sources"]
@@ -443,7 +473,7 @@ def test_sensitive_sources_silent_for_default_redaction(home):
         "source_id": src, "target_id": seeds["thesis"],
         "idempotency_key": "00000000-0000-4000-8000-600000000004",
     })
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     assert env.data["diagnostics"]["sensitive_sources"]["count"] == 0
 
 
@@ -469,7 +499,7 @@ def test_report_coach_surfaces_source_quality_callouts(home):
 
 
 def test_empty_db_returns_no_data_warning(home):
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     assert env.ok
     assert env.data["summary"]["sample_warning"] == "no_data"
 
@@ -517,7 +547,7 @@ def test_diagnostic_count_reflects_true_total_when_samples_capped(home):
     finally:
         db.close()
 
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     assert env.ok, env
     diag = env.data["diagnostics"]["sensitive_sources"]
     assert diag["count"] == total, (
@@ -601,7 +631,7 @@ def test_source_quality_counts_inline_only_decision_sources(home):
         '{"sources":[{"id":"inline_stale","kind":"url","title":"Old inline","stance":"supports","freshness_at":"2026-01-01T00:00:00Z","hash":"inline-hash","redaction_status":"sensitive"}]}',
     )
 
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     assert env.ok, env
     assert env.data["summary"]["total_sources"] >= 1
     assert env.data["summary"]["total_source_attachments"] >= 1
@@ -619,7 +649,7 @@ def test_source_quality_tolerates_malformed_inline_metadata_in_summary(home):
         '{not valid json',
     )
 
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     assert env.ok, env
     assert env.data["summary"]["total_sources"] >= 0
 
@@ -666,7 +696,7 @@ def test_expanded_stance_sources_attach_to_resolution_market_records(home):
         assert env.data["edge_type"] == "about"
         assert env.data["evidence_stance"] in {"official_source", "resolution_rule"}
 
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     assert env.ok, env
     official_diag = env.data["diagnostics"]["official_sources"]
     assert official_diag["count"] >= 2
@@ -690,7 +720,7 @@ def test_source_quality_rejects_out_of_range_stale_threshold(home, bad_value):
     `-1` is out of range; `True` is a bool, which is not a meaningful day
     count even though `isinstance(True, int)` is True."""
 
-    env = _mcp(home, "report.source_quality", {"stale_threshold_days": bad_value})
+    env = _source_quality(home, {"stale_threshold_days": bad_value})
     assert env.ok is False, env
     assert env.error.code.value == "VALIDATION_ERROR"
     assert env.error.details["field"] == "stale_threshold_days"
@@ -728,7 +758,7 @@ def test_redacted_sensitive_source_text_is_not_persisted_or_reported(home):
         db.close()
     assert row == (None, None, None, "sha256:protected")
 
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     samples = env.data["diagnostics"]["redacted_sources"]["samples"]
     sample = next(s for s in samples if s["id"] == src)
     assert sample["content_hash"] == "sha256:protected"
@@ -827,7 +857,7 @@ def test_missing_sources_bulk_query_respects_mixed_coverage(home):
         "idempotency_key": "00000000-0000-4000-8000-x0g6cov00002",
     })
 
-    env = _mcp(home, "report.source_quality", {})
+    env = _source_quality(home, {})
     diag = env.data["diagnostics"]["missing_sources_on_actual_enter"]
     surfaced = set(diag["sample_ids"]["decisions"])
     assert bare["decision"] in surfaced

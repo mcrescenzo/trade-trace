@@ -270,6 +270,11 @@ The base install does not require vector dependencies and never downloads model 
 
 ### 8.2 Enabling local embeddings
 
+These local-embedding maintenance surfaces are legacy-tier/catalog-hidden tools,
+not default public catalog calls. `model.import` and `memory.reindex` are
+confirmation-gated admin operations; `model.warm` is a read-only availability
+check for already staged local assets.
+
 The supported local path is explicit and air-gapped:
 
 1. Install optional runtime dependencies:
@@ -292,11 +297,13 @@ The supported local path is explicit and air-gapped:
 
 ### 8.3 Unsupported remote/API providers
 
-Remote embedding providers are not part of the v0.0.2 product surface. `embeddings.provider=api:openai` and other remote/provider-key variants fail validation. No keyring backend is imported for embeddings, and no memory text is sent to embedding APIs. `keyring.revoke` remains only as a legacy no-op for older clients.
+Remote embedding providers are not part of the v0.0.2 product surface. `embeddings.provider=api:openai` and other remote/provider-key variants fail validation. No keyring backend is imported for embeddings, no `keyring.revoke` tool is registered, and no memory text is sent to embedding APIs.
 
 ### 8.4 Re-indexing local embeddings
 
-Embedding model identity and dimension are recorded per node in `memory_node_embeddings`. When `embeddings.provider=local` and verified local assets are available, `tt memory reindex --confirm` embeds existing nodes in one transaction and replaces stale rows for the active provider/model. If assets or optional dependencies are missing, reindex reports degraded availability and leaves existing rows untouched. BM25 + temporal recall remains available either way.
+**Legacy-tier note:** `memory.reindex` / `tt memory reindex` is catalog-hidden and marked `removed_in=0.0.2`; it is retained only for transitional/admin compatibility, not as a default public workflow.
+
+Embedding model identity and dimension are recorded per node in `memory_node_embeddings`. When `embeddings.provider=local` and verified local assets are available, the legacy-tier `tt memory reindex --confirm` admin path embeds existing nodes in one transaction and replaces stale rows for the active provider/model. If assets or optional dependencies are missing, reindex reports degraded availability and leaves existing rows untouched. BM25 + temporal recall remains available either way.
 
 ### 8.5 Disabling vectors
 

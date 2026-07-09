@@ -85,18 +85,6 @@ def test_polymarket_finality_statuses_are_local_evidence_and_reported(tmp_path):
     assert imported["finality_uncertain"] is True
     assert imported["auto_scoreable"] is False
 
-    lifecycle = _mcp(home, "report.market_lifecycle", {}).data
-    assert instrument_id in lifecycle["summary"]["metrics"]["resolution_due_market_ids"]
-    assert instrument_id in lifecycle["summary"]["metrics"]["finality_uncertain_market_ids"]
-
-    quality = _mcp(home, "report.resolution_quality", {}).data
-    statuses = quality["summary"]["metrics"]["status_counts"]
-    assert statuses["proposed"] == 1
-    assert statuses["imported_settled"] == 1
-    assert quality["summary"]["metrics"]["finality_uncertain_count"] == 2
-    assert all("finality_uncertain" in group["caveat_codes"] for group in quality["groups"])
-
-
 def test_resolved_final_requires_explicit_high_confidence_to_auto_score(tmp_path):
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}, actor_id="agent:test").ok
@@ -182,17 +170,6 @@ def test_malformed_confidence_resolved_final_does_not_score_or_hide_pending(tmp_
     pending_ids = {item["forecast_id"] for item in pending["items"]}
     assert forecast_id in pending_ids
     assert late_forecast in pending_ids
-
-    quality = _mcp(home, "report.resolution_quality", {}).data
-    group = next(g for g in quality["groups"] if g["resolution"]["outcome_id"] == "out_malformed_confidence")
-    assert group["metrics"]["finality_uncertain"] is True
-    assert "finality_uncertain" in group["caveat_codes"]
-
-    lifecycle = _mcp(home, "report.market_lifecycle", {}).data
-    market = next(g for g in lifecycle["groups"] if g["key"] == instrument_id)
-    assert market["market"]["finality_uncertain"] is True
-    assert instrument_id in lifecycle["summary"]["metrics"]["finality_uncertain_market_ids"]
-
 
 def test_resolve_pending_excludes_already_scored_forecast(tmp_path):
     """Regression for trade-trace-2b0z: a forecast that already has a real

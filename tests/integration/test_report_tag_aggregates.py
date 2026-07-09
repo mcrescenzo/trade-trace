@@ -1,4 +1,4 @@
-"""`report.mistakes` + `report.strengths` per trade-trace-nxn."""
+"""`report.mistakes` plus coach tag-strength helper coverage."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from trade_trace.mcp_server import mcp_call
 from trade_trace.reports.tag_aggregates import (
     load_mistakes_and_strengths,
     report_mistakes,
-    report_strengths,
 )
 from trade_trace.storage.paths import db_path
 
@@ -33,7 +32,7 @@ class _QueryTrace:
 
 
 # The distinguishing prefix of the decision_tags→decisions→forecast_scores
-# join shared by report.mistakes / report.strengths (and report.coach).
+# join shared by report.mistakes and report.coach.
 _TAG_BRIER_JOIN = "FROM decision_tags dt JOIN decisions d"
 
 
@@ -85,10 +84,6 @@ def test_mistakes_registered():
     assert "report.mistakes" in default_registry().names()
 
 
-def test_strengths_registered():
-    assert "report.strengths" in default_registry().names()
-
-
 # -- ordering ---------------------------------------------------------
 
 
@@ -102,11 +97,12 @@ def test_mistakes_orders_by_mean_brier_descending(home):
     assert keys == ["bad-pattern", "good-pattern"]
 
 
-def test_strengths_orders_by_mean_brier_ascending(home):
+def test_internal_strengths_view_orders_by_mean_brier_ascending(home):
     _seed_tagged_decision_with_scored_forecast(home, tag="bad-pattern", p_yes=0.1)
     _seed_tagged_decision_with_scored_forecast(home, tag="good-pattern", p_yes=0.9)
-    env = _envelope(home, "report.strengths", {})
-    keys = [g["key"] for g in env["data"]["groups"]]
+    with sqlite3.connect(db_path(home)) as conn:
+        _mistakes, strengths = load_mistakes_and_strengths(conn)
+    keys = [g["key"] for g in strengths["groups"]]
     assert keys == ["good-pattern", "bad-pattern"]
 
 
@@ -162,19 +158,21 @@ def _seed_tagged_decision_unscored(home: Path, *, tag: str, p_yes: float) -> Non
 def test_unscored_tag_excluded_from_both_reports(home):
     # One scored tag (real Brier) + one tag whose forecast is still open. The
     # open tag has no Brier to attribute, so it is neither a recurring mistake
-    # nor a recurring strength and must not appear in either ranked report —
-    # matching report.mistake_tripwire / report.coach, which both gate on
-    # scored evidence. Before the AX-048 fix the open tag surfaced (mean_brier
-    # null) in BOTH reports, contradictorily labeled mistake AND strength.
+    # nor a recurring strength and must not appear in either ranked view —
+    # matching report.coach, which gates on scored evidence. Before the AX-048
+    # fix the open tag surfaced (mean_brier null) in BOTH views,
+    # contradictorily labeled mistake AND strength.
     _seed_tagged_decision_with_scored_forecast(home, tag="scored-pat", p_yes=0.5)
     _seed_tagged_decision_unscored(home, tag="open-pat", p_yes=0.5)
 
-    for report in ("report.mistakes", "report.strengths"):
-        env = _envelope(home, report, {})
-        keys = [g["key"] for g in env["data"]["groups"]]
-        assert keys == ["scored-pat"], (report, keys)
-        assert env["data"]["summary"]["metrics"]["tag_count"] == 1
-        for g in env["data"]["groups"]:
+    env = _envelope(home, "report.mistakes", {})
+    with sqlite3.connect(db_path(home)) as conn:
+        _mistakes, strengths = load_mistakes_and_strengths(conn)
+    for label, data in (("report.mistakes", env["data"]), ("coach_strengths", strengths)):
+        keys = [g["key"] for g in data["groups"]]
+        assert keys == ["scored-pat"], (label, keys)
+        assert data["summary"]["metrics"]["tag_count"] == 1
+        for g in data["groups"]:
             assert g["metrics"]["mean_brier"] is not None
             assert g["metrics"]["scored_forecast_count"] >= 1
 
@@ -203,28 +201,23 @@ def test_group_sample_size_counts_scored_forecasts_not_decisions(home):
 
 
 def test_each_ranked_report_runs_the_join_exactly_once(home):
-    """report.mistakes and report.strengths each execute the tag→Brier
-    join exactly once per call (the public single-report path is
-    unchanged by the bg12 refactor)."""
+    """report.mistakes executes the tag→Brier join exactly once per call."""
 
     _seed_tagged_decision_with_scored_forecast(home, tag="a", p_yes=0.2)
     _seed_tagged_decision_with_scored_forecast(home, tag="b", p_yes=0.8)
 
-    for fn in (report_mistakes, report_strengths):
-        with sqlite3.connect(db_path(home)) as conn:
-            trace = _QueryTrace()
-            conn.set_trace_callback(trace)
-            fn(conn)
-            conn.set_trace_callback(None)
-        assert trace.count_substr(_TAG_BRIER_JOIN) == 1, (
-            fn.__name__, trace.statements,
-        )
+    with sqlite3.connect(db_path(home)) as conn:
+        trace = _QueryTrace()
+        conn.set_trace_callback(trace)
+        report_mistakes(conn)
+        conn.set_trace_callback(None)
+    assert trace.count_substr(_TAG_BRIER_JOIN) == 1, trace.statements
 
 
 def test_load_mistakes_and_strengths_runs_join_once_for_both_views(home):
-    """`load_mistakes_and_strengths` builds BOTH ranked reports from a
+    """`load_mistakes_and_strengths` builds BOTH ranked views from a
     single execution of the tag→Brier join (trade-trace-bg12), and each
-    returned report is byte-for-byte identical to the separate calls."""
+    returned mistakes view is byte-for-byte identical to the public call."""
 
     _seed_tagged_decision_with_scored_forecast(home, tag="bad", p_yes=0.1)
     _seed_tagged_decision_with_scored_forecast(home, tag="good", p_yes=0.9)
@@ -239,13 +232,11 @@ def test_load_mistakes_and_strengths_runs_join_once_for_both_views(home):
         # two ranked views (desc + asc) are produced from it.
         assert trace.count_substr(_TAG_BRIER_JOIN) == 1, trace.statements
 
-        # Equivalence: the combined results match the separate public calls
-        # byte-for-byte.
+        # Equivalence: the combined mistakes result matches the separate public
+        # call byte-for-byte.
         ref_mistakes = report_mistakes(conn)
-        ref_strengths = report_strengths(conn)
 
     assert mistakes == ref_mistakes
-    assert strengths == ref_strengths
     # Sanity: desc vs asc orderings really are distinct.
     assert [g["key"] for g in mistakes["groups"]] == ["bad", "good"]
     assert [g["key"] for g in strengths["groups"]] == ["good", "bad"]

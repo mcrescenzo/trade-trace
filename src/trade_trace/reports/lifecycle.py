@@ -29,6 +29,17 @@ from trade_trace.timestamps import (
 )
 from trade_trace.tools._helpers import now_iso
 
+REPORT_NAME = "report.lifecycle"
+REPORT_FILTER_SUPPORT = frozenset({
+    "actors.run_id",
+    "instrument.instrument_id",
+    "strategy.strategy_id",
+    "time_window.created_at_gte",
+    "time_window.created_at_lt",
+    "time_window.decision_at_gte",
+    "time_window.decision_at_lt",
+})
+
 LifecycleState = Literal[
     "open",
     "pending_review",
@@ -208,7 +219,7 @@ def report_lifecycle(
     as_of_dt = _parse_ts(resolved_as_of)
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    filter_view = process_filter(rf, report="report.lifecycle")
+    filter_view = process_filter(rf, report=REPORT_NAME)
     cases = [
         _public_case(case)
         for case in derive_lifecycle_cases(

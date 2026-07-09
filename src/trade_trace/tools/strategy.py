@@ -112,7 +112,7 @@ def _parse_as_of(value: Any, *, field: str) -> str:
             },
         )
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value)
     except ValueError as exc:
         raise ToolError(
             ErrorCode.VALIDATION_ERROR,
@@ -133,7 +133,7 @@ def _parse_as_of(value: Any, *, field: str) -> str:
 
 
 def _iso_minus_days(value: str, days: int) -> str:
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    dt = datetime.fromisoformat(value)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     return (dt - timedelta(days=days)).isoformat().replace("+00:00", "Z")

@@ -226,7 +226,7 @@ def open_database(path: Path, *, create_parent: bool = True) -> Database:
         chmod_user_only_dir(path.parent)
 
     newly_created = not path.exists()
-    conn = sqlite3.connect(str(path), isolation_level=None, check_same_thread=False)
+    conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
     if newly_created:
         chmod_user_only_file(path)
     # WAL/SHM siblings can persist between sessions; pin their perms

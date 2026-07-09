@@ -109,7 +109,7 @@ def _dec(value: Any) -> Decimal:
     try:
         return Decimal(str(value if value is not None else 0))
     except (InvalidOperation, ValueError, TypeError):
-        return Decimal("0")
+        return Decimal(0)
 
 
 def _market_metadata_by_instrument(connection: Any, instrument_ids: set[str]) -> dict[str, dict[str, Any]]:
@@ -142,7 +142,7 @@ def _event_key_from_metadata(instrument_id: str, metadata: dict[str, Any]) -> tu
 def _outcome_label(position: dict[str, Any], identity: dict[str, Any], info: dict[str, Any] | None) -> str:
     labels = identity.get("outcome_token_ids_by_label")
     if isinstance(labels, dict) and len(labels) == 1:
-        return str(next(iter(labels.keys())))
+        return str(next(iter(labels)))
     title = (info or {}).get("title")
     if title:
         return str(title)
@@ -151,7 +151,7 @@ def _outcome_label(position: dict[str, Any], identity: dict[str, Any], info: dic
 
 def _side_sign(side: Any) -> Decimal:
     normalized = str(side or "").strip().lower()
-    return Decimal("-1") if normalized in {"no", "short", "sell"} else Decimal("1")
+    return Decimal(-1) if normalized in {"no", "short", "sell"} else Decimal(1)
 
 
 def _event_exposure_sets(connection: Any, open_positions: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -194,25 +194,11 @@ def test_source_add_schema_distinguishes_freshness_from_retrieval_time() -> None
     freshness = schema["properties"]["freshness_at"]["description"]
     retrieved = schema["properties"]["retrieved_at"]["description"]
     overall = schema["description"]
-    assert "stale_sources uses this field" in freshness
+    assert "source-quality stale_sources diagnostics use this field" in freshness
     assert "decision.created_at" in freshness
-    assert "does not drive report.source_quality stale_sources" in retrieved
+    assert "does not drive source-quality stale_sources" in retrieved
     assert "fetched/recorded as provenance" in retrieved
     assert "freshness_at is the evidence-current timestamp" in overall
-
-
-def test_report_source_quality_schema_documents_freshness_at_stale_semantics() -> None:
-    registry = build_registry()
-    schema = registry.get("report.source_quality").json_schema
-
-    assert schema is not None
-    description = schema["description"]
-    threshold = schema["properties"]["stale_threshold_days"]["description"]
-    combined = description + " " + threshold
-    assert "sources.freshness_at" in combined
-    assert "decision.created_at" in combined
-    assert "retrieved_at" in combined
-    assert "not used as a fallback" in combined
 
 
 def test_tool_schema_self_schema_advertises_optional_tool_argument() -> None:

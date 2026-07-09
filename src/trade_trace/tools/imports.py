@@ -1,7 +1,5 @@
 """`import.validate` / `import.commit` JSONL replay importer."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 import os
@@ -211,7 +209,7 @@ def _db_files_fingerprint(home: Path) -> dict[str, tuple[int, str] | None]:
     db = db_path(home)
     fingerprint: dict[str, tuple[int, str] | None] = {}
     for suffix in _DB_SUFFIXES:
-        path = Path(str(db) + suffix)
+        path = db.parent / (db.name + suffix)
         if not path.exists():
             fingerprint[suffix] = None
             continue
@@ -353,9 +351,9 @@ def _copy_db_files(src_home: Path, dst_home: Path) -> None:
     src_db = db_path(src_home)
     dst_db = db_path(dst_home)
     for suffix in _DB_SUFFIXES:
-        src = Path(str(src_db) + suffix)
+        src = src_db.parent / (src_db.name + suffix)
         if src.exists():
-            shutil.copy2(src, Path(str(dst_db) + suffix))
+            shutil.copy2(src, dst_db.parent / (dst_db.name + suffix))
 
 
 def _replace_db_files(src_home: Path, dst_home: Path) -> None:
@@ -363,8 +361,8 @@ def _replace_db_files(src_home: Path, dst_home: Path) -> None:
     src_db = db_path(src_home)
     dst_db = db_path(dst_home)
     for suffix in _DB_SUFFIXES:
-        src = Path(str(src_db) + suffix)
-        dst = Path(str(dst_db) + suffix)
+        src = src_db.parent / (src_db.name + suffix)
+        dst = dst_db.parent / (dst_db.name + suffix)
         if src.exists():
             os.replace(src, dst)
         elif suffix and dst.exists():

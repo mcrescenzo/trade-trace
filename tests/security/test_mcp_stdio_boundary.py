@@ -13,12 +13,15 @@ import builtins
 import importlib
 import json
 import socket
+import threading
+import time
 from typing import Any
 
 import pytest
 from mcp import types
 
 import trade_trace.mcp_server as mcp_server
+from trade_trace.contracts.envelope import Meta, SuccessEnvelope
 from trade_trace.contracts.tool_registry import ToolRegistry
 from trade_trace.mcp_server import (
     SECRET_TRANSPORT_HINT_KEYS,
@@ -293,3 +296,52 @@ def test_stdio_wrong_type_arguments_return_trade_trace_error_envelope(monkeypatc
     assert structured["meta"]["actor_id"] == "agent:stdio-boundary"
     assert structured["meta"]["request_id"]
     assert structured["meta"]["contract_version"]
+
+
+def test_stdio_tool_dispatch_runs_blocking_mcp_call_off_event_loop(monkeypatch):
+    registry = ToolRegistry()
+    registry.register("boundary.echo", _noop_handler)
+    registry.validate()
+
+    started = threading.Event()
+    finished = threading.Event()
+
+    def _blocking_mcp_call(
+        tool_name: str,
+        args: dict[str, Any] | None = None,  # noqa: ARG001
+        *,
+        actor_id: str = "agent:default",
+        request_id: str | None = None,  # noqa: ARG001
+        registry: ToolRegistry | None = None,  # noqa: ARG001
+    ) -> SuccessEnvelope:
+        started.set()
+        time.sleep(0.1)
+        finished.set()
+        meta = Meta(tool=tool_name, actor_id=actor_id, request_id="req-executor-test")
+        meta.mcp_transport_hints = {}
+        return SuccessEnvelope(data={"dispatched": True}, meta=meta)
+
+    async def _probe() -> dict[str, Any]:
+        monkeypatch.setattr(mcp_server, "mcp_call", _blocking_mcp_call)
+        task = asyncio.create_task(
+            mcp_server._dispatch_stdio_tool_call(
+                "boundary.echo",
+                {},
+                actor_id="agent:stdio-boundary",
+                registry=registry,
+            )
+        )
+        for _ in range(1_000):
+            if started.is_set():
+                break
+            if task.done():
+                await task
+            await asyncio.sleep(0.001)
+        assert started.is_set(), "stdio handler did not invoke mcp_call"
+        await asyncio.sleep(0)
+        assert not finished.is_set(), "blocking mcp_call ran on the asyncio event loop"
+        return await task
+
+    structured = _run_coro(asyncio.wait_for(_probe(), timeout=3.0))
+    assert structured["ok"] is True
+    assert structured["data"] == {"dispatched": True}

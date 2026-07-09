@@ -81,6 +81,37 @@ def test_env_set_traces_success_with_meta_latency_permissions_and_no_journal_db(
     assert not list(tmp_path.rglob("*.db"))
 
 
+def test_trace_fdopen_failure_closes_raw_fd(tmp_path: Path, monkeypatch):
+    from trade_trace import dispatch_trace
+
+    trace_path = tmp_path / "dispatch.jsonl"
+    closed: list[int] = []
+    real_close = dispatch_trace.os.close
+
+    def raise_before_taking_fd(fd: int, *args, **kwargs):
+        raise OSError("fdopen boom")
+
+    def close_spy(fd: int) -> None:
+        closed.append(fd)
+        real_close(fd)
+
+    monkeypatch.setenv(ENABLE_ENV, "1")
+    monkeypatch.setenv(PATH_ENV, str(trace_path))
+    monkeypatch.setattr(dispatch_trace.os, "fdopen", raise_before_taking_fd)
+    monkeypatch.setattr(dispatch_trace.os, "close", close_spy)
+
+    env = dispatch(
+        "report.trace_fdopen",
+        {},
+        actor_id="cli:test",
+        request_id="r-fdopen",
+        registry=_registry("report.trace_fdopen", lambda args, ctx: {"ok": True}),
+    )
+
+    assert env.ok is True
+    assert closed, "raw fd should be closed when os.fdopen raises before ownership transfer"
+
+
 def test_default_trace_path_ignores_unvalidated_raw_args_home_on_validation_error(
     tmp_path: Path, monkeypatch
 ):

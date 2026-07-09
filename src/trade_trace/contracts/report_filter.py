@@ -3,16 +3,13 @@
 Shared input shape for every read/report tool. The shape is pinned in this
 module so a future report addition cannot drift from the contract: every
 field is Pydantic-validated, unknown fields are rejected with VALIDATION_ERROR,
-and `report.filter_schema` returns the canonical JSON Schema for runtime
-introspection.
+and tool schemas advertise the filter property for reports that accept it.
 
 Sentinel semantics for `strategy.strategy_id` (reports.md §2.1 + §2.12):
 - omitted / `null` → no strategy filter applied
 - `"__none__"`     → select rows where strategy_id IS NULL
 - any other string → single strategy id (UUID-shaped) or slug, resolved server-side
 """
-
-from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 

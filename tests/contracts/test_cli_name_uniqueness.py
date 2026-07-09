@@ -23,7 +23,7 @@ def _noop(args, ctx):  # pragma: no cover - fixture only
 
 def test_dot_to_space_mapping():
     assert cli_invocation_for("decision.add") == ("decision", "add")
-    assert cli_invocation_for("report.filter_schema") == ("report", "filter_schema")
+    assert cli_invocation_for("report.calibration") == ("report", "calibration")
     assert cli_invocation_for("journal.rebuild_projections") == (
         "journal",
         "rebuild_projections",

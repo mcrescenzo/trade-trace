@@ -16,6 +16,9 @@ from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 from trade_trace.tools._helpers import now_iso
 
+REPORT_NAME = "report.unscored_forecasts"
+REPORT_FILTER_SUPPORT: frozenset[str] = frozenset()
+
 
 def report_unscored_forecasts(
     conn: sqlite3.Connection,
@@ -26,7 +29,7 @@ def report_unscored_forecasts(
     past their `resolution_at` without a resolved_final outcome."""
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    filter_view = process_filter(rf, report="report.unscored_forecasts")
+    filter_view = process_filter(rf, report=REPORT_NAME)
     now = now_iso()
     cur = conn.execute(
         """

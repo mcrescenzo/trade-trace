@@ -1,6 +1,4 @@
-"""Resolution-criteria interpretation + contract-misread diagnostic
-(trade-trace-4kec.12).
-"""
+"""Resolution-criteria interpretation tools (trade-trace-4kec.12)."""
 
 from __future__ import annotations
 
@@ -45,10 +43,6 @@ def _forecast(home: Path, inst: str) -> str:
     )["data"]["id"]
 
 
-def _resolve(home: Path, inst: str, label: str = "yes") -> None:
-    _envelope(home, "resolution.add", {"instrument_id": inst, "resolved_at": "2027-01-12T00:00:00Z", "outcome_label": label, "status": "resolved_final", "confidence": 0.99})
-
-
 def _interpret(home: Path, forecast_id: str, **extra):
     return mcp_call(
         "forecast.interpret_resolution",
@@ -58,13 +52,9 @@ def _interpret(home: Path, forecast_id: str, **extra):
     ).model_dump(mode="json", exclude_none=True)
 
 
-def _misreads(home: Path):
-    return mcp_call("report.resolution_misreads", {"home": str(home)}, actor_id="agent:default").model_dump(mode="json", exclude_none=True)
-
-
 def test_tools_registered_public():
     names = set(default_registry().public_names())
-    assert {"forecast.interpret_resolution", "forecast.resolution_interpretation", "report.resolution_misreads"}.issubset(names)
+    assert {"forecast.interpret_resolution", "forecast.resolution_interpretation"}.issubset(names)
 
 
 def test_record_and_read_interpretation(home: Path):
@@ -78,37 +68,6 @@ def test_record_and_read_interpretation(home: Path):
     got = mcp_call("forecast.resolution_interpretation", {"home": str(home), "forecast_id": fc}).model_dump(mode="json", exclude_none=True)
     assert got["ok"]
     assert got["data"]["forecast_id"] == fc
-
-
-def test_contract_misread_when_source_differs(home: Path):
-    inst = _market(home, 0, resolution_source="market_contract", resolved=True)
-    fc = _forecast(home, inst)
-    _interpret(home, fc, interpreted_resolution_source="oracle_feed")
-    _resolve(home, inst)
-    env = _misreads(home)
-    assert env["ok"], env
-    summary = env["data"]["summary"]
-    assert summary["contract_misread_count"] == 1
-    assert env["data"]["groups"][0]["metrics"]["classification"] == "contract_misread"
-
-
-def test_aligned_when_source_matches(home: Path):
-    inst = _market(home, 0, resolution_source="oracle_feed", resolved=True)
-    fc = _forecast(home, inst)
-    _interpret(home, fc, interpreted_resolution_source="oracle_feed")  # case-insensitive
-    _resolve(home, inst)
-    env = _misreads(home)
-    assert env["data"]["summary"]["aligned_count"] == 1
-    assert env["data"]["summary"]["contract_misread_count"] == 0
-
-
-def test_unresolved_market_is_not_a_misread(home: Path):
-    inst = _market(home, 0, resolution_source="oracle_feed", resolved=False)
-    fc = _forecast(home, inst)
-    _interpret(home, fc, interpreted_resolution_source="oracle_feed")
-    env = _misreads(home)
-    assert env["data"]["summary"]["unresolved_count"] == 1
-    assert env["data"]["summary"]["contract_misread_count"] == 0
 
 
 def test_interpretation_is_idempotent_one_per_forecast(home: Path):
@@ -151,32 +110,12 @@ def test_interpret_rejects_unknown_forecast(home: Path):
     assert env["error"]["code"] == "NOT_FOUND"
 
 
-def test_misread_surfaces_manual_source_provenance(home: Path):
-    # AX-067: every misread group now reports actual_source_provenance (the
-    # market's bound_via) so a consumer can tell whether the "actual" resolution
-    # source it is being scored against was caller-asserted (manual) or stamped
-    # by a venue adapter. A manually-bound market is high-confidence ground truth.
-    inst = _market(home, 0, resolution_source="market_contract", resolved=True)
-    fc = _forecast(home, inst)
-    _interpret(home, fc, interpreted_resolution_source="oracle_feed")
-    _resolve(home, inst)
-    env = _misreads(home)
-    assert env["data"]["summary"]["contract_misread_count"] == 1
-    assert env["data"]["summary"]["contract_misread_adapter_bound_count"] == 0
-    assert env["data"]["groups"][0]["metrics"]["actual_source_provenance"] == "manual"
-
-
 def test_adapter_maps_undisputed_polymarket_market_to_oracle_feed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    # trade-trace-v5va (design half of AX-067): the faithful Polymarket
-    # resolution mechanism is the UMA optimistic oracle, not an on-chain
-    # market_contract. The adapter now maps every undisputed, non-ambiguous
-    # market to oracle_feed, so an agent that reads a UMA-over-Binance crypto
-    # strike as oracle_feed scores *aligned* instead of being hard-classified a
-    # contract_misread against a coarse market_contract default. (The ergonomic
-    # provenance/caveat surfacing from 81345c8 stays; it now only fires when the
-    # venue genuinely supplies a different mechanism.)
+    # trade-trace-v5va: the faithful Polymarket resolution mechanism is the UMA
+    # optimistic oracle, not an on-chain market_contract. The adapter maps every
+    # undisputed, non-ambiguous market to oracle_feed.
     from trade_trace.adapters.polymarket.client import PolymarketClient
 
     fixtures = Path(__file__).parent / "fixtures" / "polymarket"
@@ -193,33 +132,16 @@ def test_adapter_maps_undisputed_polymarket_market_to_oracle_feed(
 
     bind = mcp_call("market.bind", {"home": home_s, "source": "polymarket", "external_id": "pm-res-yes"})
     assert bind.ok, bind
-    inst = bind.data["id"]
     # Faithful mechanism mapping: undisputed Polymarket market -> oracle_feed.
     assert bind.data["resolution_source"] == "oracle_feed"
     assert bind.data["bound_via"] == "adapter"
 
-    fc = _forecast(home, inst)
-    _interpret(home, fc, interpreted_resolution_source="oracle_feed")
-    _resolve(home, inst)
 
-    env = _misreads(home)
-    summary = env["data"]["summary"]
-    # The oracle_feed reading now aligns with the faithfully-mapped source.
-    assert summary["contract_misread_count"] == 0
-    assert summary["contract_misread_adapter_bound_count"] == 0
-    assert summary["aligned_count"] == 1
-    grp = env["data"]["groups"][0]["metrics"]
-    assert grp["classification"] == "aligned"
-    assert grp["actual_resolution_source"] == "oracle_feed"
-    assert grp["actual_source_provenance"] == "adapter"
-
-
-def test_misread_against_genuine_adapter_mechanism_still_flagged_low_confidence(
+def test_adapter_maps_disputed_polymarket_market_to_arbitration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    # The provenance/caveat surfacing (81345c8) still fires when an agent's
-    # reading genuinely disagrees with the faithfully-mapped adapter mechanism:
-    # here a disputed market maps to arbitration but the agent read oracle_feed.
+    # A disputed market maps to arbitration because the UMA assertion was
+    # challenged and escalated to the DVM vote.
     from trade_trace.adapters.polymarket.client import PolymarketClient
 
     fixtures = Path(__file__).parent / "fixtures" / "polymarket"
@@ -236,22 +158,8 @@ def test_misread_against_genuine_adapter_mechanism_still_flagged_low_confidence(
 
     bind = mcp_call("market.bind", {"home": home_s, "source": "polymarket", "external_id": "pm-disputed"})
     assert bind.ok, bind
-    inst = bind.data["id"]
     assert bind.data["resolution_source"] == "arbitration"
     assert bind.data["bound_via"] == "adapter"
-
-    fc = _forecast(home, inst)
-    _interpret(home, fc, interpreted_resolution_source="oracle_feed")
-    _resolve(home, inst)
-
-    env = _misreads(home)
-    summary = env["data"]["summary"]
-    assert summary["contract_misread_count"] == 1
-    assert summary["contract_misread_adapter_bound_count"] == 1
-    grp = env["data"]["groups"][0]["metrics"]
-    assert grp["classification"] == "contract_misread"
-    assert grp["actual_source_provenance"] == "adapter"
-    assert any("provenance='adapter'" in c for c in summary["caveats"])
 
 
 def test_adapter_maps_gamma_description_to_resolution_rule_text_and_instrument(

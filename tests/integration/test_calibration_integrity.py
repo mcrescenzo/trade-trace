@@ -1,7 +1,7 @@
 """Anti-goodhart calibration integrity diagnostics per bead trade-trace-jzn.
 
 ≥2 tests per diagnostic (positive + negative) over the six hygiene panels
-that surface in `report.calibration_integrity`, `report.calibration`, and
+that surface in the internal calibration-integrity panel, `report.calibration`, and
 `report.coach`. The framing is intentionally hygiene-not-fraud: tests assert
 the diagnostic fires on dirty fixtures and stays quiet on clean ones.
 """
@@ -9,14 +9,46 @@ the diagnostic fires on dirty fixtures and stays quiet on clean ones.
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
+from trade_trace.contracts.tool_registry import ToolContext
 from trade_trace.mcp_server import mcp_call
+from trade_trace.reports.tool_handlers.calibration_diagnostics import _report_calibration_integrity
+from trade_trace.tools.errors import ToolError
+
+CLEAN_RESOLVED_AT = "2099-06-30T00:00:00Z"
 
 
 def _mcp(home: Path, tool: str, args: dict | None = None):
     payload = {"home": str(home), **(args or {})}
     env = mcp_call(tool, payload, actor_id="agent:default")
     return env
+
+
+def _calibration_integrity(home: Path, args: dict | None = None):
+    payload = {"home": str(home), **(args or {})}
+    ctx = ToolContext(
+        tool="internal.calibration_integrity",
+        actor_id="agent:default",
+        request_id="internal-calibration-integrity-test",
+        raw_args=payload,
+    )
+    try:
+        return SimpleNamespace(
+            ok=True,
+            data=_report_calibration_integrity(payload, ctx),
+            error=None,
+        )
+    except ToolError as exc:
+        return SimpleNamespace(
+            ok=False,
+            data=None,
+            error=SimpleNamespace(
+                code=exc.code,
+                details=exc.details,
+                message=exc.message,
+            ),
+        )
 
 
 def _seed_instrument(home: Path) -> str:
@@ -35,7 +67,7 @@ def _seed_resolved_binary_forecast(
     forecast_first: bool = True,
     scoring_support: str = "supported",
     instrument_id: str | None = None,
-    resolved_at: str = "2026-06-30T00:00:00Z",
+    resolved_at: str = CLEAN_RESOLVED_AT,
 ) -> dict:
     """Walk one forecast end-to-end. If `forecast_first=False`, the outcome
     is recorded before the forecast (used to construct suspicious_late
@@ -84,13 +116,15 @@ def _seed_resolved_binary_forecast(
 # -- registration ----------------------------------------------------
 
 
-def test_report_calibration_integrity_registered():
+def test_report_calibration_integrity_is_internal_only():
     from trade_trace.core import default_registry
-    assert "report.calibration_integrity" in default_registry().names()
+    registry = default_registry()
+    assert "report.calibration_integrity" not in registry.names()
+    assert "report.calibration_integrity" not in set(registry.public_names())
 
 
 def test_empty_db_returns_no_data_warning(home):
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     assert env.ok
     summary = env.data["summary"]
     assert summary["total_decisions"] == 0
@@ -106,7 +140,7 @@ def test_forecast_coverage_reports_denominators(home):
     the three denominator numbers and the percent."""
 
     _seed_resolved_binary_forecast(home, p_yes=0.6)
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["forecast_coverage"]
     assert diag["total_forecasts"] >= 1
     assert diag["scored_forecasts"] >= 1
@@ -127,7 +161,7 @@ def test_forecast_coverage_clean_with_decisions(home):
         "side": "yes", "quantity": 1, "price": 0.6,
         "idempotency_key": "00000000-0000-4000-8000-000000000100",
     })
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["forecast_coverage"]
     assert diag["total_decisions"] == 1
     assert diag["denominator_coverage_pct"] is not None
@@ -151,7 +185,7 @@ def test_non_binary_forecasts_rejected_before_integrity_denominator(home):
         ],
     })
     assert not env.ok
-    clean = _mcp(home, "report.calibration_integrity", {})
+    clean = _calibration_integrity(home, {})
     diag = clean.data["diagnostics"]["unsupported_rate"]
     assert diag["count"] == 0
     assert diag["rate_pct"] in (0.0, None)
@@ -162,7 +196,7 @@ def test_unsupported_rate_silent_on_clean_data(home):
 
     _seed_resolved_binary_forecast(home, p_yes=0.6)
     _seed_resolved_binary_forecast(home, p_yes=0.7)
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["unsupported_rate"]
     assert diag["count"] == 0
     assert diag["sample_ids"]["forecasts"] == []
@@ -181,7 +215,7 @@ def test_ambiguous_rate_fires_on_ambiguous_outcome(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "ambiguous",
     }).data["id"]
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["ambiguous_rate"]
     assert diag["count"] == 1
     assert out in diag["sample_ids"]["outcomes"]
@@ -189,7 +223,7 @@ def test_ambiguous_rate_fires_on_ambiguous_outcome(home):
 
 def test_ambiguous_rate_silent_on_clean_data(home):
     _seed_resolved_binary_forecast(home, p_yes=0.6)  # resolved_final
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["ambiguous_rate"]
     assert diag["count"] == 0
 
@@ -204,7 +238,7 @@ def test_disputed_rate_fires_on_disputed_outcome(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "yes", "status": "disputed",
     }).data["id"]
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["disputed_rate"]
     assert diag["count"] == 1
     assert out in diag["sample_ids"]["outcomes"]
@@ -212,7 +246,7 @@ def test_disputed_rate_fires_on_disputed_outcome(home):
 
 def test_disputed_rate_silent_on_clean_data(home):
     _seed_resolved_binary_forecast(home, p_yes=0.6)
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["disputed_rate"]
     assert diag["count"] == 0
 
@@ -233,7 +267,7 @@ def test_void_cancelled_rate_fires_on_void_or_cancelled(home):
         "resolved_at": "2026-06-30T00:00:00Z",
         "outcome_label": "no", "status": "cancelled",
     }).data["id"]
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["void_cancelled_rate"]
     assert diag["count"] == 2
     ids = diag["sample_ids"]["outcomes"]
@@ -242,7 +276,7 @@ def test_void_cancelled_rate_fires_on_void_or_cancelled(home):
 
 def test_void_cancelled_rate_silent_on_clean_data(home):
     _seed_resolved_binary_forecast(home, p_yes=0.6)
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["void_cancelled_rate"]
     assert diag["count"] == 0
 
@@ -260,7 +294,7 @@ def test_suspicious_late_rate_fires_when_forecast_created_after_outcome(home):
         home, p_yes=0.6, forecast_first=False,
         resolved_at="2020-01-01T00:00:00Z",
     )
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["suspicious_late_rate"]
     assert diag["count"] == 1
     assert seed["forecast_id"] in diag["sample_ids"]["forecasts"]
@@ -271,7 +305,7 @@ def test_suspicious_late_rate_silent_when_forecast_first(home):
     forecast, diagnostic emits zero."""
 
     _seed_resolved_binary_forecast(home, p_yes=0.6, forecast_first=True)
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["suspicious_late_rate"]
     assert diag["count"] == 0
 
@@ -339,7 +373,7 @@ def test_abstention_coverage_counts_forecast_less_skip(home):
 
     inst = _seed_instrument(home)
     skip = _skip(home, inst, key="00000000-0000-4000-8000-000000000201")
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["abstention_coverage"]
     assert diag["count"] == 0  # no abstention.record
     assert diag["skip_coverage"]["count"] == 1
@@ -360,7 +394,7 @@ def test_abstention_coverage_skip_with_forecast_not_counted_as_pass(home):
         home, seed["instrument_id"], forecast_id=seed["forecast_id"],
         key="00000000-0000-4000-8000-000000000202",
     )
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["abstention_coverage"]
     assert diag["skip_coverage"]["count"] == 0
     assert diag["considered_passes_dedup"] == 0
@@ -381,7 +415,7 @@ def test_abstention_coverage_dedups_skip_and_abstention_same_market(home):
     })
     assert abst.ok, abst
     _skip(home, inst, key="00000000-0000-4000-8000-000000000204")
-    env = _mcp(home, "report.calibration_integrity", {})
+    env = _calibration_integrity(home, {})
     diag = env.data["diagnostics"]["abstention_coverage"]
     # Both surfaces report it on their own line...
     assert diag["count"] == 1

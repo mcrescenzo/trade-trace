@@ -19,7 +19,7 @@ def _env(data: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "data": data, "meta": {"tool": "fake", "actor_id": ACTOR_ID, "request_id": "r"}}
 
 
-def test_metric_rollup_calls_calibration_integrity_distinctly_and_uses_run_config_policy() -> None:
+def test_metric_rollup_uses_embedded_calibration_integrity_and_run_config_policy() -> None:
     calls: list[tuple[str, dict[str, Any], str]] = []
 
     def fake_call(tool: str, args: dict[str, Any], *, actor_id: str) -> dict[str, Any]:
@@ -30,11 +30,9 @@ def test_metric_rollup_calls_calibration_integrity_distinctly_and_uses_run_confi
                     "metrics": {"brier": 0.12, "late_recorded_excluded": 3},
                     "late_recorded_excluded": 3,
                     "integrity_probe": "must-not-be-used",
-                }
+                },
+                "integrity_diagnostics": {"summary": {"metrics": {"denominator_coverage_pct": 99.0}}},
             },
-            "report.calibration_integrity": {"summary": {"metrics": {"denominator_coverage_pct": 99.0}}},
-            "report.process_quality": {"summary": {"metrics": {"kelly_consistency": 1.0}}},
-            "report.resolution_misreads": {"summary": {"metrics": {"misreads": 0}}},
             "report.pnl": {"summary": {"metrics": {"closed_position_count": 0, "open_position_count": 2}}},
             "report.coach": {"summary": {}, "integrity_diagnostics": {"from_coach": True}},
             "report.recall_receipts": {"summary": {"sample_size": 1}, "recall_receipts": []},
@@ -46,9 +44,6 @@ def test_metric_rollup_calls_calibration_integrity_distinctly_and_uses_run_confi
     tool_names = [tool for tool, _args, _actor in calls]
     assert tool_names == [
         "report.calibration",
-        "report.calibration_integrity",
-        "report.process_quality",
-        "report.resolution_misreads",
         "report.pnl",
         "report.coach",
         "report.recall_receipts",
@@ -113,5 +108,6 @@ def test_metric_rollup_dispatch_trace_uses_recall_receipts_not_memory_recall(tmp
     assert "report.recall_receipts" in tools
     assert "memory.recall" not in tools
     assert "report.calibration" in tools
-    assert "report.calibration_integrity" in tools
+    assert "report.calibration_integrity" not in tools
+    assert "report.coach" in tools
     assert all(record["actor_id"] == ACTOR_ID for record in records)

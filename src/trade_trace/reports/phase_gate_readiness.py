@@ -36,7 +36,7 @@ from typing import Any
 from trade_trace.reports.audit_readiness import report_audit_readiness
 from trade_trace.reports.calibration import (
     DEFAULT_MIN_SAMPLE,
-    report_calibration_anchored,
+    _market_baseline_anchored,
 )
 
 # Critical reconciliation mismatch codes mirror tools/reconciliation.py
@@ -241,7 +241,7 @@ def report_phase_gate_readiness(
     """
     thresholds = thresholds or {}
 
-    anchored = report_calibration_anchored(conn, min_sample=min_sample)
+    anchored = _market_baseline_anchored(conn, min_sample=min_sample)
     cal_summary = anchored["summary"]
     metrics = cal_summary.get("metrics", {})
     anchored_n = cal_summary.get("sample_size", 0)
@@ -379,7 +379,7 @@ def report_phase_gate_readiness(
         "summary": summary,
         "criteria": criteria,
         "evidence_refs": {
-            "calibration_anchored": "report.calibration_anchored",
+            "calibration_market_baseline": "phase_gate_readiness.anchored_market_baseline",
             "audit_readiness": "report.audit_readiness",
             "reconciliation": "reconciliation.report",
         },

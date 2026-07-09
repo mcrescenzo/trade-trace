@@ -333,8 +333,8 @@ def _stale_sources(
             d_ts_iso = to_utc_iso8601(d_ts)
         except (ValueError, TimestampValidationError):
             continue
-        fresh_dt = datetime.fromisoformat(fresh_iso.replace("Z", "+00:00"))
-        d_dt = datetime.fromisoformat(d_ts_iso.replace("Z", "+00:00"))
+        fresh_dt = datetime.fromisoformat(fresh_iso)
+        d_dt = datetime.fromisoformat(d_ts_iso)
         if d_dt - fresh_dt > timedelta(days=stale_threshold_days):
             items.append({
                 "id": s_id, "decision_id": d_id,
@@ -359,8 +359,8 @@ def _stale_sources(
             d_ts_iso = to_utc_iso8601(d_row[0])
         except (ValueError, TimestampValidationError):
             continue
-        fresh_dt = datetime.fromisoformat(fresh_iso.replace("Z", "+00:00"))
-        d_dt = datetime.fromisoformat(d_ts_iso.replace("Z", "+00:00"))
+        fresh_dt = datetime.fromisoformat(fresh_iso)
+        d_dt = datetime.fromisoformat(d_ts_iso)
         if d_dt - fresh_dt > timedelta(days=stale_threshold_days):
             items.append({
                 "id": s_id, "decision_id": d_id,

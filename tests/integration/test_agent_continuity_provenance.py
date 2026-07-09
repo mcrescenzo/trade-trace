@@ -147,10 +147,10 @@ def test_snapshot_and_source_persist_agent_run_provenance(tmp_path: Path):
     assert tuple(source_row) == tuple(common.values())
 
 
-def test_calibration_filter_and_compare_group_by_run_metadata(tmp_path: Path):
+def test_calibration_filter_uses_run_metadata(tmp_path: Path):
     home = _initialized_home(tmp_path)
-    forecast_a = _scored_forecast(home, "run-a", agent_id="agent:alpha", run_id="run:a")
-    forecast_b = _scored_forecast(home, "run-b", agent_id="agent:beta", run_id="run:b")
+    _scored_forecast(home, "run-a", agent_id="agent:alpha", run_id="run:a")
+    _scored_forecast(home, "run-b", agent_id="agent:beta", run_id="run:b")
 
     filtered = _ok(
         "report.calibration",
@@ -162,32 +162,3 @@ def test_calibration_filter_and_compare_group_by_run_metadata(tmp_path: Path):
     )
     assert filtered["summary"]["sample_size"] == 1
     assert filtered["summary"]["filter"]["actors"]["run_id"] == ["run:a"]
-
-    compared = _ok(
-        "report.compare",
-        {
-            "home": str(home),
-            "base_report": "calibration",
-            "group_by": "agent_id",
-            "filter": {},
-            "min_sample": 1,
-        },
-    )
-    groups = {group["key"]: group for group in compared["groups"]}
-    assert {"agent:alpha", "agent:beta"}.issubset(groups)
-    assert groups["agent:alpha"]["filter"]["actors"]["agent_id"] == ["agent:alpha"]
-    assert forecast_a in groups["agent:alpha"]["record_ids"]["forecasts"]
-
-    compared_by_run = _ok(
-        "report.compare",
-        {
-            "home": str(home),
-            "base_report": "calibration",
-            "group_by": "run_id",
-            "filter": {},
-            "min_sample": 1,
-        },
-    )
-    run_groups = {group["key"]: group for group in compared_by_run["groups"]}
-    assert {"run:a", "run:b"}.issubset(run_groups)
-    assert forecast_b in run_groups["run:b"]["record_ids"]["forecasts"]

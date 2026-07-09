@@ -27,7 +27,7 @@ def test_tool_schema_exposes_same_metadata_for_representative_tools(tmp_path):
     home = tmp_path / "home"
     assert mcp_call("journal.init", {"home": str(home)}).ok
 
-    for tool in ("decision.add", "report.compare", "memory.reflect", "playbook.propose_version"):
+    for tool in ("decision.add", "report.bootstrap", "memory.reflect", "playbook.propose_version"):
         env = mcp_call("tool.schema", {"home": str(home), "tool": tool})
         assert env.ok, env
         assert hasattr(env, "data")
@@ -118,34 +118,14 @@ def test_source_freshness_help_and_mcp_schema_are_self_describing(capsys):
     help_text = out.out + out.err
     assert rc == 0
     assert "--freshness-at <string>" in help_text
-    assert "stale_sources uses this field" in help_text
+    assert "source-quality stale_sources diagnostics use this field" in help_text
     assert "--retrieved-at <string>" in help_text
-    assert "does not drive report.source_quality stale_sources" in help_text
+    assert "does not drive source-quality stale_sources" in help_text
 
     spec = next(s for s in mcp_tool_specs(include_legacy=True) if s["name"] == "source.add")
     props = spec["input_schema"]["properties"]
-    assert "stale_sources uses this field" in props["freshness_at"]["description"]
-    assert "does not drive report.source_quality stale_sources" in props["retrieved_at"]["description"]
-
-
-def test_report_source_quality_help_and_mcp_schema_explain_stale_basis(capsys):
-    rc = cli_main(["report", "source_quality", "--help"])
-
-    out = capsys.readouterr()
-    help_text = out.out + out.err
-    assert rc == 0
-    assert "sources.freshness_at" in help_text
-    assert "retrieved_at" in help_text
-    assert "not used as a fallback" in help_text
-
-    spec = next(s for s in mcp_tool_specs() if s["name"] == "report.source_quality")
-    combined = (
-        spec["description"]
-        + " "
-        + spec["input_schema"]["properties"]["stale_threshold_days"]["description"]
-    )
-    assert "sources.freshness_at" in combined
-    assert "retrieved_at" in combined
+    assert "source-quality stale_sources diagnostics use this field" in props["freshness_at"]["description"]
+    assert "does not drive source-quality stale_sources" in props["retrieved_at"]["description"]
 
 
 def test_unknown_cli_command_error_has_next_actions(capsys):

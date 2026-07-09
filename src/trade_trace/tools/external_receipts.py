@@ -16,6 +16,9 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 from trade_trace.tools._helpers import (
+    canonical_json as _canonical_json,
+)
+from trade_trace.tools._helpers import (
     check_idempotency_replay,
     db_for_args,
     emit_event,
@@ -26,6 +29,7 @@ from trade_trace.tools._helpers import (
     reject_if_contains_secrets,
     require,
     store_metadata_json,
+    validate_fk_refs,
 )
 from trade_trace.tools.errors import ToolError
 
@@ -44,10 +48,6 @@ _REF_TABLES = {
     "instrument_id": "instruments",
 }
 _SELECT = "id, schema_version, semantic_key, material_hash, lifecycle_state, external_event_type, pretrade_intent_id, approval_ref_id, market_id, instrument_id, external_order_ref, external_fill_ref, external_event_ref, source_system, source_run_id, retrieved_at, as_of, imported_at, artifact_hash, redacted_artifact_ref, sanitized_facts_json, caveats_json, provenance_json, quarantine_reason, idempotency_key, actor_id"
-
-
-def _canonical_json(value: Any) -> str:
-    return json.dumps(value if value is not None else {}, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _json_arg(args: dict[str, Any], field: str, default: Any) -> Any:
@@ -122,12 +122,7 @@ def _response(conn: Any, receipt_id: str) -> dict[str, Any]:
 
 
 def _validate_refs(conn: Any, args: dict[str, Any]) -> list[dict[str, str]]:
-    missing: list[dict[str, str]] = []
-    for field, table in _REF_TABLES.items():
-        value = args.get(field)
-        if value and conn.execute(f"SELECT 1 FROM {table} WHERE id = ?", (value,)).fetchone() is None:
-            missing.append({"field": field, "id": str(value), "table": table})
-    return missing
+    return validate_fk_refs(conn, args, _REF_TABLES)
 
 
 def _external_receipt_import(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:

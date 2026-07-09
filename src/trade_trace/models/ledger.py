@@ -18,28 +18,13 @@ Free-text fields are deliberately not length-capped here — operability.md §8
 blob caps are enforced at the write-tool boundary, not at model load.
 """
 
-from __future__ import annotations
-
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-
-def _check_bitemporal(valid_from: datetime | None, valid_to: datetime | None) -> None:
-    """Raise ``ValueError`` if a closed bi-temporal interval is inverted.
-
-    ``valid_to`` is the half-open upper bound of ``[valid_from, valid_to)``; an
-    equal pair is permitted (an empty/instantaneous interval) but a ``valid_to``
-    strictly before ``valid_from`` is never valid.
-    """
-
-    if valid_from is not None and valid_to is not None and valid_to < valid_from:
-        raise ValueError(
-            f"bi-temporal validity violated: valid_to ({valid_to.isoformat()}) "
-            f"precedes valid_from ({valid_from.isoformat()})"
-        )
+from trade_trace.models._shared import check_bitemporal
 
 
 class DecisionType(StrEnum):
@@ -121,8 +106,8 @@ class Thesis(_Row):
     invalidated_by: str | None = None
 
     @model_validator(mode="after")
-    def _validate_bitemporal(self) -> Thesis:
-        _check_bitemporal(self.valid_from, self.valid_to)
+    def _validate_bitemporal(self) -> Self:
+        check_bitemporal(self.valid_from, self.valid_to)
         return self
 
 
@@ -156,8 +141,8 @@ class Forecast(_Row):
     invalidated_by: str | None = None
 
     @model_validator(mode="after")
-    def _validate_bitemporal(self) -> Forecast:
-        _check_bitemporal(self.valid_from, self.valid_to)
+    def _validate_bitemporal(self) -> Self:
+        check_bitemporal(self.valid_from, self.valid_to)
         return self
 
 

@@ -132,7 +132,7 @@ Trade Trace borrows analytical and architectural patterns from existing systems 
 From **Tradervue / Edgewonk** (human trading journals):
 
 - **Report drill-down** — aggregates carry the filter spec and contributing record IDs so an agent can pull the exact underlying decisions. Translated as the `ReportFilter` / `ReportResult` / `ReportGroup` contracts in `reports.md`, not as clickable charts.
-- **Tags + tag-combination reports** — free-form sub-classifiers with a tag-co-occurrence query model. Already in MVP (`decision_tags`, `report.mistakes`, `report.strengths`).
+- **Tags + tag-combination reports** — free-form sub-classifiers with a tag-co-occurrence query model. Already in MVP through `decision_tags`, the public mistakes report, and coach's internal tag-strength view.
 - **R-multiple / risk-normalized analytics** — every trade carries declared risk so P&L can be unit-normalized. P1 per `risk-units.md`.
 - **MFE/MAE / exit efficiency** — path-dependent process diagnostics over snapshot series the agent supplied. P1 per `opportunity-analysis.md`. Never fetches market data.
 - **Mentor read-only + private comments** — adapted as `review.bundle`: a deterministic packet a separate reviewer (LLM or human) consumes. No SaaS sharing.

@@ -344,43 +344,25 @@ EXPERIMENTAL_RECONCILIATION: frozenset[str] = frozenset({
 # _anchor_to_latest_snapshot is supplied), so anchor_to_snapshot is retained
 # only as a frozen backfill path, satisfying the 4kec.5 acceptance.
 #
-# Its three READERS, by contrast, are NOT superseded — they are read-only
-# Phase-1 calibration diagnostics that measure forecast skill vs the market
-# baseline (VISION Phase 1 "forecast scoring, calibration reports") over only
-# Phase-1 tables (forecast_snapshot_anchor / forecast_scores / forecasts /
-# outcomes / snapshots), with zero Phase-2 dependency. They were UNFROZEN into
-# the public Phase-1 catalog (bead trade-trace-xtdo):
-#   - report.calibration_anchored / report.calibration_terminal: market-baseline
-#     Brier-skill panels over the inline-captured anchor.
+# Its time-series snapshot READER, by contrast, is NOT superseded — it supplies
+# Phase-1 market-baseline evidence over only local tables
+# (forecast_snapshot_anchor / forecast_scores / forecasts / outcomes /
+# snapshots), with zero Phase-2 dependency. It was UNFROZEN into the public
+# Phase-1 catalog (bead trade-trace-xtdo):
 #   - snapshot.fetch_series: the time-series snapshot fetcher (markets-table
-#     backed) that populates the snapshot history those reports read; its
+#     backed) that populates the snapshot history internal market-baseline
+#     calculations read; its
 #     idempotency_key contract matches snapshot.fetch (both is_write, both
 #     absent from TOOL_PRIMARY_EVENT_TYPE, so both require an explicit caller
 #     key — pinned by test_snapshot_fetch_series_requires_idempotency_key).
 EXPERIMENTAL_ANCHORED_VIEWERS: frozenset[str] = frozenset({
     "forecast.anchor_to_snapshot",
-    # report.decision_velocity, report.memory_usefulness, and
-    # report.recall_receipts were unfrozen into the Phase-1 public catalog
-    # (bead trade-trace-8g7t). All three are fully-implemented, read-only
-    # diagnostics over Phase-1 tables with zero Phase-2 dependency:
+    # report.recall_receipts remains in the Phase-1 public catalog. The
+    # memory-usefulness diagnostic is now composed internally by bootstrap
+    # rather than registered as a standalone public report.
     # recall_receipts reconstructs recall attribution from
     # memory_recall_events / memory_nodes / edges; memory_usefulness wraps it
-    # with negative controls; decision_velocity counts decisions bucketed by
-    # day/week FROM decisions only. The original freeze rationale claimed
-    # decision_velocity's day/week cadence was redundant with
-    # calibration_integrity, but calibration_integrity emits only static
-    # hygiene rates and process_analytics groups by tag/pair — neither
-    # produces a per-day/week decision-count series, so decision_velocity is
-    # the sole producer and was UNFROZEN rather than cut.
-    # report.market_lifecycle and report.resolution_quality were unfrozen into
-    # the Phase-1 public catalog (bead trade-trace-y0cr). Both read only
-    # Phase-1 tables (markets, snapshots, decisions, forecasts, outcomes,
-    # forecast_scores) and carry no Phase-2 dependency. market_lifecycle is
-    # PM-native situational awareness with no public equivalent;
-    # resolution_quality is the resolution-status quality family (status mix,
-    # ambiguous/void/disputed/cancelled, pre-resolution uncertainty), distinct
-    # from the public report.resolution_misreads (which classifies an agent's
-    # interpreted-vs-actual resolution *source* over resolution_interpretations).
+    # with negative controls.
     # journal.restore was swept into this cluster only because it was "operator
     # DR, never dogfooded" — it has nothing to do with Phase 2 or the anchored
     # calibration flow (bead trade-trace-26sl). It is an admin-tier disaster-
@@ -708,7 +690,7 @@ def dispatch(
                 # recommended wait; callers may exponentially back off from
                 # that 2-second starting point. SQLite already waited for the
                 # connection's busy_timeout before surfacing this error.
-                details.update({"reason": "single_writer_lock", "retry_after_seconds": 2})
+                details |= {"reason": "single_writer_lock", "retry_after_seconds": 2}
             return error_envelope(
                 meta,
                 ErrorCode.STORAGE_ERROR,

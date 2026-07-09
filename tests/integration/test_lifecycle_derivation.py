@@ -5,9 +5,11 @@ import sqlite3
 
 import pytest
 
-from trade_trace.core import default_registry, dispatch
+from trade_trace.contracts.tool_registry import ToolContext
 from trade_trace.reports.lifecycle import derive_lifecycle_cases
+from trade_trace.reports.tool_handlers.lifecycle_agent import _report_lifecycle
 from trade_trace.storage.paths import db_path
+from trade_trace.tools.errors import ToolError
 
 
 def _conn(home):
@@ -298,8 +300,29 @@ def test_null_resolution_at_forecast_is_pending_review_when_market_not_live(home
         assert "resolution_at_missing" in case["reason_codes"], fid
 
 
+def _report_env(home, args):
+    payload = {"home": str(home), **args}
+    ctx = ToolContext(
+        tool="internal.lifecycle",
+        actor_id="agent:test",
+        request_id="internal-lifecycle-test",
+        raw_args=payload,
+    )
+    try:
+        return {"ok": True, "data": _report_lifecycle(payload, ctx), "meta_hints": ctx.meta_hints}
+    except ToolError as exc:
+        return {
+            "ok": False,
+            "error": {
+                "code": exc.code.value,
+                "message": exc.message,
+                "details": exc.details,
+            },
+        }
+
+
 def _report(home, args):
-    env = dispatch("report.lifecycle", {"home": str(home), **args}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
+    env = _report_env(home, args)
     assert env["ok"], env
     return env["data"]
 
@@ -396,11 +419,11 @@ def test_report_lifecycle_rejects_invalid_limit_and_cursor(home):
     with _conn(home) as conn:
         _seed_base(conn)
 
-    bad_limit = dispatch("report.lifecycle", {"home": str(home), "limit": 0}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
+    bad_limit = _report_env(home, {"limit": 0})
     assert bad_limit["ok"] is False
     assert "limit" in bad_limit["error"]["message"]
 
-    bad_cursor = dispatch("report.lifecycle", {"home": str(home), "cursor": "!!not-base64!!"}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
+    bad_cursor = _report_env(home, {"cursor": "!!not-base64!!"})
     assert bad_cursor["ok"] is False
 
 
@@ -415,32 +438,20 @@ def test_report_lifecycle_rejects_invalid_stale_threshold(home, bad_value):
     with _conn(home) as conn:
         _seed_base(conn)
 
-    env = dispatch(
-        "report.lifecycle",
-        {"home": str(home), "stale_threshold_days": bad_value},
-        actor_id="agent:test",
-        registry=default_registry(),
-    ).model_dump(mode="json")
+    env = _report_env(home, {"stale_threshold_days": bad_value})
 
     assert env["ok"] is False, env
     assert env["error"]["code"] == "VALIDATION_ERROR", env["error"]
     assert env["error"]["details"]["field"] == "stale_threshold_days", env["error"]
 
 
-def test_report_lifecycle_status_alias_and_schema(home):
+def test_report_lifecycle_status_alias(home):
     with _conn(home) as conn:
         _seed_base(conn)
         _insert_decision(conn, "d-stale", "hold", "2026-01-01T00:04:00Z")
 
     data = _report(home, {"as_of": "2026-01-20T00:00:00Z", "status": "stale", "stale_threshold_days": 14})
     assert [case["state"] for case in data["lifecycle_cases"]] == ["stale"]
-
-    schema_env = dispatch("tool.schema", {"tool": "report.lifecycle"}, actor_id="agent:test", registry=default_registry()).model_dump(mode="json")
-    assert schema_env["ok"], schema_env
-    props = schema_env["data"]["json_schema"]["properties"]
-    for key in ("filter", "states", "status", "as_of", "stale_threshold_days", "limit", "cursor"):
-        assert key in props
-
 
 def test_report_lifecycle_invalid_state_error_lists_allowed_values(home):
     """An unsupported `states` value must surface the allowed set, not just echo
@@ -449,12 +460,7 @@ def test_report_lifecycle_invalid_state_error_lists_allowed_values(home):
     with _conn(home) as conn:
         _seed_base(conn)
 
-    env = dispatch(
-        "report.lifecycle",
-        {"home": str(home), "states": ["active"]},
-        actor_id="agent:test",
-        registry=default_registry(),
-    ).model_dump(mode="json")
+    env = _report_env(home, {"states": ["active"]})
 
     assert env["ok"] is False
     message = env["error"]["message"]

@@ -24,7 +24,7 @@ _APPEND_ONLY_UPDATE_TRIGGERS: dict[str, str] = {
 def _metadata_with_sources_array(raw: str | None) -> str:
     try:
         parsed: Any = json.loads(raw or "{}")
-    except Exception:
+    except Exception:  # noqa: BLE001 - malformed historical metadata is normalized to an empty object
         parsed = {}
     if not isinstance(parsed, dict):
         parsed = {}

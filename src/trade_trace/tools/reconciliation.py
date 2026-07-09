@@ -18,6 +18,9 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 from trade_trace.tools._helpers import (
+    canonical_json as _canonical_json,
+)
+from trade_trace.tools._helpers import (
     check_idempotency_replay,
     db_for_args,
     emit_event,
@@ -65,10 +68,6 @@ _MISMATCH_CODES = {
     "NEGATIVE_RISK_CAVEAT",
 }
 _SELECT = "id, schema_version, semantic_key, material_hash, as_of, source, source_precedence_json, expected_state_json, observed_imported_state_json, diff_json, diff_severity, mismatch_codes_json, resolution_status, contributing_ids_json, caveats_json, provenance_json, imported_at, recorded_at, idempotency_key, actor_id"
-
-
-def _canonical_json(value: Any) -> str:
-    return json.dumps(value if value is not None else {}, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _json_arg(args: dict[str, Any], field: str, default: Any) -> Any:
@@ -251,7 +250,7 @@ def _build_derived(conn: Any, *, as_of: str, stale_snapshot_statuses: set[str]) 
     paper = conn.execute("SELECT id, pretrade_intent_id, fill_status, remaining_quantity FROM paper_fill_records ORDER BY order_as_of DESC, id").fetchall()
     for row in paper:
         ids["paper_fills"].append(row[0])
-        if row[2] == "partial" and _dec(row[3]) not in (None, Decimal("0")):
+        if row[2] == "partial" and _dec(row[3]) not in (None, Decimal(0)):
             codes.add("PARTIAL_FILL_REMAINING_MISMATCH")
     if local_positions and not _event_metadata_available(conn, [p["instrument_id"] for p in local_positions]):
         codes.add("EVENT_EXPOSURE_UNAVAILABLE")

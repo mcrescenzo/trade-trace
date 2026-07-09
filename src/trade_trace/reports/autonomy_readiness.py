@@ -105,7 +105,7 @@ def _window_buckets(
     if not resolved_iso:
         return [], False
     parsed = sorted(
-        datetime.fromisoformat(ts.replace("Z", "+00:00")) for ts in resolved_iso
+        datetime.fromisoformat(ts) for ts in resolved_iso
     )
     earliest, latest = parsed[0], parsed[-1]
     span = timedelta(days=window_days)
@@ -131,7 +131,7 @@ def _to_z(ts: str) -> str:
     from datetime import datetime
 
     return (
-        datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        datetime.fromisoformat(ts)
         .astimezone()
         .isoformat()
         .replace("+00:00", "Z")
@@ -505,7 +505,7 @@ def report_autonomy_readiness(
         "contract_version": AUTONOMY_READINESS_CONTRACT_VERSION,
         "evidence_refs": {
             "phase_gate_readiness": "report.phase_gate_readiness",
-            "calibration_anchored": "report.calibration_anchored",
+            "calibration_market_baseline": "phase_gate_readiness.anchored_market_baseline",
             "risk": "report.risk",
             "audit_readiness": "report.audit_readiness",
         },

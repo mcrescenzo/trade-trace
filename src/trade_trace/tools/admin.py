@@ -64,7 +64,7 @@ BGE_SMALL_LOCK: tuple[dict[str, Any], ...] = (
     {"path": "sentence_bert_config.json", "size": 52, "sha256": "84e39fda68ccbff05bfa723ae9c0e70e23e2ec373b76e0f8c6e71af72a693cbf"},
     {"path": "1_Pooling/config.json", "size": 190, "sha256": "d1caf60c96f5fba2157c0c26b76d80818fad6cf0b8eb5e73ec372ff9818eba5c"},
     {"path": "config_sentence_transformers.json", "size": 124, "sha256": "940d5f50db195fa6e5e6a4f122c095f77880de259d74b14a65779ed48bdd7c56"},
-    {"path": "model.onnx", "size": 132986896, "sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
+    {"path": "model.onnx", "size": 133093490, "sha256": "828e1496d7fabb79cfa4dcd84fa38625c0d3d21da474a00f08db0f559940cf35"},
 )
 
 
@@ -99,11 +99,8 @@ def _model_target_dir(home: Path) -> Path:
 
 
 def _sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
     with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
+        return hashlib.file_digest(fh, "sha256").hexdigest()
 
 
 def _trusted_bge_small_lock() -> tuple[dict[str, Any], ...]:
@@ -237,14 +234,18 @@ def _atomic_replace_dir(src: Path, dest: Path) -> None:
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
-    for rel, _size, _sha in _trusted_model_entries():
-        source = _resolve_under(src, rel)
-        if source.is_symlink() or not source.is_file():
-            raise ToolError(ErrorCode.INVARIANT_VIOLATION, "trusted model file missing or not regular", details={"path": rel})
-        out = _resolve_under(staging, rel)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, out, follow_symlinks=False)
-    _verify_model_dir(staging)
+    try:
+        for rel, _size, _sha in _trusted_model_entries():
+            source = _resolve_under(src, rel)
+            if source.is_symlink() or not source.is_file():
+                raise ToolError(ErrorCode.INVARIANT_VIOLATION, "trusted model file missing or not regular", details={"path": rel})
+            out = _resolve_under(staging, rel)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, out, follow_symlinks=False)
+        _verify_model_dir(staging)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
     if dest.exists():
         shutil.rmtree(dest)
     staging.replace(dest)
@@ -718,16 +719,15 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
             },
         }
 
-    if key == "embeddings.provider" and value == "local":
-        # Do not download or fail on missing assets. model.import is the only
-        # path that stages local embeddings; missing installs/assets degrade
-        # semantic recall rather than blocking journal operations.
-        pass
-
     if key == "embeddings.provider":
         # Avoid the higher-level database opener here so config changes never
-        # try to initialize optional embedding runtimes.
-        conn = sqlite3.connect(str(path), isolation_level=None)
+        # try to initialize optional embedding runtimes. Setting local
+        # embeddings does not download or fail on missing assets; model.import
+        # is the only path that stages assets, and missing installs/assets
+        # degrade semantic recall rather than blocking journal operations.
+        # isolation_level=None is intentional autocommit; each DML statement
+        # persists immediately, so there is no follow-up commit call here.
+        conn = sqlite3.connect(path, isolation_level=None)
         try:
             conn.execute(
                 "INSERT INTO config(key, value, updated_at) "
@@ -736,7 +736,6 @@ def _journal_config_set(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any
                 "value = excluded.value, updated_at = excluded.updated_at",
                 (key, value, now_iso()),
             )
-            conn.commit()
         finally:
             conn.close()
     else:
@@ -843,7 +842,7 @@ def _memory_reindex(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             details={"home": str(home), "db_path": str(path)},
         )
 
-    conn = sqlite3.connect(str(path), isolation_level=None)
+    conn = sqlite3.connect(path, isolation_level=None)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA busy_timeout = 5000")
     try:

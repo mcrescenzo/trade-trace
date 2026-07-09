@@ -88,16 +88,13 @@ def _seed_scored_forecasts(
 REPORT_TOOLS_AND_ARGS: list[tuple[str, dict[str, Any]]] = [
     ("report.calibration", {}),
     ("report.mistakes", {}),
-    ("report.strengths", {}),
     ("report.pnl", {}),
     ("report.watchlist", {}),
     ("report.open_positions", {}),
     ("report.exposure_anomalies", {}),
     ("report.current_exposure", {}),
     ("report.unscored_forecasts", {}),
-    ("report.decision_velocity", {}),
     ("report.coach", {}),
-    ("report.filter_schema", {}),
 ]
 
 

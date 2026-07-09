@@ -13,8 +13,9 @@ This module fixes that by pinning, for each report, the exact set of
   and rejects any non-default value in a path the report does not
   support. The error carries `unsupported_filter_paths` so the agent
   can prune its input and retry.
-- `SUPPORTED_FILTER_FIELDS` is the per-report contract; new reports
-  must register here before accepting any non-default filter field.
+- `SUPPORTED_FILTER_FIELDS` is the per-report contract, lazily assembled
+  from `REPORT_FILTER_SUPPORT` declarations next to each report
+  implementation.
 - `applied_filter_view(rf, report=...)` returns the subset of the
   validated filter the report actually applies, so `summary.filter`
   can echo only the slice that influenced the result instead of the
@@ -26,10 +27,13 @@ typed `VALIDATION_ERROR` envelope.
 
 from __future__ import annotations
 
+import importlib
 import sqlite3
-from typing import Any
+from typing import Any, TypeVar, overload
 
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
+
+_T = TypeVar("_T")
 
 
 def _placeholders(count: int) -> str:
@@ -100,165 +104,87 @@ class UnsupportedFilterError(ValueError):
         )
 
 
-SUPPORTED_FILTER_FIELDS: dict[str, frozenset[str]] = {
-    # Calibration scopes scored forecasts through the forecast/thesis/
-    # instrument chain for these public/security-contract filters, and
-    # consults `outcome.include_late_recorded` to swap the dogfood default.
-    "report.calibration": frozenset({
-        "actors.actor_id",
-        "actors.agent_id",
-        "actors.model_id",
-        "actors.environment",
-        "actors.run_id",
-        "instrument.venue_id",
-        "strategy.strategy_id",
-        "outcome.include_late_recorded",
-    }),
-    "report.calibration_advisory": frozenset({
-        "actors.actor_id",
-        "actors.agent_id",
-        "actors.model_id",
-        "actors.environment",
-        "actors.run_id",
-        "instrument.venue_id",
-        "strategy.strategy_id",
-        "outcome.include_late_recorded",
-    }),
-    "report.calibration_anchored": frozenset({
-        "actors.actor_id",
-        "actors.agent_id",
-        "actors.model_id",
-        "actors.environment",
-        "actors.run_id",
-        "instrument.venue_id",
-        "strategy.strategy_id",
-        "outcome.include_late_recorded",
-    }),
-    "report.calibration_terminal": frozenset({
-        "actors.actor_id",
-        "actors.agent_id",
-        "actors.model_id",
-        "actors.environment",
-        "actors.run_id",
-        "instrument.venue_id",
-        "strategy.strategy_id",
-        "outcome.include_late_recorded",
-    }),
-    "report.market_lifecycle": frozenset({
-        "actors.actor_id",
-        "instrument.instrument_id",
-        "time_window.created_at_gte",
-        "time_window.created_at_lt",
-    }),
-    "report.resolution_quality": frozenset({
-        "actors.actor_id",
-        "instrument.instrument_id",
-        "time_window.created_at_gte",
-        "time_window.created_at_lt",
-        "time_window.resolved_at_gte",
-        "time_window.resolved_at_lt",
-        "outcome.resolution_status",
-    }),
-    "report.time_decay_sharpening": frozenset({
-        "actors.actor_id",
-        "actors.agent_id",
-        "actors.model_id",
-        "actors.environment",
-        "actors.run_id",
-        "instrument.venue_id",
-        "strategy.strategy_id",
-        "outcome.include_late_recorded",
-    }),
-    # decision_velocity wires three filter leaves into its SQL today.
-    "report.decision_velocity": frozenset({
-        "time_window.decision_at_gte",
-        "time_window.decision_at_lt",
-        "decision.decision_type",
-    }),
-    # The remaining reports validate the filter shape but do not yet
-    # join it into their SQL. Until they do, only the empty filter is
-    # accepted so the agent sees a clean rejection instead of a silently
-    # global result.
-    "report.mistakes": frozenset(),
-    "report.strengths": frozenset(),
-    "report.process_analytics": frozenset({
-        "decision.tags_any",
-        "decision.tags_all",
-        "strategy.strategy_id",
-        "time_window.decision_at_gte",
-        "time_window.decision_at_lt",
-    }),
-    "report.pnl": frozenset(),
-    "report.watchlist": frozenset(),
-    "report.lifecycle": frozenset({
-        "actors.run_id",
-        "instrument.instrument_id",
-        "strategy.strategy_id",
-        "time_window.created_at_gte",
-        "time_window.created_at_lt",
-        "time_window.decision_at_gte",
-        "time_window.decision_at_lt",
-    }),
-    "report.work_queue": frozenset({
-        "actors.run_id",
-        "instrument.instrument_id",
-        "strategy.strategy_id",
-    }),
-    "report.unscored_forecasts": frozenset(),
-    "report.playbook_adherence": frozenset(),
-    "report.strategy_health": frozenset({
-        "actors.actor_id",
-        "actors.agent_id",
-        "actors.model_id",
-        "actors.environment",
-        "actors.run_id",
-        "strategy.strategy_id",
-        "time_window.created_at_gte",
-        "time_window.created_at_lt",
-    }),
-    "report.operational_health": frozenset({
-        "actors.run_id",
-        "strategy.strategy_id",
-        "instrument.instrument_id",
-        "time_window.created_at_gte",
-        "time_window.created_at_lt",
-    }),
-    "report.forecast_diagnostics": frozenset({
-        "actors.actor_id",
-        "actors.agent_id",
-        "actors.model_id",
-        "actors.environment",
-        "actors.run_id",
-        "instrument.instrument_id",
-        "instrument.venue_id",
-        "strategy.strategy_id",
-        "decision.decision_type",
-        "outcome.include_late_recorded",
-    }),
-    # The coach composes other reports; it inherits their support
-    # contract by composition. Direct callers may only pass the empty
-    # filter shape today.
-    "report.coach": frozenset(),
-    # report.risk has no filter leaves wired into its SQL today; only
-    # the empty filter is accepted so the agent sees a clean rejection
-    # instead of a silently broadened result.
-    "report.risk": frozenset(),
-    # report.opportunity currently reconstructs paths globally and rejects
-    # non-empty filters until filter predicates are wired into the decision /
-    # snapshot path query.
-    "report.opportunity": frozenset(),
-    # review.bundle scopes its decision selection through the same
-    # actor/instrument/strategy spine as calibration, plus the
-    # decision_at time window (the selection ordering uses
-    # decisions.created_at).
-    "review.bundle": frozenset({
-        "actors.actor_id",
-        "instrument.venue_id",
-        "strategy.strategy_id",
-        "time_window.decision_at_gte",
-        "time_window.decision_at_lt",
-    }),
-}
+_REPORT_SUPPORT_MODULES = (
+    "trade_trace.reports.calibration",
+    "trade_trace.reports.tag_aggregates",
+    "trade_trace.reports.pnl",
+    "trade_trace.reports.watchlist",
+    "trade_trace.reports.lifecycle",
+    "trade_trace.reports.work_queue",
+    "trade_trace.reports.unscored",
+    "trade_trace.reports.playbook_adherence",
+    "trade_trace.reports.strategy_health",
+    "trade_trace.reports.forecast_diagnostics",
+    "trade_trace.reports.coach",
+    "trade_trace.reports.risk",
+    "trade_trace.reports.opportunity",
+    "trade_trace.tools.review_bundle",
+)
+
+
+def _support_entries_from_module(module: Any) -> dict[str, frozenset[str]]:
+    by_report = getattr(module, "REPORT_FILTER_SUPPORT_BY_REPORT", None)
+    if by_report is not None:
+        return dict(by_report)
+    return {module.REPORT_NAME: module.REPORT_FILTER_SUPPORT}
+
+
+class _LazySupportedFilterFields(dict[str, frozenset[str]]):
+    def __init__(self) -> None:
+        super().__init__()
+        self._loaded = False
+
+    def _ensure_loaded(self) -> None:
+        if self._loaded:
+            return
+        for module_name in _REPORT_SUPPORT_MODULES:
+            module = importlib.import_module(module_name)
+            super().update(_support_entries_from_module(module))
+        self._loaded = True
+
+    def __contains__(self, key: object) -> bool:
+        self._ensure_loaded()
+        return super().__contains__(key)
+
+    def __getitem__(self, key: str) -> frozenset[str]:
+        self._ensure_loaded()
+        return super().__getitem__(key)
+
+    def __iter__(self):
+        self._ensure_loaded()
+        return super().__iter__()
+
+    def __len__(self) -> int:
+        self._ensure_loaded()
+        return super().__len__()
+
+    @overload
+    def get(self, key: str, default: None = None) -> frozenset[str] | None: ...
+
+    @overload
+    def get(self, key: str, default: frozenset[str]) -> frozenset[str]: ...
+
+    @overload
+    def get(self, key: str, default: _T) -> frozenset[str] | _T: ...
+
+    def get(self, key: str, default: Any = None) -> Any:
+        self._ensure_loaded()
+        return super().get(key, default)
+
+    def items(self):
+        self._ensure_loaded()
+        return super().items()
+
+    def keys(self):
+        self._ensure_loaded()
+        return super().keys()
+
+    def values(self):
+        self._ensure_loaded()
+        return super().values()
+
+
+SUPPORTED_FILTER_FIELDS: dict[str, frozenset[str]] = _LazySupportedFilterFields()
 
 
 def _default_filter_dump() -> dict[str, Any]:

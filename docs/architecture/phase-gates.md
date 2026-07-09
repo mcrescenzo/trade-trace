@@ -37,8 +37,8 @@ in the stated `direction`. A criterion `pass` is `true`, `false`, or `null`
 | Criterion key | Measured from | Direction | Meaning |
 | --- | --- | --- | --- |
 | `resolved_n` | non-superseded `brier_binary` `forecast_scores` | `measured >= threshold` | Resolved track-record size: how many binary forecasts have actually been graded. Below the owner's floor the record is too thin to judge. |
-| `brier` | `report.calibration_anchored` `summary.metrics.brier` | `measured <= threshold` | Mean Brier score over scored binary forecasts that have a market baseline (lower is better). |
-| `skill_vs_market` | `report.calibration_anchored` `summary.metrics.skill` | `measured >= threshold` | Brier skill versus the market baseline (`1 - brier / brier_baseline`; `> 0` beats the market). The headline "did it actually beat the market" number. |
+| `brier` | `phase_gate_readiness.anchored_market_baseline` `summary.metrics.brier` | `measured <= threshold` | Mean Brier score over scored binary forecasts that have a market baseline (lower is better). |
+| `skill_vs_market` | `phase_gate_readiness.anchored_market_baseline` `summary.metrics.skill` | `measured >= threshold` | Brier skill versus the market baseline (`1 - brier / brier_baseline`; `> 0` beats the market). The headline "did it actually beat the market" number. |
 | `reconciliation_cleanliness` | `reconciliation_records` (unresolved AND critical) | `measured <= threshold` | Count of reconciliation records that are simultaneously `unresolved` and critical (carry `diff_severity='critical'` or a critical mismatch code: `POLICY_WAIVER_BREACH`, `DUPLICATE_FILL`, `REJECTED_APPROVED_INTENT`). The natural bar is `0`. |
 | `audit_readiness` | `report.audit_readiness` `summary.ready` | `measured == threshold` | A populated prediction-market sample with zero blocking provenance issues. Owner-required value is `true`. |
 | `paper_fill_coverage` | `pretrade_intents` ∩ `paper_fill_records` | `measured >= threshold` | Fraction of pretrade intents that have a linked paper fill — did the paper layer actually track what would have happened? |

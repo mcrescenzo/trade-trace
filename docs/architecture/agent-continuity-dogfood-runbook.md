@@ -126,7 +126,7 @@ All artifacts remain CLI/MCP/JSON-first, local-first SQLite, and based on caller
 Current roadmap decisions from the H3-H5 research/docs chain remain deferred unless repeated deterministic dogfood failures demand escalation:
 
 - **AgentRun table/API:** defer while row-level `actor_id`, `agent_id`, `model_id`, `environment`, `run_id`, request IDs, and idempotency are enough for attribution and replay grouping.
-- **Durable work-item state:** defer while derived `report.bootstrap`, `report.lifecycle`, and `report.work_queue` expose obligations without assignment, claiming, snooze, locks, or scheduler semantics.
+- **Durable work-item state:** defer while `report.bootstrap`, `report.work_queue`, and `agent.next_actions` expose lifecycle-derived obligations without assignment, claiming, snooze, locks, or scheduler semantics.
 - **Standalone handoff coordination:** defer while bootstrap/work-queue/recall receipts support single-agent continuity; any future handoff must be a bounded packet over existing local surfaces, not a coordination service.
 
 Escalate only with repeated, reproducible failures in the local runbook that cannot be fixed by fixture, scorecard, report, or test updates under the existing boundaries.

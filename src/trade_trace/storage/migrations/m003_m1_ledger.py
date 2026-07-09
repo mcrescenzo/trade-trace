@@ -22,7 +22,7 @@ def _migration_003_m1_ledger(conn: sqlite3.Connection) -> None:
     - Bi-temporal columns (`valid_from`, `valid_to`, `invalidated_at`,
       `invalidated_by`) on belief-shaped rows.
     - Segmentation columns (`agent_id`, `model_id`, `environment`,
-      `run_id`) on rows that participate in `report.compare` group-bys.
+      `run_id`) on rows that participate in report group-bys.
     - Append-only invariants enforced by triggers (see below).
     """
 

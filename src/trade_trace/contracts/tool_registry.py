@@ -77,7 +77,7 @@ def cli_invocation_for(tool_name: str) -> tuple[str, ...]:
     """Map an MCP tool name (`subject.verb`) to the tuple of CLI tokens after `tt`.
 
     `decision.add` -> `("decision", "add")`
-    `report.filter_schema` -> `("report", "filter_schema")`
+    `report.calibration` -> `("report", "calibration")`
     """
 
     if not tool_name:

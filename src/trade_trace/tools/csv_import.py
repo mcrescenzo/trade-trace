@@ -162,7 +162,7 @@ def _apply_mapping_value(rule: Any, row: dict[str, str]) -> Any:
                 f"value {raw!r} from column {column!r} is not in the "
                 "mapping's 'values' dictionary",
                 details={"column": column, "value": raw,
-                         "allowed": sorted(values_map.keys())},
+                         "allowed": sorted(values_map)},
             )
         return values_map[raw]
     if "format" in rule:

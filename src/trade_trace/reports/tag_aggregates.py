@@ -1,11 +1,12 @@
-"""`report.mistakes` and `report.strengths` per trade-trace-nxn.
+"""Tag aggregate helpers per trade-trace-nxn.
 
-Both reports group decisions by tag and surface recurring patterns:
+The public `report.mistakes` report and the internal coach strengths view group
+decisions by tag and surface recurring patterns:
 
 - `mistakes` ranks tags by mean Brier of their scored forecasts (worst
   first); high mean = pattern is associated with poor calibration.
-- `strengths` ranks tags by mean Brier (best first); low mean = pattern
-  is associated with well-calibrated forecasts.
+- the coach strengths view ranks tags by mean Brier (best first); low mean =
+  pattern is associated with well-calibrated forecasts.
 
 A tag falls below the report's `min_sample` (default 10 per reports.md
 §3.2) is flagged via `sample_warning` but still ranked.
@@ -15,9 +16,8 @@ no Brier to attribute, so it is neither a mistake nor a strength. This
 covers both decisions without an attached `forecast_id` and decisions
 whose forecast is not yet scored (open/pending). For surfaced (scored)
 tags, the `record_ids[decisions]` list still enumerates the decisions in
-each tag group so the agent can drill into the qualitative side. Mirrors
-the scored-evidence gate that `report.mistake_tripwire` and
-`report.coach` (top_mistakes/top_strengths) already apply.
+each tag group so the agent can drill into the qualitative side. Mirrors the
+scored-evidence gate that `report.coach` (top_mistakes/top_strengths) applies.
 """
 
 from __future__ import annotations
@@ -30,6 +30,13 @@ from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 
 DEFAULT_TAG_MIN_SAMPLE = 10
+MISTAKES_REPORT_NAME = "report.mistakes"
+COACH_REPORT_NAME = "report.coach"
+REPORT_FILTER_SUPPORT_BY_REPORT: dict[str, frozenset[str]] = {
+    # These reports validate the filter shape but do not yet join it into their
+    # SQL. Only the empty filter is accepted until predicates are wired in.
+    MISTAKES_REPORT_NAME: frozenset(),
+}
 
 
 def report_mistakes(
@@ -41,126 +48,8 @@ def report_mistakes(
     return _tag_ranked_report(
         conn, raw_filter=raw_filter, min_sample=min_sample,
         order="desc", label="recurring mistakes",
-        report="report.mistakes",
+        report=MISTAKES_REPORT_NAME,
     )
-
-
-def report_strengths(
-    conn: sqlite3.Connection,
-    *,
-    raw_filter: dict[str, Any] | None = None,
-    min_sample: int = DEFAULT_TAG_MIN_SAMPLE,
-) -> dict[str, Any]:
-    return _tag_ranked_report(
-        conn, raw_filter=raw_filter, min_sample=min_sample,
-        order="asc", label="recurring strengths",
-        report="report.strengths",
-    )
-
-
-DEFAULT_TRIPWIRE_BRIER_THRESHOLD = 0.25
-"""Mean-Brier bar above which a tag counts as a recurring mistake pattern.
-0.25 is the Brier of an always-0.5 forecast; a tag worse than that has been
-associated with systematically poor calibration."""
-
-
-def report_mistake_tripwire(
-    conn: sqlite3.Connection,
-    *,
-    tags: list[str],
-    instrument_id: str | None = None,
-    min_sample: int = DEFAULT_TAG_MIN_SAMPLE,
-    brier_threshold: float = DEFAULT_TRIPWIRE_BRIER_THRESHOLD,
-) -> dict[str, Any]:
-    """Decision-time mistake trip-wire (trade-trace-4kec.10).
-
-    Given the fingerprint (tag set) of a decision the agent is ABOUT to make,
-    fire — unprompted, without an explicit recall query — the candidate tags
-    that match the agent's own recurring-mistake patterns: tags whose prior
-    scored forecasts have a mean Brier at or above `brier_threshold` over at
-    least `min_sample` scored forecasts. Surfaces the prior failing
-    decisions/forecasts so the agent sees the pattern before committing.
-    Read-only, deterministic, no trade advice."""
-
-    if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
-        raise ValueError("tags must be a list of strings")
-    candidate = {t for t in tags if t}
-
-    placeholders = ", ".join("?" for _ in candidate)
-    where = [f"dt.tag IN ({placeholders})"] if candidate else ["0"]
-    params: list[Any] = list(candidate)
-    if instrument_id is not None:
-        where.append("t.instrument_id = ?")
-        params.append(instrument_id)
-    rows = conn.execute(
-        f"""
-        SELECT dt.tag, d.id AS decision_id, d.forecast_id, fs.score
-        FROM decision_tags dt
-        JOIN decisions d ON d.id = dt.decision_id
-        JOIN forecasts f ON f.id = d.forecast_id
-        JOIN theses t ON t.id = f.thesis_id
-        LEFT JOIN forecast_scores fs
-          ON fs.forecast_id = d.forecast_id
-          AND fs.score IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM edges e
-            WHERE e.source_kind = 'outcome' AND e.target_kind = 'outcome'
-              AND e.edge_type = 'supersedes' AND e.target_id = fs.outcome_id
-          )
-        WHERE {' AND '.join(where)}
-        """,
-        params,
-    ).fetchall()
-
-    by_tag: dict[str, list[tuple[str, str | None, float | None]]] = {}
-    for tag, did, fid, score in rows:
-        by_tag.setdefault(tag, []).append((did, fid, score))
-
-    groups: list[dict[str, Any]] = []
-    for tag in sorted(by_tag):
-        items = by_tag[tag]
-        scored = [s for (_d, _f, s) in items if s is not None]
-        sample_size = len(scored)
-        if sample_size < min_sample:
-            continue
-        mean_brier = sum(scored) / sample_size
-        if mean_brier < brier_threshold:
-            continue
-        decision_ids = sorted({d for (d, _f, _s) in items})
-        forecast_ids = sorted({f for (_d, f, _s) in items if f is not None})
-        groups.append({
-            "key": tag,
-            "label": f"Recurring mistake pattern on tag {tag!r}",
-            "metrics": {
-                "mean_brier": round(mean_brier, 6),
-                "scored_forecast_count": sample_size,
-                "threshold": brier_threshold,
-            },
-            "record_ids": {"decisions": decision_ids, "forecasts": forecast_ids},
-            "examples": [
-                {"kind": "decision", "id": d, "summary": f"prior decision tagged {tag!r}"}
-                for d, _f, _s in items[:3]
-            ],
-            "sample_size": sample_size,
-            "sample_warning": None,
-            "truncated": False,
-        })
-    groups.sort(key=lambda g: g["metrics"]["mean_brier"], reverse=True)
-
-    summary = {
-        "triggered": bool(groups),
-        "candidate_tags": sorted(candidate),
-        "instrument_id": instrument_id,
-        "match_count": len(groups),
-        "brier_threshold": brier_threshold,
-        "min_sample": min_sample,
-        "caveats": [
-            "Matches are the caller's own past poorly-calibrated tag patterns "
-            "(mean Brier at or above the threshold); this is a calibration "
-            "trip-wire, not trade advice, a signal, or an edge/profit claim.",
-        ],
-    }
-    return standard_report_result(summary=summary, groups=groups)
 
 
 _TAG_BRIER_ROWS_SQL = """
@@ -176,10 +65,9 @@ _TAG_BRIER_ROWS_SQL = """
           AND e.edge_type = 'supersedes' AND e.target_id = fs.outcome_id
       )
 """
-"""The decision_tags→decisions→forecast_scores join shared by the
-mistakes / strengths ranked reports (and, via report.coach, both at
-once). Pinned as a single string so the SQL is executed from exactly
-one place — see `_load_tag_brier_rows`."""
+"""The decision_tags→decisions→forecast_scores join shared by `report.mistakes`
+and the coach's top-mistakes/top-strengths views. Pinned as a single string so
+the SQL is executed from exactly one place — see `_load_tag_brier_rows`."""
 
 
 def _load_tag_brier_rows(
@@ -187,10 +75,10 @@ def _load_tag_brier_rows(
 ) -> list[tuple[str, str, str | None, float | None]]:
     """Run the tag→Brier join exactly once and return its raw rows.
 
-    The mistakes and strengths reports differ only in the Python-side
-    sort order and label string, so report.coach loads the rows once
-    here and feeds them to both `_build_tag_ranked_report` orderings
-    instead of paying for two identical DB round-trips (trade-trace-bg12).
+    The mistakes and coach strengths views differ only in the Python-side sort
+    order and label string, so report.coach loads the rows once here and feeds
+    them to both `_build_tag_ranked_report` orderings instead of paying for two
+    identical DB round-trips (trade-trace-bg12).
     """
 
     return conn.execute(_TAG_BRIER_ROWS_SQL).fetchall()
@@ -245,8 +133,8 @@ def _build_tag_ranked_report(
         # under either label is a false signal (and the same null-Brier tag
         # would otherwise appear identically in BOTH reports). Exclude it, in
         # line with this module's stated "there's no Brier to attribute"
-        # exclusion and the sibling report.mistake_tripwire / report.coach
-        # top_mistakes/top_strengths, which both gate on scored evidence.
+        # exclusion and report.coach top_mistakes/top_strengths, which both
+        # gate on scored evidence.
         if sample_size == 0:
             continue
         decision_ids = sorted({d for (d, _f, _s) in items})
@@ -317,23 +205,21 @@ def load_mistakes_and_strengths(
     raw_filter: dict[str, Any] | None = None,
     min_sample: int = DEFAULT_TAG_MIN_SAMPLE,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Build the mistakes (desc) and strengths (asc) reports from ONE query.
+    """Build the mistakes (desc) and coach strengths (asc) views from ONE query.
 
-    report.coach consumes both ranked views with the same filter; they
-    differ only in Python-side sort order and label, so the underlying
-    decision_tags→forecast_scores join is executed exactly once here and
-    fed to both orderings (trade-trace-bg12). Each returned report is
-    byte-for-byte identical to calling `report_mistakes` /
-    `report_strengths` separately with the same `raw_filter`.
+    report.coach consumes both ranked views with the same filter; they differ
+    only in Python-side sort order and label, so the underlying
+    decision_tags→forecast_scores join is executed exactly once here and fed to
+    both orderings (trade-trace-bg12).
 
     Returns `(mistakes, strengths)`.
     """
 
     mistakes_filter_view = process_filter(
-        ReportFilter.model_validate(raw_filter or {}), report="report.mistakes"
+        ReportFilter.model_validate(raw_filter or {}), report=MISTAKES_REPORT_NAME
     )
     strengths_filter_view = process_filter(
-        ReportFilter.model_validate(raw_filter or {}), report="report.strengths"
+        ReportFilter.model_validate(raw_filter or {}), report=COACH_REPORT_NAME
     )
     rows = _load_tag_brier_rows(conn)
     mistakes = _build_tag_ranked_report(

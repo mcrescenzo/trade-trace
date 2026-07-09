@@ -22,14 +22,10 @@ from trade_trace.contracts.schema_validation import (
 )
 from trade_trace.contracts.tool_registry import ToolRegistry
 from trade_trace.core import default_registry, dispatch, new_request_id
+from trade_trace.security.credential_keys import SECRET_TRANSPORT_HINT_KEYS
 
 DEFAULT_MCP_ACTOR_ID = "agent:mcp-default"
 TOP_LEVEL_JSON_SCHEMA_COMBINATORS = ("anyOf", "oneOf", "allOf")
-
-
-from trade_trace.security.credential_keys import (  # noqa: E402
-    SECRET_TRANSPORT_HINT_KEYS,
-)
 
 
 def stdio_actor_id(env: Mapping[str, str] | None = None) -> str:
@@ -184,6 +180,23 @@ def _stdio_validation_error(
     return envelope.model_dump(mode="json", exclude_none=True)
 
 
+async def _dispatch_stdio_tool_call(
+    name: str,
+    arguments: dict[str, Any],
+    *,
+    actor_id: str,
+    registry: ToolRegistry,
+) -> dict[str, Any]:
+    envelope = await asyncio.to_thread(
+        mcp_call,
+        name,
+        arguments,
+        actor_id=actor_id,
+        registry=registry,
+    )
+    return envelope.model_dump(mode="json", exclude_none=True)
+
+
 def _build_stdio_server(registry: ToolRegistry | None = None):
     """Build the low-level MCP SDK server without starting a transport."""
 
@@ -268,13 +281,12 @@ def _build_stdio_server(registry: ToolRegistry | None = None):
                     details=validation_error.details,
                 )
 
-        envelope = mcp_call(
+        return await _dispatch_stdio_tool_call(
             name,
             arguments,
             actor_id=actor_id,
             registry=reg,
         )
-        return envelope.model_dump(mode="json", exclude_none=True)
 
     return server
 

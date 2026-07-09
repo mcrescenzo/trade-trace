@@ -170,6 +170,17 @@ def _load_recall_events(conn: sqlite3.Connection, **filters: Any) -> list[dict[s
     if filters.get("as_of") is not None:
         clauses.append("created_at <= ?")
         params.append(filters["as_of"])
+    if filters.get("node_id") is not None:
+        clauses.append(
+            "json_valid(node_ids_returned) "
+            "AND EXISTS (SELECT 1 FROM json_each(node_ids_returned) WHERE value = ?)"
+        )
+        params.append(filters["node_id"])
+    for key in ("instrument_id", "strategy_id"):
+        expected = filters.get(key)
+        if expected is not None:
+            clauses.append("json_valid(context_json) AND json_extract(context_json, ?) = ?")
+            params.extend((f"$.{key}", expected))
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
     rows = conn.execute(
         f"""
@@ -324,7 +335,7 @@ def _memory_nodes_batch(conn: sqlite3.Connection, node_ids: list[str]) -> dict[s
     nodes: dict[str, dict[str, Any] | None] = {nid: None for nid in node_ids}
     if not nodes:
         return nodes
-    unique_ids = list(nodes.keys())
+    unique_ids = list(nodes)
     placeholders = ",".join("?" for _ in unique_ids)
     rows = conn.execute(
         f"""
@@ -360,7 +371,7 @@ def _edge_evidence_batch(
     evidence: dict[str, list[dict[str, Any]]] = {nid: [] for nid in node_ids}
     if not evidence:
         return evidence
-    unique_ids = list(evidence.keys())
+    unique_ids = list(evidence)
     clauses = ["target_kind = 'memory_node'", "target_id IN (" + ",".join("?" for _ in unique_ids) + ")"]
     params: list[Any] = list(unique_ids)
     if consumer_kind is not None:
@@ -399,7 +410,7 @@ def _source_refs_batch(conn: sqlite3.Connection, node_ids: list[str]) -> dict[st
     refs: dict[str, list[dict[str, str]]] = {nid: [] for nid in node_ids}
     if not refs:
         return refs
-    unique_ids = list(refs.keys())
+    unique_ids = list(refs)
     placeholders = ",".join("?" for _ in unique_ids)
     rows = conn.execute(
         f"""

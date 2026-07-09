@@ -23,9 +23,30 @@ from .common import (
     report_audit_readiness,
     report_filter_validation_to_tool_error,
     report_playbook_adherence,
-    report_rule_lineage,
     report_source_quality,
 )
+
+
+def _validate_thresholds(thresholds: Any) -> None:
+    if thresholds is None:
+        return
+    if not isinstance(thresholds, dict):
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "thresholds must be an object keyed by criterion",
+            details={"field": "thresholds"},
+        )
+    unknown = sorted(set(thresholds) - set(CRITERION_KEYS))
+    if unknown:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "thresholds contains unknown criterion key(s)",
+            details={
+                "field": "thresholds",
+                "unknown": unknown,
+                "allowed": list(CRITERION_KEYS),
+            },
+        )
 
 
 def _report_playbook_adherence(
@@ -66,74 +87,10 @@ def _report_playbook_adherence(
     return data
 
 
-def _report_rule_lineage(
-    args: dict[str, Any], ctx: ToolContext,
-) -> dict[str, Any]:
-    """`report.rule_lineage` — walk a playbook_rule/playbook_version ->
-    reflection -> trades chain in one read-only query path (bead
-    trade-trace-a5dy).
-
-    Exactly one of `rule_node_id` or `playbook_version_id` must be supplied.
-    The handler validates argument shape and surfaces the underlying NOT_FOUND
-    / VALIDATION_ERROR conditions raised by the report function as typed tool
-    errors.
-    """
-
-    rule_node_id = args.get("rule_node_id")
-    playbook_version_id = args.get("playbook_version_id")
-    for field, value in (
-        ("rule_node_id", rule_node_id),
-        ("playbook_version_id", playbook_version_id),
-    ):
-        if value is not None and not isinstance(value, str):
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                f"{field} must be a string",
-                details={"field": field, "value": value},
-            )
-    if (rule_node_id is None) == (playbook_version_id is None):
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            "exactly one of rule_node_id or playbook_version_id is required",
-            details={
-                "rule_node_id": rule_node_id,
-                "playbook_version_id": playbook_version_id,
-            },
-        )
-    with db_for_args(args) as db:
-        try:
-            data = report_rule_lineage(
-                db.connection,
-                rule_node_id=rule_node_id,
-                playbook_version_id=playbook_version_id,
-            )
-        except ValueError as exc:
-            message = str(exc)
-            if "not found" in message:
-                raise ToolError(
-                    ErrorCode.NOT_FOUND,
-                    message,
-                    details={
-                        "rule_node_id": rule_node_id,
-                        "playbook_version_id": playbook_version_id,
-                    },
-                ) from exc
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                message,
-                details={
-                    "rule_node_id": rule_node_id,
-                    "playbook_version_id": playbook_version_id,
-                },
-            ) from exc
-    _propagate_report_meta(ctx, data)
-    return data
-
-
 def _report_source_quality(
     args: dict[str, Any], ctx: ToolContext,
 ) -> dict[str, Any]:
-    """`report.source_quality` — provenance hygiene panel (bead trade-trace-l9q).
+    """Internal source-quality provenance hygiene panel (bead trade-trace-l9q).
 
     Five diagnostics over the source attachment graph: missing sources
     on actual_enter decisions, stale sources, contradictory same-kind
@@ -200,24 +157,7 @@ def _report_phase_gate_readiness(
     """
 
     thresholds = args.get("thresholds")
-    if thresholds is not None:
-        if not isinstance(thresholds, dict):
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                "thresholds must be an object keyed by criterion",
-                details={"field": "thresholds"},
-            )
-        unknown = sorted(set(thresholds) - set(CRITERION_KEYS))
-        if unknown:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                "thresholds contains unknown criterion key(s)",
-                details={
-                    "field": "thresholds",
-                    "unknown": unknown,
-                    "allowed": list(CRITERION_KEYS),
-                },
-            )
+    _validate_thresholds(thresholds)
 
     min_sample = args.get("min_sample", 1)
     if not isinstance(min_sample, int) or isinstance(min_sample, bool) or min_sample < 1:
@@ -252,24 +192,7 @@ def _report_autonomy_readiness(
     """
 
     thresholds = args.get("thresholds")
-    if thresholds is not None:
-        if not isinstance(thresholds, dict):
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                "thresholds must be an object keyed by criterion",
-                details={"field": "thresholds"},
-            )
-        unknown = sorted(set(thresholds) - set(CRITERION_KEYS))
-        if unknown:
-            raise ToolError(
-                ErrorCode.VALIDATION_ERROR,
-                "thresholds contains unknown criterion key(s)",
-                details={
-                    "field": "thresholds",
-                    "unknown": unknown,
-                    "allowed": list(CRITERION_KEYS),
-                },
-            )
+    _validate_thresholds(thresholds)
 
     min_sample = args.get("min_sample", 1)
     if not isinstance(min_sample, int) or isinstance(min_sample, bool) or min_sample < 1:

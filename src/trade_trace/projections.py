@@ -450,11 +450,11 @@ def remark_open_positions(
 
     `report.open_positions` / `report.current_exposure` already reconcile this
     in their shared row builder (`_position_row_payload`) by recomputing from
-    the latest mark. The other PnL-reading surfaces (`report.pnl`,
-    `report.compare`, `review.bundle`) read `positions.unrealized_pnl`
-    directly and so disagreed with the exposure surfaces. This function is the
-    SINGLE shared read-layer re-mark those surfaces apply so every PnL surface
-    reports the same number for the same open position.
+    the latest mark. Other PnL-reading surfaces (`report.pnl`, `review.bundle`)
+    read `positions.unrealized_pnl` directly and so disagreed with the exposure
+    surfaces. This function is the SINGLE shared read-layer re-mark those
+    surfaces apply so every PnL surface reports the same number for the same open
+    position.
 
     The re-mark uses the canonical side-aware convention (`_unrealized_pnl`,
     trade-trace-ctvb): the latest snapshot's YES-contract price is converted to

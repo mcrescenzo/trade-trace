@@ -113,8 +113,7 @@ ground truth).
 }
 ```
 
-Response groups by `classification_label` by default; `group_by` can be
-overridden to any field allowed by `report.compare`.
+Response groups by `classification_label`.
 
 Per-group metrics: count, mean R (when available),
 `mean_max_favorable_move_r`, `mean_max_adverse_move_r`,
@@ -151,9 +150,8 @@ For `report.opportunity` to compute reliably:
   computation, and the report's response includes a
   `duplicate_snapshot_count` caveat.
 - Snapshots carry `metadata_json.regime_tag` if the agent wants
-  regime-aware analysis; `report.compare(group_by=market_regime_tag)`
-  picks it up via the `ReportFilter.market_context.market_regime_tag`
-  field.
+  regime-aware analysis; reports that explicitly support
+  `ReportFilter.market_context.market_regime_tag` can use that field.
 
 ## 8. Synthetic Fixtures (for tests)
 

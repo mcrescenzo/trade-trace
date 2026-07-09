@@ -8,8 +8,7 @@ from typing import Any
 
 from trade_trace.contracts.tool_registry import ToolRegistry
 from trade_trace.reports import (
-    report_mistakes, report_pnl, report_process_analytics, report_risk,
-    report_strengths,
+    report_mistakes, report_pnl, report_risk,
 )
 from trade_trace.reports.tool_schemas import _REPORT_SCHEMAS
 
@@ -18,29 +17,21 @@ from .audit_quality import (
     _report_autonomy_readiness,
     _report_phase_gate_readiness,
     _report_playbook_adherence,
-    _report_rule_lineage,
-    _report_source_quality,
 )
 from .calibration_diagnostics import (
-    _report_calibration, _report_calibration_advisory,
-    _report_calibration_anchored, _report_calibration_integrity,
-    _report_calibration_terminal, _report_mistake_tripwire, _report_process_quality,
-    _report_resolution_misreads,
-    _report_market_lifecycle, _report_resolution_quality,
-    _report_time_decay_sharpening, _report_decision_velocity,
+    _report_calibration,
     _report_forecast_diagnostics, _report_unscored_forecasts,
 )
-from .common import _make_filter_only_report, _make_request_report
+from .common import _make_filter_only_report
 from .compare_policy_coach import (
-    _report_coach, _report_compare, _report_filter_schema, _report_opportunity,
+    _report_coach, _report_opportunity,
 )
 from trade_trace.reports.execution_quality import report_execution_quality
-from trade_trace.reports.operational_health import report_operational_health
 from .lifecycle_agent import (
-    _agent_next_actions, _report_bootstrap, _report_lifecycle,
-    _report_policy_candidates, _report_strategy_health, _report_work_queue,
+    _agent_next_actions, _report_bootstrap,
+    _report_strategy_health, _report_work_queue,
 )
-from .memory_recall import _report_memory_usefulness, _report_recall_receipts
+from .memory_recall import _report_recall_receipts
 from .portfolio_exposure import (
     _report_current_exposure, _report_exposure_anomalies, _report_open_positions,
     _report_watchlist,
@@ -178,18 +169,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         usage_summary="Evaluate a candidate replay output for structural process criteria only; no writes, fetches, model runs, scoring engine, simulation, or advice.",
     ),
     ReportToolRegistration(
-        "report.filter_schema",
-        _report_filter_schema,
-        description=(
-            "Return the canonical JSON Schema for ReportFilter (the shared "
-            "input shape for every report.* tool). Optional `mode` arg "
-            "(`validation` default or `serialization`). Surfaces the "
-            "`__none__` sentinel meaning for `strategy.strategy_id` so "
-            "agents can build filter UIs without reading the docs."
-        ),
-        json_schema=_REPORT_SCHEMAS["report.filter_schema"],
-    ),
-    ReportToolRegistration(
         "report.execution_quality",
         lambda args, ctx: report_execution_quality(args),
         description=(
@@ -204,20 +183,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         usage_summary="Diagnose imported execution evidence quality from local records only; no writes, fetches, execution, remediation, or advice.",
     ),
     ReportToolRegistration(
-        "report.operational_health",
-        lambda args, ctx: report_operational_health(args),
-        description=(
-            "Read-only local operational health report over trader-intelligence inputs: imported snapshots, "
-            "reconciliations, external receipts, approvals, risk-check receipts, "
-            "source evidence, and work-queue obligations. Surfaces stale/missing/sparse/unresolved inputs with stable "
-            "codes and contributing local record ids. No fetch, scheduling, alerting, supervision, execution, "
-            "remediation, advice, alpha, or profit claims."
-        ),
-        optional_keys=("filter", "as_of", "limit", "stale_snapshot_minutes", "stale_receipt_minutes", "stale_reconciliation_minutes", "stale_evidence_minutes"),
-        json_schema=_REPORT_SCHEMAS["report.operational_health"],
-        usage_summary="Summarize local trader-intelligence input health; read-only and local-evidence-only.",
-    ),
-    ReportToolRegistration(
         "report.calibration",
         _report_calibration,
         description=(
@@ -227,60 +192,10 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
             "late-recorded forecasts by default per dogfood-protocol §2.2 "
             "(opt in via filter.outcome.include_late_recorded). Emits a "
             "sample_warning when N < min_sample (default 20). Embeds the "
-            "six anti-goodhart hygiene diagnostics from "
-            "report.calibration_integrity under data.integrity_diagnostics."
+            "six anti-goodhart hygiene diagnostics under "
+            "data.integrity_diagnostics."
         ),
         json_schema=_REPORT_SCHEMAS["report.calibration"]
-    ),
-    ReportToolRegistration(
-        "report.calibration_advisory",
-        _report_calibration_advisory,
-        description=(
-            "Decision-time recalibration for a candidate forecast probability: "
-            "given the YES probability you are about to commit, returns your own "
-            "prior resolved forecasts in that equal-width 0.1 band, their "
-            "observed resolution rate, and a calibration-derived "
-            "suggested_probability (band gap = observed_frequency - "
-            "mean_probability). Read-only, deterministic, no trade advice. "
-            "Excludes late-recorded forecasts by default per dogfood-protocol §2.2."
-        ),
-        example_minimal={"probability": 0.7, "filter": {}},
-        json_schema=_REPORT_SCHEMAS["report.calibration_advisory"],
-    ),
-    ReportToolRegistration(
-        "report.calibration_anchored",
-        _report_calibration_anchored,
-        description="Calibration over scored binary forecasts anchored to caller-supplied local market snapshots; baseline and skill use snapshot implied probabilities.",
-        optional_keys=("filter", "min_sample"),
-        json_schema=_REPORT_SCHEMAS["report.calibration"],
-    ),
-    ReportToolRegistration(
-        "report.calibration_terminal",
-        _report_calibration_terminal,
-        description="Calibration over scored binary forecasts with terminal local market snapshot baseline at or before resolution; no network or live market fetch.",
-        optional_keys=("filter", "min_sample"),
-        json_schema=_REPORT_SCHEMAS["report.calibration"],
-    ),
-    ReportToolRegistration(
-        "report.market_lifecycle",
-        _report_market_lifecycle,
-        description="Local market lifecycle durations and engagement counts across open/closed/resolving/resolved states; no external market calls.",
-        optional_keys=("filter",),
-        json_schema=_REPORT_SCHEMAS["report.market_lifecycle"],
-    ),
-    ReportToolRegistration(
-        "report.resolution_quality",
-        _report_resolution_quality,
-        description="Local resolution quality diagnostics: status mix, ambiguous/void/disputed/cancelled counts, and pre-resolution uncertainty flags.",
-        optional_keys=("filter",),
-        json_schema=_REPORT_SCHEMAS["report.resolution_quality"],
-    ),
-    ReportToolRegistration(
-        "report.time_decay_sharpening",
-        _report_time_decay_sharpening,
-        description="Time-to-resolution sharpening diagnostics for scored binary forecasts, grouped by hours before resolution.",
-        optional_keys=("filter", "min_sample"),
-        json_schema=_REPORT_SCHEMAS["report.time_decay_sharpening"],
     ),
     ReportToolRegistration(
         "report.forecast_diagnostics",
@@ -307,21 +222,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
             "across decisions). Per bead fbq."
         ),
         json_schema=_REPORT_SCHEMAS["report.playbook_adherence"]
-    ),
-    ReportToolRegistration(
-        "report.source_quality",
-        _report_source_quality,
-        description=(
-            "Provenance hygiene diagnostics over attached sources "
-            "(bead trade-trace-l9q): missing_sources_on_actual_enter, "
-            "stale_sources, contradictory_sources, duplicated_sources, "
-            "sensitive_sources. Each emits {count,sample_ids,samples,"
-            "truncated}. stale_threshold_days defaults to 7. No external "
-            "fetching, no credibility scoring."
-        ),
-        example_minimal={"stale_threshold_days": 7},
-        optional_keys=("stale_threshold_days",),
-        json_schema=_REPORT_SCHEMAS["report.source_quality"]
     ),
     ReportToolRegistration(
         "report.audit_readiness",
@@ -401,21 +301,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         json_schema=_REPORT_SCHEMAS["report.autonomy_readiness"],
     ),
     ReportToolRegistration(
-        "report.calibration_integrity",
-        _report_calibration_integrity,
-        description=(
-            "Anti-goodhart hygiene diagnostics for the calibration panel "
-            "(bead trade-trace-jzn): forecast_coverage, unsupported_rate, "
-            "ambiguous_rate, disputed_rate, void_cancelled_rate, "
-            "suspicious_late_rate. Each diagnostic returns "
-            "{count,total,rate_pct,sample_ids,truncated}; the summary "
-            "carries denominator context (total_decisions, total_forecasts, "
-            "scored_forecasts, denominator_coverage_pct). Empty DBs surface "
-            "sample_warning='no_data'."
-        ),
-        json_schema=_REPORT_SCHEMAS["report.calibration_integrity"]
-    ),
-    ReportToolRegistration(
         "report.unscored_forecasts",
         _report_unscored_forecasts,
         description=(
@@ -429,16 +314,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         json_schema=_REPORT_SCHEMAS["report.unscored_forecasts"]
     ),
     ReportToolRegistration(
-        "report.decision_velocity",
-        _report_decision_velocity,
-        description=(
-            "Decision counts bucketed by day or week over the filter's "
-            "decision_at_* window. Bucket boundaries are UTC-aligned; "
-            "groups[] are ordered by bucket key ascending."
-        ),
-        json_schema=_REPORT_SCHEMAS["report.decision_velocity"]
-    ),
-    ReportToolRegistration(
         "report.mistakes",
         _make_filter_only_report(report_mistakes),
         description=(
@@ -447,68 +322,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
             "decision_count, scored_forecast_count, mean_brier."
         ),
         json_schema=_REPORT_SCHEMAS["report.mistakes"]
-    ),
-    ReportToolRegistration(
-        "report.mistake_tripwire",
-        _report_mistake_tripwire,
-        description=(
-            "Decision-time recurring-mistake trip-wire: given the tag fingerprint "
-            "of a decision you are about to make, fire — without an explicit recall "
-            "query — the candidate tags that match your own poorly-calibrated "
-            "patterns (mean Brier >= threshold over >= min_sample scored "
-            "forecasts), with the prior failing decisions/forecasts. Read-only, "
-            "deterministic, no trade advice."
-        ),
-        example_minimal={"tags": ["chased_momentum"]},
-        json_schema=_REPORT_SCHEMAS["report.mistake_tripwire"],
-    ),
-    ReportToolRegistration(
-        "report.process_quality",
-        _report_process_quality,
-        description=(
-            "Score declared bet SIZE against declared EDGE (Kelly-consistency) "
-            "and direction over sized entry decisions, computed WITHOUT consulting "
-            "any resolution/outcome — process quality, not outcome quality, so the "
-            "agent does not learn the wrong lesson from variance. Per-decision "
-            "stated_edge/kelly_fraction/direction_consistent; summary "
-            "kelly_alignment and direction_consistency_rate. Deterministic, no "
-            "trade advice."
-        ),
-        example_minimal={},
-        json_schema=_REPORT_SCHEMAS["report.process_quality"],
-    ),
-    ReportToolRegistration(
-        "report.resolution_misreads",
-        _report_resolution_misreads,
-        description=(
-            "Compare the agent's recorded resolution-criteria interpretation "
-            "(forecast.interpret_resolution) against each market's actual "
-            "resolution source. A contract_misread — interpreted source != actual "
-            "source on a resolved market — is a distinct error class from "
-            "calibration error (right about the world, wrong about the contract). "
-            "Diagnostic, not trade advice."
-        ),
-        example_minimal={},
-        json_schema=_REPORT_SCHEMAS["report.resolution_misreads"],
-    ),
-    ReportToolRegistration(
-        "report.strengths",
-        _make_filter_only_report(report_strengths),
-        description=(
-            "Tag-aggregated patterns ranked by mean Brier (best first). "
-            "Mirror of report.mistakes."
-        ),
-        json_schema=_REPORT_SCHEMAS["report.strengths"]
-    ),
-    ReportToolRegistration(
-        "report.process_analytics",
-        _make_request_report(report_process_analytics),
-        description=(
-            "Decision-tags-only process analytics MVP: tag frequency and "
-            "tag-pair co-occurrence over local decision_tags, with explicit "
-            "unsupported metadata for review/review_tags and cost-family analytics."
-        ),
-        json_schema=_REPORT_SCHEMAS["report.process_analytics"]
     ),
     ReportToolRegistration(
         "report.pnl",
@@ -583,31 +396,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         json_schema=_REPORT_SCHEMAS["report.opportunity"]
     ),
     ReportToolRegistration(
-        "report.compare",
-        _report_compare,
-        description=(
-            "Compare base report metrics across one allowlisted group_by. "
-            "Supported base_report values: calibration, pnl, and risk. The risk "
-            "base report yields the longitudinal / per-strategy R-multiple "
-            "expectancy series (group_by=period|strategy_id|decision_type) so "
-            "expectancy can be trended over resolved markets, with a per-group "
-            "coverage block reporting the declared-risk denominator. Supported "
-            "group_by depends on base_report and is validated via fixed SQL "
-            "allowlists for injection safety. Per-group sample_warning is "
-            "emitted; summary.sample_warning is set when any group is low-N."
-        ),
-        example_minimal={"base_report": "calibration", "group_by": "strategy_id", "filter": {}},
-        json_schema=_REPORT_SCHEMAS["report.compare"],
-        usage_summary="Compare calibration, pnl, or risk-expectancy metrics across one allowlisted dimension using optional shared report filters.",
-        examples=(
-            "tt report compare --base-report calibration --group-by strategy_id --filter-json '{}'",
-            "tt report compare --base-report risk --group-by period --filter-json '{}'",
-        ),
-        enum_notes={"base_report": "calibration, pnl, or risk", "group_by": "Allowed values depend on base_report and are validated by the report schema."},
-        common_failures=("group_by is not allowed for the selected base_report.",),
-        next_actions=("Use report.filter_schema to build the filter object before calling report.compare.",),
-    ),
-    ReportToolRegistration(
         "report.watchlist",
         _report_watchlist,
         description=(
@@ -618,19 +406,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         example_minimal={"filter": {}, "mode": "all", "stale_threshold_days": 14},
         optional_keys=("filter", "mode", "stale_threshold_days"),
         json_schema=_REPORT_SCHEMAS["report.watchlist"]
-    ),
-    ReportToolRegistration(
-        "report.lifecycle",
-        _report_lifecycle,
-        description=(
-            "Read-only derived lifecycle report for local decision, forecast, and material non-action cases. "
-            "Returns lifecycle_cases and groups with stable states/status, reason/caveat codes, source_refs, "
-            "record_ids, due_at, thresholds, and timestamps. Supports ReportFilter strategy/instrument/run/date "
-            "plus states/status, as_of, and stale_threshold_days. No writes, no scheduling, no recommendations."
-        ),
-        example_minimal={"filter": {}, "states": ["pending_review"], "as_of": "2026-01-20T00:00:00Z", "stale_threshold_days": 14},
-        optional_keys=("filter", "states", "status", "as_of", "stale_threshold_days"),
-        json_schema=_REPORT_SCHEMAS["report.lifecycle"],
     ),
     ReportToolRegistration(
         "report.strategy_health",
@@ -658,68 +433,6 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
         example_minimal={"recall_id": "recall_..."},
         optional_keys=("recall_id", "node_id", "consumer_kind", "consumer_id", "run_id", "agent_id", "model_id", "environment", "instrument_id", "strategy_id", "as_of", "limit"),
         json_schema=_REPORT_SCHEMAS["report.recall_receipts"],
-    ),
-    ReportToolRegistration(
-        "report.memory_usefulness",
-        _report_memory_usefulness,
-        description=(
-            "Read-only diagnostic projection over recall receipts and typed edge evidence. "
-            "Includes negative controls: recalled-unused, used-contradicted, stale-retrieved, "
-            "high-confidence bad-outcome (edge-based only), missing-expected-memory (caveated), "
-            "and overfit/harmful (edge-based only). No causal memory value, profit, signal, or advice claims."
-        ),
-        example_minimal={"recall_id": "recall_...", "as_of": "2026-01-20T00:00:00Z"},
-        optional_keys=("recall_id", "node_id", "consumer_kind", "consumer_id", "run_id", "agent_id", "model_id", "environment", "instrument_id", "strategy_id", "memory_kind", "as_of", "limit"),
-        json_schema=_REPORT_SCHEMAS["report.memory_usefulness"],
-    ),
-    ReportToolRegistration(
-        "report.policy_candidates",
-        _report_policy_candidates,
-        description=(
-            "Read-only report over quarantined/candidate policy reflection metadata. "
-            "Surfaces source-backed support/contradiction, scope, missing evidence, replay refs, and reasons not promoted; no writes, promotion, fetch, model advice, or performance claims."
-        ),
-        example_minimal={"status": "candidate", "as_of": "2026-01-20T00:00:00Z"},
-        optional_keys=("status", "strategy_id", "playbook_id", "as_of", "limit"),
-        json_schema=_REPORT_SCHEMAS["report.policy_candidates"],
-    ),
-    ReportToolRegistration(
-        "report.rule_lineage",
-        _report_rule_lineage,
-        description=(
-            "Read-only local rule-lineage report (bead trade-trace-a5dy): given "
-            "a playbook_rule node id OR a playbook_version_id, walks "
-            "playbook_versions.provenance_reflection_node_id -> the reflection "
-            "node -> the reflection's typed edges (about/derived_from/supports/"
-            "contradicts/supersedes to decisions/theses/forecasts/outcomes) + "
-            "the consumer->memory use edges into it + the "
-            "decision_playbook_rules adherence rows, into a single chain with "
-            "contributing record_ids at each hop and EXPLICIT gaps where a link "
-            "is missing. The version<->rule bridge runs through "
-            "decision_playbook_rules because rule-node provenance edges are not "
-            "auto-written today. No writes, fetch, execution, or advice."
-        ),
-        example_minimal={"playbook_version_id": "pv_..."},
-        example_rich={"rule_node_id": "mem_..."},
-        optional_keys=("rule_node_id", "playbook_version_id"),
-        json_schema=_REPORT_SCHEMAS["report.rule_lineage"],
-        usage_summary=(
-            "Trace one playbook rule (or version) back through the reflection "
-            "that proposed it to the decisions/forecasts/outcomes that taught "
-            "it, with explicit gaps; read-only and local-evidence-only."
-        ),
-        examples=(
-            "tt report rule_lineage --home <journal-home> --playbook-version-id pv_...",
-            "tt report rule_lineage --home <journal-home> --rule-node-id mem_...",
-        ),
-        common_failures=(
-            "Exactly one of rule_node_id or playbook_version_id must be supplied (not both, not neither).",
-            "rule_node_id must reference a memory node with node_type='playbook_rule'.",
-        ),
-        next_actions=(
-            "Inspect chains[].gaps and summary.gap_codes for missing provenance links before relying on completeness.",
-            "Use the contributing record_ids at each hop for local drilldowns; callers choose whether to run any follow-up.",
-        ),
     ),
     ReportToolRegistration(
         "report.work_queue",

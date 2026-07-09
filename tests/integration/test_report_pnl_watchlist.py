@@ -197,12 +197,6 @@ def test_pnl_remarks_open_position_from_fresh_snapshot(home):
     op_row = next(r for r in op if r["position_id"] == position_id)
     assert op_row["unrealized_pnl"] == pytest.approx(15.0)
 
-    # Cross-surface: report.compare (base_report=pnl) agrees too.
-    cmp = _envelope(home, "report.compare", {"base_report": "pnl", "group_by": "instrument_id"})
-    cmp_groups = cmp["data"]["groups"]
-    cmp_unrealized = sum(g["metrics"]["unrealized_pnl"] for g in cmp_groups)
-    assert cmp_unrealized == pytest.approx(15.0)
-
     # Cross-surface: review.bundle carries the re-marked value, not NULL.
     bundle = _envelope(home, "review.bundle", {})["data"]
     bundle_positions = [

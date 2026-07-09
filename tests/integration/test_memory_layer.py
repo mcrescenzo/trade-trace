@@ -1625,6 +1625,54 @@ def _semantic_rank_setup(monkeypatch, tmp_path: Path, docs, query_vec):
     return ranked, expected
 
 
+def test_query_embedding_reuses_local_onnx_embedder(monkeypatch, tmp_path: Path):
+    from trade_trace.models import embeddings
+
+    model_dir = tmp_path / "models" / "bge-small-en-v1.5"
+    constructed: list[Path] = []
+
+    class StubEmbedder:
+        def __init__(self, path: Path) -> None:
+            constructed.append(path)
+
+        def embed(self, text: str) -> list[float]:
+            return [float(len(text)), 0.0]
+
+    monkeypatch.setattr(embeddings, "LocalOnnxEmbedder", StubEmbedder)
+    monkeypatch.setattr(memory_tools, "_local_model_dir_for_connection", lambda _conn: model_dir)
+    memory_tools._LOCAL_ONNX_EMBEDDER_CACHE.clear()
+    try:
+        assert memory_tools._query_embedding("a", dim=2, provider="local", model_id="test") == [1.0, 0.0]
+        assert memory_tools._query_embedding("abcd", dim=2, provider="local", model_id="test") == [4.0, 0.0]
+    finally:
+        memory_tools._LOCAL_ONNX_EMBEDDER_CACHE.clear()
+
+    assert constructed == [model_dir]
+
+
+def test_query_embedding_does_not_cache_unavailable_embedder(monkeypatch, tmp_path: Path):
+    from trade_trace.models import embeddings
+
+    model_dir = tmp_path / "models" / "bge-small-en-v1.5"
+    constructed: list[Path] = []
+
+    class UnavailableEmbedder:
+        def __init__(self, path: Path) -> None:
+            constructed.append(path)
+            raise embeddings.LocalEmbeddingUnavailable("missing test assets")
+
+    monkeypatch.setattr(embeddings, "LocalOnnxEmbedder", UnavailableEmbedder)
+    monkeypatch.setattr(memory_tools, "_local_model_dir_for_connection", lambda _conn: model_dir)
+    memory_tools._LOCAL_ONNX_EMBEDDER_CACHE.clear()
+    try:
+        assert memory_tools._query_embedding("a", dim=2, provider="local", model_id="test") == []
+        assert memory_tools._query_embedding("b", dim=2, provider="local", model_id="test") == []
+    finally:
+        memory_tools._LOCAL_ONNX_EMBEDDER_CACHE.clear()
+
+    assert constructed == [model_dir, model_dir]
+
+
 def test_semantic_rank_equivalent_to_pre_hoist_cosine(monkeypatch, tmp_path: Path):
     # Three docs with distinct cosine similarities to a unit query vector; the
     # hoisted-norm ranking must match the pre-hoist per-call-norm ranking.

@@ -9,7 +9,6 @@ from trade_trace.timestamps import (
     parse_report_timestamp_lenient_preserve_naive_offset,
     parse_report_timestamp_lenient_utc_naive_as_utc,
     parse_report_timestamp_strict_utc_naive_as_utc,
-    parse_report_timestamp_utc_or_none,
 )
 
 NAIVE_TEXT = "2026-05-18T14:32:11.123456"
@@ -89,20 +88,4 @@ def test_strict_utc_naive_as_utc_attaches_or_normalizes_to_utc() -> None:
     )
     assert parse_report_timestamp_strict_utc_naive_as_utc(OFFSET_TEXT) == datetime(
         2026, 5, 18, 14, 32, 11, 123456, tzinfo=UTC
-    )
-
-
-def test_utc_or_none_missing_invalid_and_naive_return_none() -> None:
-    assert parse_report_timestamp_utc_or_none(None) is None
-    assert parse_report_timestamp_utc_or_none("") is None
-    assert parse_report_timestamp_utc_or_none(INVALID_TEXT) is None
-    assert parse_report_timestamp_utc_or_none(NAIVE_TEXT) is None
-
-
-def test_utc_or_none_uses_canonical_to_utc_iso8601_semantics() -> None:
-    assert parse_report_timestamp_utc_or_none(Z_TEXT) == datetime(
-        2026, 5, 18, 14, 32, 11, 123000, tzinfo=UTC
-    )
-    assert parse_report_timestamp_utc_or_none(OFFSET_TEXT) == datetime(
-        2026, 5, 18, 14, 32, 11, 123000, tzinfo=UTC
     )

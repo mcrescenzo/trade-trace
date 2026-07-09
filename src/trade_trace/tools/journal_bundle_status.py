@@ -6,8 +6,6 @@ intentionally conservative: no external market fetch, no trade execution, no
 investment advice, and no new lifecycle table.
 """
 
-from __future__ import annotations
-
 import json
 import sqlite3
 from typing import Any, Literal

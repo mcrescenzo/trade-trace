@@ -3,7 +3,7 @@
 The coach aggregates outputs from the existing reports and signal.scan
 into a single packet the agent can consult at decision time:
 
-- recurring mistake/strength tags (from report.mistakes + report.strengths)
+- recurring mistake/strength tags (from report.mistakes plus an internal strengths view)
 - calibration drift signals (recent vs older scored-forecast Brier)
 - override-outcome counts (from playbook adherence rows)
 - stale watches (from report.watchlist mode=stale)
@@ -53,6 +53,8 @@ substrate, never a trading recommender."""
 
 
 DRIFT_SAMPLE_FORECAST_LIMIT = 5
+REPORT_NAME = "report.coach"
+REPORT_FILTER_SUPPORT: frozenset[str] = frozenset()
 
 
 _FORBIDDEN_RE = re.compile(
@@ -84,11 +86,11 @@ def report_coach(
     """Build the coach packet. Returns the `data` portion of the envelope."""
 
     rf = ReportFilter.model_validate(raw_filter or {})
-    filter_dict = process_filter(rf, report="report.coach")
+    filter_dict = process_filter(rf, report=REPORT_NAME)
 
-    # report.mistakes and report.strengths run the identical tag→Brier
-    # query and differ only in Python-side sort order; load both ranked
-    # views from a single DB round-trip (trade-trace-bg12).
+    # report.mistakes and the internal strengths view run the identical
+    # tag→Brier query and differ only in Python-side sort order; load both
+    # ranked views from a single DB round-trip (trade-trace-bg12).
     mistakes, strengths = load_mistakes_and_strengths(conn, raw_filter=filter_dict)
     unscored = report_unscored_forecasts(conn, raw_filter=filter_dict)
     stale_watches = report_watchlist(
@@ -200,12 +202,12 @@ def report_coach(
         if diag["count"] > 0:
             callouts.append(
                 f"{diagnostic_key}: {diag['count']} record(s) — review "
-                "via report.source_quality for sample_ids."
+                "the embedded source_quality panel for sample_ids."
             )
             next_actions.append({
                 "category": "source_quality",
                 "reason": f"{diagnostic_key} has {diag['count']} record(s).",
-                "action": "Run report.source_quality and repair the listed provenance hygiene gaps.",
+                "action": "Review the embedded source_quality panel and repair the listed provenance hygiene gaps.",
                 "record_ids": diag.get("sample_ids", {}),
             })
 
@@ -292,9 +294,11 @@ def _report_groups(report: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _top_tag_summary(report: dict[str, Any]) -> list[dict[str, Any]]:
-    """Coach helper: top-3 tag groups from a report.mistakes /
-    report.strengths sub-report. Filters out empty-sample groups so a
-    zero-Brier division never reaches the formatter."""
+    """Coach helper: top-3 tag groups from a tag-ranked sub-report.
+
+    Filters out empty-sample groups so a zero-Brier division never reaches the
+    formatter.
+    """
 
     return [
         {

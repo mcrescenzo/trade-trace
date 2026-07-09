@@ -1,8 +1,8 @@
 # Internal derived decision/non-action lifecycle
 
-> Status: **partial — public report shipped, internal substrate documented** for `trade-trace-03b6`; `report.lifecycle` is a public read-only report while the derived lifecycle substrate remains an internal implementation note.
+> Status: **partial — internal substrate documented** for `trade-trace-03b6`; lifecycle derivation is composed by public reports such as `report.work_queue`, `agent.next_actions`, and `report.bootstrap`, but no standalone public lifecycle report is registered.
 
-`trade_trace.reports.lifecycle.derive_lifecycle_cases(conn, as_of=..., stale_threshold_days=...)` derives lifecycle cases from existing SQLite rows only. The public `report.lifecycle` surface exposes those cases as a read-only report. It does not create lifecycle tables, durable work items, scheduler state, advice, source fetches, or dashboard payloads.
+`trade_trace.reports.lifecycle.derive_lifecycle_cases(conn, as_of=..., stale_threshold_days=...)` derives lifecycle cases from existing SQLite rows only. Composed public reports project those cases into obligations or bootstrap context. The derivation does not create lifecycle tables, durable work items, scheduler state, advice, source fetches, or dashboard payloads.
 
 ## Scope
 
@@ -36,17 +36,10 @@ For decision cases the current internal precedence is:
 
 Forecast cases use supersession/scoring/outcome/due/open precedence. An open forecast whose `resolution_at` is null is treated as `pending_review` (reason code `resolution_at_missing`) rather than silently `open`: it can never become due by clock, so without this it would never surface in `report.work_queue` as a resolve obligation (trade-trace-ptyi). These are derived interpretations, not persisted lifecycle facts.
 
-## Public usage
+## Public usage through composed reports
 
-Agents can inspect lifecycle state before adding new trading records:
-
-```bash
-tt report lifecycle --home <journal-home> --as-of 2026-05-22T00:00:00Z --states-json '["pending_review","stale","reflection_due","adherence_due"]'
-```
-
-```json
-{"tool":"report.lifecycle","args":{"as_of":"2026-05-22T00:00:00Z","states":["pending_review","stale"],"filter":{"strategy":{"strategy_id":"str_..."}}}}
-```
+Agents inspect lifecycle-derived process state before adding new trading records
+through `report.work_queue`, `agent.next_actions`, and `report.bootstrap`.
 
 Representative case shape:
 

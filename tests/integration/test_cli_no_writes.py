@@ -132,18 +132,18 @@ def test_cli_malformed_json_arg_emits_typed_envelope(tmp_path, capsys, monkeypat
 
     monkeypatch.setenv("TRADE_TRACE_HOME", str(tmp_path))
     rc = cli_main([
-        "report", "filter_schema", "--mode-json", "{bad",
+        "report", "calibration", "--filter-json", "{bad",
     ])
     out = capsys.readouterr()
     assert rc == 2
     body = _json.loads(out.out.strip())
     assert body["ok"] is False
     assert body["error"]["code"] == "VALIDATION_ERROR"
-    assert body["error"]["details"]["field"] == "mode-json"
+    assert body["error"]["details"]["field"] == "filter-json"
     assert body["error"]["details"]["reason"] == "invalid_json"
     assert "decode_error" in body["error"]["details"]
-    assert body["error"]["details"]["tool"] == "report.filter_schema"
-    assert body["meta"]["tool"] == "report.filter_schema"
+    assert body["error"]["details"]["tool"] == "report.calibration"
+    assert body["meta"]["tool"] == "report.calibration"
 
 
 def test_cli_rejects_multiple_stray_positional_tokens(tmp_path, capsys, monkeypatch):

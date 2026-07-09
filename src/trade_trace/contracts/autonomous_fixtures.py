@@ -87,14 +87,14 @@ def autonomous_minimal_records() -> tuple[AutonomousFixtureRow, ...]:
     for index, expectation in enumerate(EVENT_TYPE_EXPECTATIONS):
         slug = f"minimal-{expectation.record_family.value}-{index:02d}"
         record = _base_record(expectation.record_family, slug)
-        record.update({
+        record |= {
             "event_type": expectation.event_type,
             "intent_id": "intent_fixture_001",
             "risk_check_id": "risk_fixture_001",
             "policy_id": "policy_fixture_boundary",
             "policy_version": "v1",
             "expires_at": "2026-01-02T12:00:00.000Z",
-        })
+        }
         _finalize_content_hash(record)
         rows.append(AutonomousFixtureRow(
             record_id=f"auto_fixture_{index:02d}",
@@ -116,43 +116,43 @@ def autonomous_lifecycle_rows() -> tuple[AutonomousFixtureRow, ...]:
     """
 
     intent = _base_record(AutonomousRecordFamily.EXECUTION_INTENT, "intent-001")
-    intent.update({"event_type": "execution_intent.recorded", "intent_id": "intent_fixture_001"})
+    intent |= {"event_type": "execution_intent.recorded", "intent_id": "intent_fixture_001"}
     _finalize_content_hash(intent)
     risk = _base_record(AutonomousRecordFamily.RISK_CHECK, "risk-001")
-    risk.update({
+    risk |= {
         "event_type": "risk_check.recorded",
         "intent_id": "intent_fixture_001",
         "policy_id": "policy_fixture_boundary",
         "policy_version": "v1",
         "violations_count": 1,
-    })
+    }
     _finalize_content_hash(risk)
     fill = _base_record(AutonomousRecordFamily.PAPER_FILL, "paper-fill-001")
-    fill.update({
+    fill |= {
         "event_type": "paper_fill.recorded",
         "intent_id": "intent_fixture_001",
         "quantity": 10,
         "price": 0.42,
         "paper_realized_pnl": 0.0,
-    })
+    }
     _finalize_content_hash(fill)
     duplicate_fill = dict(fill)
     correction = dict(fill)
-    correction.update({
+    correction |= {
         "idempotency_key": "idem-autonomous-fixture-paper-fill-001-correction",
         "semantic_key": "paper_fill:fixture:paper-fill-001:correction",
         "supersedes_record_id": "auto_lifecycle_fill_001",
         "quantity": 8,
-    })
+    }
     _finalize_content_hash(correction)
     stale_snapshot = _base_record(AutonomousRecordFamily.ACCOUNT_SNAPSHOT, "stale-snapshot-001")
-    stale_snapshot.update({
+    stale_snapshot |= {
         "event_type": "account_snapshot.imported",
         "source_precedence": "external_statement_over_adapter_cache",
         "confidence": "fixture-medium",
         "staleness": "stale:PT48H",
         "missing_inputs": ["latest_settlement_statement"],
-    })
+    }
     _finalize_content_hash(stale_snapshot)
     return (
         AutonomousFixtureRow("auto_lifecycle_intent_001", "execution_intent.recorded", AutonomousRecordFamily.EXECUTION_INTENT, intent, {}),

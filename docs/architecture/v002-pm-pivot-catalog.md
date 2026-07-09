@@ -1,6 +1,6 @@
 # v0.0.2 PM-pivot tool/report catalog reconciliation
 
-> Status: **shipped** and refreshed 2026-06-15 from `build_registry().public_names()`. The default public registry now exposes **103** non-admin entries. The remaining experimental tier has **5** entries (`approval.*` plus the superseded `forecast.anchor_to_snapshot`); the autonomous run/incident cluster has been cut rather than kept experimental. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
+> Status: **shipped** and refreshed 2026-07-09 from `build_registry().public_names()`. The default public registry now exposes **82** non-admin entries. The remaining experimental tier has **5** entries (`approval.*` plus the superseded `forecast.anchor_to_snapshot`); the autonomous run/incident cluster has been cut rather than kept experimental. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
 
 ## Why this exists
 
@@ -10,7 +10,7 @@
 This document originally reconciled those planning numbers against the
 then-current 89-tool registry. The pivot has since landed and the scope
 was reined in by epic trade-trace-4kec; the runtime registry now reports
-**103 public non-admin entries** in the default catalog, with 5 entries frozen
+**82 public non-admin entries** in the default catalog, with 5 entries frozen
 behind the experimental tier.
 
 This doc pins the **authoritative runtime baseline** (Section 1),
@@ -26,11 +26,11 @@ authoritative source the v0.0.2 implementation beads cite.
 
 ---
 
-## 1. Current runtime baseline (2026-06-15)
+## 1. Current runtime baseline (2026-07-09)
 
-Generated from `build_registry().public_names()` for the default public catalog: 103 non-admin entries.
+Generated from `build_registry().public_names()` for the default public catalog: 82 non-admin entries.
 
-`abstention.get`, `abstention.list`, `abstention.record`, `account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `decision.add`, `export.drain`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.add`, `forecast.commit_blind`, `forecast.independence`, `forecast.interpret_resolution`, `forecast.resolution_interpretation`, `forecast.reveal_snapshot`, `import.commit`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.find_similar`, `market.refresh`, `market.search`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `playbook.propose_version`, `playbook.record_adherence`, `playbook.upsert`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.autonomy_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_advisory`, `report.calibration_anchored`, `report.calibration_integrity`, `report.calibration_terminal`, `report.coach`, `report.compare`, `report.current_exposure`, `report.decision_velocity`, `report.execution_quality`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.market_lifecycle`, `report.memory_usefulness`, `report.mistake_tripwire`, `report.mistakes`, `report.open_positions`, `report.operational_health`, `report.opportunity`, `report.paper_exposure`, `report.phase_gate_readiness`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.process_quality`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.resolution_misreads`, `report.resolution_quality`, `report.risk`, `report.rule_lineage`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `risk.check_record`, `risk.evaluate`, `risk.policy_version_add`, `snapshot.add`, `snapshot.fetch`, `snapshot.fetch_series`, `strategy.upsert`, `tool.schema`.
+`abstention.get`, `abstention.list`, `abstention.record`, `account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `decision.add`, `export.drain`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.add`, `forecast.commit_blind`, `forecast.independence`, `forecast.interpret_resolution`, `forecast.resolution_interpretation`, `forecast.reveal_snapshot`, `import.commit`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.find_similar`, `market.refresh`, `market.search`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `playbook.propose_version`, `playbook.record_adherence`, `playbook.upsert`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.autonomy_readiness`, `report.bootstrap`, `report.calibration`, `report.coach`, `report.current_exposure`, `report.execution_quality`, `report.exposure_anomalies`, `report.forecast_diagnostics`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.paper_exposure`, `report.phase_gate_readiness`, `report.playbook_adherence`, `report.pnl`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.risk`, `report.strategy_health`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `risk.check_record`, `risk.evaluate`, `risk.policy_version_add`, `snapshot.add`, `snapshot.fetch`, `snapshot.fetch_series`, `strategy.upsert`, `tool.schema`.
 
 ### Frozen Product-B surface (experimental tier, epic trade-trace-4kec)
 
@@ -94,48 +94,46 @@ correct for that moment but missed:
   enumerates each name separately because each is a distinct CLI
   invocation. Three of those four are KILLed under §2; `resolve.record`
   goes when `outcome.add → resolution.add` lands.
-- **`report.policy_candidates`** (commit `e25c0b9`, 2026-05-23): one
-  net-new report ships in `report.*`.
+- One post-audit memory policy-candidate report had shipped in `report.*`.
 - **`replay.evaluate_output`** likewise was registered after the
   audit snapshot.
 
 The "84" number in next-steps.md was therefore stale during planning;
 the implementation ultimately landed with 65 public tools, reined in to
-56 by epic trade-trace-4kec and since grown back to the **103**
-non-admin entries documented in §1 as Phase-2 clusters were unfrozen.
+56 by epic trade-trace-4kec and later settled at the **82** non-admin entries
+documented in §1 as Phase-2 clusters were unfrozen and low-value reports were cut.
 Treat the 89 → 45 language below as the historical reduction target, not
 the current runtime truth.
 
-### 1.2 Shipped reports (44 public)
+### 1.2 Shipped reports (23 public)
 
 Pinned by `SHIPPED_REPORTS` in
 `tests/security/test_mvp_boundary_audit.py`. The names below are
 authoritative; any addition must update that pin and this doc in the
 same commit. The current set includes the Phase-1 diagnostics plus the
-Phase-2 process reports (`report.execution_quality`,
-`report.operational_health`) now unfrozen into the public catalog.
+remaining Phase-2 process report (`report.execution_quality`) now unfrozen
+into the public catalog.
 
-`report.audit_readiness`, `report.autonomy_readiness`, `report.bootstrap`, `report.calibration`, `report.calibration_advisory`, `report.calibration_anchored`, `report.calibration_integrity`, `report.calibration_terminal`, `report.coach`, `report.compare`, `report.current_exposure`, `report.decision_velocity`, `report.execution_quality`, `report.exposure_anomalies`, `report.filter_schema`, `report.forecast_diagnostics`, `report.lifecycle`, `report.market_lifecycle`, `report.memory_usefulness`, `report.mistake_tripwire`, `report.mistakes`, `report.open_positions`, `report.operational_health`, `report.opportunity`, `report.paper_exposure`, `report.phase_gate_readiness`, `report.playbook_adherence`, `report.pnl`, `report.policy_candidates`, `report.process_analytics`, `report.process_quality`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.resolution_misreads`, `report.resolution_quality`, `report.risk`, `report.rule_lineage`, `report.source_quality`, `report.strategy_health`, `report.strengths`, `report.time_decay_sharpening`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`.
+`report.audit_readiness`, `report.autonomy_readiness`, `report.bootstrap`, `report.calibration`, `report.coach`, `report.current_exposure`, `report.execution_quality`, `report.exposure_anomalies`, `report.forecast_diagnostics`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.paper_exposure`, `report.phase_gate_readiness`, `report.playbook_adherence`, `report.pnl`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.risk`, `report.strategy_health`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`.
 
 ### 1.3 Decision-time D1–D5 tools (13, epic trade-trace-4kec build half)
 
 These reinvest the freed surface budget into the decision-time deficits the
 triage identified (see `product-ab-fork-decision.md`):
 
-- **D1 calibration**: `report.calibration_advisory` (read-at-decision-time
-  recalibration), `abstention.record`/`abstention.get`/`abstention.list`
-  (no-bet record so the denominator is not survivorship-biased),
-  `report.process_quality` (bet-size vs declared-edge Kelly-consistency,
-  outcome-independent).
-- **D2/D5 mistakes & continuity**: `report.mistake_tripwire` (fire recurring
-  mistake patterns matching a candidate decision's tags),
+- **D1 calibration**: `report.calibration` with embedded calibration-integrity
+  diagnostics (track-record calibration and input-integrity evidence),
+  `abstention.record`/`abstention.get`/`abstention.list` (no-bet record so the
+  denominator is not survivorship-biased).
+- **D2/D5 mistakes & continuity**: `report.mistakes` (surface recurring
+  mistake patterns from tagged scored decisions),
   `market.find_similar` (structural/analogical recall over markets, no
   embeddings/remote).
 - **D3/D4 independence & ground truth**: `forecast.commit_blind` /
   `forecast.reveal_snapshot` / `forecast.independence` (prove a forecast
   preceded the market snapshot), `forecast.interpret_resolution` /
-  `forecast.resolution_interpretation` + `report.resolution_misreads`
-  (resolution-criteria reading vs actual source → contract-misread class).
+  `forecast.resolution_interpretation` (caller-authored resolution-criteria
+  reading and read-back).
 
 ---
 
@@ -249,43 +247,38 @@ omits them. They count against the v0.0.2 total of 45.
 | `market.bind(external_id, source)`           | fetch/cache market metadata; idempotent; populates `markets.*_at` state columns | adapter-only; disabled by default |
 | `market.refresh(market_id)`                  | re-fetch state for a bound market | adapter-only; disabled by default |
 | `snapshot.fetch(market_id, at=now)`          | capture live implied probability | adapter-only; falls back to `snapshot.add` (manual) when disabled |
-| `snapshot.fetch_series(market_id, from, to)` | capture trajectory series for `report.time_decay_sharpening` and `report.calibration_anchored` baselines | adapter-only; **no background scheduler** (see §3.3); falls back to manual `snapshot.add` loop when disabled |
+| `snapshot.fetch_series(market_id, from, to)` | capture trajectory series for calibration-baseline and forecast-horizon analyses | adapter-only; **no background scheduler** (see §3.3); falls back to manual `snapshot.add` loop when disabled |
 | `outcome.fetch(market_id)`                   | ingest on-chain resolution | adapter-only; **no background scheduler**; requires `network.polymarket.polygon_rpc_url` for the on-chain confirmation step (fails closed `CONFIG_REQUIRED` when unset, with a `no_rpc_resolution_evidence_route` / `hint` pointing at the Gamma read path — see §3.6); manual `resolution.add` is always available |
-| `forecast.anchor_to_snapshot(forecast_id, snapshot_id)` | post-hoc anchor for `report.calibration_anchored`; idempotent; corrections via `supersedes_forecast_id` | local-only |
+| `forecast.anchor_to_snapshot(forecast_id, snapshot_id)` | post-hoc anchor backfill for internal anchored market-baseline calculations; idempotent; corrections via `supersedes_forecast_id` | local-only |
 
 ### 2.7 Report consolidation (28 → 13)
 
 next-steps.md Part II §"Report Consolidation" carries the
 authoritative mapping. This doc adopts that mapping verbatim and
-adds one row: **`report.policy_candidates`** (shipped 2026-05-23)
-is **KEEP**ed unchanged — it is a P2 read-only memory-evidence
-surface and does not duplicate any consolidation target.
+notes one post-audit policy-candidate memory-evidence report that later left the
+public catalog during the 2026-07 report-catalog cull.
 
 | New surface | Consolidates / status |
 |---|---|
-| `report.calibration`              | `calibration` + `calibration_integrity` (nested as sections) |
-| `report.calibration_anchored`     | NEW (§3.1) |
-| `report.calibration_terminal`     | NEW (§3.2) |
+| `report.calibration`              | `calibration` + calibration-integrity evidence |
+| internal anchored market-baseline helper | former public variant, now retained only inside phase/autonomy readiness evidence (§3.1) |
+| terminal market-baseline variant | former public variant, removed by the 2026-07 report-catalog cull (§3.2) |
 | `report.calibration_trajectory`   | NEW (time-to-resolution calibration trend) |
 | `report.forecast_diagnostics`     | unchanged |
 | `report.book`                     | `pnl` + `open_positions` + `current_exposure` + `exposure_anomalies` + `watchlist` |
 | `report.risk`                     | unchanged |
-| `report.audit`                    | `audit_readiness` + `source_quality` + `playbook_adherence` |
-| `report.lifecycle`                | unchanged |
-| `report.recall`                   | `recall_receipts` + `memory_usefulness` (per-item) |
-| `report.work_queue`               | unchanged + `decision_velocity` fold |
+| `report.audit`                    | `audit_readiness` + embedded source-quality diagnostics + `playbook_adherence` |
+| internal lifecycle substrate       | composed by `report.work_queue`, `agent.next_actions`, and `report.bootstrap`; no standalone public report |
+| `report.recall`                   | `recall_receipts` + embedded memory-usefulness diagnostics (per-item) |
+| `report.work_queue`               | unchanged |
 | `report.bootstrap`                | composer over the above |
 | `report.coach`                    | narrowed (forbidden-phrase gate retained) |
 | `report.strategy_health`          | absorbs `strategy_performance` |
-| `report.compare`                  | unchanged |
-| `report.policy_candidates`        | KEEP (post-audit addition) |
-| `report.market_lifecycle`         | NEW (PM-native) |
-| `report.resolution_quality`       | NEW (PM-native) |
+| additional PM-native diagnostics  | later removed by the 2026-07 report-catalog cull |
 | `report.amm_slippage`             | NEW (PM-native) |
-| `report.time_decay_sharpening`    | NEW (PM-native) |
 
 Killed reports: `mistakes`, `strengths`, `opportunity`,
-`unscored_forecasts`, `decision_velocity` (fold), `pnl`,
+`unscored_forecasts`, `pnl`,
 `watchlist`, `open_positions`, `current_exposure`,
 `exposure_anomalies`, `audit_readiness`, `source_quality`,
 `playbook_adherence`, `strategy_performance`, `memory_usefulness`,
@@ -295,8 +288,8 @@ Killed reports: `mistakes`, `strengths`, `opportunity`,
 That comes out to **13 KEEP/consolidated + 4 NEW PM-native + 3
 NEW calibration-baseline/trajectory = 20** report surfaces — close to but not
 equal to the prior "13" copy. The prior count predates
-`report.policy_candidates`, `report.calibration_terminal`, and the
-explicit split of anchored vs unchanged.
+the post-audit policy-candidate report and the later calibration-baseline
+variants that the 2026-07 report-catalog cull removed or internalized.
 
 ### 2.8 Headline totals
 
@@ -316,18 +309,16 @@ the post-audit additions are absorbed, the v0.0.2 catalog lands at:
 - Import/export: **2** (`import.commit`, `export.drain`)
 - Review/replay: **3** (`review.bundle`, `replay.case_bundle`,
   `replay.evaluate_output`)
-- Reports: **35** (`report.*`, per §2.7)
+- Reports: **23** (`report.*`, per §1.2)
 - Tools: **1** (`tool.schema`)
 - Signals: **1** admin-only
 
-**Total: 68 registered surfaces (65 default + 3 admin-only).**
+**Total: 64 registered surfaces (61 default + 3 admin-only).**
 
-The "45" figure in next-steps.md was a target *before* the
-`report.policy_candidates` ship, the explicit
-`report.calibration_terminal` split, and the
-`forecast.anchor_to_snapshot` separation. The pragmatic target is
-**~50**; the previously published "45" is now a *floor*, not a
-hard contract.
+The "45" figure in next-steps.md was a target *before* later post-audit report
+additions, the explicit calibration-baseline split, and the
+`forecast.anchor_to_snapshot` separation. The pragmatic target later moved with
+the runtime catalog; §1 is the current source of truth.
 
 ---
 
@@ -337,25 +328,23 @@ next-steps.md flagged five decisions as "defaulted". This section
 pins the default so downstream beads can rely on it without
 re-deriving.
 
-### 3.1 `report.calibration_anchored` semantics
+### 3.1 Anchored market-baseline semantics (internal)
 
-**Decision:** Anchored calibration is computed over forecasts that
-have a `forecast.anchor_to_snapshot` edge. The baseline is the
-snapshot's implied probability at anchor time; skill is reported as
-agent — market in probability units, **not in P&L units**. The
-absence of an anchor produces a `coverage.unanchored_count` row in
-the diagnostics panel, not an error.
+**Decision:** Anchored market-baseline calibration is computed over forecasts
+that have a snapshot anchor. The baseline is the snapshot's implied probability
+at anchor time; skill is reported as agent — market in probability units,
+**not in P&L units**. The absence of an anchor produces an unanchored-count
+caveat in the internal evidence panel, not an error. This calculation now feeds
+`report.phase_gate_readiness` / `report.autonomy_readiness`; it is no longer a
+separate public report tool.
 
-### 3.2 `report.calibration_terminal` semantics
+### 3.2 Terminal market-baseline semantics (removed public variant)
 
-**Decision:** Terminal calibration uses the market's
-`closed_for_trading_at` snapshot (or last snapshot before
-`resolved_at` when the cleaner field is missing) as baseline.
-Markets without a terminal snapshot produce a
-`coverage.no_terminal_snapshot_count` row. Output shape is
-*identical* to `report.calibration_anchored` so the agent can switch
-baselines without changing its parser. Implemented as a thin variant
-of the anchored handler.
+**Decision:** The former terminal market-baseline variant used the market's
+`closed_for_trading_at` snapshot (or last snapshot before `resolved_at` when the
+cleaner field was missing) as baseline. The 2026-07 report-catalog cull removed
+that public variant; current public calibration/reporting paths use the shipped
+report list in §1.2 and the internal anchored helper in §3.1.
 
 ### 3.3 No background outcome fetching
 
@@ -399,8 +388,8 @@ purely on-chain, deterministic `market_contract` resolution on
 Polymarket — UMA always sits in the loop. The previous adapter
 default (`out.get("resolution_source") or ("arbitration" if disputed
 else "market_contract")`) therefore stamped the **least faithful**
-value on every non-disputed market. Because `report.resolution_misreads`
-scores an agent's `interpreted_resolution_source` against
+value on every non-disputed market. Because the now-removed resolution-source
+diagnostic scored an agent's `interpreted_resolution_source` against
 `markets.resolution_source`, the report could **never** record
 `aligned` for a defensible `oracle_feed` reading of a UMA-over-Binance
 crypto strike on the live venue, and hard-classified it
@@ -523,7 +512,7 @@ removed tools via `renamed_to`, `redirect`, and `removed_in`.
 The default surface a normal agent sees omits legacy tools and admin-only
 tools (`signal.scan`, `journal.rebuild_projections`, `journal.repair`).
 Admin and legacy surfaces are opt-in inspection modes; current quickstarts
-should point agents at the 103-tool public catalog and `tool.schema` for
+should point agents at the 82-tool public catalog and `tool.schema` for
 runtime truth.
 
 ### 4.6 Experimental tier (frozen Product-B surface)
@@ -563,7 +552,7 @@ update those pins and docs together.
 PYTHONPATH=src python -c \
   "from trade_trace.core import default_registry; \
    print(len(default_registry().public_names()))"
-# Expected: 103
+# Expected: 82
 
 # 1b. Frozen experimental Product-B surface (epic trade-trace-4kec)
 PYTHONPATH=src python -c \

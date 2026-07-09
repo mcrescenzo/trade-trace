@@ -23,8 +23,6 @@ READ_RAIL_TOOLS = {
     "report.bootstrap": "bootstrap",
     "report.work_queue": "work_queue",
     "report.coach": "coach",
-    "report.mistake_tripwire": "mistake_tripwire",
-    "report.calibration_advisory": "calibration_advisory",
 }
 CAVEATS = {
     "read_rail_adoption": (
@@ -137,7 +135,7 @@ def derive_write_rail_adoption(conn: sqlite3.Connection) -> dict[str, Any]:
 
 def _actors(conn: sqlite3.Connection, trace_path: Path | str | None) -> list[str]:
     actors: set[str] = set()
-    for table in ("forecasts", "decisions", "forecast_scores", "resolution_interpretations", "positions", "forecast_independence_locks"):
+    for table in ("forecasts", "decisions", "forecast_scores", "positions", "forecast_independence_locks"):
         if _has_table(conn, table):
             info = conn.execute(f"PRAGMA table_info({table})").fetchall()
             if any(row[1] == "actor_id" for row in info):
@@ -188,12 +186,6 @@ def _skill_for_actor(conn: sqlite3.Connection, actor: str) -> dict[str, Any]:
         }
     else:
         metrics["process_quality"] = {"sample_size": 0, "direction_consistency_rate": None, "caveat": "required public report tables absent"}
-
-    if _has_table(conn, "resolution_interpretations"):
-        total = conn.execute("SELECT COUNT(*) FROM resolution_interpretations WHERE actor_id = ?", (actor,)).fetchone()[0]
-        metrics["resolution_misreads"] = {"sample_size": total, "source": "public report data: resolution_interpretations by actor"}
-    else:
-        metrics["resolution_misreads"] = {"sample_size": 0, "caveat": "required public report table absent"}
 
     if _has_table(conn, "positions"):
         info = conn.execute("PRAGMA table_info(positions)").fetchall()

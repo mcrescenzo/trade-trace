@@ -12,6 +12,7 @@ by the memory.add pipeline.
 from __future__ import annotations
 
 import json
+import sqlite3
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
@@ -157,7 +158,9 @@ def _source_add_in_uow(args: dict[str, Any], ctx: ToolContext, uow: UnitOfWork) 
             "created_at": created_at}
 
 
-def _inline_source_object(conn, source_id: str, edge_type: str) -> dict[str, Any]:
+def _inline_source_object(
+    conn: sqlite3.Connection, source_id: str, edge_type: str,
+) -> dict[str, Any]:
     row = conn.execute(
         """
         SELECT id, kind, title, uri, ref, stance, captured_at, freshness_at,
@@ -220,7 +223,12 @@ def _metadata_with_appended_source(raw: str | None, source: dict[str, Any]) -> s
     return json.dumps(parsed, sort_keys=True)
 
 
-def _append_inline_source_to_target(conn, target_kind: str, target_id: str, source: dict[str, Any]) -> None:
+def _append_inline_source_to_target(
+    conn: sqlite3.Connection,
+    target_kind: str,
+    target_id: str,
+    source: dict[str, Any],
+) -> None:
     if target_kind not in _SOURCE_ATTACH_TARGETS:
         return
     table = _SOURCE_ATTACH_TARGETS[target_kind]["table"]
@@ -447,7 +455,7 @@ _SOURCE_ADD_SCHEMA: dict[str, Any] = {
             "type": "string",
             "description": (
                 "ISO-8601 timestamp for when the evidence itself was current. "
-                "report.source_quality stale_sources uses this field versus "
+                "source-quality stale_sources diagnostics use this field versus "
                 "decision.created_at; set it when you want stale-evidence checks."
             ),
         },
@@ -462,7 +470,7 @@ _SOURCE_ADD_SCHEMA: dict[str, Any] = {
             "type": "string",
             "description": (
                 "ISO-8601 timestamp for when this source was fetched/recorded as "
-                "provenance. It does not drive report.source_quality stale_sources; "
+                "provenance. It does not drive source-quality stale_sources; "
                 "use freshness_at for evidence freshness."
             ),
         },
@@ -487,7 +495,7 @@ _SOURCE_ADD_SCHEMA: dict[str, Any] = {
         "(title/note/excerpt/extracted_text/summary) are scanned at "
         "write time for sensitive-shaped substrings per trade-trace-sy1. "
         "freshness_at is the evidence-current timestamp used by "
-        "report.source_quality stale_sources; retrieved_at is retrieval/provenance "
+            "source-quality stale_sources; retrieved_at is retrieval/provenance "
         "time only."
     ),
 }

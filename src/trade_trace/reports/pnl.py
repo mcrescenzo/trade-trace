@@ -17,6 +17,8 @@ from trade_trace.reports._envelope import standard_report_result
 from trade_trace.reports._filter_support import process_filter
 
 DEFAULT_PNL_MIN_SAMPLE = 5
+REPORT_NAME = "report.pnl"
+REPORT_FILTER_SUPPORT: frozenset[str] = frozenset()
 
 
 def _apply_open_remark(rows: list[tuple], remark: dict[str, float]) -> list[tuple]:
@@ -41,7 +43,7 @@ def _apply_open_remark(rows: list[tuple], remark: dict[str, float]) -> list[tupl
 
 
 def _pnl_metrics_for_rows(rows: list[tuple]) -> dict[str, Any]:
-    """Shared P&L aggregation kernel for report.pnl and report.compare.
+    """Shared P&L aggregation kernel for report.pnl.
 
     Rows must expose position fields in this order:
     (id, instrument_id, kind, status, realized_pnl, unrealized_pnl, ...).
@@ -64,7 +66,7 @@ def report_pnl(
     min_sample: int = DEFAULT_PNL_MIN_SAMPLE,
 ) -> dict[str, Any]:
     rf = ReportFilter.model_validate(raw_filter or {})
-    filter_view = process_filter(rf, report="report.pnl")
+    filter_view = process_filter(rf, report=REPORT_NAME)
     cur = conn.execute(
         "SELECT id, instrument_id, kind, status, realized_pnl, unrealized_pnl "
         "FROM positions"

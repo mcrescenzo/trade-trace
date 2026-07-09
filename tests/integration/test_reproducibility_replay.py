@@ -133,11 +133,6 @@ def test_report_mistakes_replay_deterministic(populated_home):
     assert len(hashes) == 1
 
 
-def test_report_strengths_replay_deterministic(populated_home):
-    hashes = _three_call_hashes(populated_home, "report.strengths", {})
-    assert len(hashes) == 1
-
-
 def test_report_pnl_replay_deterministic(populated_home):
     hashes = _three_call_hashes(populated_home, "report.pnl", {})
     assert len(hashes) == 1
@@ -155,11 +150,6 @@ def test_report_unscored_forecasts_replay_deterministic(populated_home):
 
 def test_report_playbook_adherence_replay_deterministic(populated_home):
     hashes = _three_call_hashes(populated_home, "report.playbook_adherence", {})
-    assert len(hashes) == 1
-
-
-def test_report_decision_velocity_replay_deterministic(populated_home):
-    hashes = _three_call_hashes(populated_home, "report.decision_velocity", {})
     assert len(hashes) == 1
 
 

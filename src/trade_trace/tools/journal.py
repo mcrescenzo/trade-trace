@@ -18,8 +18,6 @@ than the env-resolved default; this is the load-bearing knob for the tests
 that exercise isolated DBs.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 from pydantic import BaseModel
@@ -97,12 +95,9 @@ def _journal_init(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 (CONTRACT_VERSION,),
             )
         fts5 = has_fts5(db.connection)
-        # Per trade-trace-mehh: report the real sqlite-vec capability
-        # instead of hard-coding False. `has_sqlite_vec` runs a
-        # best-effort load + smoke-test of the vec0 virtual table; it
-        # returns False on any failure. Vectors stay off-by-default
-        # regardless of capability (the operator opts in via
-        # `journal.config_set embeddings.provider …`).
+        # has_sqlite_vec is a legacy no-op that always returns False;
+        # sqlite-vec is no longer part of the embeddings posture (local ONNX
+        # replaced it).
         from trade_trace.storage.database import has_sqlite_vec
 
         vec = has_sqlite_vec(db.connection)
@@ -462,7 +457,7 @@ def register_journal_tools(registry: ToolRegistry) -> None:
             "append-only tables inside one atomic transaction. "
             "`projection` is required (one of `positions`, `memory_node_stats`, "
             "`all`). Used after corruption-restore or projection bug per "
-            "persistence.md §7. memory_node_stats rebuild is a no-op until "
-            "the M3 memory layer lands."
+            "persistence.md §7. memory_node_stats is rebuilt from "
+            "memory_recall_events (recall_count, last_recalled_at per node)."
         ),
     )

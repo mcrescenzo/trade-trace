@@ -30,6 +30,18 @@ from trade_trace.reports.calibration import (
 from trade_trace.storage.database import read_snapshot
 
 REPORT_NAME = "report.forecast_diagnostics"
+REPORT_FILTER_SUPPORT = frozenset({
+    "actors.actor_id",
+    "actors.agent_id",
+    "actors.model_id",
+    "actors.environment",
+    "actors.run_id",
+    "instrument.instrument_id",
+    "instrument.venue_id",
+    "strategy.strategy_id",
+    "decision.decision_type",
+    "outcome.include_late_recorded",
+})
 WIDE_SPREAD_THRESHOLD = 0.10
 
 

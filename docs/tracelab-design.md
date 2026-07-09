@@ -68,9 +68,8 @@ A set of scripts under `tools/tracelab/`:
   tracker), `positions` (open/closed split), `outbox` backlog, resolved-but-
   unclosed forecasts, free disk **and free inodes**. Also a Gamma schema-drift
   canary. No change to the `journal.status` contract.
-- **Metric rollup** — `report.calibration`, `report.calibration_integrity`
-  (a **separate** call — see correction), `report.process_quality`,
-  `report.resolution_misreads`, `report.pnl`, `report.coach`.
+- **Metric rollup** — `report.calibration` (including its embedded
+  calibration-integrity diagnostics), `report.pnl`, `report.coach`.
 - **Backup** — `journal.backup` **with the confirm flag**, inside a quiescence
   window (see correction).
 

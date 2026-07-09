@@ -66,7 +66,7 @@ Examples:
 | `decision.add` | `trade-trace decision add` |
 | `memory.recall` | `trade-trace memory recall` |
 | `report.calibration` | `trade-trace report calibration` |
-| `report.filter_schema` | `trade-trace report filter_schema` |
+| `tool.schema` | `trade-trace tool schema` |
 | `resolution.add` | `trade-trace resolution add` |
 | `import.commit` | `trade-trace import commit` |
 | `strategy.upsert` | `trade-trace strategy upsert` |
@@ -127,7 +127,7 @@ rather than a bare array, so adding pagination fields is non-breaking.
 
 Always-present fields:
 
-- `tool`: the tool name as registered (e.g. `decision.create`).
+- `tool`: the tool name as registered (e.g. `decision.add`).
 - `actor_id`: echoed from the request (or the server's default actor).
 - `request_id`: a server-generated ID for the call; useful for log
   correlation. Always returned, even if the client didn't supply one.
@@ -173,9 +173,8 @@ Sometimes-present fields:
 ### 3.3 Considered-and-passed survivorship surfaces (trade-trace-s7nn)
 
 The calibration integrity control `abstention_coverage`
-(`report.calibration_integrity.diagnostics.abstention_coverage`, also
-embedded in `report.calibration.data.integrity_diagnostics` and
-`report.coach.integrity_diagnostics`) exists to make the calibration
+(`report.calibration.data.integrity_diagnostics.diagnostics.abstention_coverage`
+and `report.coach.integrity_diagnostics`) exists to make the calibration
 denominator honest about survivorship bias: it surfaces the markets the
 agent *considered and passed on*, which never enter the Brier/log-score
 numbers.
@@ -369,6 +368,27 @@ and a deprecation window.
 For MVP, the contract version is `1.0`. The version is surfaced via
 `journal.status` and as a `meta.contract_version` field on every
 envelope.
+
+### 8.1 Tool removal (pre-1.0)
+
+Before a `1.0` release, Trade Trace may hard-delete low-value public tool
+names when a documented catalog-consolidation review approves the removal.
+This is intentionally narrower than the normal alias-and-hide compatibility
+practice in §2.1: it is available only while the package is pre-1.0 and only
+for surfaces that the review classifies as redundant, experimental, or
+standalone-only with no demonstrated agent-loop value.
+
+Every hard deletion MUST have an auditable disposition record that lists the
+removed tool names, the replacement or rationale, and any tools that remain
+available only as composed/internal report modules. Removed tools are not
+kept as hidden dispatch aliases unless the disposition explicitly chooses a
+redirect. Callers should treat `tool.schema`, MCP tool listing, and the
+architecture docs as the source of truth for the current catalog rather than
+assuming historical `report.*` names remain callable.
+
+After `1.0`, public tool removal becomes a breaking contract change: keep a
+deprecation/redirect window, bump the major contract version, and document the
+replacement path.
 
 ## 9. Open Questions
 

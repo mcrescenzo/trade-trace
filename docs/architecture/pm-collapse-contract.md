@@ -146,7 +146,7 @@ Indexes, timestamp-governance tests, semantic keys, report filters, exporter/imp
 
 1. **Schema and model seam first.** Add migrations and update low-level helpers/builders so new databases are coherent before removing runtime tools.
 2. **Core write tools next.** Implement `market.bind` and update `forecast.add`, `snapshot.add`, `decision.add`, and `resolution.add`/`outcome.add` around `market_id` and `forecasts.probability`.
-3. **Source collapse third.** Replace `source.add` and `source.attach_to_*` behavior with embedded source arrays on the owning writes. Update `report.source_quality` only after m015 is real.
+3. **Source collapse third.** Replace `source.add` and `source.attach_to_*` behavior with embedded source arrays on the owning writes. Update internal source-quality diagnostics and their composed public reports only after m015 is real.
 4. **Exporter/importer/replay fourth.** Update event names, semantic keys, and replay dispatch so old events fail explicitly or map through documented hard-break errors.
 5. **Reports and read models fifth.** Update report joins from venue/instrument/thesis/source tables to market/forecast/source arrays. Quarantine or explicitly keep position/P&L surfaces local-read-only; do not add execution behavior.
 6. **Docs/tests last.** Migrate docs and test fixtures after runtime semantics are proven. Do not make grep cleanliness the first success signal.

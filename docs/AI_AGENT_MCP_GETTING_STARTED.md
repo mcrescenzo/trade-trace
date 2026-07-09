@@ -194,7 +194,7 @@ A useful agent loop is ordered so later records point back to earlier evidence.
 5. `forecast.add` — commit binary probabilities before outcome resolution.
 6. `decision.add` — record the actual trade/skip/hold decision and rationale.
 7. `resolution.add` — record final outcome; scoring runs when prerequisites are met.
-8. `report.lifecycle`, `report.work_queue`, and review/report tools — inspect incomplete local obligations and deterministic feedback.
+8. `report.work_queue`, `agent.next_actions`, and review/report tools — inspect incomplete local obligations and deterministic feedback.
 9. `memory.reflect` — write an outcome-linked lesson.
 10. `playbook.upsert` and `playbook.record_adherence` — maintain process rules and adherence rows.
 11. `memory.recall` — before the next forecast/decision, retrieve relevant prior lessons.
@@ -208,6 +208,9 @@ This example validates a market binding write without persisting it:
 ```json
 {
   "external_id": "paper-venue:event-123",
+  "source": "manual",
+  "state": "open",
+  "mechanism": "clob",
   "title": "Paper market event",
   "idempotency_key": "run-20260519-001:market.bind:paper-event:v1",
   "_dry_run": true

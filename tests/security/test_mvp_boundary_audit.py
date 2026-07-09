@@ -324,37 +324,23 @@ SHIPPED_PUBLIC_TOOLS = {
 SHIPPED_REPORTS = {
     "report.bootstrap",
     "report.calibration",
-    "report.calibration_advisory",
-    "report.calibration_integrity",
-    "report.time_decay_sharpening",
-    "report.source_quality",
     "report.audit_readiness",
     "report.phase_gate_readiness",
     "report.autonomy_readiness",
     "report.mistakes",
-    "report.mistake_tripwire",
-    "report.strengths",
-    "report.process_analytics",
-    "report.process_quality",
     "report.pnl",
     "report.risk",
     "report.opportunity",
     "report.watchlist",
     "report.unscored_forecasts",
     "report.playbook_adherence",
-    "report.policy_candidates",
-    "report.rule_lineage",
     "report.coach",
-    "report.compare",
     "report.current_exposure",
     "report.execution_quality",
     "report.exposure_anomalies",
-    "report.filter_schema",
     "report.forecast_diagnostics",
-    "report.lifecycle",
     "report.work_queue",
     "report.open_positions",
-    "report.operational_health",
     # Unfrozen into the public Phase-2 catalog (bead trade-trace-xwox): the
     # paper-only exposure/P&L report. It aggregates ONLY filled paper_fill rows
     # into a cost-basis/exposure view carrying mark_source + as_of and explicitly
@@ -366,28 +352,8 @@ SHIPPED_REPORTS = {
     # manually_flagged aggregate as evidence for external operators; it never
     # cancels, halts, remediates, fetches private state, or moves funds.
     "report.reconciliation_mismatches",
-    "report.resolution_misreads",
     "report.strategy_health",
-    # Unfrozen into the Phase-1 public catalog (bead trade-trace-y0cr): both
-    # read only Phase-1 tables and carry no Phase-2 dependency.
-    "report.market_lifecycle",
-    "report.resolution_quality",
-    # Unfrozen into the Phase-1 public catalog (bead trade-trace-8g7t):
-    # read-only diagnostics over Phase-1 tables (recall telemetry, memory
-    # nodes, typed edges, decisions) with no Phase-2 dependency.
-    # decision_velocity is the sole producer of the per-day/week decision
-    # cadence series, so it was unfrozen rather than cut as redundant.
     "report.recall_receipts",
-    "report.memory_usefulness",
-    "report.decision_velocity",
-    # Unfrozen into the Phase-1 public catalog (bead trade-trace-xtdo):
-    # market-baseline calibration panels (Brier skill vs the market) over only
-    # Phase-1 tables (forecast_snapshot_anchor / forecast_scores / forecasts /
-    # outcomes / snapshots), no Phase-2 dependency. The after-the-fact anchor
-    # WRITER forecast.anchor_to_snapshot stays frozen (superseded by
-    # forecast.commit_blind / forecast.reveal_snapshot, bead trade-trace-4kec.9).
-    "report.calibration_anchored",
-    "report.calibration_terminal",
 }
 
 
@@ -533,34 +499,13 @@ EXPERIMENTAL_RECONCILIATION = frozenset({
     # account_snapshot.import/get/list/report were UNFROZEN into the public
     # Phase-2 catalog (bead trade-trace-qfn8) and moved to SHIPPED_PUBLIC_TOOLS
     # above; their public-catalog membership is pinned by
-    # test_unfrozen_account_snapshot_cluster_is_public below. The process reports
-    # report.execution_quality and report.operational_health were also UNFROZEN
-    # (trade-trace-2umy) and are pinned by test_unfrozen_process_reports_are_public.
+    # test_unfrozen_account_snapshot_cluster_is_public below. The remaining
+    # process report is pinned by test_unfrozen_process_reports_are_public.
 })
-
-
-def test_frozen_reconciliation_cluster_is_experimental_but_dispatchable():
-    """Epic trade-trace-4kec.4: the reconciliation/execution-truth cluster is
-    frozen behind the experimental tier — hidden from the default catalog,
-    surfaced only under explicit opt-in, still dispatchable."""
-
-    registry = default_registry()
-    public = set(registry.public_names())
-    assert EXPERIMENTAL_RECONCILIATION.isdisjoint(public)
-    assert EXPERIMENTAL_RECONCILIATION.isdisjoint(
-        set(registry.public_names(include_legacy=True))
-    )
-    assert EXPERIMENTAL_RECONCILIATION.issubset(
-        set(registry.public_names(include_experimental=True))
-    )
-    assert EXPERIMENTAL_RECONCILIATION.issubset(set(_all_dispatchable_tool_names()))
-    for tool in EXPERIMENTAL_RECONCILIATION:
-        assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
 
 
 UNFROZEN_PROCESS_REPORTS = {
     "report.execution_quality",
-    "report.operational_health",
 }
 
 
@@ -713,19 +658,16 @@ EXPERIMENTAL_ANCHORED_VIEWERS = {
     # (forecast.commit_blind / forecast.reveal_snapshot) was built as its
     # explicit semantic replacement, so the after-the-fact anchor WRITER must
     # not ship in the public Phase-1 catalog. Its anchor write is already
-    # folded into forecast.add. Its three READERS
-    # (report.calibration_anchored / report.calibration_terminal /
-    # snapshot.fetch_series) were UNFROZEN into the public Phase-1 catalog
-    # (bead trade-trace-xtdo); their public-catalog membership is pinned by
-    # test_unfrozen_anchored_calibration_readers_are_public below.
+    # folded into forecast.add. The snapshot.fetch_series reader that feeds
+    # internal market-baseline calculations was UNFROZEN into the public Phase-1
+    # catalog (bead trade-trace-xtdo); its public-catalog membership is pinned
+    # below.
     "forecast.anchor_to_snapshot",
-    # report.decision_velocity, report.memory_usefulness, and
-    # report.recall_receipts were unfrozen into the Phase-1 public catalog
-    # (bead trade-trace-8g7t); their public-catalog membership is pinned by
-    # test_unfrozen_memory_process_reports_are_public below.
-    # report.market_lifecycle and report.resolution_quality were unfrozen into
-    # the Phase-1 public catalog (bead trade-trace-y0cr); their public-catalog
-    # membership is pinned by test_pm_native_report_tools_registered.
+    # report.recall_receipts was unfrozen into the Phase-1 public catalog
+    # (bead trade-trace-8g7t); its public-catalog membership is pinned by
+    # test_unfrozen_memory_process_reports_are_public below. The
+    # memory-usefulness diagnostic is now internal-only and composed by
+    # bootstrap rather than registered as a standalone report.
     # journal.restore was grouped here as a speculative viewer, but it is a
     # destructive operator tool now admin-gated by bead trade-trace-6rnk; its
     # gating is pinned by ADMIN_GATED_OPERATOR_TOOLS /
@@ -754,13 +696,10 @@ def test_frozen_anchored_viewers_cluster_is_experimental_but_dispatchable():
         assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
 
 
-# report.decision_velocity, report.memory_usefulness, and
-# report.recall_receipts were UNFROZEN out of EXPERIMENTAL_ANCHORED_VIEWERS into
-# the Phase-1 public catalog (bead trade-trace-8g7t). They are read-only
-# diagnostics over Phase-1 tables with no Phase-2 dependency.
+# report.recall_receipts was UNFROZEN out of EXPERIMENTAL_ANCHORED_VIEWERS into
+# the Phase-1 public catalog (bead trade-trace-8g7t). It is a read-only
+# diagnostic over Phase-1 tables with no Phase-2 dependency.
 UNFROZEN_MEMORY_PROCESS_REPORTS = {
-    "report.decision_velocity",
-    "report.memory_usefulness",
     "report.recall_receipts",
 }
 
@@ -779,34 +718,28 @@ def test_unfrozen_memory_process_reports_are_public():
         assert registry.get(tool).metadata()["catalog_visibility"] == "public"
 
 
-# report.calibration_anchored, report.calibration_terminal, and
-# snapshot.fetch_series were UNFROZEN out of EXPERIMENTAL_ANCHORED_VIEWERS into
-# the Phase-1 public catalog (bead trade-trace-xtdo). They are read-only
-# market-baseline calibration diagnostics (plus the time-series snapshot fetcher
-# that feeds them) over only Phase-1 tables, with no Phase-2 dependency. The
-# anchor WRITER forecast.anchor_to_snapshot stays frozen because bead
-# trade-trace-4kec.9 (forecast.commit_blind / forecast.reveal_snapshot)
-# superseded it.
-UNFROZEN_ANCHORED_CALIBRATION_READERS = {
-    "report.calibration_anchored",
-    "report.calibration_terminal",
+# snapshot.fetch_series was UNFROZEN out of EXPERIMENTAL_ANCHORED_VIEWERS into
+# the Phase-1 public catalog (bead trade-trace-xtdo). It feeds internal
+# market-baseline calibration calculations over Phase-1 tables. The anchor
+# WRITER forecast.anchor_to_snapshot stays frozen because bead trade-trace-4kec.9
+# (forecast.commit_blind / forecast.reveal_snapshot) superseded it.
+UNFROZEN_ANCHORED_SNAPSHOT_READERS = {
     "snapshot.fetch_series",
 }
 
 
 def test_unfrozen_anchored_calibration_readers_are_public():
-    """Bead trade-trace-xtdo: the anchored/terminal market-baseline calibration
-    readers and the series snapshot fetcher ship in the default Phase-1 public
-    catalog — visible without any opt-in, and no longer in the frozen
-    experimental cluster. The anchor WRITER stays frozen (superseded by
+    """Bead trade-trace-xtdo: the series snapshot fetcher ships in the default
+    Phase-1 public catalog — visible without any opt-in, and no longer in the
+    frozen experimental cluster. The anchor WRITER stays frozen (superseded by
     forecast.commit_blind / forecast.reveal_snapshot)."""
 
     registry = default_registry()
     public = set(registry.public_names())
-    assert UNFROZEN_ANCHORED_CALIBRATION_READERS.issubset(public)
+    assert UNFROZEN_ANCHORED_SNAPSHOT_READERS.issubset(public)
     # No longer frozen behind the experimental shelf.
-    assert UNFROZEN_ANCHORED_CALIBRATION_READERS.isdisjoint(EXPERIMENTAL_ANCHORED_VIEWERS)
-    for tool in UNFROZEN_ANCHORED_CALIBRATION_READERS:
+    assert UNFROZEN_ANCHORED_SNAPSHOT_READERS.isdisjoint(EXPERIMENTAL_ANCHORED_VIEWERS)
+    for tool in UNFROZEN_ANCHORED_SNAPSHOT_READERS:
         assert registry.get(tool).metadata()["catalog_visibility"] == "public"
     # The after-the-fact anchor writer remains frozen (superseded by 4kec.9).
     assert "forecast.anchor_to_snapshot" in EXPERIMENTAL_ANCHORED_VIEWERS

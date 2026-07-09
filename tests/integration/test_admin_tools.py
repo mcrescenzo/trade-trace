@@ -321,6 +321,38 @@ def _patch_tiny_trusted_lock(monkeypatch, payload: bytes):
     return admin
 
 
+def test_bge_small_model_lock_pins_non_placeholder_onnx_digest():
+    from trade_trace.tools import admin
+
+    model_entry = next(entry for entry in admin.BGE_SMALL_LOCK if entry["path"] == "model.onnx")
+
+    assert model_entry["size"] == 133093490
+    assert model_entry["sha256"] == (
+        "828e1496d7fabb79cfa4dcd84fa38625c0d3d21da474a00f08db0f559940cf35"
+    )
+    assert set(model_entry["sha256"]) != {"0"}
+
+
+def test_atomic_replace_dir_cleans_staging_after_verify_failure(tmp_path, monkeypatch):
+    from trade_trace.tools import admin
+
+    src = tmp_path / "src"
+    dest = tmp_path / "home" / "models" / "bge-small-en-v1.5"
+    src.mkdir()
+    payload = b"wrong trusted digest fixture"
+    (src / "config.json").write_bytes(payload)
+    monkeypatch.setattr(admin, "_trusted_bge_small_lock", lambda: ({
+        "path": "config.json",
+        "size": len(payload),
+        "sha256": "0" * 64,
+    },))
+
+    with pytest.raises(admin.ToolError):
+        admin._atomic_replace_dir(src, dest)
+
+    assert not (dest.parent / ".bge-small-en-v1.5.staging").exists()
+
+
 def test_model_import_air_gap_succeeds_with_sockets_patched(home, tmp_path, monkeypatch):
     import socket
 

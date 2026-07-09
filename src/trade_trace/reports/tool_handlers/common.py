@@ -25,35 +25,20 @@ from trade_trace.reports import (
     export_case_bundle,
     report_audit_readiness,
     report_calibration,
-    report_calibration_advisory,
-    report_calibration_anchored,
     report_calibration_integrity,
-    report_calibration_terminal,
-    report_market_lifecycle,
-    report_resolution_quality,
-    report_time_decay_sharpening,
     report_coach,
-    report_compare,
-    report_decision_velocity,
     report_forecast_diagnostics,
     report_lifecycle,
     report_memory_usefulness,
-    report_mistake_tripwire,
     report_mistakes,
     report_opportunity,
     report_phase_gate_readiness,
     report_playbook_adherence,
     report_pnl,
-    report_policy_candidates,
-    report_process_analytics,
-    report_process_quality,
     report_recall_receipts,
-    report_resolution_misreads,
     report_risk,
-    report_rule_lineage,
     report_source_quality,
     report_strategy_health,
-    report_strengths,
     report_unscored_forecasts,
     report_watchlist,
     report_work_queue,
@@ -62,7 +47,7 @@ from trade_trace.reports._filter_support import UnsupportedFilterError
 from trade_trace.storage import resolve_home
 from trade_trace.storage.paths import db_path
 from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
-from trade_trace.tools._helpers import db_for_args
+from trade_trace.tools._helpers import db_for_args, ro_db_for_args
 from trade_trace.tools._report_filter_errors import (
     report_filter_validation_to_tool_error,
     unsupported_filter_to_tool_error,
@@ -95,7 +80,7 @@ def _parse_report_timestamp(value: str, *, field: str) -> datetime:
             str(exc),
             details={"field": field, "value": value},
         ) from exc
-    return datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    return datetime.fromisoformat(normalized)
 
 
 def _snapshot_latest_mark(snapshot: Any) -> dict[str, Any]:

@@ -6,16 +6,9 @@ Before this contract was pinned:
   schema-derived `minimum: 1` constraint that the MCP stdio boundary
   enforced, so `tt report calibration --min-sample -1` returned
   `EXIT 0, ok:true` while the same MCP call was rejected.
-- report.calibration_integrity was even worse: it accepted
-  `min_sample: -1` on both transports because its registered schema
-  was `_EMPTY_SCHEMA`.
-
 The CLI now validates against the property-constraint half of each
 tool's schema (required-field enforcement stays on the dispatcher /
-handler so the friendlier cpz2 idempotency-key message wins), and
-report.calibration_integrity declares `min_sample` as an accepted
-(but currently unused) integer with `minimum: 1` so negative values
-are refused on parity with sibling tools.
+handler so the friendlier cpz2 idempotency-key message wins).
 """
 
 from __future__ import annotations
@@ -58,7 +51,6 @@ def _stdio_invoke(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     [
         "report.calibration",
         "report.forecast_diagnostics",
-        "report.calibration_integrity",
     ],
 )
 def test_mcp_stdio_rejects_negative_min_sample(home, tool):
@@ -74,7 +66,6 @@ def test_mcp_stdio_rejects_negative_min_sample(home, tool):
     [
         ["report", "calibration"],
         ["report", "forecast_diagnostics"],
-        ["report", "calibration_integrity"],
     ],
 )
 def test_cli_rejects_negative_min_sample(home, cli_command, capsys):

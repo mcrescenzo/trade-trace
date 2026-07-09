@@ -26,6 +26,7 @@ from trade_trace.contracts.autonomous_substrate import RedactionProfile
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.report_filter import STRATEGY_NONE_SENTINEL, ReportFilter
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
+from trade_trace.logging import get_logger
 from trade_trace.projections import remark_open_positions
 from trade_trace.reports._filter_support import (
     UnsupportedFilterError,
@@ -47,6 +48,17 @@ from trade_trace.tools._report_filter_errors import (
 from trade_trace.tools.errors import ToolError
 
 REVIEW_BUNDLE_REPORT = "review.bundle"
+REPORT_NAME = REVIEW_BUNDLE_REPORT
+REPORT_FILTER_SUPPORT = frozenset({
+    # The bundle scopes its decision selection through the same
+    # actor/instrument/strategy spine as calibration, plus the decision_at time
+    # window (the selection ordering uses decisions.created_at).
+    "actors.actor_id",
+    "instrument.venue_id",
+    "strategy.strategy_id",
+    "time_window.decision_at_gte",
+    "time_window.decision_at_lt",
+})
 CONTRACT_VERSION = "1.0"
 RECALL_RECEIPTS_MAX_BLOCKS = 50
 DEFAULT_REDACTION_PROFILE = RedactionProfile.AUDIT_EXPORT.value
@@ -758,7 +770,11 @@ def _report_summaries(
     try:
         calibration = report_calibration(conn, raw_filter=filter_view)
         calibration_summary = calibration["summary"]
-    except Exception:  # noqa: BLE001 - bundle continues with empty summary
+    except Exception as _exc:  # noqa: BLE001 - bundle continues with empty summary
+        get_logger(__name__).warning(
+            "calibration report failed inside review bundle",
+            extra={"error": str(_exc)},
+        )
         calibration_summary = {"sample_size": 0, "sample_warning": None}
 
     report_summaries = {"calibration": calibration_summary}
@@ -1050,7 +1066,7 @@ def _suggested_prompts(selected: dict[str, list[dict[str, Any]]]) -> list[str]:
 _REVIEW_BUNDLE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "filter": {"type": "object", "description": "ReportFilter object selecting the decisions to bundle; call report.filter_schema for the canonical nested schema. Defaults to {} (an unscoped, max_records-bounded sweep)."},
+        "filter": {"type": "object", "description": "ReportFilter object selecting the decisions to bundle. Defaults to {} (an unscoped, max_records-bounded sweep)."},
         "max_records": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Max decision cases to include (default 25)."},
         "include_sources": {"type": "boolean", "description": "Include attached sources (default true)."},
         "include_reflections": {"type": "boolean", "description": "Include attached reflections (default true)."},

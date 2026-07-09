@@ -13,6 +13,8 @@ import pytest
 from tests._mcp_helpers import envelope_default as _envelope
 from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
+from trade_trace.reports.integrity import report_calibration_integrity
+from trade_trace.storage.paths import db_path
 
 
 @pytest.fixture
@@ -128,9 +130,11 @@ def test_abstentions_surface_in_calibration_integrity(home: Path):
     inst = _instrument(home)
     _record(home, inst)
     _record(home, inst, idempotency_key="k-2")
-    integrity = mcp_call("report.calibration_integrity", {"home": str(home)}).model_dump(mode="json", exclude_none=True)
-    assert integrity["ok"], integrity
-    cov = integrity["data"]["diagnostics"]["abstention_coverage"]
+    import sqlite3
+
+    with sqlite3.connect(db_path(home)) as conn:
+        integrity = report_calibration_integrity(conn)
+    cov = integrity["diagnostics"]["abstention_coverage"]
     assert cov["count"] == 2
     # No committed forecasts, so abstentions are the entire considered set.
     assert cov["total"] == 2

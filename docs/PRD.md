@@ -378,16 +378,15 @@ Deterministic reports:
 
 - `report.calibration` — binary Brier, log score, reliability buckets, ECE, sharpness, and a sample-prevalence baseline, computed over scored binary forecasts matching the filter. Supports actor/run filters for `actor_id`, `agent_id`, `model_id`, `environment`, and `run_id` plus the documented venue/strategy/outcome filters. Full output shape and formulas in [`scoring.md`](./architecture/scoring.md) §3 and §7 and `reports.md` §4. Returns `sample_warning` when the filtered set is below the configurable minimum (default 20 scored forecasts).
 - `report.forecast_diagnostics` — binary-first retrospective diagnostics over local forecasts, scored outcomes, decisions/non-actions, and caller-supplied snapshots. It compares agent `p_yes` only to stored `snapshots.implied_probability` as a caveated caller-supplied `recorded_market_reference_gap`, reports Brier/reliability/base-rate caveats and low-N/source/spread/liquidity coverage, excludes unsupported/non-binary forecasts with reasons, and never fetches data or provides advice, a trading signal, alpha, or profit/performance ranking.
-- `report.mistakes` / `report.strengths` — current compatibility implementation ranks decision tags by mean Brier on scored forecasts and rejects non-empty filters; broader tag counts/co-occurrence over decisions plus reviews remain target/follow-up work, not shipped behavior.
+- `report.mistakes` — current compatibility implementation ranks decision tags by mean Brier on scored forecasts and rejects non-empty filters; broader tag counts/co-occurrence over decisions plus reviews remain target/follow-up work, not shipped behavior. `report.coach` also consumes the same internal tag aggregates for its strengths view.
 - `report.pnl` — paper/actual P&L aggregates where position projections have enough fills to compute realized/unrealized P&L. Returns a `data_coverage` field reporting how many positions could and could not be computed.
 - Current-exposure/open-position report surfaces must follow [`current-exposure-agent-contract.md`](./architecture/current-exposure-agent-contract.md) for bucket names, caveat codes, and source precedence. This PRD link is a contract seam only; it does not imply a shipped `report.current_exposure` tool.
 - `report.watchlist` — lazy stale-watch detection (the `watch.stale` historical name was rolled into `report.watchlist`; see trade-trace-ftnu).
 - `report.unscored_forecasts` — lazy time-passed unscored detection.
 - `report.playbook_adherence` — driven by `decision_playbook_rules`; surfaces considered/followed/overridden/not_applicable counts and override outcomes.
-- `report.decision_velocity`.
-- `report.filter_schema` — returns the canonical `ReportFilter` Pydantic schema as JSON, so an agent can introspect valid fields without hitting the docs.
-- `report.calibration_integrity` — six anti-goodhart hygiene diagnostics (forecast_coverage, unsupported_rate, ambiguous_rate, disputed_rate, void_cancelled_rate, suspicious_late_rate). Embedded in `report.calibration.data.integrity_diagnostics` and surfaced as a standalone tool. See [`reports.md`](./architecture/reports.md) §4.8. (Bead trade-trace-jzn.)
-- `report.source_quality` — five provenance hygiene diagnostics (missing_sources_on_actual_enter, stale_sources, contradictory_sources, duplicated_sources, sensitive_sources) over the source-attachment graph. See [`reports.md`](./architecture/reports.md) §4.9. (Bead trade-trace-l9q.)
+- `tool.schema` — returns per-tool JSON schemas and report argument metadata, so an agent can introspect valid fields without hitting the docs.
+- Calibration integrity diagnostics — six anti-goodhart hygiene diagnostics (forecast_coverage, unsupported_rate, ambiguous_rate, disputed_rate, void_cancelled_rate, suspicious_late_rate) embedded in `report.calibration.data.integrity_diagnostics` and composed by `report.coach`; no standalone public report is registered. See [`reports.md`](./architecture/reports.md) §4.8. (Bead trade-trace-jzn.)
+- Source-quality diagnostics — provenance hygiene diagnostics (missing_sources_on_actual_enter, stale_sources, contradictory_sources, duplicated_sources, sensitive_sources) over the source-attachment graph, embedded in composed public reports such as `report.coach` / audit-readiness paths; no standalone public report is registered. See [`reports.md`](./architecture/reports.md) §4.9. (Bead trade-trace-l9q.)
 - `report.audit_readiness` — read-only prediction/event-market audit-readiness diagnostics with `blocking` / `warning` / `info` severities for resolution-rule provenance, snapshot freshness, bid/ask/spread/depth coverage, source freshness/contradictions, and decision provenance. It is local-only, deterministic, and never fetches market data or gives trading advice. See [`reports.md`](./architecture/reports.md) §4.10. (Bead trade-trace-r566.)
 - `tool.schema` — per-tool introspection: returns description, CLI invocation, example_minimal/example_rich payloads (for write tools), and required_metadata notes (actor_id pattern, idempotency_key pattern, dry-run support flags). Omit `tool` to enumerate the full tool catalog. (Bead trade-trace-268.)
 
@@ -397,10 +396,9 @@ Every write tool accepts `--dry-run` (CLI) / `_dry_run: true` (MCP): the dispatc
 
 Trading-native liquidity-bucket and skipped-positive-edge review reports are deferred to P1; that legacy label refers only to caller-recorded thesis/review terminology, not an engine for discovering profitable edge. A cautious binary-first `report.forecast_diagnostics` now covers local forecast-vs-recorded-market-reference diagnostics using caller-supplied `snapshots.implied_probability` only; no data is fetched or treated as advice, a trading signal, alpha, or profitability evidence. The data is already captured in `snapshots`; broader reports are additive.
 
-Comparison and per-strategy reporting:
+Per-strategy and local analysis reporting:
 
-- `report.compare(group_by, filter)` — runs the same metric set across groups and returns a per-group `ReportGroup` for side-by-side comparison. Live `group_by` values (per `trade_trace.reports.compare.SUPPORTED_GROUP_BY_BY_BASE_REPORT`): for `base_report="calibration"` — `actor_id`, `agent_id`, `model_id`, `run_id`, `strategy_id`, `decision_type`, `venue_id`, `asset_class`, `environment`, `instrument_id`, `outcome_status`, `status`; for `base_report="pnl"` — `instrument_id`, `status`, `venue_id`, `asset_class`. Deferred to P1+ until SQL mapping lands: `playbook_version_id`, `liquidity_bucket`, `confidence_bucket`. See trade-trace-cs0r.
-- `report.strategy_performance` — shipped convenience wrapper over `report.compare(base_report="pnl", group_by="strategy_id")`; broader per-strategy calibration trend, mistake-tag frequency, and playbook-adherence summary remain additive target behavior, not part of the current wrapper contract.
+- Per-strategy calibration, risk, opportunity, and adherence questions are answered through the dedicated reports' documented filters and `report.strategy_health`; there is no separate public cross-report comparison wrapper in the current catalog.
 - `report.strategy_health` — deterministic read-only local process-health report across active strategies by default. It surfaces review-due decisions, low-N caveats, open/unresolved forecasts, thesis source-reference gaps, repeated overrides, and the current unsupported-local-surface caveat for policy candidates. It uses administrative ordering, not profit/performance ranking, and does not fetch data, detect edge/signals, or provide advice.
 - `report.risk` and `report.opportunity` — shipped local journal/projection analysis reports; see [`risk-units.md`](./architecture/risk-units.md) and [`opportunity-analysis.md`](./architecture/opportunity-analysis.md). They do not fetch market data, execute trades, or assert broker truth.
 
@@ -501,7 +499,7 @@ The current pre-release implementation includes the import-ready write schema pl
 
 ### M2 — Binary scoring and deterministic reports
 - `forecast_scores` binary Brier on supported outcome writes (single-probability form per [`scoring.md`](./architecture/scoring.md))
-- `ReportFilter` schema and `report.filter_schema` per [`reports.md`](./architecture/reports.md)
+- `ReportFilter` schema documented in [`reports.md`](./architecture/reports.md), with per-tool argument schemas exposed through `tool.schema`
 - Calibration (Brier + log score + reliability bins + ECE + sharpness + baseline per `scoring.md` §7), watchlist, unscored forecast, tag, decision velocity, and basic P&L reports
 - Drill-down envelope on all reports per [`reports.md`](./architecture/reports.md) §3 (aggregate → filter → contributing record IDs → examples)
 - Optional `filter` parameter on every report per §2.12 strategy-id sentinel semantics; the filter operates on the still-nullable column reserved in M1, so calls without an active strategy match all rows
@@ -528,7 +526,7 @@ The current pre-release implementation includes the import-ready write schema pl
 - CSV-fills import (including optional `strategy_id` column) per [`imports.md`](./architecture/imports.md) §3
 - Risk-unit fields and the shipped subset of `report.risk` per [`risk-units.md`](./architecture/risk-units.md)
 - Path-dependent analysis and the shipped subset of `report.opportunity` per [`opportunity-analysis.md`](./architecture/opportunity-analysis.md)
-- `report.compare` implementation (segmentation data is captured from M1)
+- Segmented reporting over captured M1 metadata where each shipped report explicitly supports it
 - `review.bundle` implementation
 - `report.strategy_performance` — per-strategy P&L, calibration trend, mistake-tag frequency, playbook adherence summary
 - The former local read-only Console UI was removed before release; current reporting/review surfaces are MCP/CLI tools, `review.bundle`, and Python/library report APIs.
@@ -550,7 +548,7 @@ The current pre-release implementation includes the import-ready write schema pl
 ## 9. Testing and verification
 
 - `journal.init` is idempotent.
-- Every tool has a JSON schema; `report.filter_schema` and `journal.schema` surface them at runtime.
+- Every tool has a JSON schema; `tool.schema` and `journal.schema` surface them at runtime.
 - Every write carries `actor_id`/actor metadata; retryable writes require `idempotency_key` by default and replay-safely. The `--allow-no-idempotency` opt-out is exercised by tests of at-least-once import paths only.
 - CLI and MCP outputs are semantically equivalent after transport normalization (verified by the golden-test suite in [`contracts.md`](./architecture/contracts.md) §7).
 - Append-only invariants hold for source/event tables.

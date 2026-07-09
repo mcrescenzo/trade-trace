@@ -18,6 +18,7 @@ The seed surface is `journal.fixture_seed`; the CLI maps it to
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -190,7 +191,6 @@ def _deterministic_token(suffix: str) -> str:
     replays cleanly."""
 
     # secrets isn't deterministic; we just hash the suffix and trim.
-    import hashlib
     h = hashlib.sha256(suffix.encode("utf-8")).hexdigest()
     return h[:12]
 
@@ -474,27 +474,27 @@ def _build_decision_args(
     # The decision-required-field matrix is enforced at the tool layer;
     # we supply the minimum set per type so the fixture seeds cleanly.
     if dtype in {"paper_enter", "actual_enter", "add"}:
-        base.update({"thesis_id": theses[seq % len(theses)],
-                      "side": "yes", "quantity": 1, "price": 0.5})
+        base |= {"thesis_id": theses[seq % len(theses)],
+                 "side": "yes", "quantity": 1, "price": 0.5}
     elif dtype in {"paper_exit", "actual_exit", "reduce"}:
-        base.update({"thesis_id": theses[seq % len(theses)],
-                      "side": "yes", "quantity": 1, "price": 0.6})
+        base |= {"thesis_id": theses[seq % len(theses)],
+                 "side": "yes", "quantity": 1, "price": 0.6}
     elif dtype == "skip":
-        base.update({"reason": "spread > expected edge"})
+        base |= {"reason": "spread > expected edge"}
     elif dtype == "watch":
-        base.update({"thesis_id": theses[seq % len(theses)]})
+        base |= {"thesis_id": theses[seq % len(theses)]}
     elif dtype == "invalidate_thesis":
-        base.update({"thesis_id": theses[seq % len(theses)],
-                      "reason": "data changed"})
+        base |= {"thesis_id": theses[seq % len(theses)],
+                 "reason": "data changed"}
     elif dtype == "update_thesis":
-        base.update({"thesis_id": theses[seq % len(theses)]})
+        base |= {"thesis_id": theses[seq % len(theses)]}
     elif dtype == "resolved":
         # Resolved decisions reference an instrument that has a forecast
         # in the fixture; the type marker indicates the agent recognized
         # the outcome.
-        base.update({"thesis_id": theses[seq % len(theses)]})
+        base |= {"thesis_id": theses[seq % len(theses)]}
     elif dtype == "review":
-        base.update({"review_by": (_ANCHOR + timedelta(days=7)).isoformat()})
+        base |= {"review_by": (_ANCHOR + timedelta(days=7)).isoformat()}
     if strategy_id is not None:
         base["strategy_id"] = strategy_id
     if tags is not None:
@@ -980,7 +980,7 @@ def _build_mvp_eval_pm_loop(
         dtype = decision_types[i]
         dargs = _build_decision_args(dtype, [inst], [thesis], seq=0, strategy_id=strat)
         dargs["instrument_id"] = inst
-        dargs["thesis_id"] = thesis if dtype not in {"skip"} else dargs.get("thesis_id", thesis)
+        dargs["thesis_id"] = thesis if dtype != "skip" else dargs.get("thesis_id", thesis)
         if dtype == "skip":
             dargs["reason"] = "PM fixture: spread wider than local edge estimate"
         _call(ctx.home, "decision.add", dargs, suffix=f"pm-trading-decision-{i}")

@@ -17,6 +17,9 @@ from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._examples import WRITE_TOOL_EXAMPLES
 from trade_trace.tools._helpers import (
+    canonical_json as _canonical_json,
+)
+from trade_trace.tools._helpers import (
     check_idempotency_replay,
     db_for_args,
     emit_event,
@@ -88,10 +91,6 @@ def _reject_impossible_account_state(value: Any, *, field: str) -> None:
                 walk(nested, f"{path}[{index}]")
 
     walk(value, field)
-
-
-def _canonical_json(value: Any) -> str:
-    return json.dumps(value if value is not None else {}, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _json_arg(args: dict[str, Any], field: str, default: Any) -> Any:

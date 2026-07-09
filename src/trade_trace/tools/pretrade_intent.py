@@ -10,6 +10,9 @@ from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
+    canonical_json as _canonical_json,
+)
+from trade_trace.tools._helpers import (
     check_idempotency_replay,
     db_for_args,
     emit_event,
@@ -20,6 +23,7 @@ from trade_trace.tools._helpers import (
     reject_if_contains_secrets,
     require,
     store_metadata_json,
+    validate_fk_refs,
 )
 from trade_trace.tools.errors import ToolError
 
@@ -38,10 +42,6 @@ _REF_TABLES = {
     "strategy_id": "strategies",
     "playbook_version_id": "playbook_versions",
 }
-
-
-def _canonical_json(value: Any) -> str:
-    return json.dumps(value if value is not None else {}, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _json_arg(args: dict[str, Any], field: str, default: Any) -> Any:
@@ -73,11 +73,7 @@ def _hash_material(material: dict[str, Any]) -> str:
 
 
 def _validate_refs(conn: Any, args: dict[str, Any]) -> list[dict[str, str]]:
-    missing: list[dict[str, str]] = []
-    for field, table in _REF_TABLES.items():
-        value = args.get(field)
-        if value and conn.execute(f"SELECT 1 FROM {table} WHERE id = ?", (value,)).fetchone() is None:
-            missing.append({"field": field, "id": str(value), "table": table})
+    missing = validate_fk_refs(conn, args, _REF_TABLES)
     source_ids = _list_arg(args, "source_ids")
     for source_id in source_ids:
         if conn.execute("SELECT 1 FROM sources WHERE id = ?", (source_id,)).fetchone() is None:

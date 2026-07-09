@@ -50,10 +50,10 @@ Trade Trace supplies the storage, contracts, scoring, and reporting substrate. T
 
 - **Agent-native PM journal:** markets, snapshots, binary forecasts, optional decisions, resolutions/outcomes, reflections, playbooks, strategies, and tags.
 - **Forecast scoring:** supported binary forecasts can be scored against final outcomes, including Brier and calibration diagnostics.
-- **Deterministic reports:** calibration, forecast diagnostics, source quality, audit readiness, risk/opportunity diagnostics, P&L where local projection data exists, strategy health/performance, recall receipts, review bundles, lifecycle, and work-queue views.
+- **Deterministic reports:** calibration, forecast diagnostics, audit readiness with embedded source diagnostics, risk/opportunity diagnostics, P&L where local projection data exists, strategy health/performance, recall receipts, review bundles, and lifecycle-derived work-queue views.
 - **Typed memory graph:** retain, recall, and reflect over observations, reflections, and playbook rules, with typed links back to journal rows.
 - **Strategies and playbooks:** group related market decisions under named strategies and version process rules without turning either into trading recommendations.
-- **Agent continuity:** `report.work_queue`, `report.lifecycle`, and `report.bootstrap` expose local process obligations for fresh sessions. They do not schedule work, assign tasks, fetch data, or recommend trades.
+- **Agent continuity:** `report.bootstrap`, `report.work_queue`, and `agent.next_actions` expose local process obligations for fresh sessions. They do not schedule work, assign tasks, fetch data, or recommend trades.
 - **MCP and CLI parity:** the same tool registry, JSON envelopes, validation semantics, stable error codes, schemas, and dry-run/idempotency contracts back both transports.
 - **Local-first storage:** one SQLite database, append-only/auditable events, JSONL export/import surfaces, and SHA-256-verified backup/restore.
 
@@ -124,7 +124,7 @@ See [`docs/AI_AGENT_MCP_GETTING_STARTED.md`](./docs/AI_AGENT_MCP_GETTING_STARTED
 
 ## Use the CLI
 
-The CLI mirrors the MCP catalog by replacing dots in MCP tool names with spaces (for example, `market.bind` becomes `tt market bind`). It emits JSON by default; streaming list/read paths use NDJSON envelopes. The current default public catalog contains 103 registry-generated tools; `tool.schema` / `build_registry().public_names()` is the live count (this number updates as the catalog changes). A further 5 tools (the `approval.*` cluster plus the superseded `forecast.anchor_to_snapshot`) are frozen behind an experimental tier — hidden from the default catalog but still dispatchable via `MCP_INCLUDE_EXPERIMENTAL=1` or `tool.schema {"include_experimental": true}`. `tool.schema` is the source of truth and includes compatibility metadata such as `legacy_name` for renamed tools and hints for removed legacy callers.
+The CLI mirrors the MCP catalog by replacing dots in MCP tool names with spaces (for example, `market.bind` becomes `tt market bind`). It emits JSON by default; streaming list/read paths use NDJSON envelopes. The current default public catalog contains 82 registry-generated tools; `tool.schema` / `build_registry().public_names()` is the live count (this number updates as the catalog changes). A further 5 tools (the `approval.*` cluster plus the superseded `forecast.anchor_to_snapshot`) are frozen behind an experimental tier — hidden from the default catalog but still dispatchable via `MCP_INCLUDE_EXPERIMENTAL=1` or `tool.schema {"include_experimental": true}`. `tool.schema` is the source of truth and includes compatibility metadata such as `legacy_name` for renamed tools and hints for removed legacy callers.
 
 ```bash
 tt journal init

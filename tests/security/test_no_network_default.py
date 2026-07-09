@@ -99,18 +99,13 @@ _NO_NETWORK_SMOKE_ROWS: list[tuple[str, str]] = [
     ("decision.add", "decision"),
     ("source.add", "source"),
     # Reports + bundle (cover every report.* family)
-    ("report.filter_schema", "noop"),
     ("report.calibration", "noop"),
     ("report.pnl", "noop"),
     ("report.watchlist", "noop"),
     ("report.unscored_forecasts", "noop"),
     ("report.mistakes", "noop"),
-    ("report.strengths", "noop"),
-    ("report.decision_velocity", "noop"),
     ("report.coach", "noop"),
-    ("report.source_quality", "noop"),
     ("report.audit_readiness", "noop"),
-    ("report.calibration_integrity", "noop"),
     ("report.playbook_adherence", "noop"),
     ("review.bundle", "noop"),
     # Memory layer
@@ -175,10 +170,6 @@ def _make_kwargs(tool: str, home: Path, seed: dict[str, str]) -> dict:
         return {**base, "slug": "smoke-pb", "name": "Smoke"}
     if tool == "tool.schema":
         return {**base, "tool": "journal.init"}
-    if tool == "report.filter_schema":
-        return {}
-    if tool == "report.decision_velocity":
-        return {**base, "bucket": "day"}
     if tool == "report.watchlist":
         return {**base, "mode": "all"}
     if tool == "market.search":

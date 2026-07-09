@@ -1,13 +1,13 @@
-"""ReportFilter Pydantic schema + report.filter_schema tool per trade-trace-fo7.
+"""ReportFilter Pydantic schema per trade-trace-fo7.
 
 Covers ux0 chunk 1 acceptance:
 - Pydantic ReportFilter schema implements every field per reports.md §2.
-- report.filter_schema returns canonical JSON Schema introspectable at runtime.
 - Strategy-id sentinel semantics work as documented.
 """
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +18,6 @@ from trade_trace.contracts.report_filter import (
     STRATEGY_NONE_SENTINEL,
     ReportFilter,
 )
-from trade_trace.core import default_registry
 from trade_trace.mcp_server import mcp_call
 
 # -- schema completeness --------------------------------------------------
@@ -134,47 +133,6 @@ def test_strategy_sentinel_constant_pinned():
     assert STRATEGY_NONE_SENTINEL == "__none__"
 
 
-# -- report.filter_schema tool ----------------------------------------
-
-
-def test_report_filter_schema_registered():
-    assert "report.filter_schema" in default_registry().names()
-
-
-def test_report_filter_schema_returns_json_schema(tmp_path: Path):
-    env = mcp_call("report.filter_schema", {}).model_dump(mode="json", exclude_none=True)
-    assert env["ok"] is True
-    data = env["data"]
-    schema = data["schema"]
-    assert schema["type"] == "object"
-    # The same groups visible on the Pydantic surface land in the JSON schema.
-    assert "time_window" in schema["properties"]
-    assert "decision" in schema["properties"]
-
-
-def test_report_filter_schema_surfaces_strategy_sentinel(tmp_path: Path):
-    env = mcp_call("report.filter_schema", {}).model_dump(mode="json", exclude_none=True)
-    sentinel = env["data"]["strategy_id_sentinel"]
-    assert sentinel["value"] == STRATEGY_NONE_SENTINEL
-    assert "IS NULL" in sentinel["meaning"]
-
-
-def test_report_filter_schema_rejects_unknown_mode():
-    env = mcp_call("report.filter_schema", {"mode": "made_up"}).model_dump(
-        mode="json", exclude_none=True
-    )
-    assert env["ok"] is False
-    assert env["error"]["code"] == "VALIDATION_ERROR"
-
-
-def test_report_filter_schema_serialization_mode():
-    env = mcp_call("report.filter_schema", {"mode": "serialization"}).model_dump(
-        mode="json", exclude_none=True
-    )
-    assert env["ok"] is True
-    assert env["data"]["mode"] == "serialization"
-
-
 # -- per-report supported-filter rejection contract (beads d4k / ke1) ------
 #
 # Each report.* tool now declares the exact set of ReportFilter leaves it
@@ -200,8 +158,6 @@ _UNSUPPORTED_LEAF_CASES: list[tuple[str, dict[str, Any], dict[str, Any], str]] =
      "decision.decision_type"),
     ("report.mistakes", {}, {"actors": {"actor_id": ["agent:foo"]}},
      "actors.actor_id"),
-    ("report.strengths", {}, {"actors": {"actor_id": ["agent:foo"]}},
-     "actors.actor_id"),
     ("report.pnl", {}, {"instrument": {"venue_id": ["v_x"]}},
      "instrument.venue_id"),
     ("report.watchlist", {}, {"actors": {"actor_id": ["agent:foo"]}},
@@ -210,8 +166,6 @@ _UNSUPPORTED_LEAF_CASES: list[tuple[str, dict[str, Any], dict[str, Any], str]] =
      "strategy.strategy_id"),
     ("report.playbook_adherence", {}, {"decision": {"decision_type": ["actual_enter"]}},
      "decision.decision_type"),
-    ("report.decision_velocity", {}, {"actors": {"actor_id": ["agent:foo"]}},
-     "actors.actor_id"),
     ("report.coach", {}, {"actors": {"actor_id": ["agent:foo"]}},
      "actors.actor_id"),
 ]
@@ -266,6 +220,27 @@ def test_calibration_supports_actor_strategy_instrument_and_late_recorded(
     })
 
 
+def test_supported_filter_registry_matches_collocated_declarations():
+    """The global compatibility mapping is assembled from per-module
+    REPORT_FILTER_SUPPORT declarations, not a second central literal copy."""
+
+    from trade_trace.reports import _filter_support
+
+    expected: dict[str, frozenset[str]] = {}
+    for module_name in _filter_support._REPORT_SUPPORT_MODULES:
+        module = importlib.import_module(module_name)
+        expected.update(_filter_support._support_entries_from_module(module))
+
+    assert dict(_filter_support.SUPPORTED_FILTER_FIELDS.items()) == expected
+    assert _filter_support.SUPPORTED_FILTER_FIELDS["review.bundle"] == frozenset({
+        "actors.actor_id",
+        "instrument.venue_id",
+        "strategy.strategy_id",
+        "time_window.decision_at_gte",
+        "time_window.decision_at_lt",
+    })
+
+
 def test_empty_supported_set_reports_accept_empty_filter(tmp_path):
     """Reports with an empty supported set still accept the empty
     ReportFilter (the default) — only non-default unsupported leaves
@@ -273,7 +248,7 @@ def test_empty_supported_set_reports_accept_empty_filter(tmp_path):
 
     home = _journal_home(tmp_path)
     for tool in (
-        "report.mistakes", "report.strengths", "report.pnl",
+        "report.mistakes", "report.pnl",
         "report.watchlist", "report.unscored_forecasts",
         "report.playbook_adherence", "report.coach",
     ):

@@ -139,7 +139,7 @@ per [reports.md](reports.md) §3.2).
 
 Same metrics as `report.risk` but oriented for a single-group drill-down
 of the actual R-multiple distribution. Useful when the agent has
-spotted a worst group in `report.compare` and wants the distribution.
+spotted a weak strategy or decision slice and wants the distribution.
 
 ### 4.3 `report.calibration` interactions
 
@@ -149,11 +149,11 @@ clean. A separate `report.calibration_by_r_bucket` (P1+) can answer
 "are my big-R bets better-calibrated than my small-R bets?" by binning
 on `decisions.declared_risk_amount` and running calibration per bin.
 
-### 4.4 `report.compare` interactions
+### 4.4 Grouping interactions
 
 `group_by = decisions.declared_risk_amount` becomes meaningful once R
-is captured; `report.compare(base_report=risk, group_by=strategy_id)`
-is the natural "which strategy has best R" view.
+is captured; a future grouped risk view can answer which strategy has
+the strongest risk-normalized expectancy over a meaningful sample.
 
 ## 5. Skips, Watches, and Hypothetical R
 

@@ -3,9 +3,10 @@ and bead trade-trace-d0w (test QC).
 
 Required by the QC bead:
     - calibration < 20  (covered separately in test_report_calibration.py)
-    - mistakes / strengths < 10
+    - mistakes < 10
     - pnl < 5
-    - playbook_adherence < 10 (deferred to M3)
+    - playbook_adherence < 10 (covered in
+      test_playbook_layer.py::test_report_playbook_adherence_low_sample_summary_and_meta_warning)
 
 This file adds positive + negative cases for the report kinds that the
 calibration suite does not already cover.
@@ -54,7 +55,7 @@ def _seed_decision_with_tag(home: Path, tag: str, n: int) -> None:
         })
 
 
-# -- mistakes / strengths sample_warning ----------------------------
+# -- mistakes sample_warning ----------------------------------------
 
 
 def test_mistakes_per_group_sample_warning_fires_below_10(home):

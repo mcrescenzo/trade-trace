@@ -12,13 +12,13 @@ pass tightens it:
   value outside {observation, reflection, playbook_rule} at validation time.
 """
 
-from __future__ import annotations
-
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from trade_trace.models._shared import check_bitemporal
 
 
 class NodeType(StrEnum):
@@ -48,15 +48,6 @@ class MemoryNode(BaseModel):
     invalidated_by: str | None = None
 
     @model_validator(mode="after")
-    def _validate_bitemporal(self) -> MemoryNode:
-        if (
-            self.valid_from is not None
-            and self.valid_to is not None
-            and self.valid_to < self.valid_from
-        ):
-            raise ValueError(
-                f"bi-temporal validity violated: valid_to "
-                f"({self.valid_to.isoformat()}) precedes valid_from "
-                f"({self.valid_from.isoformat()})"
-            )
+    def _validate_bitemporal(self) -> Self:
+        check_bitemporal(self.valid_from, self.valid_to)
         return self

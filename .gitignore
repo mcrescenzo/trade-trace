@@ -18,6 +18,7 @@ docs/audits/
 docs/reviews/
 
 # Local agent state
+.opencode/
 .claude/
 .codex/
 .hermes/

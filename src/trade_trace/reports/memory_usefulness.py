@@ -294,8 +294,8 @@ def _days_between(start: str | None, end: str | None) -> float | None:
     if not start or not end:
         return None
     try:
-        start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
-        end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
+        start_dt = datetime.fromisoformat(start)
+        end_dt = datetime.fromisoformat(end)
     except ValueError:
         return None
     return round((end_dt - start_dt).total_seconds() / 86400, 6)

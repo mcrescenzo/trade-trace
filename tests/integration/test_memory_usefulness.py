@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 
 from tests.integration.test_recall_receipts import _seed
-from trade_trace.core import default_registry, dispatch
+from trade_trace.core import default_registry
 from trade_trace.reports.memory_usefulness import report_memory_usefulness
 from trade_trace.storage.paths import db_path
 
@@ -64,29 +64,26 @@ def test_memory_usefulness_negative_controls_are_caveated_and_read_only(home):
     assert "citation_use:used" in group_keys
 
 
-def test_memory_usefulness_is_in_default_public_catalog():
-    """Bead trade-trace-8g7t: report.memory_usefulness was unfrozen out of the
-    experimental anchored-viewers cluster into the Phase-1 public catalog. It
-    must be visible in the default catalog (no opt-in) and tagged public."""
+def test_memory_usefulness_is_internal_only():
+    """The memory-usefulness diagnostic is composed internally by bootstrap,
+    not exposed as a standalone public report tool."""
 
     registry = default_registry()
-    assert "report.memory_usefulness" in set(registry.public_names())
-    assert registry.get("report.memory_usefulness").metadata()["catalog_visibility"] == "public"
+    assert "report.memory_usefulness" not in set(registry.public_names())
+    assert "report.memory_usefulness" not in registry.names()
 
 
 def test_memory_usefulness_tool_filters_memory_kind_and_context(home):
     with _conn(home) as conn:
         _seed(conn)
-    registry = default_registry()
-    result = dispatch(
-        "report.memory_usefulness",
-        {"home": str(home), "instrument_id": "inst", "strategy_id": "strat", "memory_kind": "observation", "consumer_kind": "decision", "consumer_id": "dec"},
-        actor_id="agent:test",
-        registry=registry,
-    )
-    dumped = result.model_dump(mode="json", exclude_none=True)
-    assert dumped["ok"] is True, dumped
-    data = dumped["data"]
+        data = report_memory_usefulness(
+            conn,
+            instrument_id="inst",
+            strategy_id="strat",
+            memory_kind="observation",
+            consumer_kind="decision",
+            consumer_id="dec",
+        )
     assert data["summary"]["metrics"]["retrieved_item_count"] == 5
     assert data["summary"]["metrics"]["used_count"] == 2
     assert data["negative_controls"][0]["name"] == "recalled_unused"

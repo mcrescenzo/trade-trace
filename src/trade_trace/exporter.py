@@ -16,6 +16,7 @@ drops them on read.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sqlite3
@@ -28,10 +29,6 @@ from typing import Any
 from trade_trace._permissions import chmod_user_only_dirs, chmod_user_only_file
 from trade_trace.events import EventRecord
 from trade_trace.events.log import EVENT_RECORD_SELECT_COLUMNS
-
-RESERVED_TRANSPORT_KEYS = frozenset(
-    {"_event_id", "_event_type", "_actor_id", "_created_at", "_contract_version"}
-)
 
 TMP_SUFFIX = ".jsonl.tmp"
 FINAL_SUFFIX = ".jsonl"
@@ -74,7 +71,7 @@ def jsonl_path(home: Path, event_type: str, event_id: int, created_at: str) -> P
     """
 
     try:
-        ts = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        ts = datetime.fromisoformat(created_at)
     except ValueError as exc:
         raise OSError(
             f"invalid created_at for event {event_id!r}: {created_at!r}"
@@ -211,7 +208,7 @@ def write_jsonl_line_atomic(
     flags = os.O_CREAT | os.O_WRONLY | os.O_TRUNC
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
-    fd = os.open(str(tmp), flags, 0o600)
+    fd = os.open(tmp, flags, 0o600)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(line, sort_keys=True) + "\n")
@@ -499,7 +496,7 @@ def drain_outbox(
                 {
                     "event_id": event_id,
                     "event_type": event_type,
-                    "patterns": sorted(pattern_counts.keys()),
+                    "patterns": sorted(pattern_counts),
                     "counts": dict(pattern_counts),
                     "match_offsets": [m["match_offset"] for m in secrets_found
                                       if "match_offset" in m],
@@ -530,10 +527,5 @@ def sha256_of_file(path: Path) -> str:
     """Convenience for tests asserting drain idempotency (acceptance criteria
     explicitly call for SHA-256 comparison)."""
 
-    import hashlib
-
-    h = hashlib.sha256()
     with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
+        return hashlib.file_digest(f, "sha256").hexdigest()

@@ -80,7 +80,7 @@ Drive the canonical journal loop (follow `docs/AGENT_GUIDE.md`; introspect any
 unfamiliar tool with `tool.schema` first):
 
 1. **Orient:** `report.bootstrap`, then the process reads it suggests
-   (`report.work_queue`, `report.lifecycle`, `report.recall_receipts`). Ask
+   (`report.work_queue`, `agent.next_actions`, `report.recall_receipts`). Ask
    yourself: as a bot, do I actually know what to do next from this?
 2. **Resolve what's due:** for each of your own open forecasts whose market may
    have closed, determine the true outcome (see *Resolution determination*

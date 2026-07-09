@@ -43,8 +43,10 @@ Required fields:
   `forecast.add`, `forecast.supersede`, `decision.add`, `resolution.add`,
   `outcome.add`, `resolve.record`, `source.add`, `source.attach_to_thesis`,
   `source.attach_to_decision`, `source.attach_to_forecast`,
-  `playbook.upsert`, `playbook.create`, `playbook.propose_version`,
-  `strategy.upsert`, `strategy.create`, `strategy.update`. Recursive import tools, read/report/admin/journal
+  `source.attach_to_memory_node`, `playbook.upsert`, `playbook.create`,
+  `playbook.propose_version`, `strategy.upsert`, `strategy.create`,
+  `strategy.update`, `memory.retain`, `memory.reflect`, `memory.link`,
+  `market.bind`. Recursive import tools, read/report/admin/journal
   tools, and other non-allowlisted tools are rejected with
   `VALIDATION_ERROR`.
 - `args`: the tool's args object, identical to the in-process call.

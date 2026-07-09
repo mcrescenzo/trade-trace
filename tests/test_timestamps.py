@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
@@ -9,8 +10,11 @@ import pytest
 from tests.clock import FixedClock, SystemClock
 from trade_trace.timestamps import (
     TimestampValidationError,
-    is_canonical_utc_iso8601,
     to_utc_iso8601,
+)
+
+_CANONICAL_UTC_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$"
 )
 
 
@@ -46,10 +50,10 @@ def test_invalid_string_raises():
 
 
 def test_canonical_storage_predicate_matches_helper_output():
-    assert is_canonical_utc_iso8601(to_utc_iso8601("2026-05-18T14:32:11.123999Z"))
-    assert not is_canonical_utc_iso8601("2026-05-18T14:32:11Z")
-    assert not is_canonical_utc_iso8601("2026-05-18T14:32:11.123+00:00")
-    assert not is_canonical_utc_iso8601("2026-05-18T14:32:11.123")
+    assert _CANONICAL_UTC_RE.fullmatch(to_utc_iso8601("2026-05-18T14:32:11.123999Z"))
+    assert not _CANONICAL_UTC_RE.fullmatch("2026-05-18T14:32:11Z")
+    assert not _CANONICAL_UTC_RE.fullmatch("2026-05-18T14:32:11.123+00:00")
+    assert not _CANONICAL_UTC_RE.fullmatch("2026-05-18T14:32:11.123")
 
 
 def test_system_clock_returns_aware_datetime():

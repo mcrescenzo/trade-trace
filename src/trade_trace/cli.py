@@ -211,11 +211,11 @@ def _print_command_help(parser: argparse.ArgumentParser, tool_name: str, registr
     reg = registry.get(tool_name)
     invocation = " ".join(reg.cli_invocation)
     print(f"usage: tt [global options] {invocation} [tool options]", file=sys.stdout)
-    print("", file=sys.stdout)
+    print(file=sys.stdout)
     print(f"Tool: {tool_name}", file=sys.stdout)
     if reg.description:
         print(reg.description, file=sys.stdout)
-        print("", file=sys.stdout)
+        print(file=sys.stdout)
     metadata = reg.metadata()
     if metadata:
         if metadata.get("usage_summary"):
@@ -237,14 +237,14 @@ def _print_command_help(parser: argparse.ArgumentParser, tool_name: str, registr
             print("next actions:", file=sys.stdout)
             for action in metadata["next_actions"]:
                 print(f"  - {action}", file=sys.stdout)
-        print("", file=sys.stdout)
+        print(file=sys.stdout)
     print("global options:", file=sys.stdout)
     for action in parser._actions:
         if not action.option_strings:
             continue
         opts = ", ".join(action.option_strings)
         print(f"  {opts}  {action.help or ''}", file=sys.stdout)
-    print("", file=sys.stdout)
+    print(file=sys.stdout)
     print("tool options from schema:", file=sys.stdout)
     lines = _schema_arg_lines(tool_name, registry)
     if lines:
@@ -252,7 +252,7 @@ def _print_command_help(parser: argparse.ArgumentParser, tool_name: str, registr
             print(line, file=sys.stdout)
     else:
         print("  (no schema-advertised arguments)", file=sys.stdout)
-    print("", file=sys.stdout)
+    print(file=sys.stdout)
     print(
         "JSON convention: for object/array values, pass JSON with the schema field flag "
         "(for example --metadata-json '{...}' or --tags '[...]'). Repeating a flag "

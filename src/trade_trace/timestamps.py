@@ -13,12 +13,7 @@ Rules (locked):
 
 from __future__ import annotations
 
-import re
 from datetime import UTC, datetime
-
-_CANONICAL_UTC_RE = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$"
-)
 
 # Storage policy for bead trade-trace-wmz:
 #
@@ -136,18 +131,12 @@ class TimestampValidationError(ValueError):
     """Raised when a timestamp input cannot be normalized to UTC ISO 8601."""
 
 
-def is_canonical_utc_iso8601(value: str) -> bool:
-    """Return True for the canonical storage form emitted by to_utc_iso8601."""
-
-    return bool(_CANONICAL_UTC_RE.fullmatch(value))
-
-
 def _parse_iso_datetime(value: str | datetime, *, field: str = "<value>") -> datetime:
     """Parse the ISO datetime surface shared by timestamp helpers."""
 
     if isinstance(value, str):
         try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return datetime.fromisoformat(value)
         except ValueError as exc:
             raise TimestampValidationError(
                 f"{field}: not a valid ISO 8601 timestamp ({exc})"
@@ -189,7 +178,7 @@ def to_utc_iso8601(value: str | datetime, *, field: str = "<value>") -> str:
 def parse_report_timestamp_lenient_preserve_naive_offset(
     value: str | datetime | None,
 ) -> datetime | None:
-    """pm_native-compatible report timestamp parsing.
+    """Lenient report timestamp parsing.
 
     Missing/falsey and invalid inputs return None. Naive datetimes remain naive;
     aware datetimes keep their original offset, including non-UTC offsets. This
@@ -259,20 +248,3 @@ def parse_report_timestamp_strict_utc_naive_as_utc(
     if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
         return dt.replace(tzinfo=UTC)
     return dt.astimezone(UTC)
-
-
-def parse_report_timestamp_utc_or_none(value: str | datetime | None) -> datetime | None:
-    """source_quality-compatible canonical UTC report timestamp parsing.
-
-    Missing/falsey, invalid, and naive inputs return None. Valid aware inputs are
-    canonicalized through to_utc_iso8601, preserving its UTC normalization and
-    millisecond truncation behavior, then returned as UTC-aware datetimes.
-    """
-
-    if not value:
-        return None
-    try:
-        canonical = to_utc_iso8601(value)
-    except TimestampValidationError:
-        return None
-    return datetime.fromisoformat(canonical.replace("Z", "+00:00"))

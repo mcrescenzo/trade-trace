@@ -11,6 +11,9 @@ from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
+    canonical_json as _canonical_json,
+)
+from trade_trace.tools._helpers import (
     check_idempotency_replay,
     db_for_args,
     emit_event,
@@ -33,10 +36,6 @@ RECEIPT_ANCHOR_FIELDS = (
     "intended_action", "proposed_intent_hash", "decision_id", "market_id",
     "instrument_id", "strategy_id", "snapshot_id",
 )
-
-
-def _canonical_json(value: Any) -> str:
-    return json.dumps(value if value is not None else {}, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _hash_payload(prefix: str, payload: dict[str, Any]) -> str:
@@ -65,14 +64,6 @@ def _dict_arg(args: dict[str, Any], field: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ToolError(ErrorCode.VALIDATION_ERROR, f"{field} must be an object", details={"field": field})
     return value
-
-
-def _guard_json(value: Any, *, field: str) -> None:
-    reject_credential_metadata(value, field=field)
-
-
-def _guard_text(value: Any, *, field: str) -> None:
-    reject_if_contains_secrets(value, field=field)
 
 
 # ---------------------------------------------------------------------------
@@ -649,9 +640,9 @@ def _risk_policy_version_add(args: dict[str, Any], ctx: ToolContext) -> dict[str
     limits = _dict_arg(args, "limits_json")
     rules = _list_arg(args, "rules_json")
     source = require(args, "source")
-    _guard_json(limits, field="limits_json")
-    _guard_json(rules, field="rules_json")
-    _guard_text(source, field="source")
+    reject_credential_metadata(limits, field="limits_json")
+    reject_credential_metadata(rules, field="rules_json")
+    reject_if_contains_secrets(source, field="source")
     effective_from = normalize_timestamp(args, "effective_from", required=True)
     effective_to = normalize_timestamp(args, "effective_to")
     provenance_json = store_metadata_json(args, "provenance_json")
@@ -722,21 +713,21 @@ def _risk_check_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]
     if status == "pass" and outcome != "pass":
         raise ToolError(ErrorCode.VALIDATION_ERROR, "pass status requires pass outcome", details={"field": "outcome"})
     rule_results = _list_arg(args, "rule_results")
-    _guard_json(rule_results, field="rule_results")
+    reject_credential_metadata(rule_results, field="rule_results")
     if status == "missing_data" and not any(r.get("missing_data") for r in rule_results if isinstance(r, dict)):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "missing_data status requires a missing-data rule caveat", details={"field": "rule_results"})
     as_of = normalize_timestamp(args, "as_of", required=True)
     exposure_ids = _list_arg(args, "exposure_input_ids_json")
     evidence_ids = _list_arg(args, "evidence_input_ids_json")
     provenance = _dict_arg(args, "input_provenance_json")
-    _guard_json(exposure_ids, field="exposure_input_ids_json")
-    _guard_json(evidence_ids, field="evidence_input_ids_json")
-    _guard_json(provenance, field="input_provenance_json")
+    reject_credential_metadata(exposure_ids, field="exposure_input_ids_json")
+    reject_credential_metadata(evidence_ids, field="evidence_input_ids_json")
+    reject_credential_metadata(provenance, field="input_provenance_json")
     for field in (
         "intended_action", "proposed_intent_hash", "decision_id", "market_id",
         "instrument_id", "strategy_id", "snapshot_id", "waived_by", "waiver_reason",
     ):
-        _guard_text(args.get(field), field=field)
+        reject_if_contains_secrets(args.get(field), field=field)
     if not any(args.get(field) for field in RECEIPT_ANCHOR_FIELDS) and not exposure_ids and not evidence_ids:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "risk receipt must include at least one audit anchor", details={"field": "receipt_anchor"})
     validated_rule_results: list[dict[str, Any]] = []
@@ -893,7 +884,7 @@ def _guard_recorded_verdict_matches_evaluator(
     if inline_intent is not None and not isinstance(inline_intent, dict):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "proposed_intent must be an object", details={"field": "proposed_intent"})
     snapshots = _dict_arg(args, "snapshots")
-    _guard_json(snapshots, field="snapshots")
+    reject_credential_metadata(snapshots, field="snapshots")
     policy_rules = _load_policy_rules(conn, policy_version_id)
     if intent_id:
         intent = _load_intent(conn, str(intent_id))
@@ -932,13 +923,13 @@ def _risk_evaluate(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
     policy_version_id = require(args, "policy_version_id")
     snapshots = _dict_arg(args, "snapshots")
-    _guard_json(snapshots, field="snapshots")
+    reject_credential_metadata(snapshots, field="snapshots")
     inline_intent = args.get("proposed_intent")
     intent_id = args.get("proposed_intent_id")
     if inline_intent is not None and not isinstance(inline_intent, dict):
         raise ToolError(ErrorCode.VALIDATION_ERROR, "proposed_intent must be an object", details={"field": "proposed_intent"})
     if inline_intent is not None:
-        _guard_json(inline_intent, field="proposed_intent")
+        reject_credential_metadata(inline_intent, field="proposed_intent")
     if not intent_id and inline_intent is None:
         raise ToolError(ErrorCode.VALIDATION_ERROR, "provide proposed_intent_id or proposed_intent", details={"field": "proposed_intent_id"})
 

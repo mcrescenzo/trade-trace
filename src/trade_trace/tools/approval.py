@@ -10,6 +10,9 @@ from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
 from trade_trace.tools._helpers import (
+    canonical_json as _canonical_json,
+)
+from trade_trace.tools._helpers import (
     check_idempotency_replay,
     db_for_args,
     emit_event,
@@ -20,6 +23,7 @@ from trade_trace.tools._helpers import (
     reject_if_contains_secrets,
     require,
     store_metadata_json,
+    validate_fk_refs,
 )
 from trade_trace.tools.errors import ToolError
 
@@ -43,10 +47,6 @@ _REF_TABLES = {
     "policy_version_id": "risk_policy_versions",
 }
 _SELECT = "id, semantic_key, material_hash, record_type, decision, pretrade_intent_id, risk_check_receipt_id, strategy_id, instrument_id, market_id, actor_mode, decision_actor_id, decision_at, reason, modifications_json, scope_json, limits_json, expires_at, revoked_at, revocation_reason, waiver_class, hard_block_policy_permitted, violation_visible, policy_version_id, policy_version, policy_evidence_json, environment_label, account_label, external_receipt_refs_json, caveats_json, run_id, idempotency_key, provenance_json, created_at, actor_id"
-
-
-def _canonical_json(value: Any) -> str:
-    return json.dumps(value if value is not None else {}, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _json_arg(args: dict[str, Any], field: str, default: Any) -> Any:
@@ -111,12 +111,7 @@ def _response(conn: Any, record_id: str) -> dict[str, Any]:
 
 
 def _validate_refs(conn: Any, args: dict[str, Any]) -> list[dict[str, str]]:
-    missing: list[dict[str, str]] = []
-    for field, table in _REF_TABLES.items():
-        value = args.get(field)
-        if value and conn.execute(f"SELECT 1 FROM {table} WHERE id = ?", (value,)).fetchone() is None:
-            missing.append({"field": field, "id": str(value), "table": table})
-    return missing
+    return validate_fk_refs(conn, args, _REF_TABLES)
 
 
 def _approval_record(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:

@@ -135,7 +135,7 @@ def _parse(ts: str | None) -> datetime | None:
     if not ts:
         return None
     try:
-        return datetime.fromisoformat(to_utc_iso8601(ts).replace("Z", "+00:00"))
+        return datetime.fromisoformat(to_utc_iso8601(ts))
     except (ValueError, TimestampValidationError):
         return None
 

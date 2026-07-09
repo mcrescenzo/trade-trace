@@ -435,17 +435,13 @@ class _QueryTrace:
 
 
 # Distinguishing prefix of the decision_tags→decisions→forecast_scores join
-# that report.mistakes and report.strengths share. report.mistake_tripwire
-# uses a different join (it adds `JOIN forecasts f`), so this substring
+# that report.mistakes and the coach strengths view share. This substring
 # isolates the ranked-report query the coach consumes.
 _TAG_BRIER_JOIN = "FROM decision_tags dt JOIN decisions d ON d.id = dt.decision_id LEFT JOIN forecast_scores"
 
 
 def test_coach_runs_tag_brier_join_exactly_once(home):
-    """report.coach used to call report_mistakes and report_strengths
-    separately, executing the identical decision_tags→forecast_scores
-    join twice per packet. After trade-trace-bg12 the join runs exactly
-    once per coach call."""
+    """report.coach builds mistake and strength tag views from one query."""
 
     _seed = _envelope  # local alias for brevity below
     venue = _seed(home, "venue.add", {"name": "PM", "kind": "prediction_market"})

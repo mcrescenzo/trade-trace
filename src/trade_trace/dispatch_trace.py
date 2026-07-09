@@ -73,7 +73,7 @@ def _trace_path(args: dict[str, Any]) -> Path | None:
     home = os.environ.get(HOME_ENV)
     if not home:
         return None
-    return Path(str(home)).expanduser() / "trace" / "dispatch.jsonl"
+    return Path(home).expanduser() / "trace" / "dispatch.jsonl"
 
 
 def _chmod_0600(path: Path) -> None:
@@ -210,10 +210,15 @@ def emit(
         path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
         _rotate(path, _positive_int_from_env(MAX_BYTES_ENV, _DEFAULT_MAX_BYTES), _positive_int_from_env(MAX_FILES_ENV, _DEFAULT_MAX_FILES))
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        fh = None
         try:
-            with os.fdopen(fd, "a", encoding="utf-8") as fh:
-                fh.write(line)
+            fh = os.fdopen(fd, "a", encoding="utf-8")
+            fh.write(line)
         finally:
+            if fh is not None:
+                fh.close()
+            else:
+                os.close(fd)
             _chmod_0600(path)
-    except Exception:
+    except Exception:  # noqa: BLE001 - trace I/O failures are intentionally swallowed (operability.md diagnostics)
         return

@@ -33,8 +33,8 @@ def _schema(
 _FILTER_PROP = {
     "type": "object",
     "description": (
-        "ReportFilter object; call report.filter_schema for the canonical "
-        "nested schema and supported fields."
+        "ReportFilter object; accepted fields vary by report and unsupported "
+        "non-default leaves are rejected."
     ),
 }
 
@@ -127,62 +127,9 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "No DB writes, no fetch, no model runner, no market simulator, no backtester, profit proof, or trading advice."
         ),
     ),
-    "report.filter_schema": _schema(
-        {"mode": {"type": "string", "enum": ["validation", "serialization"]}},
-        description=(
-            "Optional mode selects validation (accepted input) or "
-            "serialization (emitted echo) ReportFilter schema."
-        ),
-    ),
     "report.calibration": _schema(
         {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
         description="Optional ReportFilter and low-N warning threshold; defaults min_sample=20.",
-    ),
-    "report.calibration_advisory": _schema(
-        {
-            "probability": {"type": "number", "minimum": 0, "maximum": 1},
-            "filter": _FILTER_PROP,
-            "min_sample": {"type": "integer", "minimum": 1},
-        },
-        required=["probability"],
-        description=(
-            "Candidate YES probability (required, in [0,1]) to recalibrate "
-            "against the caller's own prior resolved forecasts in that band; "
-            "optional ReportFilter and low-N threshold (default 20)."
-        ),
-    ),
-    "report.resolution_misreads": _schema(
-        {"instrument_id": {"type": "string", "description": "Optional: scope to one instrument."}},
-        description="Contract-misread diagnostic: compares recorded resolution-criteria interpretations against actual resolution sources.",
-    ),
-    "report.process_quality": _schema(
-        {
-            "instrument_id": {"type": "string", "description": "Optional: scope to one instrument."},
-            "min_sample": {"type": "integer", "minimum": 1},
-        },
-        description="Bet-sizing vs declared-edge (Kelly-consistency) process score, independent of outcome.",
-    ),
-    "report.mistake_tripwire": _schema(
-        {
-            "tags": {"type": "array", "items": {"type": "string"}, "description": "Candidate decision tag fingerprint to check against recurring-mistake patterns."},
-            "instrument_id": {"type": "string", "description": "Optional: scope prior mistakes to one instrument."},
-            "min_sample": {"type": "integer", "minimum": 1},
-            "brier_threshold": {"type": "number", "minimum": 0, "maximum": 2},
-        },
-        required=["tags"],
-        description="Fire recurring-mistake patterns matching a candidate decision's tag fingerprint; deterministic, no trade advice.",
-    ),
-    "report.market_lifecycle": _schema(
-        {"filter": _FILTER_PROP},
-        description="Local market lifecycle timing and engagement counts over caller-recorded market rows.",
-    ),
-    "report.resolution_quality": _schema(
-        {"filter": _FILTER_PROP},
-        description="Local resolution status quality diagnostics and pre-resolution uncertainty flags.",
-    ),
-    "report.time_decay_sharpening": _schema(
-        {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
-        description="Time-to-resolution sharpening diagnostics grouped by local forecast age-to-resolution buckets.",
     ),
     "report.forecast_diagnostics": _schema(
         {"filter": _FILTER_PROP, "min_sample": {"type": "integer", "minimum": 1}},
@@ -211,22 +158,6 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "no fetching, broker access, execution, cancellation, remediation, advice, alpha, or profit claims."
         ),
     ),
-    "report.operational_health": _schema(
-        {
-            "filter": _FILTER_PROP,
-            "as_of": {"type": "string", "format": "date-time"},
-            "limit": {"type": "integer", "minimum": 1},
-            "stale_snapshot_minutes": {"type": "number", "minimum": 0},
-            "stale_receipt_minutes": {"type": "number", "minimum": 0},
-            "stale_reconciliation_minutes": {"type": "number", "minimum": 0},
-            "stale_evidence_minutes": {"type": "number", "minimum": 0},
-        },
-        description=(
-            "Read-only local operational health diagnostics over trader-intelligence inputs. Reports stale, missing, "
-            "blocked, failed, unreviewed, and unresolved local evidence with stable codes and contributing ids; no "
-            "fetching, scheduling, alerting, supervision, execution, remediation, advice, alpha, or profit claims."
-        ),
-    ),
     "report.playbook_adherence": _schema(
         {
             "filter": _FILTER_PROP,
@@ -234,67 +165,6 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "strategy_id": {"type": "string"},
         },
         description="Optional ReportFilter plus top-level playbook_id/strategy_id scoping.",
-    ),
-    "report.policy_candidates": _schema(
-        {
-            "status": {"type": "string"},
-            "strategy_id": {"type": "string"},
-            "playbook_id": {"type": "string"},
-            "as_of": {"type": "string", "format": "date-time"},
-            "limit": {"type": "integer", "minimum": 1},
-        },
-        description=(
-            "Read-only local report over reflection memory_nodes with meta_json.policy_candidate. "
-            "Shows caveated candidate policy statements, support/contradiction, scope, missing evidence, replay refs, and reasons not promoted. No writes, promotion, fetching, model advice, or performance claims."
-        ),
-    ),
-    "report.rule_lineage": _schema(
-        {
-            "rule_node_id": {
-                "type": "string",
-                "description": (
-                    "A playbook_rule memory-node id to anchor the chain. "
-                    "Bridged to its playbook_versions via decision_playbook_rules "
-                    "(rule-node provenance edges are not auto-written today)."
-                ),
-            },
-            "playbook_version_id": {
-                "type": "string",
-                "description": (
-                    "A playbook_version id to anchor the chain directly. "
-                    "Exactly one of rule_node_id or playbook_version_id is "
-                    "required."
-                ),
-            },
-        },
-        description=(
-            "Read-only local rule-lineage chain: walks a playbook_rule (or "
-            "playbook_version) -> playbook_versions.provenance_reflection_node_id "
-            "-> the reflection -> its typed edges to decisions/theses/forecasts/"
-            "outcomes + consumer->memory use edges + decision_playbook_rules "
-            "adherence rows, with contributing record_ids at each hop and "
-            "explicit gaps where a link is missing. No writes, fetch, execution, "
-            "or advice."
-        ),
-    ),
-    "report.source_quality": _schema(
-        {
-            "stale_threshold_days": {
-                "type": "integer",
-                "minimum": 0,
-                "description": (
-                    "Age threshold in days for stale_sources. The diagnostic "
-                    "compares sources.freshness_at to the linked decision.created_at; "
-                    "sources without freshness_at are skipped, and retrieved_at is "
-                    "not used as a fallback."
-                ),
-            }
-        },
-        description=(
-            "Global source provenance hygiene report. stale_sources is driven by "
-            "sources.freshness_at (evidence-current time) versus decision.created_at; "
-            "retrieved_at is retrieval/provenance time only and does not trigger stale diagnostics."
-        ),
     ),
     "report.audit_readiness": _schema(
         {
@@ -374,47 +244,8 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "local-only; no network, no advice, no execution."
         ),
     ),
-    "report.calibration_integrity": _schema(
-        # min_sample is accepted but currently unused by the integrity
-        # panel; the schema declares it so a caller habitually passing
-        # the same low-N threshold across the report.calibration family
-        # gets a consistent rejection on negative values (bead
-        # trade-trace-cms2). Sibling tools share the minimum:1 contract.
-        {"min_sample": {"type": "integer", "minimum": 1}},
-        description=(
-            "Standalone anti-goodhart hygiene panel. min_sample is "
-            "accepted for parity with the report.calibration family but "
-            "currently unused; reserved for future denominator-coverage "
-            "thresholds."
-        ),
-    ),
     "report.unscored_forecasts": _schema({"filter": _FILTER_PROP}),
-    "report.decision_velocity": _schema(
-        {"filter": _FILTER_PROP, "bucket": {"type": "string", "enum": ["day", "week"]}},
-        description="bucket defaults to day; only day/week are accepted.",
-    ),
     "report.mistakes": _schema({"filter": _FILTER_PROP}),
-    "report.strengths": _schema({"filter": _FILTER_PROP}),
-    "report.process_analytics": _schema(
-        {
-            "filter": _FILTER_PROP,
-            "dimensions": {"type": "array", "items": {"type": "string"}},
-            "group_by": {"type": "array", "items": {"type": "string"}},
-            "metrics": {"type": "array", "items": {"type": "string"}},
-            "features": {"type": "array", "items": {"type": "string"}},
-            "include_costs": {"type": "boolean"},
-            "min_sample": {"type": "integer", "minimum": 1},
-            "max_groups": {"type": "integer", "minimum": 1},
-            "max_record_ids_per_group": {"type": "integer", "minimum": 1},
-            "cursor": {"type": "string"},
-            "as_of": {"type": "string"},
-        },
-        description=(
-            "Decision-tags-only process analytics MVP: tag frequency and tag-pair "
-            "co-occurrence over local decision_tags. Review/review_tags and cost-family "
-            "analytics are explicitly unsupported metadata, not computed values."
-        ),
-    ) | {"additionalProperties": False},
     "report.pnl": _schema(
         {"filter": _FILTER_PROP},
         description=(
@@ -433,31 +264,6 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "minimum_coverage": {"type": "string", "enum": ["sparse", "partial", "complete"]},
             "max_records": {"type": "integer", "minimum": 1},
             "include_labels": {"type": "boolean"},
-            "min_sample": {"type": "integer", "minimum": 1},
-        }
-    ),
-    "report.compare": _schema(
-        {
-            "base_report": {"type": "string", "enum": ["calibration", "pnl", "risk"]},
-            "group_by": {
-                "type": "string",
-                "description": (
-                    "Allowlisted per base_report (unsupported values are rejected "
-                    "with a VALIDATION_ERROR listing the allowed set). calibration: "
-                    "strategy_id, instrument_id, decision_type, venue_id, asset_class, "
-                    "actor_id, agent_id, model_id, run_id, environment, status, "
-                    "outcome_status (status and outcome_status are aliases for the "
-                    "outcome resolution status), resolution_month (YYYY-MM) and "
-                    "resolution_week (YYYY-Www) — the longitudinal calibration-over-"
-                    "time trend, bucketed by the outcome's resolved_at; per-period N "
-                    "is often below the N=20 floor, so each thin period self-caveats "
-                    "with sample_warning and insufficient:true. pnl: instrument_id, "
-                    "status, venue_id, asset_class. risk: period (YYYY-MM month bucket "
-                    "— the over-time expectancy series), strategy_id, decision_type. "
-                    "Note: tag is not a supported group_by for any base_report."
-                ),
-            },
-            "filter": _FILTER_PROP,
             "min_sample": {"type": "integer", "minimum": 1},
         }
     ),
@@ -481,34 +287,6 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "stale_threshold_days": {"type": "integer", "minimum": 0},
         }
     ),
-    "report.lifecycle": _schema(
-        {
-            "filter": _FILTER_PROP,
-            "states": {"type": "array", "items": {"type": "string"}},
-            "status": {"type": "string"},
-            "as_of": {"type": "string", "format": "date-time"},
-            "stale_threshold_days": {"type": "integer", "minimum": 0},
-            "limit": {
-                "type": "integer",
-                "minimum": 1,
-                "description": (
-                    "Maximum lifecycle cases per page; defaults to the report page "
-                    "default. When more cases match, truncated=true and next_cursor "
-                    "pages the next slice (mirrors report.open_positions)."
-                ),
-            },
-            "cursor": {
-                "type": "string",
-                "description": "Opaque pagination cursor from a previous report.lifecycle response.",
-            },
-        },
-        description=(
-            "Read-only derived lifecycle cases; filter by ReportFilter plus states/status, "
-            "as_of, and stale threshold. Paginated via limit + cursor + top-level "
-            "truncated + next_cursor; summary.metrics carry full-set totals while groups/"
-            "lifecycle_cases carry the current page."
-        ),
-    ),
     "report.recall_receipts": _schema(
         {
             "recall_id": {"type": "string"},
@@ -526,24 +304,6 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         description="Read-only computed recall receipts over memory_recall_events, memory_nodes, and typed edge evidence.",
     ),
-    "report.memory_usefulness": _schema(
-        {
-            "recall_id": {"type": "string"},
-            "node_id": {"type": "string"},
-            "consumer_kind": {"type": "string", "enum": ["decision", "thesis", "forecast", "outcome", "review", "playbook_version"]},
-            "consumer_id": {"type": "string"},
-            "run_id": {"type": "string"},
-            "agent_id": {"type": "string"},
-            "model_id": {"type": "string"},
-            "environment": {"type": "string"},
-            "instrument_id": {"type": "string"},
-            "strategy_id": {"type": "string"},
-            "memory_kind": {"type": "string", "enum": ["observation", "reflection", "playbook_rule"]},
-            "as_of": {"type": "string", "format": "date-time"},
-            "limit": {"type": "integer", "minimum": 1},
-        },
-        description="Read-only diagnostic memory usefulness projection with explicit negative controls and no causal/profit/advice claims.",
-    ),
     "report.work_queue": _schema(
         {
             "filter": _FILTER_PROP,
@@ -557,7 +317,7 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
                 "description": (
                     "Maximum obligations per page; defaults to the report page "
                     "default. When more obligations match, truncated=true and "
-                    "next_cursor pages the next slice (mirrors report.lifecycle)."
+                    "next_cursor pages the next slice (mirrors the internal lifecycle substrate)."
                 ),
             },
             "cursor": {

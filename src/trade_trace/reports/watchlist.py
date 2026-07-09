@@ -26,6 +26,8 @@ from trade_trace.reports._filter_support import process_filter
 from trade_trace.tools._helpers import now_iso
 
 DEFAULT_STALE_THRESHOLD_DAYS = 14
+REPORT_NAME = "report.watchlist"
+REPORT_FILTER_SUPPORT: frozenset[str] = frozenset()
 
 
 def report_watchlist(
@@ -36,7 +38,7 @@ def report_watchlist(
     stale_threshold_days: int = DEFAULT_STALE_THRESHOLD_DAYS,
 ) -> dict[str, Any]:
     rf = ReportFilter.model_validate(raw_filter or {})
-    filter_view = process_filter(rf, report="report.watchlist")
+    filter_view = process_filter(rf, report=REPORT_NAME)
     # Per bead trade-trace-bew: capture one clock instant at entry so
     # the stale threshold, per-row age_days, and the response's
     # `as_of` field all read from the same clock. Previously each
@@ -46,7 +48,7 @@ def report_watchlist(
     # ContextVar used by the deterministic-replay fixture, so the
     # report stays deterministic under fixture seeding.
     as_of = now_iso()
-    as_of_dt = datetime.fromisoformat(as_of.replace("Z", "+00:00")).astimezone(UTC)
+    as_of_dt = datetime.fromisoformat(as_of).astimezone(UTC)
 
     cur = conn.execute(
         "SELECT id, instrument_id, created_at, reason, review_by, metadata_json "
@@ -111,20 +113,20 @@ def report_watchlist(
 
 
 def _age_days(created_at: str, *, now: datetime) -> float:
-    ts = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(UTC)
+    ts = datetime.fromisoformat(created_at).astimezone(UTC)
     delta = now - ts
     return round(delta.total_seconds() / 86400, 3)
 
 
 def _is_stale(created_at: str, threshold_ts: datetime) -> bool:
-    ts = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(UTC)
+    ts = datetime.fromisoformat(created_at).astimezone(UTC)
     return ts < threshold_ts
 
 
 def _is_overdue(review_by: str | None, as_of: datetime) -> bool:
     if not review_by:
         return False
-    ts = datetime.fromisoformat(review_by.replace("Z", "+00:00")).astimezone(UTC)
+    ts = datetime.fromisoformat(review_by).astimezone(UTC)
     return ts <= as_of
 
 

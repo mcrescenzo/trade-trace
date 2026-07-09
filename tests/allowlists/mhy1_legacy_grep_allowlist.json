@@ -254,31 +254,12 @@
       "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
     },
     {
-      "pattern": "src/trade_trace/reports/compare.py",
-      "terms": [
-        "forecast_outcomes",
-        "instrument_id",
-        "thesis_id",
-        "venue_id"
-      ],
-      "category": "pm_native_with_legacy_fallback",
-      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs. forecast_outcomes added per trade-trace-u7j3: the grouped scored-row loader bulk-fetches forecast_outcomes in one IN-list query (legacy-probability fallback) instead of the per-row N+1 SELECT."
-    },
-    {
       "pattern": "src/trade_trace/reports/execution_quality.py",
       "terms": [
         "instrument_id"
       ],
       "category": "local_execution_quality_projection_compatibility",
       "reason": "execution_quality compares local receipt/intent/snapshot evidence through existing instrument links while the legacy schema remains present; it remains read-only and non-executing."
-    },
-    {
-      "pattern": "src/trade_trace/reports/operational_health.py",
-      "terms": [
-        "instrument_id"
-      ],
-      "category": "local_operational_health_filter_compatibility",
-      "reason": "operational_health reads existing local evidence tables and honors ReportFilter instrument_id where those legacy columns remain; report is read-only and non-executing."
     },
     {
       "pattern": "src/trade_trace/reports/forecast_diagnostics.py",
@@ -341,23 +322,6 @@
       ],
       "category": "legacy_report_compatibility",
       "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs."
-    },
-    {
-      "pattern": "src/trade_trace/reports/policy_candidates.py",
-      "terms": [
-        "meta_json"
-      ],
-      "category": "pm_native_with_legacy_fallback",
-      "reason": "Report now prefers memory_nodes.metadata_json and falls back to meta_json for legacy rows."
-    },
-    {
-      "pattern": "src/trade_trace/reports/pm_native.py",
-      "terms": [
-        "instrument_id",
-        "venue_id"
-      ],
-      "category": "pm_native_schema_compatibility",
-      "reason": "PM-native reports expose market IDs publicly while retaining legacy ReportFilter aliases and SQLite compatibility joins to snapshots, decisions, outcomes, and instrument-backed venue filters until destructive schema cleanup."
     },
     {
       "pattern": "src/trade_trace/reports/recall_receipts.py",
@@ -453,7 +417,7 @@
         "venue_id"
       ],
       "category": "legacy_report_compatibility",
-      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs. venue_id added per AX-049: the report.compare group_by schema description enumerates the real per-base_report allowlist (which includes venue_id) so a bot picks a valid value instead of the rejected 'tag'."
+      "reason": "Reviewed report compatibility hit deferred from destructive PM cleanup; retained for filters, joins, or diagnostic record IDs. venue_id remains explicitly reviewed because public report schemas still expose venue-scoped filters where supported."
     },
     {
       "pattern": "src/trade_trace/reports/unscored.py",
@@ -750,24 +714,8 @@
         "instrument_id",
         "thesis_id"
       ],
-      "category": "mistake_tripwire_fingerprint_keys",
-      "reason": "report.mistake_tripwire (trade-trace-4kec.10) joins theses/forecasts and optionally scopes by instrument_id to fingerprint a candidate decision against recurring-mistake tags; these are current schema columns, not legacy aliases."
-    },
-    {
-      "pattern": "src/trade_trace/reports/tool_handlers/calibration_diagnostics.py",
-      "terms": [
-        "instrument_id"
-      ],
-      "category": "mistake_tripwire_fingerprint_keys",
-      "reason": "the report.mistake_tripwire handler forwards an optional instrument_id scope (trade-trace-4kec.10); current schema column, not a legacy alias."
-    },
-    {
-      "pattern": "src/trade_trace/reports/process_quality.py",
-      "terms": [
-        "instrument_id"
-      ],
-      "category": "process_quality_scope_key",
-      "reason": "report.process_quality (trade-trace-4kec.11) optionally scopes bet-sizing process scoring to one instrument_id; current schema column, not a legacy alias."
+      "category": "tag_aggregate_keys",
+      "reason": "The retained tag aggregate helper joins theses/forecasts and scopes contributing decisions by instrument_id/thesis_id; these are current schema columns, not legacy aliases."
     },
     {
       "pattern": "src/trade_trace/tools/resolution_interpretation.py",
@@ -777,14 +725,6 @@
       ],
       "category": "resolution_interpretation_keys",
       "reason": "forecast.interpret_resolution (trade-trace-4kec.12) derives the instrument_id via forecasts->theses(thesis_id) and stores it on the interpretation; current schema columns, not legacy aliases."
-    },
-    {
-      "pattern": "src/trade_trace/reports/resolution_misreads.py",
-      "terms": [
-        "instrument_id"
-      ],
-      "category": "resolution_interpretation_keys",
-      "reason": "report.resolution_misreads (trade-trace-4kec.12) joins interpretations to markets/outcomes by instrument_id to classify contract misreads; current schema column."
     },
     {
       "pattern": "src/trade_trace/tools/market_similarity.py",

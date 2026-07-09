@@ -21,6 +21,16 @@ from trade_trace.timestamps import (
 from trade_trace.tools._helpers import now_iso
 
 REPORT_NAME = "report.strategy_health"
+REPORT_FILTER_SUPPORT = frozenset({
+    "actors.actor_id",
+    "actors.agent_id",
+    "actors.model_id",
+    "actors.environment",
+    "actors.run_id",
+    "strategy.strategy_id",
+    "time_window.created_at_gte",
+    "time_window.created_at_lt",
+})
 DEFAULT_HEALTH_MIN_SAMPLE = 5
 
 

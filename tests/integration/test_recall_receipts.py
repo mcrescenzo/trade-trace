@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from tests.integration.recall_quality_fixture import seed_recall_quality_fixture
@@ -77,6 +78,48 @@ def test_recall_receipts_tool_filters_by_context_and_consumer(home):
     receipts = dumped["data"]["recall_receipts"]
     assert [r["recall_id"] for r in receipts] == ["recall-1"]
     assert receipts[0]["node_ids_used"] == ["mem-helpful", "mem-harmful"]
+
+
+def test_recall_receipts_applies_json_filters_before_limit(home):
+    with _conn(home) as conn:
+        _insert_memory_node(conn, node_id="mem-target", valid_to=None)
+        for recall_id, node_ids, context, created_at in (
+            ("recall-nonmatch-node", ["mem-other"], {"instrument_id": "other"}, "2026-01-01T00:01:00Z"),
+            ("recall-nonmatch-context", ["mem-other"], {"instrument_id": "other"}, "2026-01-01T00:02:00Z"),
+            (
+                "recall-target",
+                ["mem-target"],
+                {"instrument_id": "inst-target", "strategy_id": "strat-target"},
+                "2026-01-01T00:03:00Z",
+            ),
+        ):
+            conn.execute(
+                """
+                INSERT INTO memory_recall_events(
+                    recall_id, query, strategies_used, node_ids_returned,
+                    context_json, limit_k, as_of, created_at, actor_id,
+                    agent_id, model_id, environment, run_id
+                )
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    recall_id, "limit filter", '["bm25"]', json.dumps(node_ids),
+                    json.dumps(context), 5, None, created_at, "actor",
+                    "agent", "model", "paper", "run",
+                ),
+            )
+        conn.commit()
+
+        by_node = report_recall_receipts(conn, node_id="mem-target", limit=1)
+        by_context = report_recall_receipts(
+            conn,
+            instrument_id="inst-target",
+            strategy_id="strat-target",
+            limit=1,
+        )
+
+    assert [r["recall_id"] for r in by_node["recall_receipts"]] == ["recall-target"]
+    assert [r["recall_id"] for r in by_context["recall_receipts"]] == ["recall-target"]
 
 
 def test_recall_receipts_require_consumer_scope_for_strong_attribution(home):

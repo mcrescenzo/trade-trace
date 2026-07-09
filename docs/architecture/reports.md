@@ -1,63 +1,46 @@
-# Reports: Filters, Drill-Down, Compare, Bundles
+# Reports: Filters, Drill-Down, Bundles
 
 > Status: **shipped**. `ReportFilter` / `ReportResult` / drill-down / `review.bundle` describe the live report surface.
 
 
 **Implementation status (v0.0.2 PM pivot):**
 
-shipped (public catalog): report.calibration,
-report.calibration_integrity, report.calibration_advisory,
-report.forecast_diagnostics,
-report.book, report.risk, report.audit, report.lifecycle,
-report.recall, report.work_queue, report.bootstrap, report.coach,
-report.strategy_health, report.process_analytics, report.compare, report.policy_candidates,
-report.filter_schema, report.market_lifecycle,
-report.resolution_quality, report.recall_receipts,
-report.memory_usefulness, report.decision_velocity, and
-report.time_decay_sharpening.
+shipped (public catalog): report.audit_readiness,
+report.autonomy_readiness, report.bootstrap, report.calibration,
+report.coach, report.current_exposure,
+report.execution_quality, report.exposure_anomalies,
+report.forecast_diagnostics, report.mistakes, report.open_positions,
+report.opportunity, report.paper_exposure,
+report.phase_gate_readiness, report.playbook_adherence, report.pnl,
+report.recall_receipts, report.reconciliation_mismatches,
+report.risk, report.strategy_health,
+report.unscored_forecasts, report.watchlist, and report.work_queue.
 
-report.recall_receipts, report.memory_usefulness, and
-report.decision_velocity were unfrozen out of the experimental
-anchored-viewers cluster into the Phase-1 public catalog (bead
-trade-trace-8g7t): all three are fully-implemented, read-only
-diagnostics over Phase-1 tables (recall telemetry, memory nodes,
-typed edges, decisions) with no Phase-2 dependency. decision_velocity
-is the sole report that emits a per-day/week decision-cadence series
-(calibration_integrity emits only static hygiene rates;
-process_analytics groups by tag/pair), so it was unfrozen rather than
-cut as redundant.
+report.recall_receipts remains in the Phase-1 public catalog. The
+memory-usefulness diagnostic is fully implemented over Phase-1 tables but is
+now composed internally by `report.bootstrap` rather than registered as a
+standalone public report. One formerly planned velocity diagnostic from that
+unfreeze cluster was also removed from the public catalog by the 2026-07 report
+census cull.
 
-report.calibration_anchored and report.calibration_terminal were
-unfrozen out of the experimental anchored-viewers cluster into the
-Phase-1 public catalog (bead trade-trace-xtdo): both are read-only
-market-baseline calibration panels (Brier skill versus the market) over
-only Phase-1 tables (forecast_snapshot_anchor / forecast_scores /
-forecasts / outcomes / snapshots) with no Phase-2 dependency. The
-after-the-fact anchor WRITER forecast.anchor_to_snapshot stays frozen in
-EXPERIMENTAL_ANCHORED_VIEWERS (see src/trade_trace/core.py) because bead
-trade-trace-4kec.9 (forecast.commit_blind / forecast.reveal_snapshot)
-superseded it; the anchor write it performed is already folded into
-forecast.add at commit time.
+The market-baseline calibration variants were removed from the public
+catalog by the 2026-07 report census cull. The anchored-market baseline
+calculation remains as an internal helper for `report.phase_gate_readiness`
+and `report.autonomy_readiness`. The after-the-fact anchor WRITER
+forecast.anchor_to_snapshot stays frozen in EXPERIMENTAL_ANCHORED_VIEWERS
+(see src/trade_trace/core.py) because bead trade-trace-4kec.9
+(forecast.commit_blind / forecast.reveal_snapshot) superseded it; the anchor
+write it performed is already folded into forecast.add at commit time. The
+report-catalog cull also removed the earlier process/meta report contracts from
+the public catalog; this shipped list is the current surface.
 
-Legacy report names such as
-report.pnl, report.watchlist, report.open_positions,
-report.current_exposure, report.exposure_anomalies,
-report.audit_readiness, report.source_quality,
-report.playbook_adherence,
-report.opportunity, and
-report.unscored_forecasts are retained
-only as hidden/legacy compatibility metadata or consolidated into the
-reports above. Deferred (post-v0.0.2): trading-native
-calibration-by-liquidity-bucket, skipped-positive-edge review, and
-broader replay/evaluation surfaces.
-
-Current-vs-target audit note (trade-trace-0rxr): the live registry still
-includes `report.mistakes` and `report.strengths`, but their shipped
-implementation is narrower than the earlier product target. They are
-legacy-compatible tag aggregate reports over decision tags with scored
-forecast Brier ranking, not the broader decision+review tag
-count/co-occurrence contract. See §4.3 for the exact shipped behavior and
-the deferred target.
+Current-vs-target audit note (trade-trace-0rxr): the live registry includes
+`report.mistakes`, and `report.coach` uses the same internal aggregate helper
+for a strengths view, but the shipped implementation is narrower than the
+earlier product target. It is a legacy-compatible tag aggregate over decision
+tags with scored forecast Brier ranking, not the broader decision+review tag
+count/co-occurrence contract. See §4.3 for the exact shipped behavior and the
+deferred target.
 
 Companion docs: [PRD.md](../PRD.md), [product-scope-v002.md](product-scope-v002.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
@@ -163,17 +146,16 @@ filter on this field"; `null` means "unset."
   `(decision_tags ∩ tags_all == tags_all) AND (decision_tags ∩ tags_any ≠ ∅)`.
 - `report.calibration` applies `actors.actor_id`, `actors.agent_id`,
   `actors.model_id`, `actors.environment`, and `actors.run_id` against
-  scored forecasts. `report.compare(base_report="calibration")` may group
-  by the same actor/run fields. Reports that do not list these fields in
+  scored forecasts. Reports that do not list these fields in
   `_filter_support.SUPPORTED_FILTER_FIELDS` reject them instead of silently
   broadening the result.
 
-### 2.2 Round-trip and `report.filter_schema`
+### 2.2 Round-trip and Schema Discovery
 
 The filter must round-trip through JSON without semantic loss. The
-`report.filter_schema` tool returns the Pydantic-generated JSON Schema
-so agents can introspect valid fields, types, and enum values without
-reading these docs.
+`tool.schema` catalog and per-tool drilldown expose report argument schemas so
+agents can introspect valid fields, types, and enum values without reading
+these docs.
 
 ## 3. `ReportResult` and `ReportGroup`
 
@@ -244,8 +226,12 @@ schema is considered.
 optional fields are backward-compatible within the same major version;
 renaming/removing fields, changing field types, changing metric meanings,
 or changing unsupported-data semantics requires a major version bump and a
-deprecation window. Report-specific `data.contract_version` MAY be present
-when the payload is embedded elsewhere, but `meta.contract_version` is the
+deprecation window. Pre-1.0 catalog consolidation may hard-delete approved
+low-value public report tool names under the narrower policy in
+[contracts.md §8.1](contracts.md#81-tool-removal-pre-10); when that happens,
+the current registry/tool listing and this document supersede historical
+`report.*` names. Report-specific `data.contract_version` MAY be present when
+the payload is embedded elsewhere, but `meta.contract_version` is the
 transport-level authority.
 
 **Requested vs applied scope.** Reports MUST distinguish caller intent from
@@ -415,10 +401,9 @@ Per-report minimums:
 |---|---|
 | `report.calibration` | 20 scored binary forecasts |
 | `report.forecast_diagnostics` | 20 scored binary forecasts |
-| `report.mistakes` / `report.strengths` | 10 tagged decisions |
+| `report.mistakes` | 10 tagged decisions |
 | `report.pnl` | 5 closed positions |
 | `report.playbook_adherence` | 10 decisions with adherence rows |
-| `report.compare` | each group must hit its own report's minimum independently |
 | `report.opportunity` | per [opportunity-analysis.md](opportunity-analysis.md) |
 | `report.risk` | per [risk-units.md](risk-units.md) |
 
@@ -445,8 +430,8 @@ See [scoring.md](scoring.md) §7 for the full panel: Brier, log score,
 ECE, sharpness, baseline (prevalence, Brier-baseline, log-score-baseline,
 skill), reliability bins.
 
-Groups: by default, one group; group-by is via `report.compare` (§4.7).
-The single-group case still emits `groups[]` for shape uniformity.
+Groups: by default, one group. The single-group case still emits `groups[]`
+for shape uniformity.
 
 **Late-recorded filter (default exclusion).** Per
 [`dogfood-protocol.md`](dogfood-protocol.md) §2.2, every score row
@@ -459,9 +444,9 @@ count) and adds a caveat to `data.caveats[]` when any were excluded.
 
 **Embedded integrity panel (MVP hardening, bead trade-trace-jzn).** Every
 `report.calibration` envelope also carries `data.integrity_diagnostics`
-— the same shape that `report.calibration_integrity` (§4.8) emits as a
-standalone surface. The embed exists so an agent reading the calibration
-panel cannot ignore the denominator/hygiene context. See §4.8.
+— the same shape as the internal calibration-integrity panel (§4.8). The embed
+exists so an agent reading the calibration panel cannot ignore the
+denominator/hygiene context. See §4.8.
 
 ### 4.2 `report.forecast_diagnostics`
 
@@ -488,16 +473,16 @@ by decision type, including non-actions such as `watch`, `skip`, `hold`, and
 `review`, plus drill-down IDs for forecasts, decisions, snapshots, outcomes,
 forecast scores, and strategies where applicable.
 
-### 4.3 `report.mistakes` / `report.strengths`
+### 4.3 `report.mistakes`
 
-Current shipped behavior: these compatibility reports group by
-`decision_tags` only and rank tags by mean binary Brier score from scored
-forecasts attached to the tagged decisions. `report.mistakes` orders worst
-mean Brier first; `report.strengths` orders best mean Brier first.
-Per-group metrics are `decision_count`, `scored_forecast_count`, and
-`mean_brier`; drill-down IDs include contributing decisions and forecasts.
-Decisions without a scored forecast still contribute to `decision_count`
-and decision drill-down IDs but not to `mean_brier`.
+Current shipped behavior: this compatibility report groups by `decision_tags`
+only and ranks tags by mean binary Brier score from scored forecasts attached to
+the tagged decisions, worst mean Brier first. Per-group metrics are
+`decision_count`, `scored_forecast_count`, and `mean_brier`; drill-down IDs
+include contributing decisions and forecasts. Decisions without a scored
+forecast still contribute to `decision_count` and decision drill-down IDs but
+not to `mean_brier`. `report.coach` reuses the same helper for its internal
+best-tag strengths view.
 
 Filter support is intentionally empty today: non-default `ReportFilter`
 fields are rejected rather than silently ignored.
@@ -547,87 +532,20 @@ and caveats. Predicate audit is deterministic and read-only: it does not
 parse rule prose, block execution, place trades, mutate playbooks, or
 provide advice.
 
-### 4.7 `report.compare`
+### 4.7 Grouping Status
 
-Inputs:
+The current public catalog has no generic cross-report grouping wrapper. Shipped
+reports expose only the filters and intrinsic `groups[]` documented in their own
+sections, and unsupported non-default filter leaves are rejected rather than
+silently broadened. Future grouped risk/calibration trend views must define their
+own allowlists, sample-warning policy, and drill-down filters before being
+documented as current runtime behavior.
 
-- `filter`: a `ReportFilter` defining the baseline candidate set.
-- `group_by`: allowlisted per base report. For `base_report='calibration'`:
-  `actor_id`, `agent_id`, `model_id`, `run_id`, `strategy_id`,
-  `decision_type`, `venue_id`, `asset_class`, `environment`,
-  `instrument_id`, `outcome_status`, `status`, `resolution_month`
-  (a `YYYY-MM` calendar-month bucket) and `resolution_week` (a
-  `YYYY-Www` calendar-week bucket) — both keyed on the outcome's
-  `resolved_at` — the longitudinal calibration-over-time trend (see
-  below). For `base_report='pnl'`: `instrument_id`, `status`,
-  `venue_id`, `asset_class`. For `base_report='risk'`: `period` (a
-  `YYYY-MM` month bucket from the decision's `created_at` — the
-  over-time expectancy series), `strategy_id`, `decision_type`.
-- `base_report`: the underlying report whose metrics to compute per
-  group. Current shipped implementation supports `calibration`, `pnl`,
-  and `risk`. Other planned kernels (`mistakes`, `playbook_adherence`)
-  remain deferred.
-
-Output: a `ReportResult` whose `groups[]` is one entry per distinct
-value of `group_by`, each with the `base_report`'s metric set. Each
-group carries its own sub-filter for drill-down. Sample warnings are
-per group; the summary aggregates over all groups.
-
-The `risk` base report is the longitudinal companion to the point-in-time
-`report.risk` (trade-trace-62fj): it reuses the same one-decision→one-position
-join and R-multiple metric kernel, but buckets resolved decisions by month
-(`period`), strategy, or decision type so expectancy can be trended "over enough
-resolved markets to mean something" (VISION). Every group carries a prominent
-`coverage` block — `{eligible_count (closed decisions), included_count
-(declared-risk decisions), missing_count, coverage_pct, denominator_kind}` — so a
-low-denominator group self-caveats; trend across groups with comparable coverage.
-Expectancy here is R-multiple based: resolved markets that never declared a
-positive risk amount are excluded from the series (raw realized-P&L expectancy for
-risk-unit-free markets is the open follow-up; today they surface via `report.pnl`).
-
-**Longitudinal calibration-over-time (trade-trace-txjn).** For
-`base_report='calibration'`, the `resolution_month` (`YYYY-MM`) and
-`resolution_week` (`YYYY-Www`) group_by keys answer the VISION's "its
-calibration curve visibly improves over MONTHS" with a single call:
-each calendar period emits the standard calibration metric panel
-(Brier / ECE / skill / sharpness), the contributing `forecasts` /
-`forecast_scores` / `outcomes` record_ids, a `sample_size`, and an
-explicit `insufficient` boolean. Read the sorted-ascending group keys
-as a drift series. Two owner decisions are baked in:
-
-- **Basis = the outcome's `resolved_at`** (not `decision_at`). The
-  calibration question is about *when a forecast was answered by the
-  world*, so the trend is keyed to resolution time. This aligns with
-  `report.autonomy_readiness`'s resolution-time `calibration_trend`
-  section; they share the resolution-time axis. (The `risk` base
-  report's `period` key deliberately uses *decision* `created_at`
-  instead, because expectancy is a property of when the bet was placed —
-  the two series are intentionally on different axes.) The bucket
-  expression is a fixed `strftime` over `o.resolved_at`, never
-  interpolated from caller input, preserving the allowlist safety
-  contract.
-- **Bucket width is selectable** via the key itself: `resolution_month`
-  for the default monthly view, `resolution_week` for finer resolution
-  when N supports it.
-
-*Low-N-per-period caveating policy.* Monthly (and especially weekly)
-buckets frequently fall below the N=20 calibration floor
-(`DEFAULT_MIN_SAMPLE`). Every under-floor period carries its own
-`sample_warning` and `insufficient: true`, and the summary `caveats`
-state the policy explicitly: read a thin period's Brier/ECE as noise,
-not as a real calibration shift, and compare only periods with
-comparable N. Autonomous consumers MUST gate on the per-period
-`insufficient` flag rather than treating a single sparse month as a
-trend reversal. This is **calendar** time and is distinct from
-`report.time_decay_sharpening`, whose buckets are hours-to-resolution
-(forecast horizon), not calendar period.
-
-### 4.8 `report.calibration_integrity` (MVP hardening)
+### 4.8 Internal calibration-integrity diagnostics (MVP hardening)
 
 Six anti-goodhart hygiene diagnostics over the journal. The same shape
-is embedded inside `report.calibration.data.integrity_diagnostics`; the
-standalone tool exists for agents that want the panel without recomputing
-calibration metrics. Diagnostics:
+is embedded inside `report.calibration.data.integrity_diagnostics` and composed
+by `report.coach`; no standalone public report is registered. Diagnostics:
 
 1. `forecast_coverage` — `{total_decisions, total_forecasts,
    scored_forecasts, denominator_coverage_pct}`. The denominator-truth
@@ -647,7 +565,7 @@ guess intent. Empty journal returns `summary.sample_warning="no_data"`.
 
 Source: bead trade-trace-jzn.
 
-### 4.9 `report.source_quality` (MVP hardening)
+### 4.9 Internal source-quality diagnostics (MVP hardening)
 
 Five provenance hygiene diagnostics over the legacy source-attachment graph and
 the v0.0.2 inline provenance projections. During the additive PM-source
@@ -672,10 +590,11 @@ fallback for old journals:
    strips these per §5.3; the diagnostic surfaces them so agents know
    which edges operate against a blank-out).
 
-Each diagnostic returns `{count, sample_ids, samples, truncated}`. The
-report is intentionally global (no `ReportFilter` input): provenance
-hygiene is a journal-level diagnostic, not a per-strategy slice. No external
-fetching, no credibility scoring.
+Each diagnostic returns `{count, sample_ids, samples, truncated}`. The panel is
+intentionally global (no `ReportFilter` input): provenance hygiene is a
+journal-level diagnostic, not a per-strategy slice. It is composed internally by
+public reports such as `report.coach` / audit-readiness paths; no standalone
+public report is registered. No external fetching, no credibility scoring.
 
 Source: bead trade-trace-l9q.
 
@@ -737,13 +656,13 @@ bundle (`report.autonomy_readiness`); see
 for the longitudinal composition (calibration trend + expectancy series +
 audit/hygiene), which is evidence-only and renders no verdict of its own.
 
-### 4.11 `report.lifecycle` (derived decision/non-action lifecycle)
+### 4.11 Internal lifecycle substrate (derived decision/non-action lifecycle)
 
-Read-only derived cases over local journal rows. This report cites source
-refs and reason/caveat codes so a stateless agent can inspect unfinished
-local process state before adding another thesis, forecast, decision,
-outcome, reflection, or adherence row. It never persists lifecycle state,
-fetches outcomes, checks broker/exchange truth, schedules follow-up, or
+Read-only derived cases over local journal rows. This internal substrate cites
+source refs and reason/caveat codes so composed public reports can surface
+unfinished local process state before an agent adds another thesis, forecast,
+decision, outcome, reflection, or adherence row. It never persists lifecycle
+state, fetches outcomes, checks broker/exchange truth, schedules follow-up, or
 produces advice.
 
 Inputs:
@@ -751,19 +670,12 @@ Inputs:
 - `as_of`: UTC read boundary for deterministic due/stale checks.
 - `stale_threshold_days`: non-negative integer; default follows the
   watchlist stale threshold.
-- `states`: optional list of lifecycle states. CLI uses `--states-json`.
+- `states`: optional list of lifecycle states for internal callers.
 - `filter`: supported `ReportFilter` fields are applied; unsupported
   non-empty fields are rejected.
 
-Examples:
-
-```bash
-tt report lifecycle --home <journal-home> --as-of 2026-05-22T00:00:00Z --states-json '["pending_review","stale"]'
-```
-
-```json
-{"tool":"report.lifecycle","args":{"as_of":"2026-05-22T00:00:00Z","states":["pending_review","stale"],"filter":{"instrument":{"instrument_id":["ins_..."]}}}}
-```
+Public callers inspect lifecycle-derived obligations through
+`report.work_queue`, `agent.next_actions`, and `report.bootstrap`.
 
 Case snippet:
 
@@ -818,24 +730,23 @@ Inputs:
   than silently broadened.
 
 Outputs include one group per matching strategy, ordered by due-review then
-slug/id. Each group carries `sections` with `{count, record_ids}` for
-decisions, review-due decisions, open unresolved forecasts, thesis
-source-reference gaps, repeated overrides (only surfaced once at least two
-override decisions exist), and policy-candidate support status. Source-quality
-checks are intentionally limited to missing thesis source references; broader
-source freshness/contradiction diagnostics remain in `report.source_quality`.
-Policy candidate support status is sourced from the shipped read-only
-`report.policy_candidates` local surface over reflection `memory_nodes` with
-`metadata_json.policy_candidate` (legacy fallback: `meta_json.policy_candidate`);
-it remains caveated and does not promote or mutate policy/playbook state.
+slug/id. Each group carries `sections` with `{count, record_ids}` for decisions,
+review-due decisions, open unresolved forecasts, thesis source-reference gaps,
+repeated overrides (only surfaced once at least two override decisions exist),
+and caveated policy-candidate support status. Source-quality checks are
+intentionally limited to missing thesis source references; broader source
+freshness/contradiction diagnostics remain embedded in composed reports such as
+`report.coach` and audit-readiness paths. Policy candidate support status is
+computed directly from reflection `memory_nodes` metadata and does not promote
+or mutate policy/playbook state.
 
 Forbidden interpretations: not a strategy ranking, performance leaderboard,
 signal/edge detector, trading advice, policy promotion engine, scheduler,
 broker/execution/wallet path, or permission to fetch live/external data.
 
-### 4.14 `report.memory_usefulness`
+### 4.14 Internal memory-usefulness diagnostics
 
-Read-only diagnostic projection over `report.recall_receipts` plus returned memory-node metadata and downstream typed edge evidence. It is a caveated evidence view only: it does not estimate causal memory value, optimize memory, score agents/models, rank trades, make profit claims, or provide advice.
+Read-only diagnostic projection over `report.recall_receipts` plus returned memory-node metadata and downstream typed edge evidence. This panel is composed internally by `report.bootstrap`; no standalone public report is registered. It is a caveated evidence view only: it does not estimate causal memory value, optimize memory, score agents/models, rank trades, make profit claims, or provide advice.
 
 Inputs mirror `report.recall_receipts` and add `memory_kind` (`observation`, `reflection`, `playbook_rule`) for node-type slicing. Supported slices/groups include strategy and instrument from recall context; agent, model, run, and retrieval strategy from the recall event; memory kind; confidence bucket; age bucket; and citation/use status. Age/decay/confidence fields are emitted when available on `memory_nodes`; outcome impact is reported as not measurable unless explicit local edge evidence supports a narrow caveated control.
 
@@ -902,60 +813,6 @@ interpretations are the same as lifecycle plus no task-manager semantics:
 no scheduler/daemon/reminder, no assignment/claiming, no notification, no
 dashboard workflow, no advice/signal/ranking/profit language, no broker or
 wallet action, and no source/market/outcome fetching.
-
-### 4.16 `report.rule_lineage` (rule -> reflection -> trades, one query path)
-
-`report.rule_lineage(*, rule_node_id?, playbook_version_id?)` operationalizes
-the VISION clause "trace any rule in its playbook back through the reflection
-that proposed it to the trades that taught it" (bead trade-trace-a5dy) as a
-single deterministic, read-only query path. Today that provenance is split
-across three heterogeneous mechanisms:
-
-- `playbook_versions.provenance_reflection_node_id` — a **column** linking a
-  rule-version to the reflection that motivated it (written by
-  `playbook.propose_version`).
-- the typed `edges` table — the reflection's **outgoing** `about` /
-  `derived_from` / `supports` / `contradicts` / `supersedes` edges to
-  decisions/theses/forecasts/outcomes (the trades and judgments that taught the
-  rule), plus the **consumer→memory use edges** (`decision` / `thesis` /
-  `forecast` / `outcome` / `review` / `playbook_version` rows pointing AT the
-  reflection per §9.1 of `memory-layer.md`).
-- `decision_playbook_rules` — the per-`(decision, version, rule)` adherence
-  rows. This table is also the **only** place a `playbook_rule` node is
-  associated with a `playbook_version` today.
-
-Exactly one of `rule_node_id` (a `playbook_rule` memory-node id) or
-`playbook_version_id` is required.
-
-- **Anchored at a `playbook_version`**: that one version is walked, and the
-  rules it evaluated are surfaced.
-- **Anchored at a `playbook_rule` node**: every version that ever evaluated that
-  rule (via an adherence row) is walked. Because **rule-node `derived_from`
-  edges are not auto-written today**, the version↔rule bridge runs through
-  `decision_playbook_rules`. A rule with no adherence row on any version yields
-  the explicit gap `rule_not_linked_to_any_version` rather than a silent empty
-  result. (Owner open question: confirm the canonical lineage anchor; the report
-  bridges both directions until then.)
-
-Each chain carries the contributing `record_ids` at every hop
-(`playbook_versions`, `reflection_nodes`, `decisions`, `forecasts`, `outcomes`,
-`theses`, `rule_nodes`, `adherence`) and an explicit `gaps` list where a link is
-missing (`provenance_reflection_missing`,
-`reflection_has_no_downstream_edges`, `reflection_not_used_downstream`,
-`no_adherence_rows`, `version_not_found`). Missing links are **declared, never
-dropped**. Read-only, deterministic, local-only: no writes, fetch, execution, or
-advice.
-
-Examples:
-
-```bash
-tt report rule_lineage --home <journal-home> --playbook-version-id pv_123
-tt report rule_lineage --home <journal-home> --rule-node-id mem_rule_abc
-```
-
-```json
-{"tool":"report.rule_lineage","args":{"playbook_version_id":"pv_123"}}
-```
 
 ## 5. `review.bundle`
 
@@ -1261,263 +1118,12 @@ Mandatory section contract:
   introduces no `tt console serve`, `trade_trace.console`, browser dashboard,
   or frontend scope.
 
-## 6A. Shipped partial + target contract: `report.process_analytics`
+## 6A. Removed Process/Meta Report Contracts
 
-> Status: **shipped / partial**. The live `report.process_analytics`
-> implementation is read-only, local-only, and decision-tags-only: it ships
-> tag frequency and tag-pair co-occurrence over filtered decision rows with
-> coverage, metric definitions, examples, caveats, and contributing decision
-> ids. Review classification, process-cost, cost-coverage, P&L, R-multiple,
-> fees/slippage, and opportunity-path analytics remain explicit target-only
-> dimensions/features that the runtime reports as unsupported rather than
-> silently inventing. This section defines both the shipped partial behavior and
-> the broader read-only backend/reporting contract that future implementations MUST
-> satisfy before any non-UI consumer claims the unsupported dimensions. It is a
-> distinct report contract, not a broadening of `report.mistakes` or `report.strengths`.
-
-### 6A.1 Inputs
-
-`report.process_analytics` accepts one request object. Unknown fields are
-rejected. All timestamps are UTC ISO 8601 with millisecond precision. The
-request is deterministic for a fixed local database snapshot and `as_of`.
-
-```jsonc
-{
-  "filter": { /* ReportFilter-compatible scope */ },
-  "dimensions": [
-    "tag_frequency",
-    "tag_pair_cooccurrence",
-    "review_classification",
-    "decision_type",
-    "strategy"
-  ],
-  "group_by": ["tag_frequency"],
-  "metrics": [
-    "decision_count",
-    "review_count",
-    "tag_count",
-    "pair_count",
-    "support",
-    "jaccard"
-  ],
-  "features": ["examples", "contributing_ids", "coverage", "cost_family"],
-  "include_costs": false,
-  "min_sample": 10,
-  "max_groups": 100,
-  "max_record_ids_per_group": 1000,
-  "as_of": "2026-02-02T00:00:00.000Z"
-}
-```
-
-Input rules:
-
-- `filter` is the caller's ReportFilter-compatible scope. The response MUST
-  echo it in `requested_scope.filter` and record the exact supported subset in
-  `applied_scope.filter`. A requested non-empty filter path that cannot be
-  applied MUST be rejected with `VALIDATION_ERROR` or listed in
-  `unsupported_filter_paths`; it MUST NOT be silently ignored.
-- `dimensions` names the analytic dimensions the caller wants available in
-  groups or sections. Supported target dimensions are `tag_frequency`,
-  `tag_pair_cooccurrence`, `review_classification`, `decision_type`,
-  `strategy`, and actor/run/model/environment dimensions (`actor_id`,
-  `agent_id`, `run_id`, `model_id`, `environment`) only where the local
-  SQL/read-model columns exist for the contributing row kinds.
-- `group_by` controls group keys. Multi-dimensional grouping is allowed only
-  when the implementation lists the exact combination in `supported_features`;
-  otherwise each unsupported grouping must appear as a machine-readable
-  `unsupported_feature` object under `unsupported_features`.
-- `metrics` declares requested metrics. Stable target metrics are
-  `decision_count`, `review_count`, `tag_count`, `pair_count`, `support`, and
-  `jaccard`. `lift` and `confidence` are optional metrics: an implementation
-  may expose them only with explicit `metric_definitions`, denominator notes,
-  and `DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM` caveats.
-- `features` declares optional report features such as examples, contributing
-  IDs, coverage, cost family, lift/confidence, or actor panels. Unsupported
-  features require machine-readable metadata; omission is not enough.
-- `include_costs` requests the cost family. If false, cost metrics appear as
-  `omitted_by_request` or are absent from requested metrics. If true, every
-  unavailable cost component MUST be represented by `unsupported_features` or
-  `insufficient_data`, never by zero-filled values.
-- `min_sample`, `max_groups`, and `max_record_ids_per_group` control warning
-  and truncation behavior only. They MUST NOT change metric denominators unless
-  a metric explicitly declares itself page-local.
-- `as_of` is required when reproducibility depends on mutable local rows or
-  projections, including review classification changes, redaction state,
-  position projections, outcome appends, or strategy metadata. If `as_of`
-  cannot be honored, reject the request or emit unsupported metadata.
-
-### 6A.2 Dimensions, metrics, and cost-family semantics
-
-The process analytics contract is descriptive and diagnostic over local rows:
-
-- `tag_frequency`: one group per normalized decision or review tag, with
-  counts, support, coverage, contributing IDs, and examples.
-- `tag_pair_cooccurrence`: unordered normalized tag pairs within a single
-  eligible record, or across an explicitly documented decision/review join
-  boundary. The pair key order is deterministic (`tag_a <= tag_b`).
-- `review_classification`: groups over stored review classes, review tags, or
-  review outcomes only where the read model has those fields.
-- `decision_type`: groups over `decisions.type` values.
-- `strategy`: groups over `strategy.strategy_id`, including the `"__none__"`
-  sentinel for rows without a strategy when supported.
-- `actor_id`, `agent_id`, `run_id`, `model_id`, and `environment`: allowed only
-  for row kinds whose local tables carry those columns. Mixed decision/review
-  groups MUST report per-kind coverage when a dimension is unavailable for one
-  side.
-
-Metric definitions:
-
-- `decision_count`: count of distinct decisions in the applied group.
-- `review_count`: count of distinct reviews in the applied group.
-- `tag_count`: count of tag occurrences contributing to a tag-frequency group.
-- `pair_count`: count of eligible records containing both tags in a pair group.
-- `support`: group count divided by the eligible denominator declared in
-  `metric_definitions.denominator_kind`; for example tag occurrences over
-  eligible decisions, eligible reviews, or eligible decision+review records.
-- `jaccard`: `pair_count / count(records containing tag_a OR tag_b)` for the
-  same eligible denominator. If the denominator cannot be materialized, return
-  `null` plus `insufficient_data` metadata.
-- `lift`: optional diagnostic only, defined as
-  `support(tag_a AND tag_b) / (support(tag_a) * support(tag_b))` over the same
-  denominator. It is not causal evidence or advice.
-- `confidence`: optional diagnostic only, defined directionally as
-  `pair_count(tag_a AND tag_b) / count(records containing antecedent_tag)`;
-  the response must name the antecedent and consequent tags.
-
-Cost family semantics are local-only and coverage-caveated:
-
-- `local_pnl_projection`: historical P&L projection only from local
-  `positions`/`position_events`/decision-linked rows where the read model can
-  compute it. It is not broker truth and does not imply live exposure.
-- `r_multiple`: computed only where a declared risk unit or equivalent local
-  risk row exists. Missing declared risk yields `insufficient_data`.
-- `fees_slippage`: sums or averages only stored `fees` and `slippage` fields.
-  Missing fields are coverage gaps, not zeros unless the row explicitly stores
-  zero.
-- `opportunity_path_diagnostics`: allowed only where local snapshots or local
-  opportunity/path rows support a diagnostic. No invented counterfactual profit,
-  no broker truth, no external market/source/outcome fetch, no advice, and no
-  alpha/edge or profitability claim is permitted.
-
-### 6A.3 Output envelope
-
-The response uses the shared §3.0 report conventions. Groups are standard
-report groups with metrics, coverage, caveats/sample warnings, contributing
-IDs, examples, unsupported feature metadata, and explicit truncation.
-
-```jsonc
-{
-  "ok": true,
-  "data": {
-    "contract_version": "1.0",
-    "requested_scope": {
-      "filter": {"decision": {"tags_any": ["liquidity-ignored"]}},
-      "dimensions": ["tag_pair_cooccurrence", "decision_type"],
-      "group_by": ["tag_pair_cooccurrence"],
-      "metrics": ["decision_count", "pair_count", "support", "jaccard", "local_pnl_projection"],
-      "features": ["coverage", "examples", "contributing_ids", "cost_family"],
-      "include_costs": true,
-      "min_sample": 10,
-      "max_groups": 50,
-      "max_record_ids_per_group": 100,
-      "as_of": "2026-02-02T00:00:00.000Z"
-    },
-    "applied_scope": {
-      "filter": {"decision": {"tags_any": ["liquidity-ignored"]}},
-      "dimensions": ["tag_pair_cooccurrence"],
-      "group_by": ["tag_pair_cooccurrence"],
-      "metrics": ["decision_count", "pair_count", "support", "jaccard"],
-      "include_costs": false,
-      "as_of": "2026-02-02T00:00:00.000Z"
-    },
-    "supported_filter_paths": ["decision.tags_any", "decision.tags_all", "strategy.strategy_id", "time_window.decision_at_gte", "time_window.decision_at_lt"],
-    "unsupported_filter_paths": [],
-    "supported_features": ["tag_pair_cooccurrence", "coverage", "examples", "contributing_ids"],
-    "unsupported_features": [
-      {
-        "unsupported_feature": "cost_family.local_pnl_projection",
-        "path": "metrics.local_pnl_projection",
-        "reason_code": "cost_read_model_not_available",
-        "message": "local P&L projection is unavailable for this journal/read model",
-        "requested_value": true,
-        "applied": false
-      },
-      {
-        "unsupported_feature": "dimension.decision_type",
-        "path": "dimensions.decision_type",
-        "reason_code": "multi_dimension_grouping_not_supported",
-        "requested_value": "decision_type",
-        "applied": false
-      }
-    ],
-    "metric_definitions": {
-      "pair_count": "count of eligible records containing both normalized tags",
-      "support": "pair_count divided by eligible decision denominator",
-      "jaccard": "pair_count divided by records containing either tag in the same eligible denominator"
-    },
-    "coverage": {"eligible_count": 42, "included_count": 39, "missing_count": 3, "coverage_pct": 92.9, "denominator_kind": "decisions"},
-    "groups": [
-      {
-        "key": "liquidity-ignored|late-source",
-        "label": "Tag pair liquidity-ignored + late-source",
-        "dimensions": {"tag_a": "liquidity-ignored", "tag_b": "late-source"},
-        "metrics": {"decision_count": 7, "review_count": 0, "tag_count": null, "pair_count": 7, "support": 0.1667, "jaccard": 0.3043, "local_pnl_projection": null},
-        "filter": {"decision": {"tags_all": ["liquidity-ignored", "late-source"]}},
-        "coverage": {"eligible_count": 42, "included_count": 7, "missing_count": 0, "coverage_pct": 100.0, "denominator_kind": "decisions"},
-        "record_ids": {"decisions": ["dec_..."], "reviews": [], "forecasts": [], "outcomes": [], "sources": []},
-        "examples": [{"kind": "decision", "id": "dec_...", "summary": "local row excerpt"}],
-        "sample_size": 7,
-        "sample_warning": "only 7 records; process analytics is unreliable below min_sample=10",
-        "caveat_codes": ["LOCAL_ROWS_ONLY", "LOW_SAMPLE_SIZE", "PARTIAL_COVERAGE", "DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM"],
-        "unsupported_features": [{"unsupported_feature": "cost_family.local_pnl_projection", "reason_code": "cost_read_model_not_available", "applied": false}],
-        "truncated": false
-      }
-    ],
-    "caveat_codes": ["LOCAL_ROWS_ONLY", "DIAGNOSTIC_ONLY_NO_CAUSAL_CLAIM", "PARTIAL_COVERAGE"],
-    "sample_warning": "some requested metrics/features are unsupported or below sample thresholds"
-  },
-  "meta": {"tool": "report.process_analytics", "contract_version": "1.0", "truncated": false, "next_cursor": null}
-}
-```
-
-Output invariants:
-
-- Every included metric MUST have `metric_definitions`, coverage, caveats where
-  applicable, and contributing `record_ids` or a machine-readable
-  `record_ids_unavailable` reason.
-- Unsupported analytics MUST appear in `unsupported_features`,
-  `unsupported_filter_paths`, or `insufficient_data` metadata. Silent omission,
-  zero-filled metrics, fabricated empty groups, and unscoped global fallbacks
-  are contract violations.
-- Redaction follows `review.bundle` §5.3. Source text is not needed for tag
-  counts unless the implementation explicitly adds a text-derived feature; if
-  redaction prevents a feature from being computed, emit coverage and caveats.
-- Ordering is deterministic: primary sort by requested metric descending (or
-  documented report default), then stable group key. `max_groups` truncation
-  sets group/report `truncated` and `meta.next_cursor` without changing metric
-  denominators.
-
-### 6A.4 Compatibility and boundaries
-
-- Current shipped `report.mistakes` and `report.strengths` semantics remain unchanged:
-  they group decision tags by mean Brier over scored forecasts and
-  reject non-empty filters. They must not be silently broadened into decision +
-  review tag counts, co-occurrence, costs, strategy panels, or actor panels.
-- `report.process_analytics` is the target home for backend process frequency,
-  co-occurrence, and cost-coverage analytics when implemented. Compatibility
-  aliases from older product language MAY point here only after preserving the
-  legacy `report.mistakes` / `report.strengths` behavior or documenting a major
-  version migration.
-- The contract is read-only and local-only. It MUST NOT fetch external market,
-  source, outcome, broker, wallet, or execution data; call brokers; place or cancel orders;
-  schedule alerts; emit trading advice; provide buy/sell/hold signals; claim
-  alpha/edge; or make profit claims.
-- Cost output is diagnostic process context only. It may say what local stored
-  rows imply under explicitly defined formulas and coverage, but it must not
-  claim true realized broker P&L, missed profit, optimal counterfactual trades,
-  or expected future performance.
-- This target contract does not make Console/UI claims and introduces no
-  `tt console serve`, `trade_trace.console`, browser dashboard, or frontend scope.
+The 2026-07 report-catalog cull removed several process/meta standalone report
+contracts from the public catalog. Current process diagnostics remain available
+through the shipped reports listed at the top of this document and through
+internal consumers that do not dispatch deleted public report tools.
 
 ## 7. Bucketing Policies
 
@@ -1540,9 +1146,8 @@ falls before or at `decision.created_at`.
 
 ```bash
 trade-trace report calibration --filter-json filter.json
-trade-trace report compare --base-report calibration --group-by model_id --filter-json filter.json
 trade-trace review bundle --filter-json filter.json --max-records 25 --no-include-sources
-trade-trace report filter_schema    # prints the JSON schema for ReportFilter
+trade-trace tool schema --tool report.calibration
 trade-trace report bootstrap --as-of 2026-01-20T00:00:00Z --filter-json '{}' --budgets-json '{"max_chars_total":24000}'
 ```
 
@@ -1559,10 +1164,9 @@ orders, or generate trading recommendations.
 1. **Custom bucketing.** §7 ships fixed thresholds for reproducibility.
    If dogfood shows the defaults are wrong for prediction markets vs.
    equities, expose per-asset-class threshold overrides via config.
-2. **Composable group_by.** `report.compare` accepts one `group_by`;
-   two-level group-by (e.g. `model_id × strategy_id`) is a P1+
-   enhancement. Sub-filters already compose, so the implementation is a
-   straightforward extension.
+2. **Composable group_by.** A future grouped-report API may need two-level
+   group-by (e.g. `model_id × strategy_id`). Sub-filters already compose, but
+   each shipped grouping still needs an explicit allowlist and low-N policy.
 3. **`bundle_hash` canonicalization.** §5.2 promises a stable hash;
    the canonical JSON form (key ordering, whitespace stripping,
    timestamp precision) needs a one-line policy. Recommended: RFC 8785

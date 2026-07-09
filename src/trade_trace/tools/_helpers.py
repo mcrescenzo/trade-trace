@@ -16,7 +16,9 @@ from trade_trace._permissions import chmod_user_only_dir
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext
 from trade_trace.events.unit_of_work import UnitOfWork
+from trade_trace.security.credential_keys import PROJECT_CREDENTIAL_KEYS
 from trade_trace.storage import open_database, resolve_home
+from trade_trace.storage.database import ReadOnlyDatabaseError, open_database_readonly
 from trade_trace.storage.paths import HomePathValidationError, db_path
 from trade_trace.timestamps import TimestampValidationError, to_utc_iso8601
 from trade_trace.tools.errors import ToolError
@@ -29,6 +31,12 @@ from trade_trace.tools.errors import ToolError
 CONFIDENCE_LABELS: tuple[str, ...] = (
     "very_low", "low", "medium", "high", "very_high",
 )
+
+
+def canonical_json(value: Any) -> str:
+    """Return deterministic compact JSON for material-hash inputs."""
+
+    return json.dumps(value if value is not None else {}, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def validate_confidence_label(value: Any) -> None:
@@ -133,6 +141,27 @@ def open_db_for_args(args: dict[str, Any]):
     return open_database(path, create_parent=False)
 
 
+def open_ro_db_for_args(args: dict[str, Any]):
+    """Resolve $TRADE_TRACE_HOME and open a DB connection for read-only access."""
+
+    home = _resolve_home_arg(args)
+    path = db_path(home)
+    if not path.exists():
+        raise ToolError(
+            ErrorCode.STORAGE_ERROR,
+            "journal not initialized; run `tt journal init` first",
+            details={"home": str(home), "db_path": str(path)},
+        )
+    try:
+        return open_database_readonly(path)
+    except ReadOnlyDatabaseError as exc:
+        raise ToolError(
+            ErrorCode.STORAGE_ERROR,
+            str(exc),
+            details={"home": str(home), "db_path": str(path), "reason": exc.reason},
+        ) from exc
+
+
 @contextmanager
 def db_for_args(args: dict[str, Any]) -> Iterator[Any]:
     """Context-manager form of `open_db_for_args` for write handlers.
@@ -150,6 +179,17 @@ def db_for_args(args: dict[str, Any]) -> Iterator[Any]:
         db.close()
 
 
+@contextmanager
+def ro_db_for_args(args: dict[str, Any]) -> Iterator[Any]:
+    """Context-manager form of `open_ro_db_for_args` for read-only handlers."""
+
+    db = open_ro_db_for_args(args)
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 def require(args: dict[str, Any], field: str) -> Any:
     """Return args[field] or raise VALIDATION_ERROR with details.field set."""
 
@@ -160,6 +200,21 @@ def require(args: dict[str, Any], field: str) -> Any:
             details={"field": field},
         )
     return args[field]
+
+
+def validate_fk_refs(
+    conn: Any,
+    args: dict[str, Any],
+    ref_tables: dict[str, str],
+) -> list[dict[str, str]]:
+    """Return missing foreign-key-like references for simple id fields."""
+
+    missing: list[dict[str, str]] = []
+    for field, table in ref_tables.items():
+        value = args.get(field)
+        if value and conn.execute(f"SELECT 1 FROM {table} WHERE id = ?", (value,)).fetchone() is None:
+            missing.append({"field": field, "id": str(value), "table": table})
+    return missing
 
 
 def parse_int_arg(
@@ -222,18 +277,6 @@ def parse_float_arg(
     return value
 
 
-def forbidden(args: dict[str, Any], field: str) -> None:
-    """Raise VALIDATION_ERROR if `args[field]` is set (used for the decision
-    required-field matrix where some fields are forbidden per type)."""
-
-    if field in args and args[field] is not None:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            f"{field} is forbidden for this decision type",
-            details={"field": field, "decision_type": args.get("type")},
-        )
-
-
 _TIMESTAMP_EXPECTED_FORMAT = (
     "UTC ISO 8601 with millisecond precision (e.g., 2026-05-18T15:30:00.000Z); "
     "operability.md §2.1"
@@ -272,30 +315,6 @@ def normalize_timestamp(args: dict[str, Any], field: str, *, required: bool = Fa
         ) from exc
 
 
-_CREDENTIAL_METADATA_KEY_PARTS = (
-    "api_key",
-    "access_token",
-    "refresh_token",
-    "auth_token",
-    "bearer_token",
-    "secret_key",
-    "client_secret",
-    "password",
-    "passphrase",
-    "wallet_seed",
-    "wallet_seed_phrase",
-    "seed_phrase",
-    "mnemonic",
-    "private_key",
-    "signing" + "_key",
-    "signing_secret",
-    "broker_token",
-    "trading_password",
-    "session_token",
-    "oauth_token",
-)
-
-
 def reject_credential_metadata(value: Any, *, field: str) -> None:
     """Reject explicit metadata JSON that tries to carry credentials.
 
@@ -309,15 +328,14 @@ def reject_credential_metadata(value: Any, *, field: str) -> None:
     if isinstance(value, dict):
         for key, child in value.items():
             key_text = str(key).lower()
-            for forbidden in _CREDENTIAL_METADATA_KEY_PARTS:
-                if forbidden in key_text:
-                    raise ToolError(
-                        ErrorCode.VALIDATION_ERROR,
-                        f"{field} contains credential-shaped key "
-                        f"{key!r}; strip credentials before submitting",
-                        details={"field": field,
-                                 "credential_key": str(key)},
-                    )
+            if any(forbidden in key_text for forbidden in PROJECT_CREDENTIAL_KEYS):
+                raise ToolError(
+                    ErrorCode.VALIDATION_ERROR,
+                    f"{field} contains credential-shaped key "
+                    f"{key!r}; strip credentials before submitting",
+                    details={"field": field,
+                             "credential_key": str(key)},
+                )
             reject_credential_metadata(child, field=field)
         return
     if isinstance(value, list):

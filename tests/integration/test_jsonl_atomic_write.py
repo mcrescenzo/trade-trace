@@ -9,13 +9,16 @@ from pathlib import Path
 
 from trade_trace.exporter import (
     FINAL_SUFFIX,
-    RESERVED_TRANSPORT_KEYS,
     TMP_SUFFIX,
     cleanup_orphan_tmp_files,
     iter_jsonl_files,
     jsonl_path,
     strip_transport_keys,
     write_event_atomic,
+)
+
+_RESERVED_TRANSPORT_KEYS = frozenset(
+    {"_event_id", "_event_type", "_actor_id", "_created_at", "_contract_version"}
 )
 
 
@@ -52,7 +55,7 @@ def test_jsonl_line_carries_transport_metadata(tmp_path: Path):
         payload={"name": "Polymarket", "kind": "prediction_market"},
     )
     line = json.loads(path.read_text())
-    for key in RESERVED_TRANSPORT_KEYS:
+    for key in _RESERVED_TRANSPORT_KEYS:
         assert key in line
     assert line["_event_id"] == 7
     assert line["_event_type"] == "venue.created"
@@ -135,7 +138,7 @@ def test_atomic_write_deterministic_canonical_form(tmp_path: Path):
 def test_reserved_transport_keys_documented():
     """The reserved set is the canonical 5 per operability.md §9.2."""
 
-    assert RESERVED_TRANSPORT_KEYS == frozenset(
+    assert _RESERVED_TRANSPORT_KEYS == frozenset(
         {"_event_id", "_event_type", "_actor_id", "_created_at", "_contract_version"}
     )
 

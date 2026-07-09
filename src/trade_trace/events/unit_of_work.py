@@ -108,8 +108,5 @@ def transaction(conn: sqlite3.Connection) -> Iterator[UnitOfWork]:
     """Functional equivalent of `with UnitOfWork(conn) as uow:`."""
 
     uow = UnitOfWork(conn)
-    try:
-        with uow as inner:
-            yield inner
-    finally:
-        pass
+    with uow as inner:
+        yield inner

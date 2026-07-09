@@ -332,9 +332,7 @@ def test_report_risk_surfaces_prominent_coverage_block(home):
     assert coverage["coverage_pct"] == 50.0
     assert coverage["denominator_kind"] == "closed_decisions"
     assert "declared a positive risk amount" in coverage["note"]
-    # prominent pointer to the over-time / per-strategy expectancy series
-    assert "report.compare" in summary["longitudinal_expectancy_report"]
-    assert "period" in summary["longitudinal_expectancy_report"]
+    assert summary["longitudinal_expectancy_report"] is None
     # exactly-0.5 coverage does NOT trip the below-0.5 caveat (boundary is
     # exclusive); the missing-risk caveat still fires.
     assert not any("coverage is below 0.5" in c for c in summary["caveats"])

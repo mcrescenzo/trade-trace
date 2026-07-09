@@ -33,6 +33,7 @@ import sqlite3
 import struct
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Final
 
 from trade_trace.contracts.errors import ErrorCode
@@ -76,6 +77,16 @@ _EMBEDDING_IN_CLAUSE_CHUNK: Final[int] = 900
 """Max node_ids per `node_id IN (...)` chunk in `_semantic_rank` so the
 bound-parameter count (chunk + 1 for `provider`) stays under SQLite's default
 `SQLITE_MAX_VARIABLE_NUMBER` of 999 on older builds (trade-trace-zsi8)."""
+
+_LOCAL_ONNX_EMBEDDER_CACHE: dict[Path, Any] = {}
+_ScoreRow = tuple[str, float] | tuple[str, float, Any]
+
+
+def _score_sort_key(row: _ScoreRow) -> tuple[float, str]:
+    """Sort memory-score pairs by score descending, then id ascending."""
+
+    return -row[1], row[0]
+
 
 NODE_TYPES: Final[tuple[str, ...]] = ("observation", "reflection", "playbook_rule")
 
@@ -941,9 +952,8 @@ def _verify_endpoint_exists(
 
     table = ENDPOINT_TABLES.get(target_kind)
     if table is None:
-        # `review`, `playbook_version`, `strategy` — no backing table in
-        # MVP. Accept without existence check; FK constraints will catch
-        # later if/when those tables land.
+        # review has no backing table; review.bundle produces ephemeral packets
+        # rather than persisted rows. Accept without existence check.
         return
     if conn is not None:
         row = conn.execute(
@@ -1217,9 +1227,9 @@ def _score_ranked_nodes(conn: sqlite3.Connection, rankings: dict[str, list[str]]
             boost *= SUPERSESSION_DISCOUNT
         scored.append((node_id, base_score * boost, provenance))
     if limit is None:
-        scored.sort(key=lambda r: (-r[1], r[0]))
+        scored.sort(key=_score_sort_key)
         return scored
-    return heapq.nsmallest(limit, scored, key=lambda r: (-r[1], r[0]))
+    return heapq.nsmallest(limit, scored, key=_score_sort_key)
 
 
 def _effective_confidence(row: dict[str, Any], *, as_of_iso: str) -> float:
@@ -1252,8 +1262,8 @@ def _effective_confidence(row: dict[str, Any], *, as_of_iso: str) -> float:
     created_at = row.get("created_at")
     if not created_at:
         return max(0.0, min(1.0, float(confidence_base)))
-    created_dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
-    as_of_dt = datetime.fromisoformat(as_of_iso.replace("Z", "+00:00"))
+    created_dt = datetime.fromisoformat(str(created_at))
+    as_of_dt = datetime.fromisoformat(as_of_iso)
     age_days = max(0.0, (as_of_dt - created_dt).total_seconds() / 86400.0)
     effective = float(confidence_base) * math.exp(-float(decay_rate) * age_days)
     return max(0.0, min(1.0, effective))
@@ -1303,26 +1313,21 @@ def _write_recall_event_and_stats(conn: sqlite3.Connection, *, items: list[dict[
     recall_id = new_id("rcl")
     created_at = now_iso()
     node_ids_returned = [it["id"] for it in items]
-    conn.execute("BEGIN")
-    try:
-        conn.execute(
+    with UnitOfWork(conn) as uow:
+        uow.execute(
             "INSERT INTO memory_recall_events(recall_id, query, strategies_used, node_ids_returned, context_json, limit_k, as_of, created_at, actor_id, agent_id, model_id, environment, run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (recall_id, options.query, json.dumps(list(rankings.keys()), sort_keys=True), json.dumps(node_ids_returned, sort_keys=False), json.dumps(options.context, sort_keys=True), options.limit_k, options.as_of, created_at, ctx.actor_id, seg["agent_id"], seg["model_id"], seg["environment"], seg["run_id"]),
         )
         for node_id in node_ids_returned:
-            conn.execute(
+            uow.execute(
                 "INSERT INTO memory_node_stats(node_id, recall_count, last_recalled_at) VALUES (?, 1, ?) ON CONFLICT(node_id) DO UPDATE SET recall_count = memory_node_stats.recall_count + 1, last_recalled_at = excluded.last_recalled_at",
                 (node_id, created_at),
             )
-        conn.execute("COMMIT")
-    except Exception:
-        conn.execute("ROLLBACK")
-        raise
     return recall_id, created_at
 
 
 def _build_recall_response(*, recall_id: str, rankings: dict[str, list[str]], options: RecallOptions, items: list[dict[str, Any]], in_scope_rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    response: dict[str, Any] = {"recall_id": recall_id, "query": options.query, "strategies_used": sorted(rankings.keys()), "k": options.limit_k, "as_of": options.as_of, "mode": options.mode, "items": items, "total_in_scope": len(in_scope_rows)}
+    response: dict[str, Any] = {"recall_id": recall_id, "query": options.query, "strategies_used": sorted(rankings), "k": options.limit_k, "as_of": options.as_of, "mode": options.mode, "items": items, "total_in_scope": len(in_scope_rows)}
     if options.mode == "per_strategy":
         response["per_strategy"] = {strategy: ranked[:options.limit_k] for strategy, ranked in rankings.items()}
     return response
@@ -1332,7 +1337,7 @@ def _set_recall_meta_hints(ctx: ToolContext, *, created_at: str, rankings: dict[
     from trade_trace.version import __version__
     ctx.meta_hints["generated_at"] = created_at
     ctx.meta_hints["package_version"] = __version__
-    ctx.meta_hints["retrieval_strategy_metadata"] = {"strategies_used": sorted(rankings.keys()), "k": options.limit_k, "max_chars": options.max_chars, "k_rrf": K_RRF, "importance_boost_slope": IMPORTANCE_BOOST_SLOPE, "supersession_discount": SUPERSESSION_DISCOUNT}
+    ctx.meta_hints["retrieval_strategy_metadata"] = {"strategies_used": sorted(rankings), "k": options.limit_k, "max_chars": options.max_chars, "k_rrf": K_RRF, "importance_boost_slope": IMPORTANCE_BOOST_SLOPE, "supersession_discount": SUPERSESSION_DISCOUNT}
 
 
 # -- ranking helpers -----------------------------------------------
@@ -1538,7 +1543,7 @@ def _temporal_rank(
     """Rank in-scope nodes by recency relative to `as_of` (or now)."""
 
     effective = as_of or now_iso()
-    effective_dt = datetime.fromisoformat(effective.replace("Z", "+00:00"))
+    effective_dt = datetime.fromisoformat(effective)
     scored = []
     for node_id, row in in_scope.items():
         created_dt = datetime.fromisoformat(
@@ -1661,11 +1666,15 @@ def _query_embedding(query: str, *, dim: int, provider: str, model_id: str) -> l
         return []
     try:
         from trade_trace.models.embeddings import LocalEmbeddingUnavailable, LocalOnnxEmbedder
-    except Exception:
+    except Exception:  # noqa: BLE001 - optional embedding dependency absence disables semantic search
         return []
     try:
         model_dir = _local_model_dir_for_connection(_ACTIVE_SEMANTIC_CONNECTION)
-        vector = LocalOnnxEmbedder(model_dir).embed(query)
+        embedder = _LOCAL_ONNX_EMBEDDER_CACHE.get(model_dir)
+        if embedder is None:
+            embedder = LocalOnnxEmbedder(model_dir)
+            _LOCAL_ONNX_EMBEDDER_CACHE[model_dir] = embedder
+        vector = embedder.embed(query)
     except (LocalEmbeddingUnavailable, ToolError, OSError, sqlite3.Error):
         return []
     if dim and len(vector) != dim:
@@ -1683,8 +1692,6 @@ def _local_model_dir_for_connection(conn: sqlite3.Connection | None) -> Any:
     row = conn.execute("PRAGMA database_list").fetchone()
     if row is None or not row[2]:
         raise ToolError(ErrorCode.STORAGE_ERROR, "database path is unavailable")
-    from pathlib import Path
-
     home = Path(str(row[2])).resolve().parent.parent
     return home / "models" / "bge-small-en-v1.5"
 
@@ -1783,7 +1790,7 @@ def _semantic_rank(
             scored.append((node_id, _cosine_with_query_norm(query_vec, query_norm, vec)))
     finally:
         _ACTIVE_SEMANTIC_CONNECTION = previous_conn
-    scored.sort(key=lambda r: (-r[1], r[0]))
+    scored.sort(key=_score_sort_key)
     return [node_id for node_id, score in scored if score > 0.0]
 
 
@@ -1807,8 +1814,8 @@ def _rrf_combine(
     out = [(node_id, accumulated[node_id], provenance.get(node_id, {}))
            for node_id in accumulated]
     if limit is not None:
-        return heapq.nsmallest(limit, out, key=lambda r: (-r[1], r[0]))
-    out.sort(key=lambda r: (-r[1], r[0]))
+        return heapq.nsmallest(limit, out, key=_score_sort_key)
+    out.sort(key=_score_sort_key)
     return out
 
 
@@ -1887,7 +1894,7 @@ def _source_refs_batch(
         refs.setdefault(nid, [])
     if not refs:
         return refs
-    unique_ids = list(refs.keys())
+    unique_ids = list(refs)
     placeholders = ",".join("?" for _ in unique_ids)
     cur = conn.execute(
         f"""

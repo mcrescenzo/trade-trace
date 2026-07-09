@@ -29,7 +29,7 @@ When reporting, include:
 
 - a minimal reproduction (repo state, commands, expected vs observed
   behavior),
-- the affected version (`trade-trace --version` or the git SHA), and
+- the affected version (`tt journal status | python3 -c "import json, sys; print(json.load(sys.stdin)['data']['package_version'])"`, `pip show trade-trace | grep Version`, or the git SHA), and
 - the impact you believe a real attacker could achieve.
 
 We aim to acknowledge new reports within seven days while the project

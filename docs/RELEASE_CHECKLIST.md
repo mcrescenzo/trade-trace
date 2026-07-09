@@ -90,4 +90,6 @@ Run from a clean checkout and record the candidate SHA plus command output. Do n
 
 ## Sanitization rules for release notes
 
+Release notes live in [`docs/RELEASE_NOTES.md`](./RELEASE_NOTES.md).
+
 Never paste RPC URLs with keys, request/response bodies, API tokens, private Beads audit dumps, raw emails, or unredacted logs. Acceptable evidence: command names, status codes, latency summaries, public condition IDs, generated market IDs, test counts, and scrubbed error envelopes.

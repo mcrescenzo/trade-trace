@@ -1,7 +1,5 @@
 """Success/error envelopes per docs/architecture/contracts.md §3-§4."""
 
-from __future__ import annotations
-
 from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field

@@ -17,6 +17,8 @@
 set -euo pipefail
 
 export TRADE_TRACE_HOME="${TRADE_TRACE_HOME:-$HOME/.trade-trace-axloop}"
+# Per-dispatch usage tracing for catalog census evidence (JSONL only; journal DB untouched).
+export TRADE_TRACE_DISPATCH_TRACE=1
 export MCP_ACTOR_ID="agent:ax-dogfood"
 REPO_DIR="${AX_REPO_DIR:-/home/hermes/code/trade-trace}"
 MODEL="${AX_MODEL:-opus}"

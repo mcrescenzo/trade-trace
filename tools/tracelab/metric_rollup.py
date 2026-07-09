@@ -20,9 +20,6 @@ from trade_trace.mcp_server import mcp_call
 ACTOR_ID = "system:tracelab.metric_rollup"
 REPORTS = (
     "report.calibration",
-    "report.calibration_integrity",
-    "report.process_quality",
-    "report.resolution_misreads",
     "report.pnl",
     "report.coach",
     "report.recall_receipts",
@@ -99,12 +96,10 @@ def build_metric_rollup(
         "report.calibration",
         {"home": home_s, "filter": report_filter},
     )
-    calibration_integrity = _call_report(call, "report.calibration_integrity", {"home": home_s})
-    process_quality = _call_report(call, "report.process_quality", {"home": home_s})
-    resolution_misreads = _call_report(call, "report.resolution_misreads", {"home": home_s})
     pnl = _call_report(call, "report.pnl", {"home": home_s, "filter": report_filter})
     coach = _call_report(call, "report.coach", {"home": home_s, "filter": report_filter})
     recall_receipts = _call_report(call, "report.recall_receipts", {"home": home_s})
+    calibration_integrity = calibration.get("integrity_diagnostics") or {}
 
     late_excluded = _late_excluded_count(calibration) if not decided_include_late else 0
 
@@ -120,8 +115,6 @@ def build_metric_rollup(
         "reports": {
             "calibration": calibration,
             "calibration_integrity": calibration_integrity,
-            "process_quality": process_quality,
-            "resolution_misreads": resolution_misreads,
             "pnl": pnl,
             "coach": coach,
             "recall_receipts": recall_receipts,

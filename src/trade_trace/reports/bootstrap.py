@@ -193,7 +193,7 @@ def compose_bootstrap_packet(
         work = report_work_queue(conn, raw_filter=report_filter, as_of=resolved_as_of, limit=None)
         source_tools.append("report.work_queue")
         lifecycle = report_lifecycle(conn, raw_filter=report_filter, as_of=resolved_as_of)
-        source_tools.append("report.lifecycle")
+        source_tools.append("internal.lifecycle")
         try:
             strategy = report_strategy_health(conn, raw_filter=report_filter, status="all", as_of=resolved_as_of)
             source_tools.append("report.strategy_health")
@@ -202,7 +202,7 @@ def compose_bootstrap_packet(
         recall = report_recall_receipts(conn, **_receipt_kwargs(requested_filter, resolved_as_of, effective_budgets["sections"]["memory_context"]["max_items"]))
         source_tools.append("report.recall_receipts")
         memory = report_memory_usefulness(conn, **_receipt_kwargs(requested_filter, resolved_as_of, effective_budgets["sections"]["memory_context"]["max_items"]))
-        source_tools.append("report.memory_usefulness")
+        source_tools.append("internal.memory_usefulness")
         forecast = report_forecast_diagnostics(conn, raw_filter=report_filter)
         source_tools.append("report.forecast_diagnostics")
 
@@ -410,7 +410,7 @@ def _obligation(item: dict[str, Any], n: int) -> dict[str, Any]:
 def _active_ideas(lifecycle: dict[str, Any]) -> dict[str, Any]:
     buckets: dict[str, list[dict[str, Any]]] = {"current_exposure": [], "watches": [], "unresolved_forecasts": [], "non_actions_and_reviews": [], "recently_resolved_needing_learning": []}
     for case in lifecycle.get("lifecycle_cases", []):
-        item = {"id": case["case_id"], "summary": ",".join(case.get("reason_codes", [])), "timestamps": case.get("timestamps", {}), "source_refs": case.get("source_refs", []), "caveat_codes": case.get("caveat_codes", []), "drilldown_tool": "report.lifecycle"}
+        item = {"id": case["case_id"], "summary": ",".join(case.get("reason_codes", [])), "timestamps": case.get("timestamps", {}), "source_refs": case.get("source_refs", []), "caveat_codes": case.get("caveat_codes", []), "drilldown_tool": "report.work_queue", "internal_source": "lifecycle"}
         if any(r.get("kind") == "forecast" for r in case.get("source_refs", [])) and case.get("state") in {"open", "pending_review"}:
             buckets["unresolved_forecasts"].append(item)
         elif case.get("state") in {"pending_review", "stale", "adherence_due"}:
@@ -655,7 +655,7 @@ def _section_count(value: Any) -> int:
         return len(value)
     if isinstance(value, dict):
         nested_lists = sum(len(v) for v in value.values() if isinstance(v, list))
-        return nested_lists if nested_lists else (1 if value else 0)
+        return nested_lists or (1 if value else 0)
     return 1 if value else 0
 
 

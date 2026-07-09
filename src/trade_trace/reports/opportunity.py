@@ -21,6 +21,8 @@ from trade_trace.timestamps import (
 )
 
 DEFAULT_OPPORTUNITY_MIN_SAMPLE = 20
+REPORT_NAME = "report.opportunity"
+REPORT_FILTER_SUPPORT: frozenset[str] = frozenset()
 _COVERAGE_RANK = {"missing": 0, "sparse": 1, "partial": 2, "complete": 3}
 _ENTER_TYPES = {"paper_enter", "actual_enter", "add"}
 _SKIP_TYPES = {"skip", "watch"}
@@ -178,7 +180,7 @@ def report_opportunity(
         raise ValueError("max_records must be between 1 and 1000")
     conn.row_factory = sqlite3.Row
     rf = ReportFilter.model_validate(raw_filter or {})
-    filter_view = process_filter(rf, report="report.opportunity")
+    filter_view = process_filter(rf, report=REPORT_NAME)
 
     rows = conn.execute(
         """

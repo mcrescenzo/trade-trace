@@ -43,7 +43,7 @@ def _pending_counts(conn: Any) -> dict[str, int]:
         """
     ).fetchall()
     counts = {"pending": 0, "failed": 0, "exported": 0}
-    counts.update({str(state): int(count) for state, count in rows})
+    counts |= {str(state): int(count) for state, count in rows}
     counts["drainable"] = counts["pending"] + counts["failed"]
     return counts
 

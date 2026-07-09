@@ -38,6 +38,7 @@ from trade_trace.tools.review_bundle import (
     ReviewBundleOutput,
     _bundle_hash,
     _json_value_has_exact_token,
+    _report_summaries,
 )
 
 
@@ -91,6 +92,37 @@ def test_review_bundle_output_schema_carries_bundle_hash_and_contract_version():
     assert "selected" in schema["properties"]
     assert "caveats" in schema["properties"]
     assert "recall_receipts" in schema["properties"]
+
+
+def test_report_summaries_logs_calibration_fallback(monkeypatch, home):
+    import trade_trace.tools.review_bundle as review_bundle
+
+    warnings: list[tuple[str, dict[str, str] | None]] = []
+
+    class FakeLogger:
+        def warning(self, message: str, *, extra: dict[str, str] | None = None) -> None:
+            warnings.append((message, extra))
+
+    def raise_calibration(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(review_bundle, "report_calibration", raise_calibration)
+    monkeypatch.setattr(review_bundle, "get_logger", lambda _name: FakeLogger())
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        summaries, calibration = _report_summaries(db.connection, filter_view={})
+    finally:
+        db.close()
+
+    assert calibration == {"sample_size": 0, "sample_warning": None}
+    assert summaries["calibration"] == calibration
+    assert warnings == [
+        (
+            "calibration report failed inside review bundle",
+            {"error": "boom"},
+        )
+    ]
 
 
 # -- empty DB ----------------------------------------------------------
