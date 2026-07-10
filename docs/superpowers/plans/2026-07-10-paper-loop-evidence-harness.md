@@ -301,7 +301,7 @@ SCRATCH="$(mktemp -d)"   # or under your session scratchpad dir
 TRADE_TRACE_HOME="$SCRATCH/home" bash scripts/paper-loop/setup.sh
 ```
 
-Expected: `set network.polymarket.enabled = true`, `set network.polymarket.gamma_base_url = ...`, `policy id=... (idempotent_replay=False)`, `outbound_network_active=True enabled=True gamma_set=https://gamma-api.polymarket.com`, `Ready.` — exit 0.
+Expected: `set network.polymarket.enabled = true`, `set network.polymarket.gamma_base_url = ...`, `policy id=... (idempotent_replay=False)`, `outbound_network_active=True enabled=True gamma_set=True`, `Ready.` — exit 0. (`journal.status` reports `configured_endpoints.gamma_base_url` as a boolean by design — endpoints are never echoed because RPC URLs can embed keys; see `adapters/polymarket/config.py`.)
 
 - [ ] **Step 4: Test idempotent re-run against the same scratch home**
 
