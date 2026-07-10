@@ -106,6 +106,15 @@ placeholders) and pass them to `report.phase_gate_readiness` (or wire them
 into whatever invokes the gate). **Do not commit owner-authorized thresholds
 without the owner's explicit sign-off.**
 
+> **Owner decision record (2026-07-10):** the owner explicitly decided to
+> keep all thresholds **unset** for now (recorded in bead
+> `trade-trace-cjgz2.5`). The gate therefore remains at
+> `owner_thresholds_unset` and can never report `ready` until a future,
+> explicitly signed-off owner decision replaces the placeholders above.
+> Live trade execution likewise remains **not authorized**: no execution,
+> credential, or custody path exists in this repository, and adding one
+> would require a new explicit owner authorization.
+
 ## 5. The report
 
 `report.phase_gate_readiness` (handler in

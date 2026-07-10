@@ -39,15 +39,15 @@ Conclusion from runtime readback: all 9 rows are currently registered, default-p
 
 | Report | Current registry/catalog status | Proposed disposition | Owner decision status | Highest safety condition |
 | --- | --- | --- | --- | --- |
-| `report.audit_readiness` | Registered, public, read-only | Keep public | Pending owner decision | Must remain local provenance diagnostics, not a trading/autonomy authorization. |
-| `report.autonomy_readiness` | Registered, public, read-only | Keep public | Pending owner decision | Must remain evidence-only and pass through owner-thresholded gate status. |
-| `report.current_exposure` | Registered, public, read-only | Keep public | Pending owner decision | Must keep local-projection and broker-truth caveats prominent. |
-| `report.execution_quality` | Registered, public, read-only | Keep public | Pending owner decision | Must read only imported/local receipt evidence and avoid live execution assurance. |
-| `report.exposure_anomalies` | Registered, public, read-only | Keep public | Pending owner decision | Must distinguish projection/data-quality caveats from market risk. |
-| `report.opportunity` | Registered, public, read-only | Keep public | Pending owner decision | Must stay retrospective process diagnostics, not recommendations/backtesting/live advice. |
-| `report.paper_exposure` | Registered, public, read-only | Keep public | Pending owner decision | Must remain paper-only, local-evidence-only, and non-executing. |
-| `report.phase_gate_readiness` | Registered, public, read-only | Keep public | Pending owner decision | Must require owner-supplied thresholds and never self-grant readiness. |
-| `report.reconciliation_mismatches` | Registered, public, read-only | Keep public | Pending owner decision | Must remain local mismatch evidence, not remediation or external account truth. |
+| `report.audit_readiness` | Registered, public, read-only | Keep public | Approved keep public (owner, 2026-07-10) | Must remain local provenance diagnostics, not a trading/autonomy authorization. |
+| `report.autonomy_readiness` | Registered, public, read-only | Keep public | Approved keep public (owner, 2026-07-10) | Must remain evidence-only and pass through owner-thresholded gate status. |
+| `report.current_exposure` | Registered, public, read-only | Keep public | Approved keep public (owner, 2026-07-10) | Must keep local-projection and broker-truth caveats prominent. |
+| `report.execution_quality` | Registered, public, read-only | Keep public | Approved keep public (owner, 2026-07-10) | Must read only imported/local receipt evidence and avoid live execution assurance. |
+| `report.exposure_anomalies` | Registered, public, read-only | Keep public | Approved keep public (owner, 2026-07-10) | Must distinguish projection/data-quality caveats from market risk. |
+| `report.opportunity` | Registered, public, read-only | Keep public | Approved keep public (owner, 2026-07-10) | Must stay retrospective process diagnostics, not recommendations/backtesting/live advice. |
+| `report.paper_exposure` | Registered, public, read-only | Keep public | Approved keep public (owner, 2026-07-10) | Must remain paper-only, local-evidence-only, and non-executing. |
+| `report.phase_gate_readiness` | Registered, public, read-only | Keep public | Approved keep public (owner, 2026-07-10) | Must require owner-supplied thresholds and never self-grant readiness. |
+| `report.reconciliation_mismatches` | Registered, public, read-only | Keep public | Approved keep public (owner, 2026-07-10) | Must remain local mismatch evidence, not remediation or external account truth. |
 
 ## Row Evidence
 
@@ -55,7 +55,7 @@ Conclusion from runtime readback: all 9 rows are currently registered, default-p
 
 Proposed disposition: keep public.
 
-Owner decision: PENDING. This document recommends; it does not approve.
+Owner decision: APPROVED — keep public (owner sign-off 2026-07-10, recorded in bead trade-trace-degbz).
 
 Evidence:
 
@@ -63,7 +63,7 @@ Evidence:
 - Registered through `ReportToolRegistration` with a deterministic, no-network, no-advice description in `src/trade_trace/reports/tool_handlers/registration.py:226-238`.
 - The schema advertises only stale-threshold inputs and describes the report as read-only local diagnostics in `src/trade_trace/reports/tool_schemas.py:169-175`.
 - Implementation states deterministic local diagnostics only, no network, no recommendations in `src/trade_trace/reports/audit_readiness.py:1-4`, and returns only `summary` plus bounded `issues` in `src/trade_trace/reports/audit_readiness.py:70-112`.
-- Architecture docs describe it as deterministic SQL over existing journal tables that never fetches market data, scores source credibility, or gives trading advice in `docs/architecture/reports.md:601-606`.
+- Architecture docs describe it as deterministic SQL over existing journal tables that never fetches market data, scores source credibility, or gives trading advice in `docs/architecture/reports.md:622-624`.
 - Tests cover empty-journal safe output, blocker/warning surfacing with remediation, and registered read-only schema in `tests/integration/test_audit_readiness.py:10-16`, `tests/integration/test_audit_readiness.py:68-88`, and `tests/integration/test_audit_readiness.py:148-154`.
 
 Safety rationale and caveats:
@@ -88,7 +88,7 @@ Required validation for implementation:
 
 Proposed disposition: keep public.
 
-Owner decision: PENDING. This document recommends; it does not approve.
+Owner decision: APPROVED — keep public (owner sign-off 2026-07-10, recorded in bead trade-trace-degbz).
 
 Evidence:
 
@@ -121,7 +121,7 @@ Required validation for implementation:
 
 Proposed disposition: keep public.
 
-Owner decision: PENDING. This document recommends; it does not approve.
+Owner decision: APPROVED — keep public (owner sign-off 2026-07-10, recorded in bead trade-trace-degbz).
 
 Evidence:
 
@@ -154,7 +154,7 @@ Required validation for implementation:
 
 Proposed disposition: keep public.
 
-Owner decision: PENDING. This document recommends; it does not approve.
+Owner decision: APPROVED — keep public (owner sign-off 2026-07-10, recorded in bead trade-trace-degbz).
 
 Evidence:
 
@@ -187,7 +187,7 @@ Required validation for implementation:
 
 Proposed disposition: keep public.
 
-Owner decision: PENDING. This document recommends; it does not approve.
+Owner decision: APPROVED — keep public (owner sign-off 2026-07-10, recorded in bead trade-trace-degbz).
 
 Evidence:
 
@@ -220,7 +220,7 @@ Required validation for implementation:
 
 Proposed disposition: keep public.
 
-Owner decision: PENDING. This document recommends; it does not approve.
+Owner decision: APPROVED — keep public (owner sign-off 2026-07-10, recorded in bead trade-trace-degbz).
 
 Evidence:
 
@@ -254,14 +254,14 @@ Required validation for implementation:
 
 Proposed disposition: keep public.
 
-Owner decision: PENDING. This document recommends; it does not approve.
+Owner decision: APPROVED — keep public (owner sign-off 2026-07-10, recorded in bead trade-trace-degbz).
 
 Evidence:
 
 - Runtime readback above: registered, public, `is_write=False`.
 - Core comments state the paper-fill ledger cluster, including `report.paper_exposure`, was unfrozen into the public Phase-2 catalog and is paper-only, non-executing, local-evidence-only, credential-blind, and free of venue client/signing/order-placement/cancellation/fund-movement paths in `src/trade_trace/core.py:240-257`.
 - Handler aggregates only filled `paper_fill_records` rows into a paper-only exposure/P&L basis and returns `paper_only`, `non_executing`, and `no_live_execution_claims` in `src/trade_trace/tools/paper_fills.py:290-307`.
-- Registration description states paper-only exposure/P&L basis with explicit exclusion of imported/live truth or execution claims in `src/trade_trace/tools/paper_fills.py:310-316`.
+- Registration description states paper-only exposure/P&L basis with explicit exclusion of imported/live truth or execution claims in the `registry.register(...)` call at `src/trade_trace/tools/paper_fills.py:339`.
 - Tests cover paper exposure netting/exclusion behavior and pin public, non-experimental status in `tests/integration/test_paper_fill_records.py:303-335`.
 - The Phase-2 paper loop test calls `report.paper_exposure` and asserts `non_executing` plus `no_live_execution_claims` in `tests/integration/test_phase2_paper_trading_loop.py:423-429`.
 - Boundary tests list `report.paper_exposure` in `SHIPPED_REPORTS` and document the public Phase-2 catalog rationale in `tests/security/test_mvp_boundary_audit.py:335-345` and `tests/security/test_mvp_boundary_audit.py:512-541`.
@@ -287,7 +287,7 @@ Required validation for implementation:
 
 Proposed disposition: keep public.
 
-Owner decision: PENDING. This document recommends; it does not approve.
+Owner decision: APPROVED — keep public (owner sign-off 2026-07-10, recorded in bead trade-trace-degbz).
 
 Evidence:
 
@@ -321,14 +321,14 @@ Required validation for implementation:
 
 Proposed disposition: keep public.
 
-Owner decision: PENDING. This document recommends; it does not approve.
+Owner decision: APPROVED — keep public (owner sign-off 2026-07-10, recorded in bead trade-trace-degbz).
 
 Evidence:
 
 - Runtime readback above: registered, public, `is_write=False`.
 - Core comments state the reconciliation cluster, including `report.reconciliation_mismatches`, was unfrozen into the public Phase-2 catalog; it is local-evidence-only, credential-blind, non-executing, and has no fetch/sign/place/cancel/settle/fund-movement/remediation path in `src/trade_trace/core.py:259-276`.
 - Handler reads `reconciliation_records`, returns deterministic mismatch-code aggregates plus `local_evidence_only` and `non_executing`, and provides agent hints that Trade Trace does not cancel, halt, remediate, fetch private state, or move funds in `src/trade_trace/tools/reconciliation.py:380-399`.
-- Registration description says it reports local reconciliation mismatch records and stable mismatch codes for external operators with no remediation or execution path in `src/trade_trace/tools/reconciliation.py:402-407`.
+- Registration description says it reports local reconciliation mismatch records and stable mismatch codes for external operators with no remediation or execution path in the `registry.register(...)` call at `src/trade_trace/tools/reconciliation.py:430`.
 - Reconciliation tests pin public, non-experimental status and state the cluster was unfrozen into the public Phase-2 catalog in `tests/integration/test_reconciliation_records.py:210-241`.
 - The Phase-2 paper loop test calls the report and asserts `non_executing`, `credential_blind`, and empty mismatch codes for the local fixture in `tests/integration/test_phase2_paper_trading_loop.py:455-459`.
 - Boundary tests list it in `SHIPPED_REPORTS` and document the no-remediation/no-fund-movement public-catalog rationale in `tests/security/test_mvp_boundary_audit.py:340-345` and `tests/security/test_mvp_boundary_audit.py:544-574`.
@@ -356,8 +356,21 @@ Recommended owner action: approve `keep public` for all 9 rows, subject to the s
 
 Reason: the current runtime catalog already exposes all 9 rows publicly; all 9 are read-only; docs/tests/source evidence show local-evidence, non-executing, no-advice, owner-thresholded, or caveated behavior. Moving any row to `internalize`, `remove`, or `keep deferred` would be a real product/catalog change and should be handled by a follow-up implementation bead after owner sign-off.
 
-Residual blockers before final owner decision:
+## Owner Decision Record (2026-07-10)
 
-- Owner has not approved any row in this document.
-- This document was prepared against a dirty worktree with unrelated uncommitted changes.
-- No full project test suite was run for this docs-only recommendation; only runtime catalog readback and targeted static evidence were inspected for this artifact.
+- The owner approved `keep public` for all 9 rows on 2026-07-10; the decision
+  is recorded in bead `trade-trace-degbz`.
+- The residual blockers listed at preparation time are resolved: this matrix
+  was re-verified on 2026-07-10 against the clean committed tree at `e00ac30`
+  (runtime readback reproduced identical output — `public_count 77`,
+  `include_experimental_count 87`, all 9 rows registered/public/read-only —
+  and the targeted catalog/registration tests passed).
+- Because the approved disposition ratifies the current runtime state, no
+  registration, schema, handler, or test changes were required.
+- Three citation errata found during the 2026-07-10 re-verification were
+  fixed in place in this document: the `reports.md` line range for the
+  audit-readiness architecture quote (601-606 → 622-624), and the
+  registration-description cites for `report.paper_exposure`
+  (`paper_fills.py:310-316` → `:339`) and `report.reconciliation_mismatches`
+  (`reconciliation.py:402-407` → `:430`), which previously pointed inside the
+  handler bodies rather than at the `registry.register(...)` calls.
