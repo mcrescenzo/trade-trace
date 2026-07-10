@@ -100,7 +100,10 @@ using the shipped `limit_class` taxonomy (`src/trade_trace/tools/risk.py`):
 - Total exposure cap: **$6,000** (60%)
 - Daily loss limit: **$500**; weekly: **$1,000**
 - Max spread: **$0.05**; slippage cap: **100 bps**
-- Time to resolution: **≤ 90 days**
+- Time to resolution: **≤ 90 days** as a market-*selection* rule (the
+  evaluator's `time_to_resolution` limit_class is a MIN-runway check, so
+  the policy encodes a **≥ 6 h runway** hard block and the 90-day cap
+  lives in the playbook's universe rule)
 - Markets: binary only (market.bind constraint), no blocked categories in v1
 
 Every intent is evaluated (`risk.evaluate` → `risk.check_record`) before
