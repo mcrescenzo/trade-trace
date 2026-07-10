@@ -124,12 +124,41 @@ def _report(home: Path, **args):
     return env["data"]
 
 
+def _assert_boundary(data: dict) -> None:
+    for field in (
+        "local_evidence_only",
+        "non_executing",
+        "credential_blind",
+        "advice_free",
+        "no_external_price_fetch",
+        "no_backtest_or_simulation_claims",
+        "no_live_execution_claims",
+        "no_settlement_or_redemption_claims",
+        "not_broker_truth",
+    ):
+        assert data[field] is True
+    assert "external_price_fetching_excluded" in data["source_precedence"]
+    caveat = data["boundary_caveat"].lower()
+    for phrase in ("retrospective process diagnostics", "not a recommendation", "backtest", "market simulator", "broker truth", "live execution", "settlement", "redemption", "advice"):
+        assert phrase in caveat
+
+
 def _record(data: dict, decision_id: str) -> dict:
     return next(r for r in data["records"] if r["decision_id"] == decision_id)
 
 
 def test_report_opportunity_registered():
     assert "report.opportunity" in default_registry().names()
+
+
+def test_report_opportunity_boundary_metadata_and_schema(home):
+    data = _report(home)
+    _assert_boundary(data)
+
+    registration = default_registry().get("report.opportunity")
+    text = (registration.description + " " + registration.json_schema.get("description", "")).lower()
+    for phrase in ("retrospective process diagnostics", "no external price fetching", "broker truth", "live execution", "settlement/redemption", "backtest", "market simulation", "recommendation", "trading advice"):
+        assert phrase in text
 
 
 def test_favorable_skip_classifies_missed_positive_edge(home):

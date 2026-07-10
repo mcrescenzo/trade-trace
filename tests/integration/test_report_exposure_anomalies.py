@@ -23,6 +23,22 @@ def _call(home: Path, args: dict | None = None) -> dict:
     return dump_envelope(env)
 
 
+def _assert_boundary(data: dict) -> None:
+    for field in (
+        "local_evidence_only",
+        "non_executing",
+        "credential_blind",
+        "advice_free",
+        "no_live_execution_claims",
+        "no_settlement_or_redemption_claims",
+        "not_broker_truth",
+    ):
+        assert data[field] is True
+    caveat = data["boundary_caveat"].lower()
+    for phrase in ("local journal/projection", "not broker/imported account truth", "live execution", "settlement", "redemption", "advice"):
+        assert phrase in caveat
+
+
 def _instrument(home: Path, title: str = "Will X happen?") -> str:
     venue = dump_envelope(mcp_call("venue.add", {"home": str(home), "name": "Test", "kind": "prediction_market"}))
     assert venue["ok"] is True, venue
@@ -114,6 +130,7 @@ def test_exposure_anomalies_clean_empty_journal_returns_positive_zero(home: Path
     assert body["data"]["summary"]["severity_counts"] == {"data_quality": 0, "market_risk": 0}
     assert body["data"]["projection_anomalies"] == []
     assert body["data"]["agent_answer_hints"]
+    _assert_boundary(body["data"])
 
 
 def test_exposure_anomalies_flags_duplicate_record_only_and_missing_position_event(home: Path) -> None:
@@ -240,3 +257,5 @@ def test_exposure_anomalies_schema_mentions_projection_anomalies_and_stable_code
     assert "record_only_actual" in text
     assert "fragmented_same_side_exposure" in text
     assert "not market risk" in text
+    for phrase in ("broker truth", "live execution", "settlement/redemption", "advice"):
+        assert phrase in text

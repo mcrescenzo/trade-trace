@@ -23,6 +23,22 @@ def _call(home: Path, args: dict | None = None) -> dict:
     return dump_envelope(env)
 
 
+def _assert_boundary(data: dict) -> None:
+    for field in (
+        "local_evidence_only",
+        "non_executing",
+        "credential_blind",
+        "advice_free",
+        "no_live_execution_claims",
+        "no_settlement_or_redemption_claims",
+        "not_broker_truth",
+    ):
+        assert data[field] is True
+    caveat = data["boundary_caveat"].lower()
+    for phrase in ("local journal/projection", "not broker/imported account truth", "live execution", "settlement", "redemption", "advice"):
+        assert phrase in caveat
+
+
 def _instrument(home: Path) -> str:
     venue = dump_envelope(mcp_call("venue.add", {"home": str(home), "name": "Test", "kind": "prediction_market"}))
     assert venue["ok"] is True, venue
@@ -125,6 +141,7 @@ def test_current_exposure_clean_empty_is_positive(home: Path) -> None:
     assert data["recent_trade_activity"] == []
     assert data["projection_anomalies"] == []
     assert any("No watch ideas" in hint for hint in data["agent_answer_hints"])
+    _assert_boundary(data)
 
 
 def test_current_exposure_omitted_as_of_surfaces_effective_timestamp_in_summary_and_meta(home: Path) -> None:
@@ -407,6 +424,8 @@ def test_current_exposure_schema_mentions_recommended_packet() -> None:
     assert registration.json_schema is not None
     text = (registration.description + " " + registration.json_schema.get("description", "")).lower()
     for phrase in ("recommended trader-agent entry point", "open_positions", "watchlist", "recent_trade_activity", "projection_anomalies"):
+        assert phrase in text
+    for phrase in ("not assert broker/imported account truth", "live execution", "settlement/redemption", "advice"):
         assert phrase in text
 
 

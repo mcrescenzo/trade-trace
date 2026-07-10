@@ -297,18 +297,19 @@ def test_snapshot_fetch_series_enabled_writes_each_fixture_point(tmp_path: Path,
     assert [item["captured_at"] for item in env.data["items"]] == ["2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z"]
 
 
-# -- snapshot.fetch_series unfrozen into the Phase-1 public catalog (xtdo) --
-# It was frozen in EXPERIMENTAL_ANCHORED_VIEWERS alongside the anchored-
-# calibration readers; bead trade-trace-xtdo unfroze the three readers (the
-# anchor WRITER forecast.anchor_to_snapshot stays frozen, superseded by 4kec.9).
+# -- snapshot.fetch_series catalog opt-in --
+# The live Polymarket series fetcher remains dispatchable for explicit callers,
+# but is hidden from the default catalog with the other adapter-backed network
+# tools so offline/default clients do not see a fetch surface without opt-in.
 
 
-def test_snapshot_fetch_series_is_in_default_public_catalog():
+def test_snapshot_fetch_series_requires_experimental_catalog_opt_in():
     from trade_trace.core import default_registry
 
     registry = default_registry()
-    assert "snapshot.fetch_series" in set(registry.public_names())
-    assert registry.get("snapshot.fetch_series").metadata()["catalog_visibility"] == "public"
+    assert "snapshot.fetch_series" not in set(registry.public_names())
+    assert "snapshot.fetch_series" in set(registry.public_names(include_experimental=True))
+    assert registry.get("snapshot.fetch_series").metadata()["catalog_visibility"] == "experimental"
 
 
 def test_snapshot_fetch_series_derives_per_point_idempotency_keys_from_base_key(

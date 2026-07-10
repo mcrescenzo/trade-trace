@@ -254,13 +254,10 @@ SHIPPED_PUBLIC_TOOLS = {
     "journal.status",
     "market.bind",
     "market.find_similar",
-    "market.refresh",
-    "market.search",
     "memory.link",
     "memory.recall",
     "memory.reflect",
     "memory.retain",
-    "outcome.fetch",
     # Unfrozen into the public Phase-2 catalog (bead trade-trace-xwox): the
     # paper-fill ledger write/read surface. paper_fill.record runs a
     # deterministic conservative limit/depth fill engine over caller-supplied
@@ -310,12 +307,6 @@ SHIPPED_PUBLIC_TOOLS = {
     "risk.evaluate",
     "risk.policy_version_add",
     "snapshot.add",
-    "snapshot.fetch",
-    # Unfrozen into the Phase-1 public catalog (bead trade-trace-xtdo): the
-    # time-series snapshot fetcher that feeds the anchored/terminal calibration
-    # readers; markets-table backed, no Phase-2 dependency, same idempotency
-    # contract as snapshot.fetch.
-    "snapshot.fetch_series",
     "strategy.upsert",
     "tool.schema",
 }
@@ -718,29 +709,38 @@ def test_unfrozen_memory_process_reports_are_public():
         assert registry.get(tool).metadata()["catalog_visibility"] == "public"
 
 
-# snapshot.fetch_series was UNFROZEN out of EXPERIMENTAL_ANCHORED_VIEWERS into
-# the Phase-1 public catalog (bead trade-trace-xtdo). It feeds internal
-# market-baseline calibration calculations over Phase-1 tables. The anchor
-# WRITER forecast.anchor_to_snapshot stays frozen because bead trade-trace-4kec.9
-# (forecast.commit_blind / forecast.reveal_snapshot) superseded it.
-UNFROZEN_ANCHORED_SNAPSHOT_READERS = {
+EXPERIMENTAL_POLYMARKET_ADAPTER_TOOLS = {
+    "market.refresh",
+    "market.search",
+    "outcome.fetch",
+    "snapshot.fetch",
     "snapshot.fetch_series",
 }
 
 
-def test_unfrozen_anchored_calibration_readers_are_public():
-    """Bead trade-trace-xtdo: the series snapshot fetcher ships in the default
-    Phase-1 public catalog — visible without any opt-in, and no longer in the
-    frozen experimental cluster. The anchor WRITER stays frozen (superseded by
-    forecast.commit_blind / forecast.reveal_snapshot)."""
+def test_polymarket_adapter_tools_are_experimental_but_dispatchable():
+    """Live Polymarket adapter tools are opt-in catalog entries.
+
+    They stay registered for explicit callers and tests, but the default public
+    catalog remains local/offline by default: listing these network-backed
+    surfaces requires include_experimental, and include_legacy does not reveal
+    them.
+    """
 
     registry = default_registry()
     public = set(registry.public_names())
-    assert UNFROZEN_ANCHORED_SNAPSHOT_READERS.issubset(public)
-    # No longer frozen behind the experimental shelf.
-    assert UNFROZEN_ANCHORED_SNAPSHOT_READERS.isdisjoint(EXPERIMENTAL_ANCHORED_VIEWERS)
-    for tool in UNFROZEN_ANCHORED_SNAPSHOT_READERS:
-        assert registry.get(tool).metadata()["catalog_visibility"] == "public"
+    assert EXPERIMENTAL_POLYMARKET_ADAPTER_TOOLS.isdisjoint(public)
+    assert EXPERIMENTAL_POLYMARKET_ADAPTER_TOOLS.isdisjoint(
+        set(registry.public_names(include_legacy=True))
+    )
+    assert EXPERIMENTAL_POLYMARKET_ADAPTER_TOOLS.issubset(
+        set(registry.public_names(include_experimental=True))
+    )
+    assert EXPERIMENTAL_POLYMARKET_ADAPTER_TOOLS.issubset(
+        set(_all_dispatchable_tool_names())
+    )
+    for tool in EXPERIMENTAL_POLYMARKET_ADAPTER_TOOLS:
+        assert registry.get(tool).metadata()["catalog_visibility"] == "experimental"
     # The after-the-fact anchor writer remains frozen (superseded by 4kec.9).
     assert "forecast.anchor_to_snapshot" in EXPERIMENTAL_ANCHORED_VIEWERS
     assert "forecast.anchor_to_snapshot" not in public

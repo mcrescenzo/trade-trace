@@ -155,7 +155,8 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
         description=(
             "Read-only local execution-quality diagnostics over caller-supplied/imported pre-trade intents, "
             "snapshots, and external execution receipts. Computes slippage only where local numeric evidence exists; "
-            "no fetching, broker access, execution, cancellation, remediation, advice, alpha, or profit claims."
+            "imported receipts are not live broker truth. No fetching, broker access, execution, cancellation, "
+            "settlement, redemption, remediation, advice, alpha, or profit claims."
         ),
     ),
     "report.playbook_adherence": _schema(
@@ -265,7 +266,12 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "max_records": {"type": "integer", "minimum": 1},
             "include_labels": {"type": "boolean"},
             "min_sample": {"type": "integer", "minimum": 1},
-        }
+        },
+        description=(
+            "Retrospective path/process diagnostics over locally stored decisions/outcomes/positions and "
+            "caller-supplied snapshots only. No external price fetching, broker truth, live execution, "
+            "settlement/redemption, backtest, market simulation, recommendation, or trading advice."
+        ),
     ),
     "report.strategy_health": _schema(
         {
@@ -418,7 +424,7 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "paper_enter always opening an independent position), "
             "RECORD_ONLY_ACTUAL, MISSING_MARK, STALE_MARK, PROJECTION_MISSING, "
             "and PROJECTION_STALE. This reports local journal/projection data quality, "
-            "not market risk or broker truth."
+            "not market risk, broker truth, live execution, settlement/redemption, or advice."
         ),
     ),
     "report.current_exposure": _schema(
@@ -438,7 +444,7 @@ _REPORT_SCHEMAS: dict[str, dict[str, Any]] = {
             "Recommended trader-agent entry point for open trades/current exposure/recent trading activity. "
             "Returns open_positions, event_exposure_sets, watchlist, recent_trade_activity, and projection_anomalies in one packet. "
             "Current exposure comes from positions/position_events; event_exposure_sets are local derived grouping/netting diagnostics with negative-risk caveats only; watchlist rows are WATCH_ONLY_IDEA; recent_trade_activity "
-            "is journal activity and not canonical exposure by itself."
+            "is journal activity and not canonical exposure by itself. Local projection output is not broker/imported account truth, live execution, settlement/redemption, or advice."
         ),
     ),
     "report.coach": _schema(

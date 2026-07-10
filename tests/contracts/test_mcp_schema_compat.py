@@ -13,8 +13,11 @@ from trade_trace.mcp_server import TOP_LEVEL_JSON_SCHEMA_COMBINATORS, mcp_call, 
 from trade_trace.storage.paths import db_path
 
 
-def test_mcp_advertised_schemas_have_no_top_level_combinators() -> None:
-    specs = mcp_tool_specs()
+@pytest.mark.parametrize("include_experimental", [False, True])
+def test_mcp_advertised_schemas_have_no_top_level_combinators(
+    include_experimental: bool,
+) -> None:
+    specs = mcp_tool_specs(include_experimental=include_experimental)
     assert specs
 
     offenders = {
@@ -25,10 +28,19 @@ def test_mcp_advertised_schemas_have_no_top_level_combinators() -> None:
     assert offenders == {}
 
 
-@pytest.mark.parametrize("tool_name", ["market.bind", "snapshot.fetch"])
-def test_phase5_retryable_public_tools_advertise_idempotency_key(tool_name: str) -> None:
+@pytest.mark.parametrize(
+    ("tool_name", "include_experimental"),
+    [("market.bind", False), ("snapshot.fetch", True)],
+)
+def test_phase5_retryable_catalog_tools_advertise_idempotency_key(
+    tool_name: str, include_experimental: bool
+) -> None:
     registry = default_registry()
-    advertised = next(spec["input_schema"] for spec in mcp_tool_specs(registry) if spec["name"] == tool_name)
+    advertised = next(
+        spec["input_schema"]
+        for spec in mcp_tool_specs(registry, include_experimental=include_experimental)
+        if spec["name"] == tool_name
+    )
 
     assert advertised["type"] == "object"
     assert "idempotency_key" in advertised.get("properties", {})

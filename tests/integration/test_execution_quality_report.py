@@ -2,12 +2,28 @@ from __future__ import annotations
 
 import sqlite3
 
-from trade_trace.core import dispatch
+from trade_trace.core import default_registry, dispatch
 from trade_trace.storage.paths import db_path
 
 
 def _call(tool: str, args: dict, *, actor_id: str = "agent:execution-quality"):
     return dispatch(tool, args, actor_id=actor_id)
+
+
+def _assert_boundary(data: dict) -> None:
+    for field in (
+        "local_evidence_only",
+        "non_executing",
+        "credential_blind",
+        "advice_free",
+        "no_live_execution_claims",
+        "no_settlement_or_redemption_claims",
+        "not_broker_truth",
+    ):
+        assert data[field] is True
+    caveat = data["boundary_caveat"].lower()
+    for phrase in ("caller-imported", "not live broker truth", "live execution authority", "settlement", "redemption", "remediation", "advice"):
+        assert phrase in caveat
 
 
 def _seed_refs(home, *, with_snapshot: bool = True, intent_as_of: str = "2026-05-28T00:10:00.000Z", side: str = "yes") -> str:
@@ -72,6 +88,7 @@ def test_report_execution_quality_missing_snapshot_partial_rejected_and_sparse(t
     data = report.data
     assert data["local_evidence_only"] is True
     assert data["non_executing"] is True
+    _assert_boundary(data)
     assert data["summary"]["receipt_count"] == 2
     assert data["summary"]["partial_fill_count"] == 1
     assert data["summary"]["rejected_count"] == 1
@@ -106,10 +123,18 @@ def test_report_execution_quality_empty_receipts_has_stable_caveat(tmp_path):
 
     assert data["local_evidence_only"] is True
     assert data["non_executing"] is True
+    _assert_boundary(data)
     assert data["summary"]["receipt_count"] == 0
     assert data["summary"]["sparse_sample"] is True
     assert data["rows"] == []
     assert data["summary"]["caveat_codes"] == ["MISSING_RECEIPT_INPUTS"]
+
+
+def test_report_execution_quality_schema_text_preserves_imported_evidence_boundary():
+    registration = default_registry().get("report.execution_quality")
+    text = (registration.description + " " + registration.json_schema.get("description", "")).lower()
+    for phrase in ("imported receipts", "not live broker truth", "broker access", "execution", "settlement", "redemption", "remediation", "trade advice"):
+        assert phrase in text
 
 
 def test_report_execution_quality_stale_snapshot_cancel_stale_open_and_fill_direction(tmp_path):

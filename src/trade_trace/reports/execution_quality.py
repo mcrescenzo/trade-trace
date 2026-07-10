@@ -17,6 +17,10 @@ DEFAULT_STALE_OPEN_MINUTES = 60
 _OPEN_STATES = {"submitted", "accepted", "cancel_requested"}
 _REJECT_STATES = {"rejected", "failed", "mismatch"}
 _CANCEL_FAILURE_STATES = {"failed", "mismatch"}
+_BOUNDARY_CAVEAT = (
+    "Caller-imported sanitized receipt evidence and local snapshots only; not live "
+    "broker truth, live execution authority, settlement, redemption, remediation, or trading advice."
+)
 
 
 def _loads(value: Any, default: Any) -> Any:
@@ -246,4 +250,18 @@ def report_execution_quality(args: dict[str, Any]) -> dict[str, Any]:
             },
             "contributing_ids": {"receipt_ids": [row["receipt_id"] for row in rows], "intent_ids": sorted({x for row in rows for x in row["contributing_ids"]["intent_ids"]}), "snapshot_ids": sorted({x for row in rows for x in row["contributing_ids"]["snapshot_ids"]})},
         }
-        return {"summary": summary, "rows": rows, "report_kind": "execution_quality_diagnostics", "non_executing": True, "local_evidence_only": True, "credential_blind": True, "advice_free": True, "truncated": len(records) == limit, "next_cursor": None}
+        return {
+            "summary": summary,
+            "rows": rows,
+            "report_kind": "execution_quality_diagnostics",
+            "boundary_caveat": _BOUNDARY_CAVEAT,
+            "non_executing": True,
+            "local_evidence_only": True,
+            "credential_blind": True,
+            "advice_free": True,
+            "no_live_execution_claims": True,
+            "no_settlement_or_redemption_claims": True,
+            "not_broker_truth": True,
+            "truncated": len(records) == limit,
+            "next_cursor": None,
+        }

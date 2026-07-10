@@ -76,4 +76,6 @@ snapshot, or resolution tools can open a socket. Configured adapter endpoints
 must use HTTPS, are checked against the adapter host policy before an HTTP
 client is used, and error/log details scrub URL scheme, credentials, query
 strings, and fragments. Adapter operational logs include method, scrubbed
-endpoint, status, and latency only; response bodies are never logged.
+endpoint, status, and latency only; response bodies are never logged. Live
+adapter fetch tools are also hidden from the default tool catalog; operators
+must explicitly opt into the experimental catalog tier to list them.

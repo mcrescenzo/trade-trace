@@ -893,6 +893,11 @@ def _outcome_fetch(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
 
 
 def register_adapter_polymarket_tools(registry: ToolRegistry) -> None:
+    # Live adapter-backed tools are dispatchable by explicit name but hidden from
+    # the default catalog. Listing them requires experimental opt-in; invoking
+    # them still fails closed unless network.polymarket.enabled=true. market.bind
+    # stays public because its manual/local path does not need the adapter.
+    catalog_visibility = "experimental"
     # market.refresh / snapshot.fetch / outcome.fetch are retryable writes whose
     # semantic identity is NOT in the auto-derivation registry
     # (TOOL_PRIMARY_EVENT_TYPE), so the dispatcher cannot synthesize an
@@ -901,8 +906,8 @@ def register_adapter_polymarket_tools(registry: ToolRegistry) -> None:
     # idempotency_key REQUIRED, not optional, so schema text and dispatcher
     # enforcement agree (bead trade-trace-2cmb). `at` stays optional because the
     # handler defaults it ("now").
-    registry.register("market.refresh", _market_refresh, is_write=True, example_minimal={"market_id":"mkt_...","idempotency_key":"00000000-0000-4000-8000-marketrefresh01"})
-    registry.register("snapshot.fetch", _snapshot_fetch, is_write=True, example_minimal={"market_id":"mkt_...","at":"now","idempotency_key":"00000000-0000-4000-8000-snapshotfetch01"}, optional_keys=("at",))
+    registry.register("market.refresh", _market_refresh, is_write=True, example_minimal={"market_id":"mkt_...","idempotency_key":"00000000-0000-4000-8000-marketrefresh01"}, catalog_visibility=catalog_visibility)
+    registry.register("snapshot.fetch", _snapshot_fetch, is_write=True, example_minimal={"market_id":"mkt_...","at":"now","idempotency_key":"00000000-0000-4000-8000-snapshotfetch01"}, optional_keys=("at",), catalog_visibility=catalog_visibility)
     # snapshot.fetch_series has the SAME retryable-write idempotency contract as
     # snapshot.fetch above: it is is_write=True and absent from
     # TOOL_PRIMARY_EVENT_TYPE, so the dispatcher rejects calls without an
@@ -910,8 +915,8 @@ def register_adapter_polymarket_tools(registry: ToolRegistry) -> None:
     # the derived schema (via example_minimal) so the schema matches enforcement
     # — otherwise a schema-trusting bot omits it and gets a confusing rejection
     # (bead trade-trace-xtdo; same gap snapshot.fetch closed in trade-trace-2cmb).
-    registry.register("snapshot.fetch_series", _snapshot_fetch_series, is_write=True, example_minimal={"market_id":"mkt_...","from":"2026-01-01T00:00:00Z","to":"2026-01-02T00:00:00Z","idempotency_key":"00000000-0000-4000-8000-snapfetchseries1"})
-    registry.register("outcome.fetch", _outcome_fetch, is_write=True, example_minimal={"market_id":"mkt_...","idempotency_key":"00000000-0000-4000-8000-outcomefetch001"})
+    registry.register("snapshot.fetch_series", _snapshot_fetch_series, is_write=True, example_minimal={"market_id":"mkt_...","from":"2026-01-01T00:00:00Z","to":"2026-01-02T00:00:00Z","idempotency_key":"00000000-0000-4000-8000-snapfetchseries1"}, catalog_visibility=catalog_visibility)
+    registry.register("outcome.fetch", _outcome_fetch, is_write=True, example_minimal={"market_id":"mkt_...","idempotency_key":"00000000-0000-4000-8000-outcomefetch001"}, catalog_visibility=catalog_visibility)
     # Live read-only discovery: find bindable binary markets WITHOUT a pre-known
     # external_id or an already-bound market (bead trade-trace-663l). Adapter-only;
     # fails closed with ADAPTER_DISABLED when network.polymarket.enabled is false.
@@ -936,4 +941,5 @@ def register_adapter_polymarket_tools(registry: ToolRegistry) -> None:
         examples=("tt market search --query election --limit 20",),
         common_failures=("ADAPTER_DISABLED", "ADAPTER_TIMEOUT", "EXTERNAL_API_ERROR"),
         next_actions=("Pass a candidate external_id to market.bind, then snapshot.fetch / forecast.add.",),
+        catalog_visibility=catalog_visibility,
     )

@@ -90,6 +90,7 @@ class PolymarketClient:
         """Minimal resolution/on-chain path guard used by downstream tools/tests."""
 
         endpoint = self._require_polygon_rpc()
+        self._validate_endpoint(endpoint, gamma=False)
         return {"available": True, "endpoint": error_details(endpoint=endpoint)["endpoint"]}
 
     def _client(self) -> httpx.Client:

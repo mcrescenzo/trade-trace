@@ -187,7 +187,7 @@ omitted from the bundle (parity with §8 / `review.bundle`).
   `tests/security/test_no_telemetry_packages.py` pins the set against
   the deny-list `{analytics, telemetry, sentry, mixpanel, segment,
   datadog, rollbar, posthog}`.
-- The Polymarket adapter is opt-in and disabled by default. With the default configuration, Trade Trace creates no adapter HTTP client and generates zero outbound traffic.
+- The Polymarket adapter is opt-in and disabled by default. With the default configuration, Trade Trace creates no adapter HTTP client and generates zero outbound traffic. Live adapter fetch tools are hidden from the default catalog unless the operator opts into the experimental catalog tier.
 - Semantic embeddings are local-only in v0.0.2. `tt journal config_set --key embeddings.provider --value local --confirm` only records the local provider choice and reports whether imported model files are present; it does not download, stage, or verify model assets.
 - Local embedding installs use `tt model import --path <pre-staged BAAI/bge-small-en-v1.5> --confirm`. That path only reads local files, ignores any source-provided manifest as proof, rejects unsafe paths/symlinks through the verified copy pipeline, verifies pinned lock data, and copies only allowlisted files into `$TRADE_TRACE_HOME/models/bge-small-en-v1.5/`; it performs zero outbound calls.
 - Remote/API embedding providers and keyring-backed embedding credentials are unsupported. `keyring.revoke` is a legacy no-op retained for older clients.

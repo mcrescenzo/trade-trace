@@ -386,6 +386,11 @@ redirect. Callers should treat `tool.schema`, MCP tool listing, and the
 architecture docs as the source of truth for the current catalog rather than
 assuming historical `report.*` names remain callable.
 
+The current pre-1.0 review record for legacy-visible registry entries is
+[`legacy-tool-disposition.md`](legacy-tool-disposition.md). It is pinned to
+the runtime `catalog_visibility="legacy"` metadata by docs tests and must be
+updated with any legacy catalog addition, removal, or decision change.
+
 After `1.0`, public tool removal becomes a breaking contract change: keep a
 deprecation/redirect window, bump the major contract version, and document the
 replacement path.

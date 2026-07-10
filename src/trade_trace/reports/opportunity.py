@@ -23,6 +23,10 @@ from trade_trace.timestamps import (
 DEFAULT_OPPORTUNITY_MIN_SAMPLE = 20
 REPORT_NAME = "report.opportunity"
 REPORT_FILTER_SUPPORT: frozenset[str] = frozenset()
+_BOUNDARY_CAVEAT = (
+    "Retrospective process diagnostics over stored decisions/outcomes/positions and supplied snapshots only; "
+    "not a recommendation, backtest, market simulator, broker truth, live execution, settlement, redemption, or advice."
+)
 _COVERAGE_RANK = {"missing": 0, "sparse": 1, "partial": 2, "complete": 3}
 _ENTER_TYPES = {"paper_enter", "actual_enter", "add"}
 _SKIP_TYPES = {"skip", "watch"}
@@ -348,6 +352,18 @@ def report_opportunity(
         },
         "records": records,
         "groups": groups,
+        "report_kind": "opportunity_process_diagnostics",
+        "boundary_caveat": _BOUNDARY_CAVEAT,
+        "source_precedence": "local_decisions_outcomes_positions_and_supplied_snapshots_only; external_price_fetching_excluded",
+        "local_evidence_only": True,
+        "non_executing": True,
+        "credential_blind": True,
+        "advice_free": True,
+        "no_external_price_fetch": True,
+        "no_backtest_or_simulation_claims": True,
+        "no_live_execution_claims": True,
+        "no_settlement_or_redemption_claims": True,
+        "not_broker_truth": True,
         "truncated": len(rows) >= max_records,
         "next_cursor": None,
     }

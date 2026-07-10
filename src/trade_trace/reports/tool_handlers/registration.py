@@ -175,8 +175,9 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
             "Read-only local execution-quality/slippage diagnostics over imported external receipts, "
             "pre-trade intents, and local snapshots. Surfaces missing/stale snapshots, partial fills, "
             "rejections, cancel failures, stale open imported receipt evidence, adverse/improved fills, "
-            "and sparse-sample caveats. No fetch, broker access, execution, cancellation, remediation, "
-            "trade advice, alpha, or profit claims."
+            "and sparse-sample caveats. Imported receipts are caller-supplied local evidence, not live "
+            "broker truth. No fetch, broker access, execution, cancellation, settlement, redemption, "
+            "remediation, trade advice, alpha, or profit claims."
         ),
         optional_keys=("pretrade_intent_id", "market_id", "instrument_id", "lifecycle_state", "as_of", "limit", "min_sample", "stale_snapshot_minutes", "stale_open_minutes"),
         json_schema=_REPORT_SCHEMAS["report.execution_quality"],
@@ -375,7 +376,9 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
             "moves, exit-efficiency, data_coverage, sparse/missing snapshot "
             "caveats, and documented labels such as missed_positive_edge, "
             "good_skip, right_thesis_wrong_timing, bad_process_good_outcome, "
-            "and good_process_bad_outcome. No external price fetching. All "
+            "and good_process_bad_outcome. Retrospective process diagnostics only: "
+            "no external price fetching, broker truth, live execution, settlement/redemption, "
+            "backtest, market simulation, recommendation, or trading advice. All "
             "arguments are optional; defaults apply for omitted keys per bead "
             "trade-trace-4zbk."
         ),
@@ -490,7 +493,7 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
             "Surfaces projection_anomalies with stable codes for duplicate entry "
             "decisions, decisions without linked position_events, record-only actual "
             "journal rows, missing/stale marks, and missing/stale projections. "
-            "This is not market risk and does not assert broker truth."
+            "This is not market risk, broker truth, live execution, settlement/redemption, or advice."
         ),
         example_minimal={"stale_mark_threshold_days": 14},
         optional_keys=("stale_mark_threshold_days", "as_of"),
@@ -506,7 +509,7 @@ _REPORT_TOOL_REGISTRATIONS: tuple[ReportToolRegistration, ...] = (
             "Recommended trader-agent entry point for open trades/current exposure/recent trading activity. "
             "Composes canonical open_positions, local event_exposure_sets grouping/netting diagnostics, WATCH_ONLY_IDEA watchlist rows, recent_trade_activity journal rows, "
             "and projection_anomalies in one read-only packet. Decisions are activity/audit trail, not canonical exposure; "
-            "negative-risk metadata is caveated only and never converted/redeemed/settled; actual-recorded rows are record-only without linked position_events/projection. Does not assert broker truth."
+            "negative-risk metadata is caveated only and never converted/redeemed/settled; actual-recorded rows are record-only without linked position_events/projection. Does not assert broker/imported account truth, live execution, settlement/redemption, or advice."
         ),
         example_minimal={"recent_limit": 10, "include_watchlist": True, "include_anomalies": True},
         optional_keys=("recent_limit", "include_watchlist", "include_anomalies", "kind", "instrument_id", "strategy_id", "stale_mark_threshold_days", "as_of"),

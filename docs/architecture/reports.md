@@ -42,6 +42,24 @@ tags with scored forecast Brier ranking, not the broader decision+review tag
 count/co-occurrence contract. See §4.3 for the exact shipped behavior and the
 deferred target.
 
+**Phase-2-adjacent report caveats.** The exposure, reconciliation, and
+opportunity reports that sit near execution/autonomy workflows are public
+read-only reports, but their outputs must carry explicit boundary metadata and
+agent-readable caveats:
+
+| Report | Required caveat |
+|---|---|
+| `report.current_exposure` | Local `positions`/`position_events` projection only; not broker or imported-account truth, live execution, settlement, redemption, or advice. Use reconciliation before treating projected positions as externally observed holdings. |
+| `report.exposure_anomalies` | Local journal/projection data-quality caveats only; not market risk, broker truth, execution, settlement/redemption, or advice. |
+| `report.execution_quality` | Caller-imported sanitized receipt evidence plus local intents/snapshots only; not live broker truth, execution authority, remediation, settlement/redemption, or advice. |
+| `report.opportunity` | Retrospective path/process diagnostics over stored decisions/outcomes/positions and supplied snapshots only; not external price fetching, a backtest, market simulator, recommendation, broker truth, live execution, settlement/redemption, or advice. |
+| `report.paper_exposure` | Paper-only local fill evidence and cost-basis math; imported/live account truth, live execution, settlement/redemption, fund movement, and advice claims are excluded. |
+| `report.reconciliation_mismatches` | Local reconciliation evidence over projections and caller-imported account/execution facts; imported facts are evidence, not live broker truth, and the report does not remediate, execute, settle, redeem, move funds, or advise. |
+
+This section hardens report wording only. It does not decide whether any report
+should remain public, move internal, or be removed; disposition is owned by the
+separate report-catalog decision work.
+
 Companion docs: [PRD.md](../PRD.md), [product-scope-v002.md](product-scope-v002.md),
 [scoring.md](scoring.md), [persistence.md](persistence.md),
 [contracts.md](contracts.md), [memory-layer.md](memory-layer.md),

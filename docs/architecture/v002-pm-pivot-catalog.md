@@ -1,6 +1,6 @@
 # v0.0.2 PM-pivot tool/report catalog reconciliation
 
-> Status: **shipped** and refreshed 2026-07-09 from `build_registry().public_names()`. The default public registry now exposes **82** non-admin entries. The remaining experimental tier has **5** entries (`approval.*` plus the superseded `forecast.anchor_to_snapshot`); the autonomous run/incident cluster has been cut rather than kept experimental. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
+> Status: **shipped** and refreshed 2026-07-09 from `build_registry().public_names()`. The default public registry now exposes **77** non-admin entries. The experimental tier has **10** entries (`approval.*`, the superseded `forecast.anchor_to_snapshot`, and live Polymarket adapter fetch tools); the autonomous run/incident cluster has been cut rather than kept experimental. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
 
 ## Why this exists
 
@@ -10,8 +10,8 @@
 This document originally reconciled those planning numbers against the
 then-current 89-tool registry. The pivot has since landed and the scope
 was reined in by epic trade-trace-4kec; the runtime registry now reports
-**82 public non-admin entries** in the default catalog, with 5 entries frozen
-behind the experimental tier.
+**77 public non-admin entries** in the default catalog, with 10 entries behind
+the experimental tier.
 
 This doc pins the **authoritative runtime baseline** (Section 1),
 keeps the old-tool disposition table as historical implementation
@@ -28,17 +28,19 @@ authoritative source the v0.0.2 implementation beads cite.
 
 ## 1. Current runtime baseline (2026-07-09)
 
-Generated from `build_registry().public_names()` for the default public catalog: 82 non-admin entries.
+Generated from `build_registry().public_names()` for the default public catalog: 77 non-admin entries.
 
-`abstention.get`, `abstention.list`, `abstention.record`, `account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `decision.add`, `export.drain`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.add`, `forecast.commit_blind`, `forecast.independence`, `forecast.interpret_resolution`, `forecast.resolution_interpretation`, `forecast.reveal_snapshot`, `import.commit`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.find_similar`, `market.refresh`, `market.search`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `outcome.fetch`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `playbook.propose_version`, `playbook.record_adherence`, `playbook.upsert`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.autonomy_readiness`, `report.bootstrap`, `report.calibration`, `report.coach`, `report.current_exposure`, `report.execution_quality`, `report.exposure_anomalies`, `report.forecast_diagnostics`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.paper_exposure`, `report.phase_gate_readiness`, `report.playbook_adherence`, `report.pnl`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.risk`, `report.strategy_health`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `risk.check_record`, `risk.evaluate`, `risk.policy_version_add`, `snapshot.add`, `snapshot.fetch`, `snapshot.fetch_series`, `strategy.upsert`, `tool.schema`.
+`abstention.get`, `abstention.list`, `abstention.record`, `account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `decision.add`, `export.drain`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.add`, `forecast.commit_blind`, `forecast.independence`, `forecast.interpret_resolution`, `forecast.resolution_interpretation`, `forecast.reveal_snapshot`, `import.commit`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.find_similar`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `playbook.propose_version`, `playbook.record_adherence`, `playbook.upsert`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.autonomy_readiness`, `report.bootstrap`, `report.calibration`, `report.coach`, `report.current_exposure`, `report.execution_quality`, `report.exposure_anomalies`, `report.forecast_diagnostics`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.paper_exposure`, `report.phase_gate_readiness`, `report.playbook_adherence`, `report.pnl`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.risk`, `report.strategy_health`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `risk.check_record`, `risk.evaluate`, `risk.policy_version_add`, `snapshot.add`, `strategy.upsert`, `tool.schema`.
 
-### Frozen Product-B surface (experimental tier, epic trade-trace-4kec)
+### Experimental / opt-in surface
 
-5 tools are registered and dispatchable but hidden from the default catalog
+10 tools are registered and dispatchable but hidden from the default catalog
 behind the experimental tier (`public_names(include_experimental=True)` /
-`MCP_INCLUDE_EXPERIMENTAL=1`; see §4.6):
+`MCP_INCLUDE_EXPERIMENTAL=1`; see §4.6). This includes both frozen Product-B
+tools and live Polymarket adapter fetch tools, so default catalog discovery
+stays offline/local unless the caller opts into the adapter surface:
 
-`approval.get`, `approval.list`, `approval.record`, `approval.report`, `forecast.anchor_to_snapshot`.
+`approval.get`, `approval.list`, `approval.record`, `approval.report`, `forecast.anchor_to_snapshot`, `market.refresh`, `market.search`, `outcome.fetch`, `snapshot.fetch`, `snapshot.fetch_series`.
 
 The 3 removed redundant report tools (`report.calibration_trajectory`,
 `report.strategy_performance`, `report.amm_slippage`) are gone from the
@@ -243,12 +245,12 @@ omits them. They count against the v0.0.2 total of 45.
 
 | New tool | Purpose | Default network behavior |
 |---|---|---|
-| `market.search(query?, limit?, closed?)`     | **read-only** live discovery of bindable binary (YES/NO) markets via the Gamma list API; returns `external_id`/`gamma_market_id`, `slug`, `question`, `outcomes`, `close_at`. Closes the discovery gap (bead trade-trace-663l): a bot can find markets to forecast on without a pre-known `external_id`, an already-bound market, or an out-of-band Gamma curl. No DB writes, no advice, no trade execution. | adapter-only; fails closed with `ADAPTER_DISABLED` when disabled |
-| `market.bind(external_id, source)`           | fetch/cache market metadata; idempotent; populates `markets.*_at` state columns | adapter-only; disabled by default |
-| `market.refresh(market_id)`                  | re-fetch state for a bound market | adapter-only; disabled by default |
-| `snapshot.fetch(market_id, at=now)`          | capture live implied probability | adapter-only; falls back to `snapshot.add` (manual) when disabled |
-| `snapshot.fetch_series(market_id, from, to)` | capture trajectory series for calibration-baseline and forecast-horizon analyses | adapter-only; **no background scheduler** (see §3.3); falls back to manual `snapshot.add` loop when disabled |
-| `outcome.fetch(market_id)`                   | ingest on-chain resolution | adapter-only; **no background scheduler**; requires `network.polymarket.polygon_rpc_url` for the on-chain confirmation step (fails closed `CONFIG_REQUIRED` when unset, with a `no_rpc_resolution_evidence_route` / `hint` pointing at the Gamma read path — see §3.6); manual `resolution.add` is always available |
+| `market.search(query?, limit?, closed?)`     | **read-only** live discovery of bindable binary (YES/NO) markets via the Gamma list API; returns `external_id`/`gamma_market_id`, `slug`, `question`, `outcomes`, `close_at`. Closes the discovery gap (bead trade-trace-663l): a bot can find markets to forecast on without a pre-known `external_id`, an already-bound market, or an out-of-band Gamma curl. No DB writes, no advice, no trade execution. | adapter-only; hidden from the default catalog; fails closed with `ADAPTER_DISABLED` when disabled |
+| `market.bind(external_id, source)`           | local/manual market bind by default; when `source='polymarket'`, adapter is enabled, and caller does not force `bound_via='manual'`, it can fetch/cache market metadata and populate `markets.*_at` state columns | public because the manual path is local-only; adapter enrichment is disabled by default |
+| `market.refresh(market_id)`                  | re-fetch state for a bound market | adapter-only; hidden from the default catalog; disabled by default |
+| `snapshot.fetch(market_id, at=now)`          | capture live implied probability | adapter-only; hidden from the default catalog; use `snapshot.add` for manual/local snapshots |
+| `snapshot.fetch_series(market_id, from, to)` | capture trajectory series for calibration-baseline and forecast-horizon analyses | adapter-only; hidden from the default catalog; **no background scheduler** (see §3.3); use manual `snapshot.add` loops when disabled |
+| `outcome.fetch(market_id)`                   | ingest on-chain resolution | adapter-only; hidden from the default catalog; **no background scheduler**; requires `network.polymarket.polygon_rpc_url` for the on-chain confirmation step (fails closed `CONFIG_REQUIRED` when unset, with a `no_rpc_resolution_evidence_route` / `hint` pointing at the Gamma read path — see §3.6); manual `resolution.add` is always available |
 | `forecast.anchor_to_snapshot(forecast_id, snapshot_id)` | post-hoc anchor backfill for internal anchored market-baseline calculations; idempotent; corrections via `supersedes_forecast_id` | local-only |
 
 ### 2.7 Report consolidation (28 → 13)
@@ -512,14 +514,15 @@ removed tools via `renamed_to`, `redirect`, and `removed_in`.
 The default surface a normal agent sees omits legacy tools and admin-only
 tools (`signal.scan`, `journal.rebuild_projections`, `journal.repair`).
 Admin and legacy surfaces are opt-in inspection modes; current quickstarts
-should point agents at the 82-tool public catalog and `tool.schema` for
+should point agents at the 77-tool public catalog and `tool.schema` for
 runtime truth.
 
-### 4.6 Experimental tier (frozen Product-B surface)
+### 4.6 Experimental tier
 
 `catalog_visibility="experimental"` is a distinct opt-in tier from `legacy`,
-used to freeze the autonomous-ops / reconciliation surface (epic
-trade-trace-4kec) without deleting handlers. Experimental tools are:
+used to freeze Product-B surfaces without deleting handlers and to keep live
+adapter fetch surfaces out of the default offline/local catalog. Experimental
+tools are:
 
 - **Hidden** from the default catalog — absent from `public_names()`,
   `tool.schema` catalog mode, and the MCP list-tools surface.
@@ -552,13 +555,13 @@ update those pins and docs together.
 PYTHONPATH=src python -c \
   "from trade_trace.core import default_registry; \
    print(len(default_registry().public_names()))"
-# Expected: 82
+# Expected: 77
 
-# 1b. Frozen experimental Product-B surface (epic trade-trace-4kec)
+# 1b. Experimental opt-in surface
 PYTHONPATH=src python -c \
   "from trade_trace.core import default_registry as r; \
    print(len(r().public_names(include_experimental=True)) - len(r().public_names()))"
-# Expected: 5
+# Expected: 10
 
 # 2. Shipped public catalog, legacy metadata, admin filtering, reports pin, and freezes
 PYTHONPATH=src pytest \
@@ -569,8 +572,9 @@ PYTHONPATH=src pytest \
   tests/security/test_mvp_boundary_audit.py::test_frozen_autonomous_ops_cluster_is_experimental_but_dispatchable \
   tests/security/test_mvp_boundary_audit.py::test_frozen_reconciliation_cluster_is_experimental_but_dispatchable \
   tests/security/test_mvp_boundary_audit.py::test_frozen_anchored_viewers_cluster_is_experimental_but_dispatchable \
+  tests/security/test_mvp_boundary_audit.py::test_polymarket_adapter_tools_are_experimental_but_dispatchable \
   -q
-# Expected: 7 passed
+# Expected: 8 passed
 ```
 
 ---

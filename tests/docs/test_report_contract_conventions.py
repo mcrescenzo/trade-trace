@@ -20,6 +20,13 @@ def _section() -> str:
     return text[start:end]
 
 
+def _phase2_boundary_section() -> str:
+    text = REPORTS_DOC.read_text(encoding="utf-8")
+    start = text.index("**Phase-2-adjacent report caveats.**")
+    end = text.index("Companion docs:")
+    return text[start:end]
+
+
 def test_shared_report_contract_convention_section_exists_with_required_terms():
     section = _section()
 
@@ -98,3 +105,27 @@ def test_shared_report_contract_example_pins_reusable_shape():
 
     missing = [term for term in example_terms if term not in section]
     assert not missing, "shared report example missing shape terms: " + ", ".join(missing)
+
+
+def test_phase2_adjacent_report_boundary_section_names_required_caveats():
+    section = _phase2_boundary_section()
+
+    required_terms = [
+        "report.current_exposure",
+        "report.execution_quality",
+        "report.exposure_anomalies",
+        "report.opportunity",
+        "report.paper_exposure",
+        "report.reconciliation_mismatches",
+        "not broker",
+        "not live broker truth",
+        "live execution",
+        "settlement",
+        "redemption",
+        "advice",
+        "does not decide whether any report",
+        "should remain public",
+    ]
+
+    missing = [term for term in required_terms if term not in section]
+    assert not missing, "phase-2 report caveat section missing terms: " + ", ".join(missing)

@@ -48,6 +48,10 @@ _SOURCE_PRECEDENCE = [
     "approval_waiver_records",
     "risk_check_receipts",
 ]
+_REPORT_BOUNDARY_CAVEAT = (
+    "Local reconciliation evidence over projections and caller-imported account/execution facts only; "
+    "not live broker truth, remediation, execution authority, settlement, redemption, fund movement, or advice."
+)
 _MISMATCH_CODES = {
     "MISSING_EXTERNAL_EVENT",
     "ORPHAN_EXTERNAL_ORDER",
@@ -396,7 +400,26 @@ def _reconciliation_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
         records = [_row(row) for row in db.connection.execute(sql, (*params, limit)).fetchall()]
     codes = sorted({code for record in records for code in record["mismatch_codes"]})
     manually_flagged = sorted({code for record in records for code in record["manually_flagged"]})
-    return {"summary": {"bucket": "reconciliation_mismatches", "count": len(records), "mismatch_codes": codes, "manually_flagged_codes": manually_flagged, "source_precedence": list(_SOURCE_PRECEDENCE), "local_evidence_only": True, "non_executing": True}, "groups": records, "reconciliation_records": records, "report_kind": "local_reconciliation_mismatch_report", "agent_answer_hints": ["Use reconciliation rows as evidence for external operators; Trade Trace does not cancel, halt, remediate, fetch private state, or move funds.", "mismatch_codes are deterministically derived from append-only rows; manually_flagged are caller-supplied operator annotations kept distinct so the derived set stays reproducible.", "Current exposure remains caveated as local projected positions versus imported-observed positions when account snapshots are present."], "non_executing": True, "credential_blind": True}
+    return {
+        "summary": {"bucket": "reconciliation_mismatches", "count": len(records), "mismatch_codes": codes, "manually_flagged_codes": manually_flagged, "source_precedence": list(_SOURCE_PRECEDENCE), "local_evidence_only": True, "non_executing": True},
+        "groups": records,
+        "reconciliation_records": records,
+        "report_kind": "local_reconciliation_mismatch_report",
+        "boundary_caveat": _REPORT_BOUNDARY_CAVEAT,
+        "agent_answer_hints": [
+            "Use reconciliation rows as local evidence for external operators; Trade Trace does not cancel, halt, remediate, fetch private state, settle, redeem, or move funds.",
+            "Imported account/execution facts are caller-supplied local evidence, not live broker truth.",
+            "mismatch_codes are deterministically derived from append-only rows; manually_flagged are caller-supplied operator annotations kept distinct so the derived set stays reproducible.",
+            "Current exposure remains caveated as local projected positions versus imported-observed positions when account snapshots are present.",
+        ],
+        "local_evidence_only": True,
+        "non_executing": True,
+        "credential_blind": True,
+        "advice_free": True,
+        "no_live_execution_claims": True,
+        "no_settlement_or_redemption_claims": True,
+        "not_broker_truth": True,
+    }
 
 
 def register_reconciliation_tools(registry: ToolRegistry) -> None:
@@ -404,7 +427,7 @@ def register_reconciliation_tools(registry: ToolRegistry) -> None:
     props = {"schema_version": {"type": "string"}, "semantic_key": {"type": "string"}, "as_of": {"type": "string"}, "source": {"type": "string"}, "source_precedence": {"type": "array", "items": {"type": "string"}}, "diff": {"type": "object"}, "diff_severity": {"type": "string", "enum": sorted(_SEVERITIES)}, "mismatch_codes": {"type": "array", "items": {"type": "string", "enum": sorted(_MISMATCH_CODES)}}, "resolution_status": {"type": "string", "enum": sorted(_RESOLUTION)}, "caveats": {"type": "array"}, "provenance_json": {"type": "object"}, "material_hash": {"type": "string"}, "idempotency_key": {"type": "string"}, "home": {"type": "string"}}
     registry.register("reconciliation.record", _reconciliation_record, is_write=True, example_minimal=ex.get("minimal") or {"semantic_key": "recon:example", "as_of": "2026-01-20T00:00:00Z"}, example_rich=ex.get("rich"), description="Record an append-only local reconciliation snapshot/result comparing local projection to imported external facts; no fetch, signing, execution, cancellation, settlement, fund movement, or remediation.", json_schema={"type": "object", "properties": props, "required": ["semantic_key", "as_of"]})
     registry.register("reconciliation.get", _reconciliation_get, description="Read one local reconciliation result record.", json_schema={"type": "object", "properties": {"id": {"type": "string"}, "home": {"type": "string"}}, "required": ["id"]})
-    registry.register("report.reconciliation_mismatches", _reconciliation_report, description="Report local reconciliation mismatch records and stable mismatch codes for external operators; no remediation or execution path.", json_schema={"type": "object", "properties": {"resolution_status": {"type": "string", "enum": sorted(_RESOLUTION)}, "diff_severity": {"type": "string", "enum": sorted(_SEVERITIES)}, "limit": {"type": "integer"}, "home": {"type": "string"}}, "required": []})
+    registry.register("report.reconciliation_mismatches", _reconciliation_report, description="Report local reconciliation mismatch records and stable mismatch codes over local projections plus caller-imported account/execution facts; not live broker truth and no remediation, execution, settlement/redemption, fund movement, or advice path.", json_schema={"type": "object", "properties": {"resolution_status": {"type": "string", "enum": sorted(_RESOLUTION)}, "diff_severity": {"type": "string", "enum": sorted(_SEVERITIES)}, "limit": {"type": "integer"}, "home": {"type": "string"}}, "required": []})
 
 
 __all__ = ["register_reconciliation_tools"]

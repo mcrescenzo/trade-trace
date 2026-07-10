@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from trade_trace.core import dispatch
+from trade_trace.core import default_registry, dispatch
 from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
 
@@ -38,6 +38,23 @@ def _ok(env):
     dumped = _dump(env)
     assert dumped["ok"] is True, dumped
     return dumped["data"]
+
+
+def _assert_paper_exposure_boundary(report: dict) -> None:
+    for field in (
+        "paper_only",
+        "not_imported_account_truth",
+        "local_evidence_only",
+        "non_executing",
+        "credential_blind",
+        "advice_free",
+        "no_live_execution_claims",
+        "no_settlement_or_redemption_claims",
+    ):
+        assert report[field] is True
+    caveat = report["boundary_caveat"].lower()
+    for phrase in ("paper-only", "imported/live account truth", "live execution", "settlement", "redemption", "fund movement", "advice"):
+        assert phrase in caveat
 
 
 def _err(env):
@@ -92,6 +109,7 @@ def test_paper_fill_full_partial_no_fill_and_report_labels(initialized_home):
     assert "imported/live account truth excluded" in report["source_precedence"]
     assert report["as_of"]
     assert report["confidence_label"] in {"low", "medium"}
+    _assert_paper_exposure_boundary(report)
 
 
 def test_paper_exposure_nets_buys_and_sells_for_mixed_side_account(initialized_home):
@@ -298,6 +316,14 @@ def test_paper_fill_record_and_exposure_carry_mark_source_and_as_of(initialized_
     # The exposure view must never claim live execution.
     assert report["no_live_execution_claims"] is True
     assert report["non_executing"] is True
+    _assert_paper_exposure_boundary(report)
+
+
+def test_paper_exposure_schema_text_preserves_paper_only_boundary():
+    registration = default_registry().get("report.paper_exposure")
+    text = registration.description.lower()
+    for phrase in ("paper-only", "local paper_fill_records", "imported/live truth", "live execution", "settlement/redemption", "advice"):
+        assert phrase in text
 
 
 def test_paper_fill_cluster_is_not_frozen(initialized_home):

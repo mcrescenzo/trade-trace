@@ -5,12 +5,28 @@ from decimal import Decimal
 
 import pytest
 
-from trade_trace.core import dispatch
+from trade_trace.core import default_registry, dispatch
 from trade_trace.storage.paths import db_path
 
 
 def _call(tool: str, args: dict, *, actor_id: str = "agent:reconciliation"):
     return dispatch(tool, args, actor_id=actor_id)
+
+
+def _assert_report_boundary(data: dict) -> None:
+    for field in (
+        "local_evidence_only",
+        "non_executing",
+        "credential_blind",
+        "advice_free",
+        "no_live_execution_claims",
+        "no_settlement_or_redemption_claims",
+        "not_broker_truth",
+    ):
+        assert data[field] is True
+    caveat = data["boundary_caveat"].lower()
+    for phrase in ("local reconciliation evidence", "not live broker truth", "remediation", "execution authority", "settlement", "redemption", "fund movement", "advice"):
+        assert phrase in caveat
 
 
 def _seed(home):
@@ -81,6 +97,14 @@ def test_reconciliation_record_and_report_mismatch_codes(tmp_path):
     assert report.data["summary"]["count"] == 1
     assert "DUPLICATE_FILL" in report.data["summary"]["mismatch_codes"]
     assert report.data["non_executing"] is True
+    _assert_report_boundary(report.data)
+
+
+def test_reconciliation_mismatches_schema_text_preserves_local_evidence_boundary():
+    registration = default_registry().get("report.reconciliation_mismatches")
+    text = registration.description.lower()
+    for phrase in ("local reconciliation mismatch records", "caller-imported account/execution facts", "not live broker truth", "settlement/redemption", "advice"):
+        assert phrase in text
 
 
 def test_reconciliation_rejects_unknown_codes_and_append_only(tmp_path):

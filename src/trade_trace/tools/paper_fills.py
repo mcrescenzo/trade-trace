@@ -39,6 +39,10 @@ _SCHEMA_VERSION = "paper_fill.v1"
 _CONFIDENCE = {"low", "medium", "high", "unknown"}
 _STALENESS = {"fresh", "stale", "missing", "unknown"}
 _SELECT = "id, schema_version, semantic_key, material_hash, environment_label, account_label, market_id, instrument_id, pretrade_intent_id, side, outcome_side, requested_quantity, filled_quantity, remaining_quantity, limit_price, average_fill_price, fee_amount, slippage_cap_bps, quote_id, book_id, snapshot_id, snapshot_as_of, order_as_of, freshness_status, fill_status, conservative_fill_model, mark_source, mark_as_of, confidence_label, staleness_status, source_precedence, caveats_json, evidence_json, provenance_json, recorded_at, idempotency_key, actor_id"
+_PAPER_EXPOSURE_BOUNDARY_CAVEAT = (
+    "Paper-only local fill evidence and cost-basis math; imported/live account truth, "
+    "live execution, settlement, redemption, fund movement, and trading advice are excluded."
+)
 
 
 def _json_arg(args: dict[str, Any], field: str, default: Any) -> Any:
@@ -304,7 +308,26 @@ def _paper_exposure_report(args: dict[str, Any], ctx: ToolContext) -> dict[str, 
     sell_proceeds = sell_notional - sell_fees
     net_quantity = buy_quantity - sell_quantity
     cost_basis_plus_fees = buy_cost_basis - sell_proceeds
-    return {"environment": "paper", "account_label": args.get("account_label"), "as_of": args.get("as_of") or now_iso(), "mark_source": "paper_fill_records", "confidence_label": "low" if any(r["staleness_status"] != "fresh" for r in records) else "medium", "staleness_statuses": sorted({r["staleness_status"] for r in records}), "source_precedence": "paper_fill_records_only; imported/live account truth excluded", "paper_exposure": {"net_quantity": net_quantity, "buy_quantity": buy_quantity, "sell_quantity": sell_quantity, "buy_cost_basis": buy_cost_basis, "sell_proceeds": sell_proceeds, "buy_fees": buy_fees, "sell_fees": sell_fees, "cost_basis_plus_fees": cost_basis_plus_fees}, "records": records, "paper_only": True, "non_executing": True, "no_live_execution_claims": True}
+    return {
+        "environment": "paper",
+        "account_label": args.get("account_label"),
+        "as_of": args.get("as_of") or now_iso(),
+        "mark_source": "paper_fill_records",
+        "confidence_label": "low" if any(r["staleness_status"] != "fresh" for r in records) else "medium",
+        "staleness_statuses": sorted({r["staleness_status"] for r in records}),
+        "source_precedence": "paper_fill_records_only; imported/live account truth excluded",
+        "paper_exposure": {"net_quantity": net_quantity, "buy_quantity": buy_quantity, "sell_quantity": sell_quantity, "buy_cost_basis": buy_cost_basis, "sell_proceeds": sell_proceeds, "buy_fees": buy_fees, "sell_fees": sell_fees, "cost_basis_plus_fees": cost_basis_plus_fees},
+        "records": records,
+        "boundary_caveat": _PAPER_EXPOSURE_BOUNDARY_CAVEAT,
+        "paper_only": True,
+        "not_imported_account_truth": True,
+        "local_evidence_only": True,
+        "non_executing": True,
+        "credential_blind": True,
+        "advice_free": True,
+        "no_live_execution_claims": True,
+        "no_settlement_or_redemption_claims": True,
+    }
 
 
 def register_paper_fill_tools(registry: ToolRegistry) -> None:
@@ -313,7 +336,7 @@ def register_paper_fill_tools(registry: ToolRegistry) -> None:
     registry.register("paper_fill.record", _paper_fill_record, is_write=True, example_minimal=examples.get("minimal"), example_rich=examples.get("rich"), description="Record one local paper-only conservative fill from caller-supplied quote/book/snapshot facts; no live order execution, account access, signing, cancellation, settlement, or fund movement.", json_schema={"type": "object", "properties": props, "required": ["semantic_key", "account_label", "side", "requested_quantity", "limit_price", "order_as_of"]})
     registry.register("paper_fill.get", _paper_fill_get, description="Read one local paper-only fill record; not imported/live account truth.", json_schema={"type": "object", "properties": {"id": {"type": "string"}, "home": {"type": "string"}}, "required": ["id"]})
     registry.register("paper_fill.list", _paper_fill_list, description="List local paper-only fill records separately from imported/live account truth.", json_schema={"type": "object", "properties": {"account_label": {"type": "string"}, "market_id": {"type": "string"}, "instrument_id": {"type": "string"}, "fill_status": {"type": "string"}, "limit": {"type": "integer"}, "home": {"type": "string"}}})
-    registry.register("report.paper_exposure", _paper_exposure_report, description="Report paper-only exposure/P&L basis with mark source, as_of, confidence/staleness, and explicit exclusion of imported/live truth or execution claims.", json_schema={"type": "object", "properties": {"account_label": {"type": "string"}, "market_id": {"type": "string"}, "instrument_id": {"type": "string"}, "as_of": {"type": "string"}, "limit": {"type": "integer"}, "home": {"type": "string"}}, "required": []})
+    registry.register("report.paper_exposure", _paper_exposure_report, description="Report paper-only exposure/P&L basis from local paper_fill_records with mark source, as_of, confidence/staleness, and explicit exclusion of imported/live truth, live execution, settlement/redemption, fund movement, and advice claims.", json_schema={"type": "object", "properties": {"account_label": {"type": "string"}, "market_id": {"type": "string"}, "instrument_id": {"type": "string"}, "as_of": {"type": "string"}, "limit": {"type": "integer"}, "home": {"type": "string"}}, "required": []})
 
 
 __all__ = ["register_paper_fill_tools"]

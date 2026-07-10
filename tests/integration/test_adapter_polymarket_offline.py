@@ -12,7 +12,7 @@ import pytest
 from tests._mcp_helpers import with_legacy_idempotency_key
 from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.adapters.polymarket.config import PolymarketConfig
-from trade_trace.adapters.polymarket.errors import AdapterError
+from trade_trace.adapters.polymarket.errors import AdapterError, error_details, scrub_endpoint
 from trade_trace.adapters.polymarket.retry import retry_policy_kwargs
 from trade_trace.contracts.envelope import SuccessEnvelope
 from trade_trace.mcp_server import mcp_call
@@ -109,6 +109,129 @@ def test_polymarket_client_disabled_by_default_fails_closed():
         assert exc.details["config_key"] == "network.polymarket.enabled"
     else:  # pragma: no cover
         raise AssertionError("expected disabled adapter error")
+
+
+class _NoSocketPolymarketClient(PolymarketClient):
+    def _client(self):  # noqa: ANN001 - intentionally untyped test double seam
+        raise AssertionError("disabled/invalid adapter path attempted to create an HTTP client")
+
+
+def test_disabled_config_opens_no_http_client_for_adapter_paths():
+    client = _NoSocketPolymarketClient(
+        PolymarketConfig(
+            enabled=False,
+            gamma_base_url="http://gamma-api.polymarket.com?api_key=secret#frag",
+            polygon_rpc_url="http://polygon-rpc.com/rpc/secret?api_key=secret#frag",
+        )
+    )
+
+    for call in (
+        lambda: client.get_json("http://gamma-api.polymarket.com/markets/1?api_key=secret"),
+        lambda: client.gamma_get("/markets/1"),
+        lambda: client.polygon_rpc("eth_blockNumber", []),
+        lambda: client.check_resolution_available(),
+    ):
+        with pytest.raises(AdapterError) as err:
+            call()
+        assert err.value.code.value == "ADAPTER_DISABLED"
+
+
+def test_unsafe_or_disallowed_endpoints_fail_closed_before_http_client():
+    cases = [
+        (
+            _NoSocketPolymarketClient(
+                PolymarketConfig(enabled=True, gamma_base_url="http://gamma-api.polymarket.com")
+            ).gamma_get,
+            ("/markets/1",),
+        ),
+        (
+            _NoSocketPolymarketClient(PolymarketConfig(enabled=True)).get_json,
+            ("https://gamma-api.polymarket.com.evil.test/markets/1?api_key=secret",),
+        ),
+        (
+            _NoSocketPolymarketClient(
+                PolymarketConfig(enabled=True, polygon_rpc_url="http://polygon-rpc.com/rpc")
+            ).check_resolution_available,
+            (),
+        ),
+        (
+            _NoSocketPolymarketClient(
+                PolymarketConfig(enabled=True, polygon_rpc_url="https://evil.test/rpc")
+            ).polygon_rpc,
+            ("eth_blockNumber", []),
+        ),
+    ]
+
+    for call, args in cases:
+        with pytest.raises(AdapterError) as err:
+            call(*args)
+        assert err.value.code.value == "CONFIG_REQUIRED"
+
+
+def test_endpoint_error_details_scrub_url_parts_and_response_bodies():
+    endpoint = "https://user:pass@polygon-mainnet.g.alchemy.com/v2/path-token?api_key=query-token#frag"
+
+    assert scrub_endpoint(endpoint) == "polygon-mainnet.g.alchemy.com"
+    details = error_details(
+        endpoint=endpoint,
+        body="response body token",
+        response_body="raw response body token",
+        status_code=403,
+    )
+
+    assert details == {"status_code": 403, "endpoint": "polygon-mainnet.g.alchemy.com"}
+    serialized = json.dumps(details, sort_keys=True)
+    for forbidden in (
+        "https://",
+        "user",
+        "pass",
+        "path-token",
+        "api_key",
+        "query-token",
+        "frag",
+        "response body",
+    ):
+        assert forbidden not in serialized
+
+
+class _RecordingLogger:
+    def __init__(self) -> None:
+        self.records: list[tuple[str, dict[str, Any]]] = []
+
+    def info(self, message: str, *, extra: dict[str, Any]) -> None:
+        self.records.append((message, extra))
+
+
+def test_operational_response_logs_use_scrubbed_metadata_only():
+    logger = _RecordingLogger()
+    client = PolymarketClient(PolymarketConfig(enabled=True))
+    client._logger = logger  # test-only injection; project loggers do not propagate to caplog
+
+    client._log_response(
+        method="GET",
+        endpoint="https://user:pass@polygon-mainnet.g.alchemy.com/v2/path-token?api_key=query-token#frag",
+        status_code=429,
+        started_at=0.0,
+    )
+
+    assert len(logger.records) == 1
+    message, extra = logger.records[0]
+    assert message == "polymarket adapter response"
+    assert set(extra) == {"tool", "method", "endpoint", "status_code", "latency_ms"}
+    assert extra["endpoint"] == "polygon-mainnet.g.alchemy.com"
+    serialized = json.dumps(extra, sort_keys=True)
+    for forbidden in (
+        "https://",
+        "user",
+        "pass",
+        "path-token",
+        "api_key",
+        "query-token",
+        "frag",
+        "response_body",
+        "raw response",
+    ):
+        assert forbidden not in serialized
 
 
 def test_retry_policy_shape_is_exposed():

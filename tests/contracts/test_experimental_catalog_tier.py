@@ -18,6 +18,16 @@ from trade_trace.contracts.tool_registry import ToolRegistry
 from trade_trace.core import build_registry
 from trade_trace.mcp_server import mcp_call, mcp_tool_specs
 
+ADAPTER_BACKED_POLYMARKET_TOOLS = frozenset(
+    {
+        "market.refresh",
+        "market.search",
+        "outcome.fetch",
+        "snapshot.fetch",
+        "snapshot.fetch_series",
+    }
+)
+
 
 def _handler(args, ctx):
     return {"ok": True}
@@ -119,3 +129,45 @@ def test_real_registry_has_no_unexpected_experimental_leak(tmp_path):
     assert hasattr(catalog, "data")
     for tool in catalog.data["tools"]:
         assert tool["metadata"]["catalog_visibility"] != "experimental", tool["name"]
+
+
+def test_adapter_backed_polymarket_tools_require_catalog_opt_in(tmp_path):
+    """Live adapter surfaces stay dispatchable but are hidden by default.
+
+    The Polymarket adapter is disabled unless an operator configures it, and the
+    network-backed tool surfaces should not appear in the default catalog that a
+    fresh MCP client sees. Explicit experimental opt-in is required to list them.
+    """
+
+    reg = build_registry()
+    all_names = set(reg.names())
+    default_names = set(reg.public_names())
+    legacy_names = set(reg.public_names(include_legacy=True))
+    experimental_names = set(reg.public_names(include_experimental=True))
+
+    assert ADAPTER_BACKED_POLYMARKET_TOOLS.issubset(all_names)
+    assert ADAPTER_BACKED_POLYMARKET_TOOLS.isdisjoint(default_names)
+    assert ADAPTER_BACKED_POLYMARKET_TOOLS.isdisjoint(legacy_names)
+    assert ADAPTER_BACKED_POLYMARKET_TOOLS.issubset(experimental_names)
+    for name in ADAPTER_BACKED_POLYMARKET_TOOLS:
+        assert reg.get(name).metadata()["catalog_visibility"] == "experimental"
+
+    default_specs = {spec["name"] for spec in mcp_tool_specs(reg)}
+    opted_in_specs = {spec["name"] for spec in mcp_tool_specs(reg, include_experimental=True)}
+    assert ADAPTER_BACKED_POLYMARKET_TOOLS.isdisjoint(default_specs)
+    assert ADAPTER_BACKED_POLYMARKET_TOOLS.issubset(opted_in_specs)
+
+    home = tmp_path / "home"
+    assert mcp_call("journal.init", {"home": str(home)}).ok
+    default_catalog = mcp_call("tool.schema", {"home": str(home)})
+    assert default_catalog.ok
+    assert ADAPTER_BACKED_POLYMARKET_TOOLS.isdisjoint(
+        {tool["name"] for tool in default_catalog.data["tools"]}
+    )
+    opted_in_catalog = mcp_call(
+        "tool.schema", {"home": str(home), "include_experimental": True}
+    )
+    assert opted_in_catalog.ok
+    assert ADAPTER_BACKED_POLYMARKET_TOOLS.issubset(
+        {tool["name"] for tool in opted_in_catalog.data["tools"]}
+    )

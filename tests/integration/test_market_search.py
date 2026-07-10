@@ -41,11 +41,13 @@ def _binary_market(market_id: str, *, question: str, slug: str, close_at: str) -
     }
 
 
-def test_market_search_is_registered_public_and_read_only():
+def test_market_search_is_registered_experimental_and_read_only():
     registry = build_registry()
-    assert "market.search" in registry.public_names()
+    assert "market.search" not in registry.public_names()
+    assert "market.search" in registry.public_names(include_experimental=True)
     reg = registry.get("market.search")
     assert reg.is_write is False
+    assert reg.metadata()["catalog_visibility"] == "experimental"
 
 
 def test_market_search_disabled_fails_closed(tmp_path: Path):

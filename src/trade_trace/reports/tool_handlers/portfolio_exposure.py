@@ -41,6 +41,21 @@ from .common import (
 # Mirrors work_queue.WORK_QUEUE_TRANSPORT_DEFAULT_LIMIT.
 OPEN_POSITIONS_TRANSPORT_DEFAULT_LIMIT = 5
 
+_EXPOSURE_REPORT_BOUNDARY = {
+    "local_evidence_only": True,
+    "non_executing": True,
+    "credential_blind": True,
+    "advice_free": True,
+    "no_live_execution_claims": True,
+    "no_settlement_or_redemption_claims": True,
+    "not_broker_truth": True,
+}
+
+_EXPOSURE_BOUNDARY_CAVEAT = (
+    "Local journal/projection evidence only; not broker/imported account truth, "
+    "live execution, settlement, redemption, or trading advice."
+)
+
 
 def _report_watchlist(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """`report.watchlist` — list open watch decisions. `mode='stale'` opts in
@@ -552,6 +567,8 @@ def _report_exposure_anomalies(args: dict[str, Any], ctx: ToolContext) -> dict[s
         "groups": [],
         "projection_anomalies": anomalies,
         "agent_answer_hints": hints,
+        "boundary_caveat": _EXPOSURE_BOUNDARY_CAVEAT,
+        **_EXPOSURE_REPORT_BOUNDARY,
     }
     _propagate_report_meta(ctx, data)
     return data
@@ -847,6 +864,8 @@ def _report_current_exposure(args: dict[str, Any], ctx: ToolContext) -> dict[str
         "recent_trade_activity": recent_activity,
         "projection_anomalies": anomalies,
         "agent_answer_hints": hints,
+        "boundary_caveat": _EXPOSURE_BOUNDARY_CAVEAT,
+        **_EXPOSURE_REPORT_BOUNDARY,
         # Propagate open_positions pagination so a limit-bounded exposure read
         # signals when rows were dropped instead of silently under-reporting
         # exposure (trade-trace-lszg / AX-034 silent-truncation hazard).
