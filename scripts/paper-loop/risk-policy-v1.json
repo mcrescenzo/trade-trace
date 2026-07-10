@@ -1,0 +1,33 @@
+{
+  "policy_key": "paper-loop",
+  "version": "1",
+  "source": "owner_decision_2026-07-10",
+  "effective_from": "2026-07-10T00:00:00.000Z",
+  "limits_json": {
+    "bankroll_usd": 10000,
+    "per_intent_notional_usd": 200,
+    "market_exposure_usd": 400,
+    "category_exposure_usd": 1500,
+    "total_exposure_usd": 6000,
+    "daily_loss_usd": 500,
+    "weekly_loss_usd": 1000,
+    "max_spread": 0.05,
+    "slippage_cap_bps": 100,
+    "min_seconds_to_resolution": 21600,
+    "selection_max_days_to_resolution": 90,
+    "paper_only": true
+  },
+  "rules_json": [
+    {"rule_id": "per_intent_notional", "limit_class": "notional", "severity": "hard_block", "threshold": 200},
+    {"rule_id": "market_exposure", "limit_class": "market_exposure", "severity": "hard_block", "threshold": 400},
+    {"rule_id": "category_exposure", "limit_class": "category_exposure", "severity": "hard_block", "threshold": 1500},
+    {"rule_id": "total_exposure", "limit_class": "total_exposure", "severity": "hard_block", "threshold": 6000},
+    {"rule_id": "daily_loss", "limit_class": "daily_loss", "severity": "hard_block", "threshold": 500},
+    {"rule_id": "weekly_loss", "limit_class": "weekly_loss", "severity": "hard_block", "threshold": 1000},
+    {"rule_id": "max_spread", "limit_class": "spread", "severity": "hard_block", "threshold": 0.05},
+    {"rule_id": "slippage_bps", "limit_class": "slippage", "severity": "hard_block", "threshold": 100},
+    {"rule_id": "min_resolution_runway_seconds", "limit_class": "time_to_resolution", "severity": "hard_block", "threshold": 21600},
+    {"rule_id": "required_evidence_links", "limit_class": "required_links", "severity": "hard_block", "threshold": ["forecast_id", "snapshot_id", "decision_id"]},
+    {"rule_id": "paper_only", "limit_class": "paper_only", "severity": "hard_block", "threshold": true}
+  ]
+}
