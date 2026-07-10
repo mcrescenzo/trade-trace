@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "trade-trace": {
+      "command": "/home/hermes/.local/bin/trade-trace-mcp",
+      "args": [],
+      "env": {
+        "TRADE_TRACE_HOME": "${TRADE_TRACE_HOME}",
+        "TRADE_TRACE_DISPATCH_TRACE": "1",
+        "MCP_ACTOR_ID": "agent:paper-loop",
+        "MCP_INCLUDE_EXPERIMENTAL": "1"
+      }
+    }
+  }
+}
