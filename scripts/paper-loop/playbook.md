@@ -64,7 +64,7 @@ explain it in the run summary.
 runs: politics, central banks, sports, crypto, entertainment, science —
 check `memory.recall` for what recent runs covered). Select up to 4 new
 binary markets meeting the universe rule (conventions.md): >6h and ≤90d
-to resolution, 24h volume ≥ $4,000, unambiguous resolution rules. For
+to resolution, reported (cumulative) volume ≥ $4,000 — see conventions.md v2, unambiguous resolution rules. For
 each: `market.bind` (source=polymarket), `snapshot.fetch`,
 `memory.recall` for priors, then `forecast.add` (kind=binary, both
 outcomes, probabilities summing to 1, `rationale_body` with your actual

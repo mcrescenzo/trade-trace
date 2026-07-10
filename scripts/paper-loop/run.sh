@@ -70,7 +70,7 @@ claude -p "$(cat "$PLAYBOOK")" \
   --model "$MODEL" \
   --mcp-config "$MCP_CONFIG" --strict-mcp-config \
   --dangerously-skip-permissions \
-  >>"$LOG_FILE" 2>&1
+  >>"$LOG_FILE" 2>&1 200>&-
 status=$?
 set -e
 
