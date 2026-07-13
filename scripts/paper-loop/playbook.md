@@ -48,7 +48,11 @@ procedure, and the trading rule. Follow it exactly.
 `report.bootstrap`, then `report.work_queue`, then `forecast.list`
 (public, read-only; NDJSON one envelope per item; filters + cursor) to
 enumerate the open book authoritatively — including forecasts with no
-linked decision. Set RUN_ID (`YYYY-MM-DD-NN`, UTC; NN = 1 + count of
+linked decision. Items carry `id` (not `forecast_id`) and no
+probability (fetch outcomes separately for edge checks); the stream
+ends with a standard summary envelope (`count`, empty `items`,
+`meta.next_cursor`) — that is contract behavior for all list tools,
+not an error. Set RUN_ID (`YYYY-MM-DD-NN`, UTC; NN = 1 + count of
 files in `$TRADE_TRACE_HOME/reports/` matching today's date).
 
 ### 2. Settle
