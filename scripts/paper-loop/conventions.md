@@ -4,7 +4,13 @@ Versioned decisions the playbook applies every run. Changing anything here
 is a methodology change: bump the run-summary `conventions_version` and note
 it in the next run summary.
 
-`conventions_version: 10`
+`conventions_version: 11`
+(v11, 2026-07-13, run -11 review: exercise-trade selection made
+deterministic and ex-ante — see the Exercise trades section. Selecting a
+risk-compliant market+side BEFORE any verdict is compliance with the
+owner's limits, not evasion; what remains forbidden is reshaping or
+re-siding AFTER a fail verdict. Slippage arithmetic: (spread/2)/mid —
+the higher-mid side of the same book always carries lower bps.)
 (v10, 2026-07-13, run -10 review — two deviations RATIFIED + one fix:
 (1) risk-first chain order: `risk.evaluate` → `risk.check_record` run
 BEFORE `decision.add(paper_enter)`, because paper_enter opens a position
@@ -97,12 +103,17 @@ untouched.
 - At most ONE exercise trade per UTC day: before opening one, check the
   prior run summary and `pretrade_intent.list` for an
   `intent_type=exercise` intent today; skip if present.
-- Size: $10–20 notional. Market: the most-liquid universe-passing market
-  among this run's fresh snapshots (prefer near-dated so settlement
-  exercises quickly). Direction (v10): buy the side priced NEAREST 0.50
-  at the touch — longshot sides structurally fail the 100 bps slippage
-  cap; if no candidate passes the cap honestly, the exercise trade
-  cancels at the risk gate and that cancellation is the day's evidence.
+- Size: $10–20 notional. Selection (v11, deterministic + ex-ante):
+  compute, for every universe-passing market in this run's fresh
+  snapshots and BOTH sides, the ex-ante slippage bps = (spread/2)/mid at
+  the touch. Candidate set = pairs whose ex-ante arithmetic passes ALL
+  policy limits (slippage ≤ 100 bps, spread ≤ $0.05, runway, notional).
+  Pick the candidate with the highest 24h volume; direction = that pair's
+  side (i.e. the lower-bps, higher-mid side of its book). If the set is
+  EMPTY, attempt the least-failing candidate anyway and let the risk gate
+  cancel it — the cancellation is the day's honest evidence. NEVER
+  reshape or re-side after a fail verdict; the ex-ante selection is the
+  only place side choice happens.
 - Full chain, no shortcuts: `decision.add` (type=paper_enter, reason
   starts `exercise_trade:`), `risk.evaluate` → `risk.check_record` (ALL
   policy rules apply — supply full exposure inputs and links; a fail
