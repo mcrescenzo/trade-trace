@@ -55,3 +55,11 @@ Paper only — no live-execution code path exists in this repository (owner
 decision 2026-07-10, `docs/architecture/phase-gates.md`). The loop never
 runs git, never edits code, and files friction to beads (label
 `paper-loop`).
+
+Headless runs use a scoped permission allowlist
+(`headless-settings.json`: trade-trace MCP tools, journal-home reads/writes,
+`bd create`; git/gh/crontab/web explicitly denied) — NOT
+`--dangerously-skip-permissions` (owner decision 2026-07-12,
+trade-trace-99vch). If a run logs a permission denial for something the
+playbook legitimately needs, extend the allowlist deliberately rather than
+reaching for the dangerous flag.

@@ -42,12 +42,14 @@ command -v claude >/dev/null 2>&1 || { echo "[$(stamp)] ERROR: claude CLI not fo
 
 PLAYBOOK="$REPO_DIR/scripts/paper-loop/playbook.md"
 MCP_CONFIG="$REPO_DIR/scripts/paper-loop/mcp.json"
+SETTINGS="$REPO_DIR/scripts/paper-loop/headless-settings.json"
 [ -f "$PLAYBOOK" ] || { echo "[$(stamp)] ERROR: playbook not found at $PLAYBOOK" >>"$LOG_FILE"; exit 1; }
 [ -f "$MCP_CONFIG" ] || { echo "[$(stamp)] ERROR: mcp config not found at $MCP_CONFIG" >>"$LOG_FILE"; exit 1; }
+[ -f "$SETTINGS" ] || { echo "[$(stamp)] ERROR: headless settings not found at $SETTINGS" >>"$LOG_FILE"; exit 1; }
 [ -f "$TRADE_TRACE_HOME/trade-trace.sqlite" ] || { echo "[$(stamp)] ERROR: journal home not initialized — run setup.sh first" >>"$LOG_FILE"; exit 1; }
 
 if [ "$DRY_RUN" = "1" ]; then
-  echo "would run: claude -p <playbook.md> --model $MODEL --mcp-config $MCP_CONFIG --strict-mcp-config --dangerously-skip-permissions (cwd=$REPO_DIR, home=$TRADE_TRACE_HOME)"
+  echo "would run: claude -p <playbook.md> --model $MODEL --mcp-config $MCP_CONFIG --strict-mcp-config --settings $SETTINGS (cwd=$REPO_DIR, home=$TRADE_TRACE_HOME)"
   exit 0
 fi
 
@@ -66,10 +68,13 @@ cd "$REPO_DIR"
 } >>"$LOG_FILE"
 
 set +e
+# Scoped permissions, not --dangerously-skip-permissions: the settings file
+# allowlists exactly the trade-trace MCP surface, journal-home writes, and
+# bd-create friction filing; git/gh/crontab/web are explicitly denied.
 claude -p "$(cat "$PLAYBOOK")" \
   --model "$MODEL" \
   --mcp-config "$MCP_CONFIG" --strict-mcp-config \
-  --dangerously-skip-permissions \
+  --settings "$SETTINGS" \
   >>"$LOG_FILE" 2>&1 200>&-
 status=$?
 set -e

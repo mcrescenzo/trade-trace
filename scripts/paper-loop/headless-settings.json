@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__trade-trace",
+      "Read(//home/hermes/.trade-trace-paper/**)",
+      "Write(//home/hermes/.trade-trace-paper/**)",
+      "Bash(ls:*)",
+      "Bash(date:*)",
+      "Bash(bd create:*)"
+    ],
+    "deny": [
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(crontab:*)",
+      "WebFetch",
+      "WebSearch"
+    ]
+  }
+}
