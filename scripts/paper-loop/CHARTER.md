@@ -60,8 +60,16 @@ driver at a time).
 
 ## Pending owner decisions
 
-- **Stale-forecast re-anchoring** (raised by run 2026-07-13-05, memory
-  mem_utyqB5wm0Zsr5UXT): the loop's first-ever gate-clearing edge (Sinner
+- **Stale-forecast re-anchoring** — COST NOW QUANTIFIED (deep-sweep-1,
+  cycle 6): the mandatory settle/edge sweep doubled in six runs (18→36
+  markets, 36→72 adapter calls/run) as the book grew 22→40, and the same
+  two stale edges (Sinner, BTC-65k) have been re-derived and re-abstained
+  four consecutive runs. Related in-zone option awaiting the same
+  decision: tier the settle sweep (full refresh only for markets with
+  resolution_at within N days or open positions; complete sweep every Nth
+  run) — affects resolution-detection latency, so bundled here rather
+  than changed unilaterally. (Originally raised by run 2026-07-13-05,
+  memory mem_utyqB5wm0Zsr5UXT): the loop's first-ever gate-clearing edge (Sinner
   US Open, +0.11) was a *staleness artifact* — a 3-day-old forecast
   against a market that moved on new information. The agent correctly
   abstained rather than trade a view it no longer holds. Question: should

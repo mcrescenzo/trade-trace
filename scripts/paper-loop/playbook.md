@@ -115,7 +115,12 @@ at most 1–3 durable lessons (market-level insights, not run trivia).
 Write the run summary to `$TRADE_TRACE_HOME/reports/<RUN_ID>.md`:
 markets touched, forecasts made (with probabilities), trades/abstentions
 (with risk verdicts), settlements, reconciliation result, calibration
-numbers, `conventions_version`, and anything anomalous.
+numbers, `conventions_version`, and anything anomalous. Friction wording:
+say "no bead filed BY THIS RUN (orchestrator triages friction post-run)"
+— the orchestrator regularly files beads from your friction list, and
+cross-audits flag a bare "no bead filed" as a contradiction. Keep the two
+audit metrics distinct: `blocking_count` (missing rule text) is NOT the
+undated-forecast count (`resolution_at=null`).
 
 ## Failure handling
 If the adapter is disabled/misconfigured (`ADAPTER_DISABLED`,
