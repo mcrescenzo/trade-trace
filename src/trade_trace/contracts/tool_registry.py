@@ -34,6 +34,20 @@ def _compile_validator(schema: dict[str, Any] | None) -> Any | None:
     return cls(schema)
 
 
+def _is_array_or_object_schema_type(type_value: Any) -> bool:
+    """True when a JSON Schema `type` value includes "array" or "object".
+
+    `type` may be a single string or (per draft 2020-12) a list of strings
+    for a union type (e.g. `["object", "string"]`), so check both shapes.
+    """
+
+    if isinstance(type_value, str):
+        return type_value in ("array", "object")
+    if isinstance(type_value, list):
+        return any(t in ("array", "object") for t in type_value)
+    return False
+
+
 class CLINameCollisionError(RuntimeError):
     """Raised when two tool names map to the same CLI invocation.
 
@@ -165,7 +179,45 @@ class ToolRegistration:
             out["common_failures"] = list(self.common_failures)
         if self.next_actions:
             out["next_actions"] = list(self.next_actions)
+        cli_hint = self.cli_array_object_hint()
+        if cli_hint:
+            out["cli_hint"] = cli_hint
         return out
+
+    def cli_array_object_hint(self) -> str | None:
+        """Return a CLI usage hint for array/object-typed input fields, or
+        ``None`` when this tool has none.
+
+        The `tt` CLI only JSON-decodes flags whose key ends in `_json`
+        (see `cli._parse_kv_args`); a plain `--outcomes '[...]'` is coerced
+        as a scalar/string, never parsed as JSON. Agents previously
+        discovered this by trial and error (trade-trace-wgau7) because
+        `tool.schema` output never mentioned it, even though
+        `docs/architecture/contracts.md` §2.1 already documents it for
+        human readers. Generated straight from `json_schema.properties`
+        (single source of truth, no hand-maintained tool list) and only
+        for tools that actually have an array/object property, so tools
+        with none carry no extra noise.
+        """
+
+        if self.json_schema is None:
+            return None
+        properties = self.json_schema.get("properties")
+        if not isinstance(properties, dict):
+            return None
+        fields = sorted(
+            name
+            for name, prop in properties.items()
+            if isinstance(prop, dict) and _is_array_or_object_schema_type(prop.get("type"))
+        )
+        if not fields:
+            return None
+        return (
+            "Array/object parameters (" + ", ".join(fields) + ") are passed on "
+            "the CLI as --<name>-json '<json>' (hyphenated flag, key suffix "
+            "_json) — a plain --<name> value is treated as a scalar string, "
+            "not parsed as JSON. Repeated flags accumulate into a list."
+        )
 
     def display_example_minimal(self) -> dict[str, Any] | None:
         """The minimal example surfaced to agents via ``tool.schema``.

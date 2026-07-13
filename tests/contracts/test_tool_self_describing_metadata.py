@@ -128,6 +128,41 @@ def test_source_freshness_help_and_mcp_schema_are_self_describing(capsys):
     assert "does not drive source-quality stale_sources" in props["retrieved_at"]["description"]
 
 
+def test_tool_schema_surfaces_cli_json_flag_hint_only_for_array_object_tools(tmp_path):
+    """trade-trace-wgau7: the `tt` CLI only JSON-decodes flags whose key
+    ends in `_json` (`--outcomes-json '[...]'`, not `--outcomes '[...]'`);
+    agents previously discovered this only by trial and error because
+    tool.schema output never mentioned it. forecast.add has an array
+    property (`outcomes`) and an object-typed property (`metadata_json`),
+    so its tool.schema metadata must carry a `cli_hint` naming the `_json`
+    convention. forecast.commit_blind is a public, non-legacy write tool
+    whose schema properties are all scalars (`forecast_id`, `as_of`,
+    `idempotency_key`, `home`), so it must carry no `cli_hint` -- the hint
+    is generated only where it is actually relevant."""
+
+    home = tmp_path / "home"
+    assert mcp_call("journal.init", {"home": str(home)}).ok
+
+    forecast_env = mcp_call("tool.schema", {"home": str(home), "tool": "forecast.add"})
+    assert forecast_env.ok, forecast_env
+    forecast_hint = forecast_env.data["metadata"]["cli_hint"]
+    assert "_json" in forecast_hint
+    assert "--<name>-json" in forecast_hint
+    assert "outcomes" in forecast_hint
+
+    scalar_env = mcp_call("tool.schema", {"home": str(home), "tool": "forecast.commit_blind"})
+    assert scalar_env.ok, scalar_env
+    assert "cli_hint" not in scalar_env.data["metadata"]
+
+    # Catalog mode (no `tool` filter) surfaces the same per-tool metadata,
+    # so the hint is discoverable without knowing the tool name in advance.
+    catalog_env = mcp_call("tool.schema", {"home": str(home)})
+    assert catalog_env.ok, catalog_env
+    catalog = {t["name"]: t for t in catalog_env.data["tools"]}
+    assert catalog["forecast.add"]["metadata"]["cli_hint"] == forecast_hint
+    assert "cli_hint" not in catalog["forecast.commit_blind"]["metadata"]
+
+
 def test_unknown_cli_command_error_has_next_actions(capsys):
     rc = cli_main(["decision", "nope"])
 
