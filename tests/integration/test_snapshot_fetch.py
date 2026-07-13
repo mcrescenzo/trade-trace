@@ -165,6 +165,86 @@ def test_snapshot_fetch_volume24hr_absent_is_not_fabricated(
     assert stored["polymarket_snapshot"]["volume_24h"] is None
 
 
+# -- price -> lastTradePrice -> last -> mid chain provenance (trade-trace-2j4r1) --
+# `snapshot.price` is filled by a price -> lastTradePrice -> last -> mid
+# chain (and may itself be overridden by the within-book mid per AX-027), but
+# callers previously could not tell WHICH field supplied it, nor read
+# `lastTradePrice` explicitly when it differs from `price`. Mirror the
+# volume_24h pattern (trade-trace-ismzy): record `price_source` (the chain
+# field name) and `last_trade_price` (explicit, never fabricated) in
+# metadata_json.
+
+
+def test_snapshot_fetch_records_price_source_and_last_trade_price_when_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-price-source")
+    _enable_adapter(home)
+
+    # A live two-sided book plus a diverging lastTradePrice (ax-dogfood
+    # AX-027 shape): `price` is book-mid-anchored (0.425), but
+    # `last_trade_price` must still surface the venue's real last print
+    # (0.49) and `price_source` must name the chain field it came from
+    # (`lastTradePrice`, since no top-level `price` key is present).
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"bestBid": "0.41", "bestAsk": "0.44", "lastTradePrice": "0.49"},
+    )
+
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["price"] == pytest.approx(0.425)
+    assert env.data["metadata_json"]["price_source"] == "lastTradePrice"
+    assert env.data["metadata_json"]["last_trade_price"] == "0.49"
+
+    with sqlite3.connect(db_path(Path(home))) as conn:
+        (metadata_text,) = conn.execute(
+            "SELECT metadata_json FROM snapshots WHERE id=?", (env.data["id"],)
+        ).fetchone()
+    stored = json.loads(metadata_text)
+    assert stored["polymarket_snapshot"]["price_source"] == "lastTradePrice"
+    assert stored["polymarket_snapshot"]["last_trade_price"] == "0.49"
+
+
+def test_snapshot_fetch_price_source_and_last_trade_price_absent_are_not_fabricated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """When Gamma's payload carries none of price/lastTradePrice/last/mid,
+    both price_source and last_trade_price must record as genuinely absent —
+    never derived/defaulted from another field."""
+
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-no-price-source")
+    _enable_adapter(home)
+
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"volume": "10"},
+    )
+
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["metadata_json"]["price_source"] is None
+    assert env.data["metadata_json"]["last_trade_price"] is None
+
+    with sqlite3.connect(db_path(Path(home))) as conn:
+        (metadata_text,) = conn.execute(
+            "SELECT metadata_json FROM snapshots WHERE id=?", (env.data["id"],)
+        ).fetchone()
+    stored = json.loads(metadata_text)
+    assert stored["polymarket_snapshot"]["price_source"] is None
+    assert stored["polymarket_snapshot"]["last_trade_price"] is None
+
+
 def test_snapshot_from_raw_without_depth_fields_does_not_dump_whole_payload():
     """A closed/sports market payload that carries no book/liquidity/orderBook/
     depth field must NOT have the entire raw Gamma object dumped into

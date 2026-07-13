@@ -78,6 +78,19 @@ def _first_present(raw: dict[str, Any], *keys: str) -> Any:
     return None
 
 
+def _first_present_source(raw: dict[str, Any], *keys: str) -> str | None:
+    """Return the name of the key `_first_present` would resolve to for the
+    same `raw`/`keys` (same presence/non-blank selection order), or None when
+    no key in the chain supplied a value. Lets a caller record provenance
+    (which field actually filled a derived value) alongside the value itself.
+    """
+
+    for key in keys:
+        if key in raw and raw[key] not in (None, ""):
+            return key
+    return None
+
+
 def _normalize_bool_like(value: Any) -> bool | None:
     """Normalize common API bool encodings without treating 'false' as truthy."""
 
@@ -504,6 +517,7 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
     # returns the first key whose value is not None/"" — preserving 0.0
     # (trade-trace-ph4n).
     price = _first_present(raw, "price", "lastTradePrice", "last", "mid")
+    price_source = _first_present_source(raw, "price", "lastTradePrice", "last", "mid")
     bidf = _optional_float(bid, "bestBid")
     askf = _optional_float(ask, "bestAsk")
     pricef = _optional_float(price, "price")
@@ -542,6 +556,18 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
         # field, so no schema migration is needed). Absent when Gamma omits it
         # — never fabricated/derived from the cumulative `volume` field.
         "volume_24h": _first_present(raw, "volume24hr"),
+        # Mirrors the volume_24h pattern (trade-trace-ismzy) for the
+        # price -> lastTradePrice -> last -> mid chain above
+        # (trade-trace-2j4r1): callers previously could not tell WHICH field
+        # supplied `price`, nor read `lastTradePrice` explicitly when it
+        # differs from `price` (`price` is book-mid-anchored per AX-027 when
+        # a two-sided book exists, so it and lastTradePrice can legitimately
+        # diverge). `price_source` names the chain field that supplied the
+        # pre-mid-anchoring fallback value; `last_trade_price` is the venue's
+        # actual last trade print. Both are absent (None) — never
+        # fabricated/derived — when Gamma's payload doesn't carry them.
+        "price_source": price_source,
+        "last_trade_price": _first_present(raw, "lastTradePrice", "last"),
     }
     # Sentinel-aware: `impliedProbability` of 0.0 is a real value (resolved-NO /
     # dead YES contract worth $0), but 0.0 is falsy, so the old
