@@ -40,7 +40,7 @@ in the stated `direction`. A criterion `pass` is `true`, `false`, or `null`
 | `brier` | `phase_gate_readiness.anchored_market_baseline` `summary.metrics.brier` | `measured <= threshold` | Mean Brier score over scored binary forecasts that have a market baseline (lower is better). |
 | `skill_vs_market` | `phase_gate_readiness.anchored_market_baseline` `summary.metrics.skill` | `measured >= threshold` | Brier skill versus the market baseline (`1 - brier / brier_baseline`; `> 0` beats the market). The headline "did it actually beat the market" number. |
 | `reconciliation_cleanliness` | `reconciliation_records` (unresolved AND critical) | `measured <= threshold` | Count of reconciliation records that are simultaneously `unresolved` and critical (carry `diff_severity='critical'` or a critical mismatch code: `POLICY_WAIVER_BREACH`, `DUPLICATE_FILL`, `REJECTED_APPROVED_INTENT`). The natural bar is `0`. |
-| `audit_readiness` | `report.audit_readiness` `summary.ready` | `measured == threshold` | A populated prediction-market sample with zero blocking provenance issues. Owner-required value is `true`. |
+| `audit_readiness` | `report.audit_readiness` `summary.ready` | `measured == threshold` | A populated prediction-market sample with zero blocking provenance issues. Owner-required value is `true`. `blocking_count` excludes forecasts created before `PRE_V3_CONVENTION_CUTOFF` under the owner-authorized legacy carve-out (see §4). |
 | `paper_fill_coverage` | `pretrade_intents` ∩ `paper_fill_records` | `measured >= threshold` | Fraction of pretrade intents that have a linked paper fill — did the paper layer actually track what would have happened? |
 
 `brier` and `skill_vs_market` are computed over the **anchored** sample
@@ -98,7 +98,7 @@ authorized thresholds and the agent did not choose them as a self-grant.**
 | `brier` | _TBD_ (e.g. 0.18) | Below a coin-flip-on-base-rate; tie to observed base rates. |
 | `skill_vs_market` | _TBD_ (e.g. ≥ 0.0, ideally > 0) | Must at least match the market baseline; arguably must beat it. |
 | `reconciliation_cleanliness` | _TBD_ (e.g. 0 over a rolling window) | Zero open critical mismatches is the natural bar. |
-| `audit_readiness` | `true` | Non-negotiable: zero blocking provenance issues. |
+| `audit_readiness` | `true` | Non-negotiable: zero blocking provenance issues. **Exception, owner-authorized 2026-07-13 (trade-trace-55ybn / trade-trace-15i4q):** forecasts created before `PRE_V3_CONVENTION_CUTOFF = "2026-07-13T15:00:00Z"` (18 forecasts made under paper-loop conventions v1/v2, lacking forecast-level `resolution_rule_text`, append-only and therefore unfixable in place) are a labeled legacy bucket reported as `summary.legacy_missing_rule_count` — always surfaced, never hidden — and are excluded from `blocking_count`. The bar remains non-negotiable for every forecast created at or after the cutoff; this is a scoped carve-out for pre-convention archaeology, not a relaxation going forward. |
 | `paper_fill_coverage` | _TBD_ (e.g. 0.9) | Most proposed trades must have a paper fill to learn from. |
 
 Once the owner sets these, record the authorized values here (replacing the
@@ -114,6 +114,22 @@ without the owner's explicit sign-off.**
 > Live trade execution likewise remains **not authorized**: no execution,
 > credential, or custody path exists in this repository, and adding one
 > would require a new explicit owner authorization.
+
+> **Owner decision record (2026-07-13, trade-trace-55ybn / trade-trace-15i4q):**
+> the owner explicitly authorized a scoped legacy carve-out for the
+> `audit_readiness` criterion's "non-negotiable" bar above: forecasts created
+> before `PRE_V3_CONVENTION_CUTOFF = "2026-07-13T15:00:00Z"` (18 forecasts made
+> under paper-loop conventions v1/v2, lacking forecast-level
+> `resolution_rule_text`; forecasts are append-only so they cannot be edited
+> in place) are separated into `report.audit_readiness`
+> `summary.legacy_missing_rule_count` and excluded from `blocking_count`. This
+> is option (c) from `trade-trace-55ybn`'s proposal, picked over superseding
+> all 18 rows (heavy, inflates forecast counts, muddies calibration lineage)
+> or leaving a permanent blocking floor of 18 (the criterion would never read
+> clean). The carve-out is scoped to pre-cutoff archaeology only: the bar
+> stays non-negotiable — zero blocking provenance issues — for every forecast
+> created at or after the cutoff, and `legacy_missing_rule_count` is always
+> surfaced, never hidden.
 
 ## 5. The report
 

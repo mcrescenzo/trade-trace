@@ -18,6 +18,21 @@ DEFAULT_STALE_SOURCE_THRESHOLD_DAYS = 7
 ENTER_TYPES = ("actual_enter", "paper_enter")
 PM_CLASSES = ("prediction_market", "event_market")
 
+# Owner-authorized legacy bucket for pre-v3 forecasts (trade-trace-55ybn,
+# implementation trade-trace-15i4q; owner authorization 2026-07-13). 18
+# forecasts made under paper-loop conventions v1/v2 lack forecast-level
+# resolution_rule_text and cannot be edited (forecasts are append-only).
+# Option (c) from trade-trace-55ybn was authorized: forecasts CREATED before
+# this cutoff are pre-v3 archaeology, not a live provenance gap -- they are
+# separated into `legacy_missing_rule_count` (always surfaced in the
+# summary, never hidden) and excluded from `blocking_count`, which reflects
+# post-v3-convention rows only. This is a deliberate, explicit owner
+# carve-out of the "non-negotiable: zero blocking provenance issues" bar in
+# docs/architecture/phase-gates.md §4 for rows that predate the convention
+# that made resolution_rule_text mandatory -- it does NOT relax the bar for
+# any forecast created at or after this timestamp.
+PRE_V3_CONVENTION_CUTOFF = "2026-07-13T15:00:00Z"
+
 # Point-of-failure remediation guidance, one per check. Audit-readiness is a
 # diagnostic surface; without these a caller sees a "blocking" count with no
 # in-surface path to clear it (AX dogfood run 22). Purely advisory text — it
@@ -74,8 +89,15 @@ def report_audit_readiness(
     stale_source_threshold_days: int = DEFAULT_STALE_SOURCE_THRESHOLD_DAYS,
 ) -> dict[str, Any]:
     issues: list[dict[str, Any]] = []
+    resolution_rule_check = _missing_resolution_rule_provenance(conn)
+    # Owner-authorized legacy bucket (trade-trace-15i4q): pop the legacy
+    # fields off before the check joins `issues` so its shape matches every
+    # other check; legacy_missing_rule_count is surfaced on the summary
+    # instead, ALWAYS (even when zero), never hidden.
+    legacy_missing_rule_count = resolution_rule_check.pop("legacy_count", 0)
+    legacy_missing_rule_sample_ids = resolution_rule_check.pop("legacy_sample_ids", {"forecasts": []})
     checks = [
-        _missing_resolution_rule_provenance(conn),
+        resolution_rule_check,
         _missing_snapshot_for_entered_decisions(conn),
         _stale_snapshots(conn, stale_snapshot_threshold_days),
         _missing_microstructure(conn),
@@ -138,6 +160,9 @@ def report_audit_readiness(
             "info_count": counts["info"],
             "ready": sample_size > 0 and counts["blocking"] == 0,
             "sample_warning": sample_warning,
+            "legacy_missing_rule_count": legacy_missing_rule_count,
+            "legacy_missing_rule_sample_ids": legacy_missing_rule_sample_ids,
+            "pre_v3_convention_cutoff": PRE_V3_CONVENTION_CUTOFF,
             "stale_snapshot_threshold_days": stale_snapshot_threshold_days,
             "stale_source_threshold_days": stale_source_threshold_days,
         },
@@ -176,7 +201,7 @@ def _parse(ts: str | None) -> datetime | None:
 def _missing_resolution_rule_provenance(conn: sqlite3.Connection) -> dict[str, Any]:
     rows = conn.execute(
         """
-        SELECT f.id, t.instrument_id, i.resolution_criteria_text, f.resolution_rule_text
+        SELECT f.id, f.created_at, t.instrument_id, i.resolution_criteria_text, f.resolution_rule_text
         FROM forecasts f
         JOIN theses t ON t.id = f.thesis_id
         JOIN instruments i ON i.id = t.instrument_id
@@ -186,8 +211,30 @@ def _missing_resolution_rule_provenance(conn: sqlite3.Connection) -> dict[str, A
         ORDER BY f.created_at, f.id
         """
     ).fetchall()
-    samples = [{"id": r[0], "instrument_id": r[1], "has_instrument_criteria": bool(r[2]), "has_forecast_rule": bool(r[3])} for r in rows]
-    return _issue("missing_resolution_rule_provenance", "blocking", "forecasts", samples)
+    # Owner-authorized legacy bucket (see PRE_V3_CONVENTION_CUTOFF): a
+    # forecast created before the cutoff is pre-v3 archaeology, reported via
+    # legacy_missing_rule_count on the summary rather than counted toward
+    # blocking_count. A forecast whose created_at cannot be parsed is treated
+    # as post-cutoff (fails closed into the blocking bucket rather than
+    # silently escaping into the legacy carve-out).
+    cutoff = _parse(PRE_V3_CONVENTION_CUTOFF)
+    blocking_samples: list[dict[str, Any]] = []
+    legacy_samples: list[dict[str, Any]] = []
+    for f_id, created_at, instrument_id, has_instrument_criteria, has_forecast_rule in rows:
+        sample = {
+            "id": f_id, "instrument_id": instrument_id,
+            "has_instrument_criteria": bool(has_instrument_criteria),
+            "has_forecast_rule": bool(has_forecast_rule),
+        }
+        created = _parse(created_at)
+        if created is not None and cutoff is not None and created < cutoff:
+            legacy_samples.append(sample)
+        else:
+            blocking_samples.append(sample)
+    issue = _issue("missing_resolution_rule_provenance", "blocking", "forecasts", blocking_samples)
+    issue["legacy_count"] = len(legacy_samples)
+    issue["legacy_sample_ids"] = {"forecasts": [s["id"] for s in legacy_samples[:MAX_SAMPLES]]}
+    return issue
 
 
 def _missing_snapshot_for_entered_decisions(conn: sqlite3.Connection) -> dict[str, Any]:

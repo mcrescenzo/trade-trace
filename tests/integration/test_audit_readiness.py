@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from tests._mcp_helpers import mcp_default as _mcp
+from trade_trace.reports.audit_readiness import PRE_V3_CONVENTION_CUTOFF
+from trade_trace.tools._helpers import CLOCK_OVERRIDE
 
 
 def test_audit_readiness_empty_journal_safe(home: Path):
@@ -85,6 +88,79 @@ def test_audit_readiness_surfaces_prediction_market_blockers_and_warnings(home: 
     rr_remediation = by_check["missing_resolution_rule_provenance"]["remediation"]
     assert "forecast.add" in rr_remediation
     assert "resolution_rule_text" in rr_remediation
+
+
+def _seed_forecast_missing_rule_provenance(home: Path, idx: int, *, created_at: datetime) -> str:
+    """Seed a prediction-market forecast lacking BOTH instrument- and
+    forecast-level resolution rule provenance, with created_at pinned via
+    CLOCK_OVERRIDE (forecast.add stamps created_at server-side)."""
+    token = CLOCK_OVERRIDE.set(created_at)
+    try:
+        venue = _mcp(home, "venue.add", {"name": f"PM-legacy-{idx}", "kind": "prediction_market"}).data["id"]
+        inst = _mcp(home, "instrument.add", {
+            "venue_id": venue,
+            "asset_class": "prediction_market",
+            "title": f"Will legacy-{idx} happen?",
+        }).data["id"]
+        thesis = _mcp(home, "thesis.add", {"instrument_id": inst, "side": "yes", "body": "because"}).data["id"]
+        fcst = _mcp(home, "forecast.add", {
+            "thesis_id": thesis,
+            "kind": "binary",
+            "yes_label": "yes",
+            "outcomes": [
+                {"outcome_label": "yes", "probability": 0.5},
+                {"outcome_label": "no", "probability": 0.5},
+            ],
+        }).data["id"]
+        return fcst
+    finally:
+        CLOCK_OVERRIDE.reset(token)
+
+
+def test_audit_readiness_legacy_bucket_excludes_pre_cutoff_from_blocking(home: Path):
+    """Owner-authorized legacy bucket (trade-trace-55ybn, trade-trace-15i4q):
+    a pre/post-cutoff mix must exclude the legacy row from blocking_count
+    while surfacing its exact count via legacy_missing_rule_count."""
+    legacy_id = _seed_forecast_missing_rule_provenance(
+        home, 1, created_at=datetime(2026, 7, 10, 0, 0, 0, tzinfo=UTC),
+    )
+    post_cutoff_id = _seed_forecast_missing_rule_provenance(
+        home, 2, created_at=datetime(2026, 7, 13, 16, 0, 0, tzinfo=UTC),
+    )
+
+    env = _mcp(home, "report.audit_readiness", {})
+    assert env.ok, env
+    summary = env.data["summary"]
+    assert summary["blocking_count"] == 1
+    assert summary["legacy_missing_rule_count"] == 1
+    assert summary["pre_v3_convention_cutoff"] == PRE_V3_CONVENTION_CUTOFF
+    by_check = {issue["check"]: issue for issue in env.data["issues"]}
+    rr = by_check["missing_resolution_rule_provenance"]
+    assert rr["count"] == 1
+    assert rr["sample_ids"]["forecasts"] == [post_cutoff_id]
+    assert legacy_id not in rr["sample_ids"]["forecasts"]
+    assert legacy_id in summary["legacy_missing_rule_sample_ids"]["forecasts"]
+
+
+def test_audit_readiness_all_legacy_journal_yields_zero_blocking(home: Path):
+    """An all-legacy journal (the 18 pre-v3 forecasts this bead targets)
+    reports blocking_count == 0 while legacy_missing_rule_count is exact and
+    always surfaced -- never hidden."""
+    legacy_ids = [
+        _seed_forecast_missing_rule_provenance(
+            home, idx, created_at=datetime(2026, 7, 10, 0, 0, 0, tzinfo=UTC),
+        )
+        for idx in range(18)
+    ]
+
+    env = _mcp(home, "report.audit_readiness", {})
+    assert env.ok, env
+    summary = env.data["summary"]
+    assert summary["blocking_count"] == 0
+    assert summary["legacy_missing_rule_count"] == 18
+    assert set(summary["legacy_missing_rule_sample_ids"]["forecasts"]) == set(legacy_ids)
+    by_check = {issue["check"]: issue for issue in env.data["issues"]}
+    assert "missing_resolution_rule_provenance" not in by_check
 
 
 def _seed_entered_decision(home: Path, idx: int, *, reason: str | None) -> str:
