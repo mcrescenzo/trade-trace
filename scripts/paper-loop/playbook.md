@@ -37,13 +37,19 @@ procedure, and the trading rule. Follow it exactly.
    `decision.add`, read `json_schema["x-decision-matrix"]` in its
    tool.schema output FIRST — it lists per-type required/optional/
    forbidden fields (e.g. type=skip forbids price/quantity/fees).
+   `snapshot.fetch` is not replay-idempotent (same-key retry returns
+   IDEMPOTENCY_CONFLICT on `captured_at` — trade-trace-pzyvq): fetch
+   each market ONCE per run and reuse the first snapshot id on any
+   conflict.
 
 ## Phases (do all six, in order)
 
 ### 1. Orient
-`report.bootstrap`, then `report.work_queue`. Set RUN_ID
-(`YYYY-MM-DD-NN`, UTC; NN = 1 + count of files in
-`$TRADE_TRACE_HOME/reports/` matching today's date).
+`report.bootstrap`, then `report.work_queue`, then `forecast.list`
+(public, read-only; NDJSON one envelope per item; filters + cursor) to
+enumerate the open book authoritatively — including forecasts with no
+linked decision. Set RUN_ID (`YYYY-MM-DD-NN`, UTC; NN = 1 + count of
+files in `$TRADE_TRACE_HOME/reports/` matching today's date).
 
 ### 2. Settle
 For every market with an open forecast or open paper position:
