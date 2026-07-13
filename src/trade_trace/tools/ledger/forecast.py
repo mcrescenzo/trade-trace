@@ -22,6 +22,7 @@ from trade_trace.reporting.pagination import (
     _decode_cursor,
     _encode_cursor,
 )
+from trade_trace.reports._filter_support import _placeholders
 from trade_trace.tools._helpers import (
     CONFIDENCE_LABELS,
     check_idempotency_replay,
@@ -847,6 +848,39 @@ _FORECAST_SUPERSEDED_IDS_SQL = (
 )
 
 
+def _bulk_fetch_forecast_list_outcomes(
+    conn: Any, forecast_ids: set[str],
+) -> dict[str, list[dict[str, Any]]]:
+    """Batch-fetch `forecast_outcomes` rows for the given forecast ids in one
+    `IN (...)` query (bead trade-trace-mymh7).
+
+    `forecast.list` items previously carried structural fields only — no
+    probability — so a caller doing an edge-vs-market check had to issue a
+    second per-forecast query (`forecast_outcomes WHERE forecast_id = ?`) for
+    every row. This fetches every *page* forecast's outcomes in a single
+    round trip instead. Scoped to the already-paginated page (not the full
+    unpaginated result set), matching the pagination-window ordering in
+    `_forecast_list`, so payload growth stays bounded by `limit` regardless
+    of how many forecasts match the filter — a forecast with no rows is
+    simply absent from the returned map."""
+
+    outcomes: dict[str, list[dict[str, Any]]] = {}
+    if not forecast_ids:
+        return outcomes
+    ids = list(forecast_ids)
+    rows = conn.execute(
+        "SELECT forecast_id, outcome_label, probability FROM forecast_outcomes "
+        f"WHERE forecast_id IN ({_placeholders(len(ids))}) "
+        "ORDER BY forecast_id, outcome_label",
+        ids,
+    ).fetchall()
+    for forecast_id, outcome_label, probability in rows:
+        outcomes.setdefault(forecast_id, []).append(
+            {"outcome_label": outcome_label, "probability": probability}
+        )
+    return outcomes
+
+
 def _derive_scoring_state_from_maps(
     forecast_id: str,
     superseded_ids: set[str],
@@ -942,7 +976,10 @@ def _forecast_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     LEFT JOIN aggregate over `decisions.forecast_id`) and
     `snapshot_anchor_id` (from the 1:1 `forecast_snapshot_anchor` table) so a
     caller can distinguish audited-elsewhere forecasts from orphaned ones
-    without a second round-trip.
+    without a second round-trip. Each item also carries `outcomes` (its
+    `forecast_outcomes` rows as `[{outcome_label, probability}, ...]`,
+    batch-fetched for the page only) so a caller can compute forecast-vs-
+    market edge without a second per-forecast query (bead trade-trace-mymh7).
     """
 
     del ctx
@@ -992,21 +1029,30 @@ def _forecast_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         superseded_ids = {r[0] for r in conn.execute(_FORECAST_SUPERSEDED_IDS_SQL).fetchall()}
         score_map = {r[0]: (r[1], r[2]) for r in conn.execute(_FORECAST_LATEST_SCORE_SQL).fetchall()}
 
-    items = []
-    for row in rows:
-        state = _derive_scoring_state_from_maps(row[0], superseded_ids, score_map)
-        if scoring_state is not None and state != scoring_state:
-            continue
-        items.append(_forecast_list_row_to_dict(row, state))
+        items = []
+        for row in rows:
+            state = _derive_scoring_state_from_maps(row[0], superseded_ids, score_map)
+            if scoring_state is not None and state != scoring_state:
+                continue
+            items.append(_forecast_list_row_to_dict(row, state))
 
-    try:
-        page_items, next_cursor = _forecast_list_cursor_window(items, cursor=cursor, limit=limit)
-    except PaginationError as exc:
-        raise ToolError(
-            ErrorCode.VALIDATION_ERROR,
-            f"invalid cursor: {exc}",
-            details={"field": "cursor", "value": cursor},
-        ) from exc
+        try:
+            page_items, next_cursor = _forecast_list_cursor_window(items, cursor=cursor, limit=limit)
+        except PaginationError as exc:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                f"invalid cursor: {exc}",
+                details={"field": "cursor", "value": cursor},
+            ) from exc
+
+        # Outcomes are batch-fetched for the page only (bead trade-trace-mymh7),
+        # not the full pre-pagination `items` list, so payload growth stays
+        # bounded by `limit` on both the SQL round trip and the response size.
+        outcomes_by_forecast = _bulk_fetch_forecast_list_outcomes(
+            conn, {item["id"] for item in page_items}
+        )
+        for item in page_items:
+            item["outcomes"] = outcomes_by_forecast.get(item["id"], [])
 
     return {
         "items": page_items,
@@ -1055,9 +1101,11 @@ def register_forecast_tools(registry: ToolRegistry) -> None:
         description=(
             "List every forecast row regardless of decision linkage, with "
             "scoring_state/instrument_id/resolution-window filters and cursor "
-            "pagination; each item carries its snapshot_anchor_id (if any) and "
+            "pagination; each item carries its snapshot_anchor_id (if any), "
             "linked_decision_count so forecasts with no linked decision stay "
-            "enumerable outside review.bundle."
+            "enumerable outside review.bundle, and outcomes "
+            "([{outcome_label, probability}, ...]) so a caller can compute "
+            "forecast-vs-market edge without a second per-forecast query."
         ),
         json_schema=FORECAST_LIST_JSON_SCHEMA,
     )

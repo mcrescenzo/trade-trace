@@ -51,8 +51,9 @@ procedure, and the trading rule. Follow it exactly.
 `report.bootstrap`, then `report.work_queue`, then `forecast.list`
 (public, read-only; NDJSON one envelope per item; filters + cursor) to
 enumerate the open book authoritatively — including forecasts with no
-linked decision. Items carry `id` (not `forecast_id`) and no
-probability (fetch outcomes separately for edge checks); the stream
+linked decision. Items carry `id` (not `forecast_id`) and an
+`outcomes` array (`[{outcome_label, probability}, ...]`, batch-fetched
+per page) so edge-vs-market checks don't need a second query; the stream
 ends with a standard summary envelope (`count`, empty `items`,
 `meta.next_cursor`) — that is contract behavior for all list tools,
 not an error. Also read the most recent prior run summary in

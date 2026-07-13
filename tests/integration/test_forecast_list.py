@@ -12,6 +12,8 @@ style (dispatch-based, one DB per test via `tmp_path`).
 
 from __future__ import annotations
 
+import pytest
+
 from trade_trace.core import dispatch
 
 
@@ -215,6 +217,76 @@ def test_forecast_list_rejects_malformed_cursor(tmp_path):
     assert not bad.ok
     assert bad.error.code == "VALIDATION_ERROR"
     assert bad.error.details["field"] == "cursor"
+
+
+def test_forecast_list_items_carry_outcome_probabilities(tmp_path):
+    """Bead trade-trace-mymh7: items must carry an `outcomes` array so a
+    caller can compute forecast-vs-market edge without a second per-forecast
+    query."""
+
+    home = tmp_path / "home"
+    assert _call("journal.init", {"home": str(home)}).ok
+
+    market_id = _bind_market(home, external_id="ext-outcomes", idempotency_key="bind-outcomes")
+    forecast_id = _add_forecast(
+        home, market_id=market_id, idempotency_key="fc-outcomes", p_yes=0.62,
+    )["id"]
+
+    listed = _call("forecast.list", {"home": str(home)})
+    assert listed.ok, listed
+    item = listed.data["items"][0]
+    assert item["id"] == forecast_id
+
+    outcomes = item["outcomes"]
+    by_label = {o["outcome_label"]: o["probability"] for o in outcomes}
+    assert set(by_label) == {"yes", "no"}
+    assert by_label["yes"] == pytest.approx(0.62)
+    assert by_label["no"] == pytest.approx(0.38)
+    assert sum(by_label.values()) == pytest.approx(1.0)
+
+
+def test_forecast_list_outcomes_correct_across_pagination_pages(tmp_path):
+    """Each item's `outcomes` must resolve to its own forecast's rows even
+    when the batch fetch is scoped per-page (bead trade-trace-mymh7) —
+    a forecast on page 2 must not pick up page 1's outcomes or vice versa."""
+
+    home = tmp_path / "home"
+    assert _call("journal.init", {"home": str(home)}).ok
+
+    expected_by_id: dict[str, dict[str, float]] = {}
+    for i in range(5):
+        market_id = _bind_market(home, external_id=f"ext-outcomes-page-{i}", idempotency_key=f"bind-outcomes-page-{i}")
+        p_yes = 0.5 + (i * 0.05)
+        forecast_id = _add_forecast(
+            home, market_id=market_id, idempotency_key=f"fc-outcomes-page-{i}", p_yes=p_yes,
+        )["id"]
+        expected_by_id[forecast_id] = {"yes": p_yes, "no": 1.0 - p_yes}
+
+    seen_by_id: dict[str, dict[str, float]] = {}
+    cursor = None
+    pages = 0
+    while True:
+        args = {"home": str(home), "limit": 2}
+        if cursor is not None:
+            args["cursor"] = cursor
+        page = _call("forecast.list", args)
+        assert page.ok, page
+        pages += 1
+        for item in page.data["items"]:
+            outcomes = item["outcomes"]
+            assert len(outcomes) == 2
+            by_label = {o["outcome_label"]: o["probability"] for o in outcomes}
+            assert sum(by_label.values()) == pytest.approx(1.0)
+            seen_by_id[item["id"]] = by_label
+        cursor = page.data["next_cursor"]
+        if not page.data["truncated"]:
+            break
+        assert pages < 10, "pagination did not terminate"
+
+    assert set(seen_by_id) == set(expected_by_id)
+    for forecast_id, expected in expected_by_id.items():
+        assert seen_by_id[forecast_id]["yes"] == pytest.approx(expected["yes"])
+        assert seen_by_id[forecast_id]["no"] == pytest.approx(expected["no"])
 
 
 def test_forecast_list_cursor_pagination_walks_every_forecast_without_duplicates(tmp_path):
