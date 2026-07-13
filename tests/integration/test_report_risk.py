@@ -433,6 +433,45 @@ def test_risk_policy_versions_and_receipts_are_deterministic_and_reported(home):
     assert "no trading advice" in summary["audit_only_note"]
 
 
+def test_risk_policy_version_add_duplicate_content_under_new_key_is_typed_not_raw_integrity_error(home):
+    """trade-trace-0c7cn: risk_policy_versions.policy_hash is UNIQUE (m016).
+    Replaying the EXACT SAME policy content under a NEW idempotency key must
+    NOT leak a raw sqlite3.IntegrityError ("UNIQUE constraint failed:
+    risk_policy_versions.policy_hash"); it must return a typed VALIDATION_ERROR
+    naming the existing policy version id. Same-key replay (the seed call
+    itself) must keep working unmodified."""
+
+    seed_args = {
+        "policy_key": "profile/duplicate-content",
+        "version": "2026-07-10",
+        "limits_json": {"max_position_usd": 100},
+        "rules_json": [{"rule_id": "position_limit", "severity": "hard_block"}],
+        "source": "profile_fixture",
+        "provenance_json": {"author": "test"},
+        "effective_from": "2026-07-10T00:00:00Z",
+    }
+    seeded = _env(home, "risk.policy_version_add", {**seed_args, "idempotency_key": "policy-seed-key"})
+    assert seeded["ok"], seeded
+
+    # Same key + same payload: idempotent replay still works (unaffected by
+    # this fix).
+    replay = _env(home, "risk.policy_version_add", {**seed_args, "idempotency_key": "policy-seed-key"})
+    assert replay["ok"], replay
+    assert replay["data"]["id"] == seeded["data"]["id"]
+
+    # Identical content, a DIFFERENT idempotency key: must be a typed
+    # VALIDATION_ERROR naming the existing version, never a raw
+    # sqlite3.IntegrityError / UNIQUE constraint message reaching the caller.
+    dup = _env(home, "risk.policy_version_add", {**seed_args, "idempotency_key": "policy-replay-key"})
+    assert dup["ok"] is False
+    assert dup["error"]["code"] == "VALIDATION_ERROR"
+    assert dup["error"]["details"]["existing_policy_version_id"] == seeded["data"]["id"]
+    assert dup["error"]["details"]["policy_hash"] == seeded["data"]["policy_hash"]
+    assert "UNIQUE constraint" not in dup["error"]["message"]
+    assert "IntegrityError" not in dup["error"]["message"]
+    assert seeded["data"]["id"] in dup["error"]["message"]
+
+
 def test_risk_missing_data_never_silent_pass(home):
     policy = _env(home, "risk.policy_version_add", {
         "policy_key": "profile/default",

@@ -670,6 +670,31 @@ def _risk_policy_version_add(args: dict[str, Any], ctx: ToolContext) -> dict[str
             if replay is not None:
                 emit_event(uow, event_type=_POLICY_EVENT, subject_kind="risk_policy_version", subject_id=replay["id"], payload=payload(replay["id"]), actor_id=ctx.actor_id, idempotency_key=idempotency_key, ctx=ctx)
                 return _policy_response(uow.conn, replay["id"])
+            # risk_policy_versions.policy_hash is UNIQUE (m016): identical
+            # policy content submitted under a NEW idempotency key would
+            # otherwise fall through to the INSERT below and surface a raw
+            # sqlite3.IntegrityError ("UNIQUE constraint failed:
+            # risk_policy_versions.policy_hash") instead of a typed, actionable
+            # envelope (trade-trace-0c7cn). Detect the duplicate up front and
+            # name the existing version so the caller can replay with the
+            # original idempotency_key or bump the version. Same-key replay is
+            # handled above and unaffected.
+            duplicate = uow.conn.execute(
+                "SELECT id FROM risk_policy_versions WHERE policy_hash = ?",
+                (policy_hash,),
+            ).fetchone()
+            if duplicate is not None:
+                raise ToolError(
+                    ErrorCode.VALIDATION_ERROR,
+                    f"identical policy content already recorded as {duplicate[0]}; "
+                    "replay with the original idempotency key or bump the version",
+                    details={
+                        "field": "policy_hash",
+                        "existing_policy_version_id": duplicate[0],
+                        "policy_hash": policy_hash,
+                        "reason": "duplicate_policy_content",
+                    },
+                )
             policy_id = args.get("id") or new_id("rpv")
             created_at = now_iso()
             uow.execute(
