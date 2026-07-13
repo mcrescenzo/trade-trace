@@ -32,7 +32,11 @@ procedure, and the trading rule. Follow it exactly.
    `market.refresh`, `snapshot.fetch`, `snapshot.fetch_series`,
    `outcome.fetch`) require an explicit `idempotency_key`; so do
    `pretrade_intent.record`, `paper_fill.record`,
-   `account_snapshot.import`, `external_receipt.import`.
+   `account_snapshot.import`, `external_receipt.import`. Array/object CLI
+   args use the `_json` flag suffix (`--outcomes-json '[...]'`); for
+   `decision.add`, read `json_schema["x-decision-matrix"]` in its
+   tool.schema output FIRST — it lists per-type required/optional/
+   forbidden fields (e.g. type=skip forbids price/quantity/fees).
 
 ## Phases (do all six, in order)
 
