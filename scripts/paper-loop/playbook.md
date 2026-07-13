@@ -68,7 +68,14 @@ to resolution, reported (cumulative) volume ≥ $4,000 — see conventions.md v2
 each: `market.bind` (source=polymarket), `snapshot.fetch`,
 `memory.recall` for priors, then `forecast.add` (kind=binary, both
 outcomes, probabilities summing to 1, `rationale_body` with your actual
-reasoning, `snapshot_id` anchored). Forecast EVERY selected market even
+reasoning, `snapshot_id` anchored, **`resolution_rule_text`** carrying
+the market's resolution rule verbatim from the venue data, and
+**`resolution_at`** set to the market's scheduled close/resolution time,
+ISO-8601). Both fields are REQUIRED on every forecast: without
+`resolution_rule_text` the forecast blocks `report.audit_readiness`
+(a phase-gate criterion), and without `resolution_at` the due-forecast
+machinery (`report.work_queue`, `report.unscored_forecasts`) can never
+flag it for settlement. Forecast EVERY selected market even
 if you will not trade it — forecasts are the evidence backbone.
 
 ### 5. Trade under policy

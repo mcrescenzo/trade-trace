@@ -4,10 +4,13 @@ Versioned decisions the playbook applies every run. Changing anything here
 is a methodology change: bump the run-summary `conventions_version` and note
 it in the next run summary.
 
-`conventions_version: 2`
-(v2, 2026-07-10: after run 2026-07-10-01, the liquidity-check volume field
-is named honestly — the substrate exposes Gamma's cumulative `volume`, not
-24h volume. Substrate follow-up tracked in beads labeled `paper-loop`.)
+`conventions_version: 3`
+(v3, 2026-07-13: forecasts must carry `resolution_rule_text` +
+`resolution_at` — see playbook phase 4; thin-book price-anchor rule added
+below. v2, 2026-07-10: after run 2026-07-10-01, the liquidity-check volume
+field is named honestly — the substrate exposes Gamma's cumulative
+`volume`, not 24h volume. Substrate follow-up tracked in beads labeled
+`paper-loop`.)
 
 ## Keys
 
@@ -82,6 +85,12 @@ a drift-detector for the local ledger and the source of
   check (i.e. ≥ $4,000 reported volume — cumulative, per the v2 note
   above) AND a live book (spread within the policy's $0.05 cap).
 - Edge: trade only when |forecast p − tradeable price| ≥ 0.05.
+- Thin books (v3): when a book is near-empty (spread beyond the policy's
+  $0.05 cap or trivial resting size), the midpoint is meaningless — do
+  not reason from it or report it as "the price"; anchor to
+  `lastTradePrice` with an explicit caveat in the rationale. Such markets
+  fail the universe rule for trading regardless; this rule governs how
+  their prices are *described* in forecasts and summaries.
 - Size: notional = min($200, room under market/category/total exposure
   caps); quantity = notional / price.
 - Every intent gets `risk.evaluate` → `risk.check_record` FIRST. A fail or
