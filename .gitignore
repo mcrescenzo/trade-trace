@@ -17,9 +17,13 @@ audits/
 docs/audits/
 docs/reviews/
 
-# Local agent state
+# Local agent state. `.claude/*` (not `.claude/`) so tracked exceptions
+# below can re-include children: settings.json (session hooks) and
+# skills/ (repo-local loop skills, per trade-trace-x7w7s).
 .opencode/
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/skills/
 .codex/
 .hermes/
 .hermes-bughunt/

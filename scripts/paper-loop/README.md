@@ -19,14 +19,25 @@ only by adding a NEW policy version file + version bump).
 
 ## Running
 
-- Supervised single pass: `bash scripts/paper-loop/run.sh`
+- **Primary (since 2026-07-13): the self-improvement loop** — in a
+  Claude Code session in this repo run `/loop 1h /paper-cycle`. Each
+  hourly cycle spawns a background trading agent (playbook via `tt` CLI),
+  then the orchestrator reviews the run, fixes issues, and logs to
+  `~/.trade-trace-paper/cycle-ledger.md`. Governance:
+  `scripts/paper-loop/CHARTER.md`; procedure:
+  `.claude/skills/paper-cycle/SKILL.md`. Restart after session death:
+  the same one line in a fresh session.
+- Supervised single pass (headless wrapper): `bash scripts/paper-loop/run.sh`
   (watch: `tail -f ~/.trade-trace-paper/logs/run-$(date -u +%F).log`)
 - Interactive pass: `/paper-trade` in a Claude Code session in this repo.
 - Sanity check without running: `bash scripts/paper-loop/run.sh --dry-run`
 
-## Enabling the cron (after 2–3 clean supervised passes)
+## Fallback: headless cron (retired 2026-07-13, kept commented)
 
-Uncomment the paper-loop line in `crontab -e`. The prepared entry:
+The crontab holds a commented entry running `run.sh` every 6 hours with
+scoped permissions. Re-enabling it is an owner action (uncomment via
+`crontab -e`) and it must not run concurrently with the session loop —
+one driver at a time. The prepared entry:
 
 ```
 0 */6 * * * bash -lc '/home/hermes/code/trade-trace/scripts/paper-loop/run.sh' >> /home/hermes/.trade-trace-paper/logs/cron.log 2>&1
