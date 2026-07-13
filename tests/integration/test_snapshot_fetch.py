@@ -167,27 +167,32 @@ def test_snapshot_fetch_volume24hr_absent_is_not_fabricated(
 
 # -- price -> lastTradePrice -> last -> mid chain provenance (trade-trace-2j4r1) --
 # `snapshot.price` is filled by a price -> lastTradePrice -> last -> mid
-# chain (and may itself be overridden by the within-book mid per AX-027), but
-# callers previously could not tell WHICH field supplied it, nor read
-# `lastTradePrice` explicitly when it differs from `price`. Mirror the
-# volume_24h pattern (trade-trace-ismzy): record `price_source` (the chain
-# field name) and `last_trade_price` (explicit, never fabricated) in
-# metadata_json.
+# chain, and may itself be overridden by the within-book mid per AX-027
+# when a two-sided book is present. Mirror the volume_24h pattern
+# (trade-trace-ismzy): record `price_source` and `last_trade_price`
+# (explicit, never fabricated) in metadata_json. `price_source` must name
+# what actually filled `price` (trade-trace-6n4jp): "book_mid" when the
+# two-sided-book anchoring supplied it, the chain field name otherwise —
+# NOT the pre-anchoring chain pick when the book mid overrode it.
 
 
-def test_snapshot_fetch_records_price_source_and_last_trade_price_when_present(
+def test_snapshot_fetch_records_book_mid_price_source_when_two_sided_book_diverges_from_last_trade(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
+    """trade-trace-6n4jp regression: a live two-sided book plus a diverging
+    lastTradePrice (ax-dogfood AX-027 shape) stores `price` as the book mid
+    (0.425), NOT `lastTradePrice` (0.49) — so `price_source` must name
+    "book_mid" (what actually filled the column), not "lastTradePrice" (the
+    pre-anchoring chain pick that lost out to the book mid). Before this fix,
+    price_source named the chain field even though the book mid overrode it,
+    so the label contradicted the stored value. `last_trade_price` still
+    surfaces the venue's real last print (0.49) independently."""
+
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok
     market_id = _manual_market(home, external_id="pm-price-source")
     _enable_adapter(home)
 
-    # A live two-sided book plus a diverging lastTradePrice (ax-dogfood
-    # AX-027 shape): `price` is book-mid-anchored (0.425), but
-    # `last_trade_price` must still surface the venue's real last print
-    # (0.49) and `price_source` must name the chain field it came from
-    # (`lastTradePrice`, since no top-level `price` key is present).
     monkeypatch.setattr(
         PolymarketClient,
         "gamma_get",
@@ -199,6 +204,44 @@ def test_snapshot_fetch_records_price_source_and_last_trade_price_when_present(
     assert env.ok, env
     assert isinstance(env, SuccessEnvelope)
     assert env.data["price"] == pytest.approx(0.425)
+    assert env.data["price"] == env.data["mid"]
+    assert env.data["metadata_json"]["price_source"] == "book_mid"
+    assert env.data["metadata_json"]["last_trade_price"] == "0.49"
+
+    with sqlite3.connect(db_path(Path(home))) as conn:
+        (metadata_text,) = conn.execute(
+            "SELECT metadata_json FROM snapshots WHERE id=?", (env.data["id"],)
+        ).fetchone()
+    stored = json.loads(metadata_text)
+    assert stored["polymarket_snapshot"]["price_source"] == "book_mid"
+    assert stored["polymarket_snapshot"]["last_trade_price"] == "0.49"
+
+
+def test_snapshot_fetch_records_chain_field_price_source_when_no_two_sided_book(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """No-book fallback path (trade-trace-6n4jp): when Gamma's payload has no
+    two-sided book (bestBid/bestAsk both present), `price` falls back to the
+    price -> lastTradePrice -> last -> mid chain, and `price_source` must
+    name the chain field that supplied it — here `lastTradePrice`, since no
+    top-level `price` key is present."""
+
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-price-source-no-book")
+    _enable_adapter(home)
+
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"lastTradePrice": "0.49"},
+    )
+
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["price"] == pytest.approx(0.49)
     assert env.data["metadata_json"]["price_source"] == "lastTradePrice"
     assert env.data["metadata_json"]["last_trade_price"] == "0.49"
 

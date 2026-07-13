@@ -517,11 +517,22 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
     # returns the first key whose value is not None/"" — preserving 0.0
     # (trade-trace-ph4n).
     price = _first_present(raw, "price", "lastTradePrice", "last", "mid")
-    price_source = _first_present_source(raw, "price", "lastTradePrice", "last", "mid")
     bidf = _optional_float(bid, "bestBid")
     askf = _optional_float(ask, "bestAsk")
     pricef = _optional_float(price, "price")
     mid = (bidf + askf) / 2 if bidf is not None and askf is not None else pricef
+    two_sided_book = bidf is not None and askf is not None
+    # `price_source` must name what actually filled the stored `price` column
+    # above, not the pre-anchoring chain pick (trade-trace-6n4jp: a regression
+    # in the AX-027 mid-anchoring fix left `price_source` naming the chain
+    # field — e.g. "lastTradePrice" — even when a two-sided book overrode it
+    # with the book mid, so the label contradicted the stored value, e.g.
+    # price=0.345==mid, last_trade_price=0.36, price_source="lastTradePrice").
+    # When a two-sided book is present, `mid` (the stored `price`) is always
+    # the book mid regardless of what the chain would have picked, so the
+    # source is "book_mid"; only fall back to the chain field name when no
+    # two-sided book anchored the price.
+    price_source = "book_mid" if two_sided_book else _first_present_source(raw, "price", "lastTradePrice", "last", "mid")
     # `snapshots.price` is the canonical YES-contract mark the positions
     # projection and PnL reports value open positions against
     # (x-price-convention; projections._latest_snapshot_price). When a live
@@ -562,9 +573,13 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
         # supplied `price`, nor read `lastTradePrice` explicitly when it
         # differs from `price` (`price` is book-mid-anchored per AX-027 when
         # a two-sided book exists, so it and lastTradePrice can legitimately
-        # diverge). `price_source` names the chain field that supplied the
-        # pre-mid-anchoring fallback value; `last_trade_price` is the venue's
-        # actual last trade print. Both are absent (None) — never
+        # diverge). `price_source` names what actually filled the stored
+        # `price` column: "book_mid" when a two-sided book anchored it, or
+        # the chain field name when no two-sided book was present and the
+        # fallback chain supplied it instead (trade-trace-6n4jp — the label
+        # must describe the stored value, not the pre-anchoring chain pick).
+        # `last_trade_price` is the venue's actual last trade print. Both
+        # `price_source` and `last_trade_price` are absent (None) — never
         # fabricated/derived — when Gamma's payload doesn't carry them.
         "price_source": price_source,
         "last_trade_price": _first_present(raw, "lastTradePrice", "last"),

@@ -4,8 +4,13 @@ Versioned decisions the playbook applies every run. Changing anything here
 is a methodology change: bump the run-summary `conventions_version` and note
 it in the next run summary.
 
-`conventions_version: 6`
-(v6, 2026-07-13, trade-trace-2j4r1: snapshot.fetch now records
+`conventions_version: 7`
+(v7, 2026-07-13, trade-trace-6n4jp: fixed a v6 regression — when a
+two-sided book anchors `price` to the book mid (AX-027), `price_source` now
+names `"book_mid"` (what actually filled the column), not the pre-anchoring
+chain field name. It only names the price → lastTradePrice → last → mid
+chain field when no two-sided book was present. v6, 2026-07-13,
+trade-trace-2j4r1: snapshot.fetch now records
 `metadata_json.price_source` (names which field in the
 price → lastTradePrice → last → mid chain supplied the value) and an
 explicit `metadata_json.last_trade_price` (absent-not-fabricated); the
@@ -101,18 +106,23 @@ a drift-detector for the local ledger and the source of
   to cumulative volume per the v4 note above) AND a live book (spread
   within the policy's $0.05 cap).
 - Edge: trade only when |forecast p − tradeable price| ≥ 0.05.
-- Thin books (v3, field-corrected in v5, provenance added in v6): when a
-  book is near-empty (spread beyond the policy's $0.05 cap or trivial
-  resting size), the midpoint is meaningless — do not reason from it or
-  report it as "the price". When `metadata_json.last_trade_price` is
-  present (trade-trace-2j4r1), it is the preferred anchor —
-  `metadata_json.price_source` names which field in the chain the fallback
-  `price` field itself came from. Fall back to the snapshot's **`price`
-  field** (the adapter's venue-price/last-trade chain) when
-  `last_trade_price` is absent, with an explicit caveat in the rationale,
-  and quote `bid`/`ask` (Gamma `bestBid`/`bestAsk`) alongside. Such
-  markets fail the universe rule for trading regardless; this rule
-  governs how their prices are *described* in forecasts and summaries.
+- Thin books (v3, field-corrected in v5, provenance added in v6,
+  provenance labeling fixed in v7): when a book is near-empty (spread
+  beyond the policy's $0.05 cap or trivial resting size), the midpoint is
+  meaningless — do not reason from it or report it as "the price". Note a
+  thin book still has both `bestBid`/`bestAsk` present, so the stored
+  `price` is still the book mid and `metadata_json.price_source` still
+  reads `"book_mid"` (trade-trace-6n4jp: `price_source` names what
+  actually filled the `price` column, not a chain field, whenever a
+  two-sided book exists — thin or not). When `metadata_json.last_trade_price`
+  is present (trade-trace-2j4r1), it is the preferred anchor regardless of
+  what `price_source` says. Fall back to the snapshot's **`price`
+  field** (the adapter's venue-price/last-trade chain, or the book mid when
+  a two-sided book is present) when `last_trade_price` is absent, with an
+  explicit caveat in the rationale, and quote `bid`/`ask` (Gamma
+  `bestBid`/`bestAsk`) alongside. Such markets fail the universe rule for
+  trading regardless; this rule governs how their prices are *described*
+  in forecasts and summaries.
 - Size: notional = min($200, room under market/category/total exposure
   caps); quantity = notional / price.
 - Every intent gets `risk.evaluate` → `risk.check_record` FIRST. A fail or
