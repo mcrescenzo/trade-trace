@@ -4,8 +4,12 @@ Versioned decisions the playbook applies every run. Changing anything here
 is a methodology change: bump the run-summary `conventions_version` and note
 it in the next run summary.
 
-`conventions_version: 4`
-(v4, 2026-07-13: the substrate now maps Gamma's `volume24hr` into
+`conventions_version: 5`
+(v5, 2026-07-13, run -04 review: thin-book anchor rule now names the field
+that actually exists — the snapshot `price` column, which the adapter fills
+via a `price → lastTradePrice → last → mid` chain; snapshot `bid`/`ask`
+map from Gamma `bestBid`/`bestAsk`. Explicit last-trade provenance is
+tracked as a bead. v4, 2026-07-13: the substrate now maps Gamma's `volume24hr` into
 `snapshot.fetch`'s `metadata_json.volume_24h` (stored row:
 `metadata_json.polymarket_snapshot.volume_24h`) — trade-trace-ismzy. The
 liquidity check below prefers that true 24h figure, falling back to
@@ -92,12 +96,14 @@ a drift-detector for the local ledger and the source of
   to cumulative volume per the v4 note above) AND a live book (spread
   within the policy's $0.05 cap).
 - Edge: trade only when |forecast p − tradeable price| ≥ 0.05.
-- Thin books (v3): when a book is near-empty (spread beyond the policy's
-  $0.05 cap or trivial resting size), the midpoint is meaningless — do
-  not reason from it or report it as "the price"; anchor to
-  `lastTradePrice` with an explicit caveat in the rationale. Such markets
-  fail the universe rule for trading regardless; this rule governs how
-  their prices are *described* in forecasts and summaries.
+- Thin books (v3, field-corrected in v5): when a book is near-empty
+  (spread beyond the policy's $0.05 cap or trivial resting size), the
+  midpoint is meaningless — do not reason from it or report it as "the
+  price"; anchor to the snapshot's **`price` field** (the adapter's
+  venue-price/last-trade chain) with an explicit caveat in the rationale,
+  and quote `bid`/`ask` (Gamma `bestBid`/`bestAsk`) alongside. Such
+  markets fail the universe rule for trading regardless; this rule
+  governs how their prices are *described* in forecasts and summaries.
 - Size: notional = min($200, room under market/category/total exposure
   caps); quantity = notional / price.
 - Every intent gets `risk.evaluate` → `risk.check_record` FIRST. A fail or
