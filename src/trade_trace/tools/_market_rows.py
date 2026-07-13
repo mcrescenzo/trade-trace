@@ -42,6 +42,19 @@ ADAPTER_CACHE_HIT_ROW_COLUMNS = (
     "resolution_source",
     "ambiguity_kind",
     "bound_via",
+    # Lifecycle timestamps (trade-trace-kgicl): bind writes a correct
+    # close_at (and siblings) into the markets row, but this projection
+    # previously omitted them entirely, so an immediate market.refresh that
+    # hit the cache (a freshly bound "open" market is inside its 1h TTL)
+    # returned a response with close_at absent -- surfacing downstream as
+    # close_at=null even though the stored row held the real value.
+    "opened_at",
+    "close_at",
+    "closed_for_trading_at",
+    "resolving_at",
+    "resolved_at",
+    "voided_at",
+    "ambiguous_at",
     "metadata_json",
     "venue_metadata_json",
     "created_at",

@@ -268,6 +268,11 @@ def test_market_cache_policy_enforces_state_ttls():
 
 
 def test_market_cache_hit_row_surface_stays_narrow_and_ordered():
+    """Pins the adapter market.refresh cache-hit row shape. It carries the
+    lifecycle timestamps (trade-trace-kgicl: close_at was previously dropped
+    here entirely, even though the stored row held a correct value) but stays
+    narrower than the full market.bind row shape (e.g. no actor_id)."""
+
     row = (
         "mkt_1",
         "polymarket",
@@ -280,6 +285,13 @@ def test_market_cache_hit_row_surface_stays_narrow_and_ordered():
         "market_contract",
         None,
         "adapter",
+        "2026-05-25T00:00:00.000Z",
+        "2026-06-25T00:00:00.000Z",
+        None,
+        None,
+        None,
+        None,
+        None,
         '{"adapter":"polymarket"}',
         '{"raw":true}',
         "2026-05-25T12:00:00.000Z",
@@ -299,12 +311,76 @@ def test_market_cache_hit_row_surface_stays_narrow_and_ordered():
         "resolution_source",
         "ambiguity_kind",
         "bound_via",
+        "opened_at",
+        "close_at",
+        "closed_for_trading_at",
+        "resolving_at",
+        "resolved_at",
+        "voided_at",
+        "ambiguous_at",
         "metadata_json",
         "venue_metadata_json",
         "created_at",
         "cache_hit",
         "state_changed",
     ]
+    assert data["close_at"] == "2026-06-25T00:00:00.000Z"
+
+
+def test_market_refresh_cache_hit_preserves_close_at_from_bind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """trade-trace-kgicl: market.bind (adapter path) returns a correct
+    close_at, but an immediate market.refresh on the same market previously
+    returned close_at=null. Root cause: a freshly bound "open" market is
+    inside the 1h cache TTL, so the very next market.refresh call hits the
+    cache-hit branch in _upsert_market, which projects the stored markets row
+    through the narrow ADAPTER_CACHE_HIT_ROW_COLUMNS shape — a column list
+    that omitted close_at (and the other lifecycle timestamps) even though
+    bind wrote a correct close_at into the row. Since resolution_at
+    (conventions v3) derives from close_at, bind -> refresh silently lost it
+    despite the DB row holding the real value the whole time."""
+
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    assert mcp_call(
+        "journal.config_set",
+        with_legacy_idempotency_key(
+            "journal.config_set",
+            {"home": home, "key": "network.polymarket.enabled", "value": "true", "confirm": True},
+        ),
+    ).ok
+
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {
+            "id": "pm-kgicl-1",
+            "question": "Will kgicl be fixed?",
+            "outcomes": '["Yes","No"]',
+            "endDate": "2026-12-31T00:00:00Z",
+            "closed": False,
+        },
+    )
+
+    bound = mcp_call("market.bind", {"home": home, "source": "polymarket", "external_id": "pm-kgicl-1"})
+    assert bound.ok, bound
+    assert isinstance(bound, SuccessEnvelope)
+    market_id = bound.data["id"]
+    assert bound.data["close_at"] == "2026-12-31T00:00:00Z"
+
+    refreshed = mcp_call(
+        "market.refresh",
+        with_legacy_idempotency_key("market.refresh", {"home": home, "market_id": market_id}),
+    )
+    assert refreshed.ok, refreshed
+    assert isinstance(refreshed, SuccessEnvelope)
+    # Immediate refresh of a freshly bound "open" market is inside the 1h
+    # cache TTL, so this must exercise the cache-hit branch -- proving the
+    # assertion below actually covers the branch that dropped close_at, not
+    # just the re-fetch path (already correct).
+    assert refreshed.data["cache_hit"] is True
+    assert refreshed.data["close_at"] == "2026-12-31T00:00:00Z"
 
 
 def test_adapter_normalizes_false_like_booleans_and_token_id_string_variants():
