@@ -4,13 +4,17 @@ Versioned decisions the playbook applies every run. Changing anything here
 is a methodology change: bump the run-summary `conventions_version` and note
 it in the next run summary.
 
-`conventions_version: 3`
-(v3, 2026-07-13: forecasts must carry `resolution_rule_text` +
-`resolution_at` — see playbook phase 4; thin-book price-anchor rule added
-below. v2, 2026-07-10: after run 2026-07-10-01, the liquidity-check volume
-field is named honestly — the substrate exposes Gamma's cumulative
-`volume`, not 24h volume. Substrate follow-up tracked in beads labeled
-`paper-loop`.)
+`conventions_version: 4`
+(v4, 2026-07-13: the substrate now maps Gamma's `volume24hr` into
+`snapshot.fetch`'s `metadata_json.volume_24h` (stored row:
+`metadata_json.polymarket_snapshot.volume_24h`) — trade-trace-ismzy. The
+liquidity check below prefers that true 24h figure, falling back to
+cumulative `volume` for snapshots captured before this change. v3,
+2026-07-13: forecasts must carry `resolution_rule_text` + `resolution_at`
+— see playbook phase 4; thin-book price-anchor rule added below. v2,
+2026-07-10: after run 2026-07-10-01, the liquidity-check volume field is
+named honestly — the substrate exposes Gamma's cumulative `volume`, not
+24h volume. Substrate follow-up tracked in beads labeled `paper-loop`.)
 
 ## Keys
 
@@ -29,14 +33,16 @@ requested quantity, risk policy caps.
 
 1. Tradeable price: **buy → ask**, **sell → bid**. Never mid.
 2. Liquidity check: requested notional (quantity × price) must be
-   ≤ 5% of the snapshot's reported volume (USD). NOTE (v2): the substrate
-   exposes Gamma's CUMULATIVE market volume — the only volume field
-   available — which overstates recent liquidity. Until the substrate
-   exposes true 24h volume, treat the volume floor as necessary-but-weak
-   and let the policy's $0.05 max-spread rule do the real liquidity
-   screening (a stale book fails it). Fail → do NOT trade; if an intent
-   was already recorded, record the fill attempt anyway and let it come
-   back `fill_status=no_fill` — that is valid evidence.
+   ≤ 5% of the snapshot's reported volume (USD). NOTE (v4): prefer the
+   snapshot's `metadata_json.volume_24h` (Gamma's `volume24hr`, mapped in
+   by trade-trace-ismzy) as the denominator — it is a true 24h figure.
+   Fall back to the cumulative `volume` field only when `volume_24h` is
+   null/absent (snapshots captured before this change); a fallback to
+   cumulative volume still overstates recent liquidity, so let the
+   policy's $0.05 max-spread rule do the real liquidity screening in that
+   case (a stale book fails it). Fail → do NOT trade; if an intent was
+   already recorded, record the fill attempt anyway and let it come back
+   `fill_status=no_fill` — that is valid evidence.
 3. `paper_fill.record` args: `book_levels=[{"price": <touch>, "quantity":
    <requested>}]`, `limit_price=<touch>`, `reference_mid_price=<mid>`,
    `slippage_cap_bps=100`, `snapshot_id` + `snapshot_as_of` from the
@@ -82,8 +88,9 @@ a drift-detector for the local ledger and the source of
 
 - Universe: binary Polymarket markets, resolving in > 6 hours and
   ≤ 90 days, with enough reported volume that a $200 intent passes the 5%
-  check (i.e. ≥ $4,000 reported volume — cumulative, per the v2 note
-  above) AND a live book (spread within the policy's $0.05 cap).
+  check (i.e. ≥ $4,000 reported volume — prefer 24h volume, falling back
+  to cumulative volume per the v4 note above) AND a live book (spread
+  within the policy's $0.05 cap).
 - Edge: trade only when |forecast p − tradeable price| ≥ 0.05.
 - Thin books (v3): when a book is near-empty (spread beyond the policy's
   $0.05 cap or trivial resting size), the midpoint is meaningless — do

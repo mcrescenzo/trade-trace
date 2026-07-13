@@ -535,6 +535,13 @@ def _snapshot_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
         "accepting_orders": _normalize_bool_like(_first_present(raw, "acceptingOrders", "accepting_orders")),
         "freshness": {"as_of": _first_present(raw, "asOf", "updatedAt", "timestamp"), "provenance": "polymarket_gamma_payload"},
         "depth_provenance": "caller_or_polymarket_gamma_payload",
+        # `volume` above is Gamma's CUMULATIVE market volume, which overstates
+        # recent liquidity (paper-loop conventions.md v2 NOTE; trade-trace-ismzy).
+        # Gamma market payloads separately carry `volume24hr`, a true 24h
+        # denominator; surface it here (metadata_json is already a free JSON
+        # field, so no schema migration is needed). Absent when Gamma omits it
+        # — never fabricated/derived from the cumulative `volume` field.
+        "volume_24h": _first_present(raw, "volume24hr"),
     }
     # Sentinel-aware: `impliedProbability` of 0.0 is a real value (resolved-NO /
     # dead YES contract worth $0), but 0.0 is falsy, so the old

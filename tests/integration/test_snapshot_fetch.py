@@ -89,6 +89,80 @@ def test_snapshot_fetch_enabled_captures_fixture_book(tmp_path: Path, monkeypatc
     assert env.data["implied_probability"] == pytest.approx(0.62)
     assert "liquidity_depth_json" in env.data
     assert env.data["metadata_json"]["tick_size"] is None or "tick_size" in env.data["metadata_json"]
+    # trade-trace-ismzy: the fixture carries Gamma's volume24hr alongside the
+    # cumulative volume; both must flow through independently.
+    assert env.data["volume"] == 12345
+    assert env.data["metadata_json"]["volume_24h"] == 890
+
+
+# -- volume24hr -> metadata_json.volume_24h (trade-trace-ismzy) --
+# Gamma's `volume` is a cumulative market total that overstates recent
+# liquidity (paper-loop conventions.md v2 NOTE); `volume24hr` is a true 24h
+# denominator. Map it into the snapshot's metadata_json (no schema migration:
+# metadata_json is already a free JSON column) and never fabricate it when
+# Gamma's payload omits the field.
+
+
+def test_snapshot_fetch_maps_volume24hr_into_metadata_when_gamma_provides_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-volume24hr")
+    _enable_adapter(home)
+
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"bestBid": "0.40", "bestAsk": "0.42", "volume": "50000", "volume24hr": "890.5"},
+    )
+
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["volume"] == "50000"
+    assert env.data["metadata_json"]["volume_24h"] == "890.5"
+
+    with sqlite3.connect(db_path(Path(home))) as conn:
+        (metadata_text,) = conn.execute(
+            "SELECT metadata_json FROM snapshots WHERE id=?", (env.data["id"],)
+        ).fetchone()
+    stored = json.loads(metadata_text)
+    assert stored["polymarket_snapshot"]["volume_24h"] == "890.5"
+
+
+def test_snapshot_fetch_volume24hr_absent_is_not_fabricated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """When Gamma omits volume24hr (older deployments or some market kinds),
+    the snapshot must record it as genuinely absent — never derived/defaulted
+    from the cumulative `volume` field or coerced to 0."""
+
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    market_id = _manual_market(home, external_id="pm-no-volume24hr")
+    _enable_adapter(home)
+
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"bestBid": "0.40", "bestAsk": "0.42", "volume": "50000"},
+    )
+
+    env = _legacy_call("snapshot.fetch", {"home": home, "market_id": market_id, "at": "now"})
+
+    assert env.ok, env
+    assert isinstance(env, SuccessEnvelope)
+    assert env.data["volume"] == "50000"
+    assert env.data["metadata_json"]["volume_24h"] is None
+
+    with sqlite3.connect(db_path(Path(home))) as conn:
+        (metadata_text,) = conn.execute(
+            "SELECT metadata_json FROM snapshots WHERE id=?", (env.data["id"],)
+        ).fetchone()
+    stored = json.loads(metadata_text)
+    assert stored["polymarket_snapshot"]["volume_24h"] is None
 
 
 def test_snapshot_from_raw_without_depth_fields_does_not_dump_whole_payload():
