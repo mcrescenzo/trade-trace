@@ -183,6 +183,109 @@ def test_full_thresholds_with_record_can_pass_when_all_clear(home: Path):
     assert summary["ready"] is False
 
 
+def _seed_paper_fill_intent(
+    home: Path, idx: int, *, exercise: bool, fill: bool,
+) -> str:
+    """Seed one pretrade intent (optionally exercise-marked, optionally
+    filled) for the paper_fill_coverage conviction/exercise split tests."""
+    market = _env(home, "market.bind", {
+        "source": "polymarket",
+        "external_id": f"pfc-market-{idx}",
+        "state": "open",
+        "mechanism": "clob",
+        "bound_via": "manual",
+        "title": f"PFC market {idx}",
+        "question": f"PFC market {idx}?",
+        "idempotency_key": f"pfc-market-bind-{idx}",
+    })
+    market_id = market["market_id"]
+    instrument_id = market["instrument_id"]
+    snapshot = _env(home, "snapshot.add", {
+        "instrument_id": instrument_id,
+        "captured_at": "2027-02-01T00:00:00Z",
+        "source": "local_fixture",
+        "price": 0.5,
+        "bid": 0.49,
+        "ask": 0.51,
+        "mid": 0.5,
+        "idempotency_key": f"pfc-snapshot-{idx}",
+    })
+    shape = {
+        "venue_family": "polymarket", "side": "yes", "quantity": 10,
+        "limit_price": 0.51, "notional": 5.1,
+    }
+    if exercise:
+        shape["intent_type"] = "exercise"
+    intent = _env(home, "pretrade_intent.record", {
+        "semantic_key": f"pfc:intent:{idx}",
+        "market_id": market_id,
+        "instrument_id": instrument_id,
+        "snapshot_id": snapshot["id"],
+        "proposed_shape": shape,
+        "as_of": "2027-02-01T00:00:00Z",
+        "idempotency_key": f"pfc-intent-{idx}",
+    })
+    if fill:
+        _env(home, "paper_fill.record", {
+            "semantic_key": f"pfc:fill:{idx}",
+            "account_label": "test-fixture",
+            "market_id": market_id,
+            "instrument_id": instrument_id,
+            "pretrade_intent_id": intent["id"],
+            "side": "buy",
+            "outcome_side": "yes",
+            "requested_quantity": 10,
+            "limit_price": 0.51,
+            "reference_mid_price": 0.5,
+            "slippage_cap_bps": 500,
+            "fee_amount": 0.01,
+            "quote_id": f"pfc-quote-{idx}",
+            "book_id": f"pfc-book-{idx}",
+            "snapshot_id": snapshot["id"],
+            "snapshot_as_of": "2027-02-01T00:00:00Z",
+            "order_as_of": "2027-02-01T00:00:00Z",
+            "book_levels": [{"price": 0.51, "quantity": 10}],
+            "evidence_json": {"source": "test_fixture"},
+            "idempotency_key": f"pfc-fill-{idx}",
+        })
+    return intent["id"]
+
+
+def test_paper_fill_coverage_mixed_journal_splits_conviction_and_exercise(home: Path):
+    """A mixed journal (trade-trace-u9u1c) reports conviction_* / exercise_*
+    counts in the paper_fill_coverage criterion's extra payload; the headline
+    `measured` coverage stays over ALL intents (plumbing is plumbing)."""
+    _seed_paper_fill_intent(home, 1, exercise=False, fill=True)
+    _seed_paper_fill_intent(home, 2, exercise=True, fill=False)
+    data = _data(home)
+    by_key = {c["key"]: c for c in data["criteria"]}
+    crit = by_key["paper_fill_coverage"]
+    assert crit["total_intents"] == 2
+    assert crit["filled_intents"] == 1
+    assert crit["measured"] == 0.5
+    assert crit["conviction_intents"] == 1
+    assert crit["conviction_filled_intents"] == 1
+    assert crit["exercise_intents"] == 1
+    assert crit["exercise_filled_intents"] == 0
+
+
+def test_paper_fill_coverage_exercise_only_journal_reads_as_plumbing_only(home: Path):
+    """An exercise-only journal must read unambiguously as plumbing-only:
+    conviction_intents == 0 even though total_intents > 0 and the headline
+    coverage is non-trivial."""
+    _seed_paper_fill_intent(home, 1, exercise=True, fill=True)
+    _seed_paper_fill_intent(home, 2, exercise=True, fill=False)
+    data = _data(home)
+    by_key = {c["key"]: c for c in data["criteria"]}
+    crit = by_key["paper_fill_coverage"]
+    assert crit["total_intents"] == 2
+    assert crit["filled_intents"] == 1
+    assert crit["conviction_intents"] == 0
+    assert crit["conviction_filled_intents"] == 0
+    assert crit["exercise_intents"] == 2
+    assert crit["exercise_filled_intents"] == 1
+
+
 def test_reconciliation_cleanliness_counts_open_critical(home: Path):
     """An open (unresolved) critical reconciliation record fails the
     cleanliness criterion when the owner sets a zero mismatch budget."""

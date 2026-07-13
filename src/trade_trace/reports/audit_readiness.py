@@ -89,6 +89,7 @@ def report_audit_readiness(
     counts = {"blocking": 0, "warning": 0, "info": 0}
     for issue in issues:
         counts[issue["severity"]] += issue["count"]
+    total_findings = sum(counts.values())
     sample_size = _count(conn, """
         SELECT COUNT(*)
         FROM decisions d
@@ -96,10 +97,42 @@ def report_audit_readiness(
         WHERE d.type IN ('actual_enter','paper_enter')
           AND i.asset_class IN ('prediction_market','event_market')
         """)
-    sample_warning = "no_data" if sample_size == 0 else None
+    # Marker convention (paper-loop conventions v9): an exercise-trade
+    # decision's reason starts with "exercise_trade:". Segregating the
+    # sample keeps 1/day plumbing-exercise activity from being misread as
+    # conviction track record in gate evidence (trade-trace-u9u1c).
+    exercise_sample_size = _count(conn, """
+        SELECT COUNT(*)
+        FROM decisions d
+        JOIN instruments i ON i.id = d.instrument_id
+        WHERE d.type IN ('actual_enter','paper_enter')
+          AND i.asset_class IN ('prediction_market','event_market')
+          AND d.reason LIKE 'exercise_trade:%'
+        """)
+    conviction_sample_size = sample_size - exercise_sample_size
+    # sample_warning must never read as "no_data" (nothing to audit) while
+    # the issues array lists concrete blocking/warning/info findings -- the
+    # provenance checks below read from other tables (forecasts, sources,
+    # theses) with a denominator independent of `sample_size`, so a journal
+    # can have sample_size==0 (no entered PM decisions yet) while still
+    # carrying real, named findings (trade-trace-nvy9e). Distinguish the two
+    # sample_size==0 states instead of collapsing them into one misleading
+    # label:
+    #   - "no_data": sample_size is 0 AND there are zero findings anywhere.
+    #   - "no_trades_yet": sample_size is 0 but findings exist (e.g. forecast
+    #     provenance issues recorded before any enter decision was made) --
+    #     the blocking presentation below is never suppressed either way.
+    if sample_size > 0:
+        sample_warning = None
+    elif total_findings == 0:
+        sample_warning = "no_data"
+    else:
+        sample_warning = "no_trades_yet"
     return {
         "summary": {
             "sample_size": sample_size,
+            "conviction_sample_size": conviction_sample_size,
+            "exercise_sample_size": exercise_sample_size,
             "blocking_count": counts["blocking"],
             "warning_count": counts["warning"],
             "info_count": counts["info"],

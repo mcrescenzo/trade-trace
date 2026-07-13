@@ -201,10 +201,21 @@ def _paper_fill_coverage(conn: sqlite3.Connection) -> dict[str, Any]:
 
     Coverage is ``filled_intents / total_intents``; an empty journal yields a
     coverage of ``0.0`` and ``total_intents=0`` so callers can detect no-data.
+    The headline ``coverage`` stays computed over ALL intents -- the paper-fill
+    plumbing is exercised the same way regardless of intent motive -- but the
+    payload also splits intent/fill counts into conviction vs exercise buckets
+    (marker convention, paper-loop conventions v9: an exercise intent carries
+    ``proposed_shape.intent_type == "exercise"``) so gate evidence can never be
+    misread as conviction track record when it is really 1/day plumbing
+    exercise activity (trade-trace-u9u1c).
     """
     total = conn.execute("SELECT COUNT(*) FROM pretrade_intents").fetchone()[0]
     if total == 0:
-        return {"coverage": 0.0, "filled_intents": 0, "total_intents": 0}
+        return {
+            "coverage": 0.0, "filled_intents": 0, "total_intents": 0,
+            "conviction_intents": 0, "conviction_filled_intents": 0,
+            "exercise_intents": 0, "exercise_filled_intents": 0,
+        }
     filled = conn.execute(
         """
         SELECT COUNT(DISTINCT pi.id)
@@ -212,10 +223,34 @@ def _paper_fill_coverage(conn: sqlite3.Connection) -> dict[str, Any]:
         JOIN paper_fill_records pf ON pf.pretrade_intent_id = pi.id
         """
     ).fetchone()[0]
+    rows = conn.execute(
+        """
+        SELECT pi.proposed_shape_json,
+               EXISTS(SELECT 1 FROM paper_fill_records pf WHERE pf.pretrade_intent_id = pi.id)
+        FROM pretrade_intents pi
+        """
+    ).fetchall()
+    conviction_intents = conviction_filled = exercise_intents = exercise_filled = 0
+    for shape_json, has_fill in rows:
+        try:
+            shape = json.loads(shape_json) if shape_json else {}
+        except (TypeError, ValueError):
+            shape = {}
+        is_exercise = isinstance(shape, dict) and shape.get("intent_type") == "exercise"
+        if is_exercise:
+            exercise_intents += 1
+            exercise_filled += int(bool(has_fill))
+        else:
+            conviction_intents += 1
+            conviction_filled += int(bool(has_fill))
     return {
         "coverage": round(filled / total, 6),
         "filled_intents": int(filled),
         "total_intents": int(total),
+        "conviction_intents": conviction_intents,
+        "conviction_filled_intents": conviction_filled,
+        "exercise_intents": exercise_intents,
+        "exercise_filled_intents": exercise_filled,
     }
 
 
@@ -330,11 +365,22 @@ def report_phase_gate_readiness(
             unit="fraction",
             description=(
                 "Fraction of pretrade intents that have a linked paper fill "
-                "record. Owner sets the minimum coverage required."
+                "record. Owner sets the minimum coverage required. Measured "
+                "over ALL intents regardless of motive (the paper-fill "
+                "plumbing is exercised the same way either way); "
+                "conviction_* / exercise_* counts in this payload segregate "
+                "1/day exercise-trade activity (marker: proposed_shape."
+                "intent_type=='exercise') from conviction trades so this "
+                "coverage number is never misread as conviction track "
+                "record (trade-trace-u9u1c)."
             ),
             extra={
                 "filled_intents": coverage["filled_intents"],
                 "total_intents": coverage["total_intents"],
+                "conviction_intents": coverage["conviction_intents"],
+                "conviction_filled_intents": coverage["conviction_filled_intents"],
+                "exercise_intents": coverage["exercise_intents"],
+                "exercise_filled_intents": coverage["exercise_filled_intents"],
             },
         ),
     ]
