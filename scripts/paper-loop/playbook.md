@@ -101,12 +101,17 @@ if you will not trade it — forecasts are the evidence backbone.
 
 ### 5. Trade under policy
 For each forecast where the edge rule passes (≥ 0.05 vs tradeable
-price): size per conventions, `decision.add` (type=paper_enter, side,
-quantity, price, declared_risk_amount/unit=USDC), `risk.evaluate`
-(policy version above; supply `snapshots.market` from the fresh snapshot
-— spread, time_to_resolution in seconds, slippage in bps — and
+price), run the chain RISK-FIRST (v10 — `decision.add(paper_enter)`
+opens a position immediately, so it must come after the risk verdict):
+size per conventions, `risk.evaluate` on an inline proposed_intent
+(supply `snapshots.market` from the fresh snapshot — spread,
+time_to_resolution in seconds, slippage in bps — and
 `snapshots.exposure` from report.current_exposure/paper_exposure) →
-`risk.check_record` → if pass: `pretrade_intent.record` (link
+`risk.check_record` (pass the SAME snapshots object verbatim — the
+consistency guard requires it) → on FAIL: journal `decision.add`
+(type=skip, reason names the failed rule) and stop → on PASS:
+`decision.add` (type=paper_enter, side, quantity, price,
+declared_risk_amount/unit=USDC) → `pretrade_intent.record` (link
 forecast/decision/snapshot/receipt, proposed_shape, risk_budget) →
 `paper_fill.record` per the fill convention. If the edge rule fails
 everywhere, no conviction trade happens — say so.

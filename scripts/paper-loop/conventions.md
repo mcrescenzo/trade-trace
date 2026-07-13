@@ -4,7 +4,18 @@ Versioned decisions the playbook applies every run. Changing anything here
 is a methodology change: bump the run-summary `conventions_version` and note
 it in the next run summary.
 
-`conventions_version: 9`
+`conventions_version: 10`
+(v10, 2026-07-13, run -10 review — two deviations RATIFIED + one fix:
+(1) risk-first chain order: `risk.evaluate` → `risk.check_record` run
+BEFORE `decision.add(paper_enter)`, because paper_enter opens a position
+immediately (pre-fill) and a later risk fail would strand a phantom
+position; a risk fail is journaled as `type=skip`, never paper_enter.
+(2) `risk.check_record`'s consistency guard needs the SAME `snapshots`
+object passed to `risk.evaluate` — reuse it verbatim. (3) exercise-trade
+market selection changed from "cheaper side" to "the side priced nearest
+0.50" — longshot sides structurally violate the 100 bps slippage cap
+((spread/2)/mid); near-even sides with tight spreads pass. Substrate
+design question filed for the pre-risk position-opening footgun.)
 (v9, 2026-07-13, owner decisions (see CHARTER.md "Owner decisions —
 recorded 2026-07-13"): exercise-trade convention added; settle sweep
 tiered; standing-abstention carry-forward; fetch-class keys get a
@@ -88,7 +99,10 @@ untouched.
   `intent_type=exercise` intent today; skip if present.
 - Size: $10–20 notional. Market: the most-liquid universe-passing market
   among this run's fresh snapshots (prefer near-dated so settlement
-  exercises quickly). Direction: buy the cheaper side at the touch.
+  exercises quickly). Direction (v10): buy the side priced NEAREST 0.50
+  at the touch — longshot sides structurally fail the 100 bps slippage
+  cap; if no candidate passes the cap honestly, the exercise trade
+  cancels at the risk gate and that cancellation is the day's evidence.
 - Full chain, no shortcuts: `decision.add` (type=paper_enter, reason
   starts `exercise_trade:`), `risk.evaluate` → `risk.check_record` (ALL
   policy rules apply — supply full exposure inputs and links; a fail
