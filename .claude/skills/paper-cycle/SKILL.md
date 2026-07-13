@@ -32,7 +32,8 @@ shape (adapt bracketed parts only):
 > Execute /home/hermes/code/trade-trace/scripts/paper-loop/playbook.md
 > end to end, exactly. Read it and
 > scripts/paper-loop/conventions.md FIRST. Transport: the `tt` CLI with
-> `TRADE_TRACE_HOME=$HOME/.trade-trace-paper` on every call (fresh
+> `TRADE_TRACE_HOME=$HOME/.trade-trace-paper` and
+> `TRADE_TRACE_DISPATCH_TRACE=1` exported on every call (fresh
 > process per call — this is required so current repo code is always
 > exercised; do NOT use an MCP server even if one is connected).
 > `--actor-id agent:paper-loop` on every call. Known state: risk policy
@@ -87,7 +88,11 @@ If CYCLE_N % 6 == 0:
   with three read-only Sonnet lanes (run summaries since last sweep;
   journal reports via tt — calibration/exposure/reconciliation/
   audit_readiness/phase_gate_readiness; bd + journal-memory inventory),
-  then triage its findings through Step 4.
+  then triage its findings through Step 4. VALIDATE each lane's payload
+  before trusting it — a lane that returns placeholder/degenerate
+  content ("test", generic facts, no ids) did not do the work: re-run
+  that lane directly and note it in the ledger (sweep-1 precedent: the
+  runs lane returned junk that schema validation could not catch).
 - Batch push: `git pull --rebase && git push` (this is the ~daily PyPI
   publication moment; skip if the owner said hold).
 

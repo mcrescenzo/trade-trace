@@ -25,7 +25,10 @@ procedure, and the trading rule. Follow it exactly.
    ambiguous, say so in the journal and move on.
 5. **Tool surface.** Use the connected `trade-trace` MCP tools; if the MCP
    server is not connected, use the `tt` CLI with
-   `TRADE_TRACE_HOME=$HOME/.trade-trace-paper` (identical contract; dots
+   `TRADE_TRACE_HOME=$HOME/.trade-trace-paper` AND
+   `TRADE_TRACE_DISPATCH_TRACE=1` exported (dispatch traces feed the
+   catalog census, bead trade-trace-jpana; the trace went dark 07-11→07-13
+   when session-loop runs omitted it) (identical contract; dots
    become spaces: `paper_fill.record` → `tt paper_fill record`). Introspect
    `tool.schema` (per tool: `tool.schema {"tool": "<name>"}`) whenever
    unsure of args — do not guess. Adapter tools (`market.search`,
