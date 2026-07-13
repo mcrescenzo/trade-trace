@@ -60,6 +60,18 @@ driver at a time).
 
 ## Pending owner decisions
 
+- **Stale-forecast re-anchoring** (raised by run 2026-07-13-05, memory
+  mem_utyqB5wm0Zsr5UXT): the loop's first-ever gate-clearing edge (Sinner
+  US Open, +0.11) was a *staleness artifact* — a 3-day-old forecast
+  against a market that moved on new information. The agent correctly
+  abstained rather than trade a view it no longer holds. Question: should
+  the loop re-anchor/supersede prior-run forecasts each pass (kills
+  phantom edges, but erases forecast accountability and inflates forecast
+  counts), refresh only when a stale forecast clears the gate (targeted
+  supersede with lineage), or keep forecasts immutable and treat
+  stale-edge abstention as the standing rule (status quo)? This
+  interacts with the edge gate and scoring semantics — owner call.
+
 - **Edge gate (0.05)**: with honest no-private-info forecasts tracking
   liquid venues within ~0.01–0.03, the loop is structurally zero-trade,
   so `paper_fill_coverage` stays 0 and the risk→intent→fill chain goes
