@@ -4,8 +4,10 @@ Versioned decisions the playbook applies every run. Changing anything here
 is a methodology change: bump the run-summary `conventions_version` and note
 it in the next run summary.
 
-`conventions_version: 7`
-(v7, 2026-07-13, trade-trace-6n4jp: fixed a v6 regression — when a
+`conventions_version: 8`
+(v8, 2026-07-13, run -09 review: writes carry `--run-id`; `decision.add`
+side is the outcome side (yes/no), never buy/sell — see Keys.
+v7, 2026-07-13, trade-trace-6n4jp: fixed a v6 regression — when a
 two-sided book anchors `price` to the book mid (AX-027), `price_source` now
 names `"book_mid"` (what actually filled the column), not the pre-anchoring
 chain field name. It only names the price → lastTradePrice → last → mid
@@ -39,6 +41,12 @@ named honestly — the substrate exposes Gamma's cumulative `volume`, not
   `semantic_key = paper:<RUN_ID>:<family>:<market_id>` (families: `intent`,
   `fill`, `account-snapshot`, `external-receipt`, `reconciliation`).
 - `account_label = paper-loop`. `environment_label = paper`.
+- Pass `--run-id <RUN_ID>` on forecast/decision/fill writes — journal
+  provenance columns, not just the idempotency-key namespace (run
+  2026-07-13-09 omitted it; append-only means no backfill).
+- `decision.add` `side` is the OUTCOME side (`yes`/`no`, or
+  `long`/`short`) — never `buy`/`sell`. SELL-YES exposure = `side=no`,
+  BUY-YES = `side=yes`.
 
 ## Fill model (v1: conservative touch-price, honest no_fill)
 
