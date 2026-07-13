@@ -555,6 +555,65 @@ def test_risk_evaluate_loads_stored_intent(tmp_path):
     assert res.data["status"] == "fail"
 
 
+def test_risk_evaluate_loads_stored_intent_snapshot_id_for_required_links(tmp_path):
+    """Regression for trade-trace-r0oee.
+
+    ``_load_intent`` must carry every policy-checkable field the deterministic
+    evaluator reads off a persisted intent, including ``snapshot_id``. A policy
+    requiring ``snapshot_id`` in ``required_links`` must PASS for a persisted
+    intent that was recorded with a ``snapshot_id`` — re-evaluating a stored
+    intent by ``proposed_intent_id`` must not spuriously report the link
+    missing just because the loader's SELECT omitted the column.
+    """
+
+    home = tmp_path / "home"
+    policy_id = _seed_policy(home, [
+        {"rule_id": "links", "limit_class": "required_links", "severity": "hard_block",
+         "threshold": ["snapshot_id"]},
+    ])
+    conn = sqlite3.connect(db_path(home))
+    try:
+        conn.execute(
+            "INSERT INTO markets(id, source, external_id, title, question, state, mechanism, bound_via, venue_metadata_json, metadata_json, created_at, actor_id) "
+            "VALUES ('m_snap', 'polymarket', 'abc-snap', 'ABC?', 'ABC?', 'open', 'clob', 'manual', '{}', '{}', '2026-06-13T00:00:00.000Z', 'agent:test')"
+        )
+        conn.execute(
+            "INSERT INTO venues(id, name, kind, created_at, actor_id) VALUES ('v_snap', 'Venue Snap', 'prediction_market', '2026-06-13T00:00:00.000Z', 'agent:test')"
+        )
+        conn.execute(
+            "INSERT INTO instruments(id, venue_id, title, asset_class, created_at, actor_id) "
+            "VALUES ('i_snap', 'v_snap', 'ABC?', 'prediction_market', '2026-06-13T00:00:00.000Z', 'agent:test')"
+        )
+        conn.execute(
+            "INSERT INTO snapshots(id, instrument_id, captured_at, created_at, actor_id) "
+            "VALUES ('snap_1', 'i_snap', '2026-06-13T00:00:00.000Z', '2026-06-13T00:00:00.000Z', 'agent:test')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    intent = _call("pretrade_intent.record", {
+        "home": str(home),
+        "semantic_key": "pm:market:abc-snap:yes:2026-06-13T00:00Z",
+        "market_id": "m_snap",
+        "snapshot_id": "snap_1",
+        "proposed_shape": {"notional": 100, "side": "yes"},
+        "as_of": "2026-06-13T00:00:00.000Z",
+        "idempotency_key": "intent-snap-1",
+    })
+    assert intent.ok, intent
+    intent_id = intent.data["id"]
+
+    res = _call("risk.evaluate", {
+        "home": str(home),
+        "policy_version_id": policy_id,
+        "proposed_intent_id": intent_id,
+    })
+    assert res.ok, res
+    rr = res.data["rule_results"][0]
+    assert rr["reason_code"] == RC_WITHIN_LIMIT, rr
+    assert res.data["status"] == "pass"
+
+
 def test_risk_evaluate_requires_an_intent(tmp_path):
     home = tmp_path / "home"
     policy_id = _seed_policy(home, [])

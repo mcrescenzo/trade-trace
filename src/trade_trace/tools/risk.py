@@ -841,8 +841,17 @@ def _load_policy_rules(conn: Any, policy_version_id: str) -> list[Any]:
 
 
 def _load_intent(conn: Any, intent_id: str) -> dict[str, Any]:
+    # Every column selected here must cover a field the deterministic
+    # evaluator can read off `intent` (see _evaluate_one_rule / _eval_
+    # required_links, which does a generic `intent.get(<policy-configured
+    # field name>)` for required_links, plus the named market_id/
+    # instrument_id/forecast_id/thesis_id/decision_id/strategy_id/
+    # snapshot_id/approval_state reads). Omitting a column here makes a
+    # persisted-intent re-evaluation (proposed_intent_id path) silently
+    # disagree with the same intent evaluated inline, e.g. spuriously
+    # failing a required_links check (trade-trace-r0oee).
     row = conn.execute(
-        "SELECT id, proposed_shape_json, approval_state, market_id, instrument_id, forecast_id, thesis_id, decision_id, strategy_id FROM pretrade_intents WHERE id = ?",
+        "SELECT id, proposed_shape_json, approval_state, market_id, instrument_id, snapshot_id, forecast_id, thesis_id, decision_id, strategy_id FROM pretrade_intents WHERE id = ?",
         (intent_id,),
     ).fetchone()
     if row is None:
@@ -851,8 +860,8 @@ def _load_intent(conn: Any, intent_id: str) -> dict[str, Any]:
         "id": row[0],
         "proposed_shape": json.loads(row[1]) if row[1] else {},
         "approval_state": row[2],
-        "market_id": row[3], "instrument_id": row[4], "forecast_id": row[5],
-        "thesis_id": row[6], "decision_id": row[7], "strategy_id": row[8],
+        "market_id": row[3], "instrument_id": row[4], "snapshot_id": row[5],
+        "forecast_id": row[6], "thesis_id": row[7], "decision_id": row[8], "strategy_id": row[9],
     }
 
 
