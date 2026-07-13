@@ -58,38 +58,39 @@ owner action; it must not run while the session loop is active (both
 respect `$TRADE_TRACE_HOME/.run.lock`, but the courtesy rule is one
 driver at a time).
 
-## Pending owner decisions
+## Owner decisions — recorded 2026-07-13 (evening)
 
-- **Stale-forecast re-anchoring** — COST NOW QUANTIFIED (deep-sweep-1,
-  cycle 6): the mandatory settle/edge sweep doubled in six runs (18→36
-  markets, 36→72 adapter calls/run) as the book grew 22→40, and the same
-  two stale edges (Sinner, BTC-65k) have been re-derived and re-abstained
-  four consecutive runs. Related in-zone option awaiting the same
-  decision: tier the settle sweep (full refresh only for markets with
-  resolution_at within N days or open positions; complete sweep every Nth
-  run) — affects resolution-detection latency, so bundled here rather
-  than changed unilaterally. (Originally raised by run 2026-07-13-05,
-  memory mem_utyqB5wm0Zsr5UXT): the loop's first-ever gate-clearing edge (Sinner
-  US Open, +0.11) was a *staleness artifact* — a 3-day-old forecast
-  against a market that moved on new information. The agent correctly
-  abstained rather than trade a view it no longer holds. Question: should
-  the loop re-anchor/supersede prior-run forecasts each pass (kills
-  phantom edges, but erases forecast accountability and inflates forecast
-  counts), refresh only when a stale forecast clears the gate (targeted
-  supersede with lineage), or keep forecasts immutable and treat
-  stale-edge abstention as the standing rule (status quo)? This
-  interacts with the edge gate and scoring semantics — owner call.
+All four pending decisions were made by the owner after an adversarial
+analysis pass (workflow wf_961e4deb-300; two draft recommendations were
+reversed by it before presentation):
 
-- **Edge gate (0.05)**: with honest no-private-info forecasts tracking
-  liquid venues within ~0.01–0.03, the loop is structurally zero-trade,
-  so `paper_fill_coverage` stays 0 and the risk→intent→fill chain goes
-  unexercised. Options when the owner is ready: keep 0.05 (abstention
-  evidence only), lower it via risk-policy v2, or authorize a periodic
-  minimum-size exercise trade. Until then: zero trades is correct
-  behavior, not a defect.
-- **Pre-v3 forecast backfill** (bead trade-trace-55ybn): the 18 forecasts
-  made before conventions v3 lack forecast-level rule text; decide
-  supersede / accept-as-legacy / criterion carve-out.
+1. **Exercise trades authorized** — ~1 minimum-size ($10–20) labeled
+   trade/day (`intent_type=exercise`, most-liquid qualifying market, full
+   risk→intent→fill→receipt→reconcile→settle chain). The 0.05 conviction
+   gate and the stale-edge abstention rule are UNCHANGED. Mandatory
+   companion (trade-trace-u9u1c): phase_gate_readiness + audit_readiness
+   segregate exercise from conviction activity so plumbing evidence can
+   never read as earned skill. Convention details: conventions v9.
+2. **Forecasts stay immutable; sweep tiered** — no supersession for
+   staleness (source-verified: superseded rows never score → any
+   movement-conditioned supersession biases Brier). Settle sweep
+   fresh-tier: markets with `resolution_at` ≤7d OR `resolution_at=null`
+   OR open positions; full sweep on runs where NN%6==1. Standing
+   stale-edge abstentions carry forward in run summaries and are only
+   re-derived if price moves a further 0.03.
+3. **snapshot.fetch replay conflict is working-as-designed**
+   (trade-trace-pzyvq closed) — fetch-class idempotency keys carry a
+   per-attempt component; a same-key conflict means reuse the first
+   snapshot, never mint a "fresh" replay of a stale price.
+4. **audit_readiness legacy bucket authorized** (trade-trace-15i4q) —
+   pre-v3 rows (created < 2026-07-13T15:00Z) report as
+   `legacy_missing_rule_count` alongside; `blocking_count` reflects
+   post-v3 discipline. Both counts always surfaced; phase-gates.md
+   records this authorization.
+
+Still owner-only, unchanged: contract invariants; risk-policy numeric
+values and the 0.05 conviction edge gate; phase-gate thresholds
+(remain unset).
 
 ## Escalation
 

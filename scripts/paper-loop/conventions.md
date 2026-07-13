@@ -4,8 +4,12 @@ Versioned decisions the playbook applies every run. Changing anything here
 is a methodology change: bump the run-summary `conventions_version` and note
 it in the next run summary.
 
-`conventions_version: 8`
-(v8, 2026-07-13, run -09 review: writes carry `--run-id`; `decision.add`
+`conventions_version: 9`
+(v9, 2026-07-13, owner decisions (see CHARTER.md "Owner decisions —
+recorded 2026-07-13"): exercise-trade convention added; settle sweep
+tiered; standing-abstention carry-forward; fetch-class keys get a
+per-attempt component.
+v8, 2026-07-13, run -09 review: writes carry `--run-id`; `decision.add`
 side is the outcome side (yes/no), never buy/sell — see Keys.
 v7, 2026-07-13, trade-trace-6n4jp: fixed a v6 regression — when a
 two-sided book anchors `price` to the book mid (AX-027), `price_source` now
@@ -47,6 +51,54 @@ named honestly — the substrate exposes Gamma's cumulative `volume`, not
 - `decision.add` `side` is the OUTCOME side (`yes`/`no`, or
   `long`/`short`) — never `buy`/`sell`. SELL-YES exposure = `side=no`,
   BUY-YES = `side=yes`.
+- Fetch-class tools (`snapshot.fetch`, `market.refresh`,
+  `snapshot.fetch_series`, `outcome.fetch`) mint keys with a per-attempt
+  component: `paper:<RUN_ID>:<purpose>:<market_id>:a<N>`. A same-key
+  IDEMPOTENCY_CONFLICT means REUSE the first row — never treat a replay
+  as a fresh price (owner decision, trade-trace-pzyvq).
+
+## Settle sweep (v9: tiered)
+
+Fresh-tier refresh every run: markets with `resolution_at` within 7 days,
+`resolution_at = null`, or an open position. FULL sweep (every open
+market) on runs where NN % 6 == 1 (runs -01, -07, -13, -19 of each UTC
+day). Early resolutions outside the fresh tier are caught by the next
+full sweep — bounded, self-healing latency; financial risk zero while
+positions are flat.
+
+## Standing abstentions (v9)
+
+The run summary carries a "Standing abstentions" table: forecast id,
+direction, edge, and the price at last derivation. Each run copies it
+forward from the most recent prior summary and re-derives an entry ONLY
+when |price_now − price_at_last_derivation| > 0.03, or when the market
+enters its final 7 days. Otherwise carry the line forward verbatim with
+a "standing" marker. New gate-clearing stale
+edges enter the table via one full derivation first.
+
+## Exercise trades (v9, owner-authorized 2026-07-13)
+
+Purpose: continuously exercise the risk→intent→fill→receipt→reconcile→
+settle chain with honest, labeled, minimum-size activity. NOT conviction
+trading; the 0.05 conviction gate and abstention discipline are
+untouched.
+
+- At most ONE exercise trade per UTC day: before opening one, check the
+  prior run summary and `pretrade_intent.list` for an
+  `intent_type=exercise` intent today; skip if present.
+- Size: $10–20 notional. Market: the most-liquid universe-passing market
+  among this run's fresh snapshots (prefer near-dated so settlement
+  exercises quickly). Direction: buy the cheaper side at the touch.
+- Full chain, no shortcuts: `decision.add` (type=paper_enter, reason
+  starts `exercise_trade:`), `risk.evaluate` → `risk.check_record` (ALL
+  policy rules apply — supply full exposure inputs and links; a fail
+  verdict CANCELS the exercise trade, journaled honestly),
+  `pretrade_intent.record` with `proposed_shape.intent_type="exercise"`,
+  `paper_fill.record` with `evidence_json.reason="exercise_trade"`,
+  receipts + reconciliation per the standard procedure, settlement exit
+  on resolution like any position.
+- Exercise activity must never be described as conviction trading in
+  summaries or memories; always label it.
 
 ## Fill model (v1: conservative touch-price, honest no_fill)
 

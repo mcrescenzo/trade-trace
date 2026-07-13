@@ -55,13 +55,17 @@ linked decision. Items carry `id` (not `forecast_id`) and no
 probability (fetch outcomes separately for edge checks); the stream
 ends with a standard summary envelope (`count`, empty `items`,
 `meta.next_cursor`) — that is contract behavior for all list tools,
-not an error. Set RUN_ID (`YYYY-MM-DD-NN`, UTC; NN = 1 + count of
+not an error. Also read the most recent prior run summary in
+`$TRADE_TRACE_HOME/reports/` — it carries the Standing abstentions
+table (conventions v9) and today's exercise-trade status. Set RUN_ID (`YYYY-MM-DD-NN`, UTC; NN = 1 + count of
 files in `$TRADE_TRACE_HOME/reports/` matching today's date).
 
 ### 2. Settle
-For every market with an open forecast or open paper position:
-`market.refresh` + `snapshot.fetch` (fresh prices; explicit idempotency
-keys). If the venue data shows resolution (`winningOutcome`, or
+Tiered sweep (conventions v9): every run, refresh markets with
+`resolution_at` within 7 days, `resolution_at = null`, or an open paper
+position; FULL sweep of every open-forecast market only on runs where
+NN % 6 == 1. For each swept market: `market.refresh` + `snapshot.fetch`
+(fresh prices; explicit per-attempt idempotency keys). If the venue data shows resolution (`winningOutcome`, or
 `outcomePrices` pinned ~1.0/~0.0 on one side): `resolution.add` with
 `status=resolved_final` and `confidence>=0.9` ONLY if genuinely
 unambiguous — otherwise record the honest status (`disputed`,
@@ -105,7 +109,19 @@ quantity, price, declared_risk_amount/unit=USDC), `risk.evaluate`
 `risk.check_record` → if pass: `pretrade_intent.record` (link
 forecast/decision/snapshot/receipt, proposed_shape, risk_budget) →
 `paper_fill.record` per the fill convention. If the edge rule fails
-everywhere, trade nothing — say so.
+everywhere, no conviction trade happens — say so.
+
+Stale-edge handling: maintain the "Standing abstentions" table per
+conventions v9 (carry it forward from the most recent prior run summary;
+re-derive an entry only on a further 0.03 move or final-7-days entry).
+
+Exercise trade (owner-authorized, conventions v9): if no
+`intent_type=exercise` intent exists yet today (check the prior run
+summary and `pretrade_intent.list`), place exactly ONE labeled
+minimum-size exercise trade through the FULL chain per the conventions
+procedure — all risk-policy rules apply, and a risk fail cancels it
+honestly. Plumbing evidence, never conviction trading; label it as such
+everywhere.
 
 ### 6. Review & retain
 `report.calibration`, `report.coach`, `report.paper_exposure`,
