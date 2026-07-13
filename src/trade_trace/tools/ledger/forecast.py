@@ -10,11 +10,18 @@ module imports them.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from trade_trace.contracts.errors import ErrorCode
 from trade_trace.contracts.tool_registry import ToolContext, ToolRegistry
 from trade_trace.events.unit_of_work import UnitOfWork
+from trade_trace.reporting.pagination import (
+    MAX_LIMIT,
+    PaginationError,
+    _decode_cursor,
+    _encode_cursor,
+)
 from trade_trace.tools._helpers import (
     CONFIDENCE_LABELS,
     check_idempotency_replay,
@@ -40,6 +47,7 @@ from trade_trace.tools.ledger._scoring import (
 from trade_trace.tools.ledger._shared import examples_for
 
 _BINARY_TOLERANCE = 1e-6
+_FORECAST_SCORING_STATES = {"pending", "scored", "failed", "superseded"}
 
 
 FORECAST_ADD_JSON_SCHEMA: dict[str, Any] = {
@@ -797,6 +805,237 @@ def _forecast_anchor_to_snapshot(args: dict[str, Any], ctx: ToolContext) -> dict
             )
 
 
+_FORECAST_LIST_SELECT = (
+    "SELECT f.id, f.thesis_id, f.market_id, f.kind, "
+    "f.resolution_at, f.created_at, fsa.id, COALESCE(dc.linked_decision_count, 0) "
+    "FROM forecasts f "
+    "LEFT JOIN forecast_snapshot_anchor fsa ON fsa.forecast_id = f.id "
+    "LEFT JOIN ("
+    "SELECT forecast_id, COUNT(*) AS linked_decision_count FROM decisions "
+    "WHERE forecast_id IS NOT NULL GROUP BY forecast_id"
+    ") dc ON dc.forecast_id = f.id"
+)
+
+# Every forecast's LATEST qualifying `forecast_scores` row (score against an
+# outcome that has not itself been superseded), one row per forecast_id.
+# Mirrors the correlated-subquery pick inside `derive_scoring_state` exactly
+# (same WHERE + ORDER BY + LIMIT 1) but as a single batch query instead of
+# one round-trip per forecast.
+_FORECAST_LATEST_SCORE_SQL = """
+    SELECT fs.forecast_id, fs.score, fs.metadata_json
+    FROM forecast_scores fs
+    WHERE NOT EXISTS (
+        SELECT 1 FROM edges e
+        WHERE e.source_kind = 'outcome' AND e.target_kind = 'outcome'
+          AND e.edge_type = 'supersedes' AND e.target_id = fs.outcome_id
+      )
+      AND fs.id = (
+        SELECT fs2.id FROM forecast_scores fs2
+        WHERE fs2.forecast_id = fs.forecast_id
+          AND NOT EXISTS (
+            SELECT 1 FROM edges e2
+            WHERE e2.source_kind = 'outcome' AND e2.target_kind = 'outcome'
+              AND e2.edge_type = 'supersedes' AND e2.target_id = fs2.outcome_id
+          )
+        ORDER BY fs2.scored_at DESC, fs2.id DESC LIMIT 1
+      )
+"""
+
+_FORECAST_SUPERSEDED_IDS_SQL = (
+    "SELECT target_id FROM edges "
+    "WHERE source_kind = 'forecast' AND target_kind = 'forecast' AND edge_type = 'supersedes'"
+)
+
+
+def _derive_scoring_state_from_maps(
+    forecast_id: str,
+    superseded_ids: set[str],
+    score_map: dict[str, tuple[float | None, str | None]],
+) -> str:
+    """Python port of `_scoring.derive_scoring_state`, evaluated against
+    batch-loaded maps instead of a per-forecast round trip.
+
+    `forecasts.scoring_state` is append-only and stays `'pending'` on disk
+    forever (the m003/m014 trigger forbids UPDATE); the logical state is
+    always projected at read time. A `WHERE f.scoring_state = ?` filter would
+    silently match nothing but 'pending' rows and misreport every forecast's
+    state (see the same caveat in `outcome.py`/`strategy.py`), so
+    `forecast.list` must derive it here rather than trust the column.
+    """
+
+    if forecast_id in superseded_ids:
+        return "superseded"
+    entry = score_map.get(forecast_id)
+    if entry is None:
+        return "pending"
+    score, metadata_json = entry
+    if score is not None:
+        return "scored"
+    try:
+        meta = json.loads(metadata_json or "{}")
+    except json.JSONDecodeError:
+        meta = {}
+    if meta.get("failure_reason"):
+        return "failed"
+    return "pending"
+
+
+def _forecast_list_row_to_dict(row: Any, scoring_state: str) -> dict[str, Any]:
+    linked_decision_count = int(row[7])
+    return {
+        "id": row[0],
+        "thesis_id": row[1],
+        "market_id": row[2],
+        "instrument_id": row[2],
+        "kind": row[3],
+        "scoring_state": scoring_state,
+        "resolution_at": row[4],
+        "created_at": row[5],
+        "snapshot_anchor_id": row[6],
+        "linked_decision_count": linked_decision_count,
+        "has_linked_decision": linked_decision_count > 0,
+    }
+
+
+def _forecast_list_cursor_window(
+    items: list[dict[str, Any]], *, cursor: str | None, limit: int,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Keyset-paginate an already `(created_at DESC, id DESC)`-sorted list.
+
+    `items` is post-filter (including the derived `scoring_state` filter,
+    which cannot be pushed into SQL — see `_derive_scoring_state_from_maps`),
+    so the shared `reporting.pagination.paginate_created_at_id_query` helper
+    (SQL-LIMIT based) does not apply here. This reuses the same opaque
+    `[created_at, id]` cursor encoding (`_encode_cursor`/`_decode_cursor`,
+    already cross-imported by `reports/work_queue.py` and
+    `reports/lifecycle.py`) so `forecast.list` cursors are byte-compatible
+    with every other keyset-paginated surface in the catalog.
+    """
+
+    clamped_limit = max(1, min(int(limit), MAX_LIMIT))
+    start = 0
+    if cursor is not None:
+        after = _decode_cursor(cursor)
+        if not isinstance(after, list) or len(after) != 2:
+            raise PaginationError("forecast.list cursor payload must be [created_at, id]")
+        after_key = (after[0], after[1])
+        start = len(items)
+        for i, item in enumerate(items):
+            if (item["created_at"], item["id"]) < after_key:
+                start = i
+                break
+    page = items[start:start + clamped_limit]
+    next_cursor = None
+    if start + clamped_limit < len(items):
+        last = page[-1]
+        next_cursor = _encode_cursor([last["created_at"], last["id"]])
+    return page, next_cursor
+
+
+def _forecast_list(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """`forecast.list` — public read-only enumeration of every forecast row.
+
+    Unlike `review.bundle` (which only reaches decision-linked forecasts by
+    walking decisions -> forecast_id), this tool reads `forecasts` directly so
+    a forecast with no linked decision is still enumerable (bead
+    trade-trace-6oob8). Each row carries `linked_decision_count` (a cheap
+    LEFT JOIN aggregate over `decisions.forecast_id`) and
+    `snapshot_anchor_id` (from the 1:1 `forecast_snapshot_anchor` table) so a
+    caller can distinguish audited-elsewhere forecasts from orphaned ones
+    without a second round-trip.
+    """
+
+    del ctx
+    raw_limit = args.get("limit", 50)
+    try:
+        limit = int(raw_limit)
+    except (TypeError, ValueError) as exc:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            "limit must be an integer",
+            details={"field": "limit", "value": raw_limit},
+        ) from exc
+
+    scoring_state = args.get("scoring_state")
+    if scoring_state is not None and scoring_state not in _FORECAST_SCORING_STATES:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"scoring_state must be one of {sorted(_FORECAST_SCORING_STATES)}",
+            details={"field": "scoring_state", "value": scoring_state, "allowed": sorted(_FORECAST_SCORING_STATES)},
+        )
+
+    instrument_id = args.get("instrument_id") or args.get("market_id")
+    resolution_before = normalize_timestamp(args, "resolution_before")
+    resolution_after = normalize_timestamp(args, "resolution_after")
+
+    where: list[str] = []
+    params: list[Any] = []
+    if instrument_id is not None:
+        where.append("f.market_id = ?")
+        params.append(instrument_id)
+    if resolution_before is not None:
+        where.append("f.resolution_at IS NOT NULL AND f.resolution_at < ?")
+        params.append(resolution_before)
+    if resolution_after is not None:
+        where.append("f.resolution_at IS NOT NULL AND f.resolution_at >= ?")
+        params.append(resolution_after)
+
+    sql = _FORECAST_LIST_SELECT
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY f.created_at DESC, f.id DESC"
+
+    cursor = args.get("cursor")
+    with db_for_args(args) as db:
+        conn = db.connection
+        rows = conn.execute(sql, tuple(params)).fetchall()
+        superseded_ids = {r[0] for r in conn.execute(_FORECAST_SUPERSEDED_IDS_SQL).fetchall()}
+        score_map = {r[0]: (r[1], r[2]) for r in conn.execute(_FORECAST_LATEST_SCORE_SQL).fetchall()}
+
+    items = []
+    for row in rows:
+        state = _derive_scoring_state_from_maps(row[0], superseded_ids, score_map)
+        if scoring_state is not None and state != scoring_state:
+            continue
+        items.append(_forecast_list_row_to_dict(row, state))
+
+    try:
+        page_items, next_cursor = _forecast_list_cursor_window(items, cursor=cursor, limit=limit)
+    except PaginationError as exc:
+        raise ToolError(
+            ErrorCode.VALIDATION_ERROR,
+            f"invalid cursor: {exc}",
+            details={"field": "cursor", "value": cursor},
+        ) from exc
+
+    return {
+        "items": page_items,
+        "count": len(page_items),
+        "truncated": next_cursor is not None,
+        "next_cursor": next_cursor,
+    }
+
+
+FORECAST_LIST_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Public read-only enumeration of every forecast row, independent of "
+        "decision linkage. Complements review.bundle (which only reaches "
+        "forecasts a decision points at) so unlinked forecasts stay auditable."
+    ),
+    "properties": {
+        "scoring_state": {"type": "string", "enum": sorted(_FORECAST_SCORING_STATES)},
+        "instrument_id": {"type": "string", "description": "Filters on the forecast's market/instrument id."},
+        "market_id": {"type": "string", "description": "Alias for instrument_id; market.bind-created markets share one id space with instruments."},
+        "resolution_before": {"type": "string", "description": "ISO 8601; only forecasts with resolution_at strictly before this."},
+        "resolution_after": {"type": "string", "description": "ISO 8601; only forecasts with resolution_at on/after this."},
+        "limit": {"type": "integer", "description": "Maximum rows per page; defaults to 50, clamped to [1, 500]."},
+        "cursor": {"type": "string", "description": "Opaque next_cursor from a prior page; omit for the first page."},
+        "home": {"type": "string"},
+    },
+}
+
+
 def register_forecast_tools(registry: ToolRegistry) -> None:
     registry.register(
         "forecast.add", _forecast_add, is_write=True,
@@ -810,4 +1049,15 @@ def register_forecast_tools(registry: ToolRegistry) -> None:
     registry.register(
         "forecast.anchor_to_snapshot", _forecast_anchor_to_snapshot, is_write=True,
         example_minimal={"forecast_id": "fc_...", "snapshot_id": "snp_..."},
+    )
+    registry.register(
+        "forecast.list", _forecast_list,
+        description=(
+            "List every forecast row regardless of decision linkage, with "
+            "scoring_state/instrument_id/resolution-window filters and cursor "
+            "pagination; each item carries its snapshot_anchor_id (if any) and "
+            "linked_decision_count so forecasts with no linked decision stay "
+            "enumerable outside review.bundle."
+        ),
+        json_schema=FORECAST_LIST_JSON_SCHEMA,
     )

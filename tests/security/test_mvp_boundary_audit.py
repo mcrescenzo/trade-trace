@@ -245,6 +245,13 @@ SHIPPED_PUBLIC_TOOLS = {
     "forecast.commit_blind",
     "forecast.independence",
     "forecast.interpret_resolution",
+    # Unfrozen into the public Phase-2 catalog (bead trade-trace-6oob8): the
+    # only read-only surface that enumerates EVERY forecast row regardless of
+    # decision linkage. review.bundle only reaches forecasts a decision
+    # points at (walks decisions.forecast_id); forecast.list reads
+    # `forecasts` directly with a cheap LEFT JOIN for snapshot_anchor_id and
+    # linked_decision_count, so an unlinked forecast stays auditable.
+    "forecast.list",
     "forecast.resolution_interpretation",
     "forecast.reveal_snapshot",
     "import.commit",

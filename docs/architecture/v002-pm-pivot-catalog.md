@@ -1,6 +1,6 @@
 # v0.0.2 PM-pivot tool/report catalog reconciliation
 
-> Status: **shipped** and refreshed 2026-07-09 from `build_registry().public_names()`. The default public registry now exposes **77** non-admin entries. The experimental tier has **10** entries (`approval.*`, the superseded `forecast.anchor_to_snapshot`, and live Polymarket adapter fetch tools); the autonomous run/incident cluster has been cut rather than kept experimental. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
+> Status: **shipped** and refreshed 2026-07-13 from `build_registry().public_names()`. The default public registry now exposes **78** non-admin entries. The experimental tier has **10** entries (`approval.*`, the superseded `forecast.anchor_to_snapshot`, and live Polymarket adapter fetch tools); the autonomous run/incident cluster has been cut rather than kept experimental. Older 89 → 45 planning tables below are retained only as historical disposition context; use the current catalog summary and `tool.schema` for runtime truth.
 
 ## Why this exists
 
@@ -10,7 +10,7 @@
 This document originally reconciled those planning numbers against the
 then-current 89-tool registry. The pivot has since landed and the scope
 was reined in by epic trade-trace-4kec; the runtime registry now reports
-**77 public non-admin entries** in the default catalog, with 10 entries behind
+**78 public non-admin entries** in the default catalog, with 10 entries behind
 the experimental tier.
 
 This doc pins the **authoritative runtime baseline** (Section 1),
@@ -28,9 +28,9 @@ authoritative source the v0.0.2 implementation beads cite.
 
 ## 1. Current runtime baseline (2026-07-09)
 
-Generated from `build_registry().public_names()` for the default public catalog: 77 non-admin entries.
+Generated from `build_registry().public_names()` for the default public catalog: 78 non-admin entries.
 
-`abstention.get`, `abstention.list`, `abstention.record`, `account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `decision.add`, `export.drain`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.add`, `forecast.commit_blind`, `forecast.independence`, `forecast.interpret_resolution`, `forecast.resolution_interpretation`, `forecast.reveal_snapshot`, `import.commit`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.find_similar`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `playbook.propose_version`, `playbook.record_adherence`, `playbook.upsert`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.autonomy_readiness`, `report.bootstrap`, `report.calibration`, `report.coach`, `report.current_exposure`, `report.execution_quality`, `report.exposure_anomalies`, `report.forecast_diagnostics`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.paper_exposure`, `report.phase_gate_readiness`, `report.playbook_adherence`, `report.pnl`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.risk`, `report.strategy_health`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `risk.check_record`, `risk.evaluate`, `risk.policy_version_add`, `snapshot.add`, `strategy.upsert`, `tool.schema`.
+`abstention.get`, `abstention.list`, `abstention.record`, `account_snapshot.get`, `account_snapshot.import`, `account_snapshot.list`, `account_snapshot.report`, `decision.add`, `export.drain`, `external_receipt.get`, `external_receipt.import`, `external_receipt.list`, `external_receipt.report`, `forecast.add`, `forecast.commit_blind`, `forecast.independence`, `forecast.interpret_resolution`, `forecast.list`, `forecast.resolution_interpretation`, `forecast.reveal_snapshot`, `import.commit`, `journal.fixture_seed`, `journal.init`, `journal.schema`, `journal.status`, `market.bind`, `market.find_similar`, `memory.link`, `memory.recall`, `memory.reflect`, `memory.retain`, `paper_fill.get`, `paper_fill.list`, `paper_fill.record`, `playbook.propose_version`, `playbook.record_adherence`, `playbook.upsert`, `pretrade_intent.get`, `pretrade_intent.list`, `pretrade_intent.record`, `reconciliation.get`, `reconciliation.record`, `replay.case_bundle`, `replay.evaluate_output`, `replay_artifact.get`, `replay_artifact.list`, `replay_artifact.record`, `report.audit_readiness`, `report.autonomy_readiness`, `report.bootstrap`, `report.calibration`, `report.coach`, `report.current_exposure`, `report.execution_quality`, `report.exposure_anomalies`, `report.forecast_diagnostics`, `report.mistakes`, `report.open_positions`, `report.opportunity`, `report.paper_exposure`, `report.phase_gate_readiness`, `report.playbook_adherence`, `report.pnl`, `report.recall_receipts`, `report.reconciliation_mismatches`, `report.risk`, `report.strategy_health`, `report.unscored_forecasts`, `report.watchlist`, `report.work_queue`, `resolution.add`, `review.bundle`, `risk.check_record`, `risk.evaluate`, `risk.policy_version_add`, `snapshot.add`, `strategy.upsert`, `tool.schema`.
 
 ### Experimental / opt-in surface
 
@@ -514,7 +514,7 @@ removed tools via `renamed_to`, `redirect`, and `removed_in`.
 The default surface a normal agent sees omits legacy tools and admin-only
 tools (`signal.scan`, `journal.rebuild_projections`, `journal.repair`).
 Admin and legacy surfaces are opt-in inspection modes; current quickstarts
-should point agents at the 77-tool public catalog and `tool.schema` for
+should point agents at the 78-tool public catalog and `tool.schema` for
 runtime truth.
 
 ### 4.6 Experimental tier
@@ -555,7 +555,7 @@ update those pins and docs together.
 PYTHONPATH=src python -c \
   "from trade_trace.core import default_registry; \
    print(len(default_registry().public_names()))"
-# Expected: 77
+# Expected: 78
 
 # 1b. Experimental opt-in surface
 PYTHONPATH=src python -c \

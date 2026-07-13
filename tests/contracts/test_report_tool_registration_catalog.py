@@ -64,7 +64,7 @@ def test_removed_report_cull_targets_are_absent_from_public_catalog():
     public = set(registry.public_names())
     public_reports = {name for name in public if name.startswith("report.")}
 
-    assert len(public) == 77
+    assert len(public) == 78
     assert len(public_reports) == 23
     assert REMOVED_PUBLIC_REPORTS.isdisjoint(public)
     assert REMOVED_PUBLIC_REPORTS.isdisjoint(registry.names())
