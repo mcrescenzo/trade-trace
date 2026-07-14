@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
+from trade_trace.adapters.polymarket.client import PolymarketClient
 from trade_trace.core import default_registry, dispatch
 from trade_trace.storage.paths import db_path
+
+_POLYMARKET_FIXTURES = Path(__file__).parent / "fixtures" / "polymarket"
 
 
 def _call(tool: str, args: dict, *, actor_id: str = "agent:reconciliation"):
@@ -617,3 +622,77 @@ def test_recon_gate_imported_correction_is_consumed_not_orphaned(tmp_path):
     assert "ORPHAN_EXTERNAL_ORDER" not in codes
     assert "ORPHAN_EXTERNAL_FILL" not in codes
     assert "REJECTED_APPROVED_INTENT" not in codes
+
+
+# --- EVENT_EXPOSURE_UNAVAILABLE / adapter event-grouping (trade-trace-en654) --
+
+
+def _polymarket_fixture(name: str) -> dict:
+    return json.loads((_POLYMARKET_FIXTURES / name).read_text(encoding="utf-8"))
+
+
+def _bind_polymarket_market(home, monkeypatch: pytest.MonkeyPatch, fixture_name: str, *, external_id: str) -> dict:
+    assert _call(
+        "journal.config_set",
+        {"home": str(home), "key": "network.polymarket.enabled", "value": "true", "confirm": True, "idempotency_key": f"test-recon:config-polymarket-enabled:{external_id}"},
+        actor_id="agent:test",
+    ).ok
+    fixture = _polymarket_fixture(fixture_name)
+    monkeypatch.setattr(PolymarketClient, "gamma_get", lambda self, path, _fixture=fixture: _fixture)
+    bind = _call("market.bind", {"home": str(home), "source": "polymarket", "external_id": external_id}, actor_id="agent:test")
+    assert bind.ok, bind
+    return bind.data
+
+
+def _open_position(home, *, instrument_id: str) -> None:
+    conn = sqlite3.connect(db_path(home))
+    try:
+        conn.execute(
+            "INSERT INTO positions(id, instrument_id, kind, side, status, opened_at, avg_entry_price, updated_at) VALUES (?, ?, 'actual', 'yes', 'open', '2026-05-28T00:00:00.000Z', 0.5, '2026-05-28T00:00:00.000Z')",
+            (f"pos_{instrument_id}", instrument_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_recon_event_exposure_available_when_adapter_bind_maps_gamma_event_grouping(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    # Regression for trade-trace-en654: Gamma's single-market payload
+    # (GET /markets/{id}) nests event identity inside an `events` array
+    # instead of flat eventId/eventSlug fields on the market object. The
+    # adapter bind path must map that into markets.metadata_json.event_grouping
+    # so reconciliation's event-exposure derivation can group a held position
+    # by venue event instead of flagging EVENT_EXPOSURE_UNAVAILABLE on every
+    # adapter-bound position.
+    home = tmp_path / "home"
+    assert _call("journal.init", {"home": str(home)}, actor_id="agent:init").ok
+    bound = _bind_polymarket_market(home, monkeypatch, "market_binary_open.json", external_id="pm-event-grouped")
+    meta = json.loads(bound["metadata_json"])
+    assert meta["event_grouping"]["event_id"]
+    assert meta["event_grouping"]["event_slug"]
+    _open_position(home, instrument_id=bound["id"])
+
+    rec = _call("reconciliation.record", {"home": str(home), "semantic_key": "recon-event-grouped", "as_of": "2026-05-28T00:03:00.000Z", "idempotency_key": "recon-event-grouped"})
+
+    assert rec.ok, rec
+    assert "EVENT_EXPOSURE_UNAVAILABLE" not in set(rec.data["mismatch_codes"])
+
+
+def test_recon_event_exposure_unavailable_still_fires_when_gamma_omits_event_fields(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    # Companion regression: when Gamma genuinely omits event identity (no
+    # `events` array and no flat eventId/eventSlug — market_binary_open_amm.json
+    # carries neither), the adapter must NOT fabricate grouping metadata, so
+    # EVENT_EXPOSURE_UNAVAILABLE must still fire. This pins the honest-absence
+    # behavior stays unchanged by the en654 fix.
+    home = tmp_path / "home"
+    assert _call("journal.init", {"home": str(home)}, actor_id="agent:init").ok
+    bound = _bind_polymarket_market(home, monkeypatch, "market_binary_open_amm.json", external_id="pm-no-event")
+    meta = json.loads(bound["metadata_json"])
+    assert meta["event_grouping"]["event_id"] is None
+    assert meta["event_grouping"]["event_slug"] is None
+    _open_position(home, instrument_id=bound["id"])
+
+    rec = _call("reconciliation.record", {"home": str(home), "semantic_key": "recon-no-event", "as_of": "2026-05-28T00:03:00.000Z", "idempotency_key": "recon-no-event"})
+
+    assert rec.ok, rec
+    assert "EVENT_EXPOSURE_UNAVAILABLE" in set(rec.data["mismatch_codes"])

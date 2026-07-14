@@ -54,7 +54,7 @@ journal is the proof:
 
 1. Read the run summary it names (`~/.trade-trace-paper/reports/<RUN_ID>.md`) end to end.
 2. `tail -400 ~/.trade-trace-paper/logs/trade-trace.log | grep -icE "error|denied|traceback"` — the app log is where session-loop runs land (`run-<date>.log` only exists for the retired run.sh path); anything new needs an explanation.
-3. `TRADE_TRACE_HOME=$HOME/.trade-trace-paper tt report reconciliation_mismatches` — investigate any code NOW, with one known exception: `EVENT_EXPOSURE_UNAVAILABLE` at warning severity is EXPECTED while a position is held, until the adapter event-metadata bead lands (bound markets carry null event_grouping). Any other code, or any critical severity, is a real finding.
+3. `TRADE_TRACE_HOME=$HOME/.trade-trace-paper tt report reconciliation_mismatches` — investigate any code NOW.
 4. `TRADE_TRACE_HOME=$HOME/.trade-trace-paper tt report audit_readiness` — blocking_count must NOT have grown (post-v3 forecasts must carry `resolution_rule_text`/`resolution_at`; if a new forecast is blocking, the playbook contract regressed).
 5. Collect every friction item from the summary + the agent's return.
 

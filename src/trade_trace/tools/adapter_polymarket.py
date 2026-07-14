@@ -109,6 +109,25 @@ def _normalize_bool_like(value: Any) -> bool | None:
     return None
 
 
+def _first_gamma_event(raw: dict[str, Any]) -> dict[str, Any]:
+    """Return the first nested event object from Gamma's ``events`` array.
+
+    Gamma's single-market payload (``GET /markets/{id}``, the endpoint
+    ``_fetch_market`` calls) nests event identity inside an ``events`` array
+    (each entry carrying its own ``id``/``slug``/``title``) rather than flat
+    ``eventId``/``eventSlug`` fields on the market object itself. Real
+    binary markets are effectively 1:1 with their parent event, so the first
+    entry is authoritative (trade-trace-en654).
+    """
+
+    events = raw.get("events")
+    if isinstance(events, list):
+        for event in events:
+            if isinstance(event, dict):
+                return event
+    return {}
+
+
 def _polymarket_identity_metadata(raw: dict[str, Any], external_id: str) -> dict[str, Any]:
     """Extract public Polymarket IDs/reporting metadata; never credentials."""
 
@@ -119,20 +138,26 @@ def _polymarket_identity_metadata(raw: dict[str, Any], external_id: str) -> dict
         for idx, label in enumerate(labels)
         if isinstance(token_ids, list) and idx < len(token_ids)
     }
-    event_id = _first_present(raw, "eventId", "event_id", "gammaEventId")
+    # Prefer flat top-level fields when a deployment supplies them, falling
+    # back to the nested `events[0]` shape real Gamma single-market payloads
+    # actually use. Absent from both -> stays None (absent-not-fabricated).
+    event = _first_gamma_event(raw)
+    event_id = _first_present(raw, "eventId", "event_id", "gammaEventId") or _first_present(event, "id", "eventId")
+    event_slug = _first_present(raw, "eventSlug", "event_slug") or _first_present(event, "slug", "eventSlug")
+    event_title = _first_present(raw, "eventTitle", "event_title", "eventName") or _first_present(event, "title", "name")
     return {
         "polymarket_identity": {
             "gamma_market_id": str(_first_present(raw, "id", "marketId", "gammaMarketId") or external_id),
             "gamma_event_id": event_id,
             "market_slug": _first_present(raw, "slug", "marketSlug"),
-            "event_slug": _first_present(raw, "eventSlug", "event_slug"),
+            "event_slug": event_slug,
             "condition_id": _first_present(raw, "conditionId", "condition_id"),
             "outcome_token_ids_by_label": token_ids_by_label,
         },
         "event_grouping": {
             "event_id": event_id,
-            "event_slug": _first_present(raw, "eventSlug", "event_slug"),
-            "event_title": _first_present(raw, "eventTitle", "event_title", "eventName"),
+            "event_slug": event_slug,
+            "event_title": event_title,
         },
         "resolution_rule": {
             # Polymarket's Gamma payload carries the resolution prose in
