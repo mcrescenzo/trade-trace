@@ -348,3 +348,75 @@ def test_audit_readiness_registered_read_only_schema(home: Path):
     assert tool["tool"] == "report.audit_readiness"
     assert tool["is_write"] is False
     assert tool["json_schema"]["properties"]["stale_snapshot_threshold_days"]["minimum"] == 0
+
+
+def _seed_forecast(home: Path, idx: int, *, resolution_at: str | None) -> str:
+    venue = _mcp(home, "venue.add", {"name": f"PM-undated-{idx}", "kind": "prediction_market"}).data["id"]
+    inst = _mcp(home, "instrument.add", {
+        "venue_id": venue,
+        "asset_class": "prediction_market",
+        "title": f"Will undated-{idx} happen?",
+    }).data["id"]
+    thesis = _mcp(home, "thesis.add", {"instrument_id": inst, "side": "yes", "body": "because"}).data["id"]
+    args: dict = {
+        "thesis_id": thesis,
+        "kind": "binary",
+        "yes_label": "yes",
+        "outcomes": [
+            {"outcome_label": "yes", "probability": 0.5},
+            {"outcome_label": "no", "probability": 0.5},
+        ],
+    }
+    if resolution_at is not None:
+        args["resolution_at"] = resolution_at
+    return _mcp(home, "forecast.add", args).data["id"]
+
+
+def test_audit_readiness_undated_forecast_count_dated_undated_mix(home: Path):
+    """Bead trade-trace-fzez6: summary.undated_forecast_count (+ sample ids)
+    counts exactly the forecasts with resolution_at IS NULL in a dated/
+    undated mix, and does not count the dated ones."""
+
+    dated_ids = {
+        _seed_forecast(home, idx, resolution_at="2026-08-01T00:00:00Z")
+        for idx in range(2)
+    }
+    undated_ids = {
+        _seed_forecast(home, idx, resolution_at=None)
+        for idx in range(10, 13)
+    }
+
+    env = _mcp(home, "report.audit_readiness", {})
+    assert env.ok, env
+    summary = env.data["summary"]
+    assert summary["undated_forecast_count"] == len(undated_ids)
+    sample = set(summary["undated_forecast_sample_ids"]["forecasts"])
+    assert sample == undated_ids
+    assert dated_ids.isdisjoint(sample)
+
+
+def test_audit_readiness_undated_forecast_sample_capped(home: Path):
+    """The sample is capped (not the full 100-row MAX_SAMPLES used for
+    issues) even though the count itself is exact."""
+
+    undated_ids = {_seed_forecast(home, idx, resolution_at=None) for idx in range(14)}
+    assert len(undated_ids) == 14
+
+    env = _mcp(home, "report.audit_readiness", {})
+    assert env.ok, env
+    summary = env.data["summary"]
+    assert summary["undated_forecast_count"] == 14
+    sample = summary["undated_forecast_sample_ids"]["forecasts"]
+    assert len(sample) == 10
+    assert set(sample) <= undated_ids
+
+
+def test_audit_readiness_zero_undated_forecasts_when_all_dated(home: Path):
+    for idx in range(3):
+        _seed_forecast(home, idx, resolution_at="2026-08-01T00:00:00Z")
+
+    env = _mcp(home, "report.audit_readiness", {})
+    assert env.ok, env
+    summary = env.data["summary"]
+    assert summary["undated_forecast_count"] == 0
+    assert summary["undated_forecast_sample_ids"] == {"forecasts": []}

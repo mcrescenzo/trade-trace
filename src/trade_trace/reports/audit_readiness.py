@@ -15,6 +15,17 @@ MAX_SAMPLES = 100
 DEFAULT_STALE_SNAPSHOT_THRESHOLD_DAYS = 1
 DEFAULT_STALE_SOURCE_THRESHOLD_DAYS = 7
 
+# Per bead trade-trace-fzez6: the undated-forecast count was previously only
+# derivable by walking forecast.list and checking resolution_at, which is
+# easy to miss in a lighter audit even though it gates the due-forecast
+# lifecycle machinery (reports/lifecycle.py's `resolution_at_missing` state,
+# report.work_queue's `resolve_due_forecast`). Surfacing it directly on
+# summary keeps it visible without a separate walk. Sample is capped small
+# (~10, not the 100-row MAX_SAMPLES used for actual findings/issues) because
+# this is a summary-level count, not an "issue" entry — undated forecasts are
+# not blocking/warning/info findings, just a visibility aid.
+UNDATED_FORECAST_SAMPLE_CAP = 10
+
 ENTER_TYPES = ("actual_enter", "paper_enter")
 PM_CLASSES = ("prediction_market", "event_market")
 
@@ -96,6 +107,7 @@ def report_audit_readiness(
     # instead, ALWAYS (even when zero), never hidden.
     legacy_missing_rule_count = resolution_rule_check.pop("legacy_count", 0)
     legacy_missing_rule_sample_ids = resolution_rule_check.pop("legacy_sample_ids", {"forecasts": []})
+    undated_forecast_count, undated_forecast_sample_ids = _undated_forecasts(conn)
     checks = [
         resolution_rule_check,
         _missing_snapshot_for_entered_decisions(conn),
@@ -162,6 +174,8 @@ def report_audit_readiness(
             "sample_warning": sample_warning,
             "legacy_missing_rule_count": legacy_missing_rule_count,
             "legacy_missing_rule_sample_ids": legacy_missing_rule_sample_ids,
+            "undated_forecast_count": undated_forecast_count,
+            "undated_forecast_sample_ids": undated_forecast_sample_ids,
             "pre_v3_convention_cutoff": PRE_V3_CONVENTION_CUTOFF,
             "stale_snapshot_threshold_days": stale_snapshot_threshold_days,
             "stale_source_threshold_days": stale_source_threshold_days,
@@ -235,6 +249,25 @@ def _missing_resolution_rule_provenance(conn: sqlite3.Connection) -> dict[str, A
     issue["legacy_count"] = len(legacy_samples)
     issue["legacy_sample_ids"] = {"forecasts": [s["id"] for s in legacy_samples[:MAX_SAMPLES]]}
     return issue
+
+
+def _undated_forecasts(conn: sqlite3.Connection) -> tuple[int, dict[str, list[str]]]:
+    """Count every forecast with `resolution_at IS NULL` (bead
+    trade-trace-fzez6), across all asset classes (not scoped to
+    prediction/event markets like the entered-decision checks above --
+    resolution_at gates the due-forecast lifecycle machinery for any
+    forecast). Returns `(count, {"forecasts": [sample ids capped at
+    UNDATED_FORECAST_SAMPLE_CAP]})`, surfaced on `summary` alongside the
+    legacy resolution-rule split rather than as an `issues` entry: an
+    undated forecast is not itself a blocking/warning/info provenance
+    finding, just a visibility aid for the due-forecast machinery it gates.
+    """
+
+    rows = conn.execute(
+        "SELECT id FROM forecasts WHERE resolution_at IS NULL ORDER BY created_at, id"
+    ).fetchall()
+    ids = [r[0] for r in rows]
+    return len(ids), {"forecasts": ids[:UNDATED_FORECAST_SAMPLE_CAP]}
 
 
 def _missing_snapshot_for_entered_decisions(conn: sqlite3.Connection) -> dict[str, Any]:
