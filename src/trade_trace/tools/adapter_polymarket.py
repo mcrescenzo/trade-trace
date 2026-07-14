@@ -416,6 +416,43 @@ def _fetch_market(client: PolymarketClient, external_id: str) -> dict[str, Any]:
     return raw
 
 
+def _augment_missing_event(client: PolymarketClient, raw: dict[str, Any], fetch_id: str) -> dict[str, Any]:
+    """Backfill event linkage for negRisk bracket markets (trade-trace-lf82j).
+
+    Live-verified against the held Fed-rate-ladder bracket (external_id
+    1654958, negRiskMarketID 0x40fd26...3400, parent event 287395
+    "Fed Decision in July?"): Gamma's single-market payload
+    (``GET /markets/{id}``, what `_fetch_market` calls) omits the market-level
+    ``events`` array entirely for negRisk bracket legs — each leg only carries
+    ``negRiskMarketID`` (the shared bracket-group id), not its own event. The
+    Gamma LIST endpoint with an ``id`` filter (``GET /markets?id={id}``)
+    returns the *same* market row but WITH ``events[]`` populated, so make
+    exactly one supplemental call to that endpoint — and only when it's
+    actually needed (the primary payload lacks events AND carries a negRisk
+    linkage id) — to backfill it. No new host: `/markets` is the same
+    already-allowlisted `gamma_base_url` path family `_fetch_market` uses.
+
+    Best-effort: if the supplemental call fails (network/API error) or still
+    carries no events, `raw` is returned unchanged and event grouping stays
+    null (absent-not-fabricated) — the primary market payload already
+    succeeded, so an optional enrichment call must not fail the whole
+    bind/refresh.
+    """
+
+    if _first_gamma_event(raw):
+        return raw
+    if not raw.get("negRiskMarketID"):
+        return raw
+    try:
+        supplemental = client.gamma_get(f"/markets?id={quote(str(fetch_id), safe='')}")
+    except AdapterError:
+        return raw
+    for row in _extract_market_rows(supplemental):
+        if isinstance(row, dict) and row.get("events"):
+            return raw | {"events": row["events"]}
+    return raw
+
+
 def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id: str | None = None) -> dict[str, Any]:
     with db_for_args(args) as db:
         cfg = load_config(db.connection)
@@ -447,7 +484,9 @@ def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id:
                 # Gamma /markets/{id} lookup 422-ing on the namespaced id.
                 gamma_market_id = args.get("gamma_market_id")
                 fetch_id = str(gamma_market_id) if gamma_market_id else str(external_id)
-            payload = _market_payload(_fetch_market(client, str(fetch_id)), str(external_id))
+            raw_market = _fetch_market(client, str(fetch_id))
+            raw_market = _augment_missing_event(client, raw_market, str(fetch_id))
+            payload = _market_payload(raw_market, str(external_id))
         except AdapterError as exc:
             raise _tool_error(exc) from exc
         with UnitOfWork(db.connection) as uow:

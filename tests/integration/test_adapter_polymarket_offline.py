@@ -15,12 +15,14 @@ from trade_trace.adapters.polymarket.config import PolymarketConfig
 from trade_trace.adapters.polymarket.errors import AdapterError, error_details, scrub_endpoint
 from trade_trace.adapters.polymarket.retry import retry_policy_kwargs
 from trade_trace.contracts.envelope import SuccessEnvelope
+from trade_trace.contracts.errors import ErrorCode
 from trade_trace.mcp_server import mcp_call
 from trade_trace.storage import open_database
 from trade_trace.storage.paths import db_path
 from trade_trace.tools._market_rows import adapter_cache_hit_row_dict
 from trade_trace.tools.adapter_polymarket import (
     _apply_caller_resolution_rule,
+    _augment_missing_event,
     _market_cache_hit,
     _market_payload,
     _normalize_gamma_market,
@@ -381,6 +383,140 @@ def test_market_refresh_cache_hit_preserves_close_at_from_bind(
     # just the re-fetch path (already correct).
     assert refreshed.data["cache_hit"] is True
     assert refreshed.data["close_at"] == "2026-12-31T00:00:00Z"
+
+
+class _StubGammaClient:
+    """Minimal gamma_get stub for `_augment_missing_event` unit tests -- no
+    PolymarketConfig/host-allowlist plumbing needed since the function under
+    test only ever calls `client.gamma_get(path)`."""
+
+    def __init__(self, responses: dict[str, Any]):
+        self._responses = responses
+
+    def gamma_get(self, path: str) -> Any:
+        return self._responses[path]
+
+
+def test_negrisk_bracket_leg_resolves_event_via_parent_lookup():
+    """trade-trace-lf82j: negRisk bracket legs' single-market payload
+    (GET /markets/{id}, what `_fetch_market` calls) omits the market-level
+    `events` array entirely -- live-verified against the held Fed-rate-ladder
+    leg (external_id 1654958, negRiskMarketID 0x40fd26...3400): the real
+    Gamma response for that endpoint carries no `events` key at all, only
+    `negRiskMarketID`. The Gamma LIST endpoint with an `id` filter
+    (GET /markets?id={id}) returns the SAME market row but WITH `events[]`
+    populated (parent event 287395 "Fed Decision in July?"), so
+    `_augment_missing_event` makes exactly one supplemental call to backfill
+    it, and `_market_payload` then populates event_grouping from it."""
+
+    leg = _fixture("market_negrisk_bracket_leg.json")
+    assert "events" not in leg  # pins the real Gamma quirk this fix works around
+    parent_response = _fixture("market_negrisk_parent_event_markets_response.json")
+    client = _StubGammaClient({"/markets?id=1654958": parent_response})
+
+    augmented = _augment_missing_event(client, leg, "1654958")
+    assert augmented["events"][0]["id"] == "287395"
+
+    market = _market_payload(augmented, "1654958")
+    metadata = json.loads(market["metadata_json"])
+    assert metadata["event_grouping"] == {
+        "event_id": "287395",
+        "event_slug": "fed-decision-in-july-181",
+        "event_title": "Fed Decision in July?",
+    }
+
+
+def test_negrisk_bracket_leg_without_reachable_parent_stays_null():
+    """Absent-not-fabricated: when the supplemental lookup carries no events
+    either (parent genuinely unreachable), event grouping stays null rather
+    than being guessed at from e.g. the bracket group id or question text."""
+
+    leg = _fixture("market_negrisk_bracket_leg_no_parent.json")
+    client = _StubGammaClient(
+        {"/markets?id=9990001": [{"id": "9990001", "negRiskMarketID": leg["negRiskMarketID"]}]}
+    )
+
+    augmented = _augment_missing_event(client, leg, "9990001")
+    assert "events" not in augmented
+
+    market = _market_payload(augmented, "9990001")
+    metadata = json.loads(market["metadata_json"])
+    assert metadata["event_grouping"] == {"event_id": None, "event_slug": None, "event_title": None}
+
+
+def test_negrisk_augment_is_noop_when_events_already_present():
+    """A market that already carries events (the common non-bracket case, and
+    the normal negRisk case per the AX-042 real-payload sample) must not
+    trigger the supplemental call at all -- `_StubGammaClient({})` KeyErrors
+    on any lookup, so a stray call fails the test loudly."""
+
+    raw = {"id": "m1", "events": [{"id": "ev-1"}]}
+    client = _StubGammaClient({})
+    assert _augment_missing_event(client, raw, "m1") is raw
+
+
+def test_negrisk_augment_is_noop_without_negrisk_linkage_id():
+    """A market with no events AND no negRiskMarketID has no linkage id to
+    look up with, so it is never treated as an enrichable bracket leg."""
+
+    raw = {"id": "m1"}
+    client = _StubGammaClient({})
+    assert _augment_missing_event(client, raw, "m1") is raw
+
+
+def test_negrisk_augment_swallows_supplemental_adapter_error():
+    """The primary market payload already succeeded (that's how we got a raw
+    dict to augment); a failure on the optional enrichment call must not fail
+    the whole bind/refresh -- it degrades to absent event grouping instead."""
+
+    class _FailingClient:
+        def gamma_get(self, path: str) -> Any:
+            raise AdapterError(ErrorCode.EXTERNAL_API_ERROR, "boom")
+
+    raw = {"id": "m1", "negRiskMarketID": "0xabc"}
+    augmented = _augment_missing_event(_FailingClient(), raw, "m1")
+    assert augmented is raw
+
+
+def test_market_bind_negrisk_bracket_leg_populates_event_grouping_end_to_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """End-to-end regression for trade-trace-lf82j: market.bind on a negRisk
+    bracket leg must resolve event_grouping via the parent-event supplemental
+    lookup, not leave it null (the root cause of the recurring
+    EVENT_EXPOSURE_UNAVAILABLE warning on held bracket positions)."""
+
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    assert mcp_call(
+        "journal.config_set",
+        with_legacy_idempotency_key(
+            "journal.config_set",
+            {"home": home, "key": "network.polymarket.enabled", "value": "true", "confirm": True},
+        ),
+    ).ok
+
+    leg = _fixture("market_negrisk_bracket_leg.json")
+    parent_response = _fixture("market_negrisk_parent_event_markets_response.json")
+
+    def _fake_gamma_get(self: PolymarketClient, path: str) -> Any:
+        if path == "/markets/1654958":
+            return leg
+        if path == "/markets?id=1654958":
+            return parent_response
+        raise AssertionError(f"unexpected gamma_get path: {path}")
+
+    monkeypatch.setattr(PolymarketClient, "gamma_get", _fake_gamma_get)
+
+    bound = mcp_call("market.bind", {"home": home, "source": "polymarket", "external_id": "1654958"})
+    assert bound.ok, bound
+    assert isinstance(bound, SuccessEnvelope)
+    metadata = json.loads(bound.data["metadata_json"])
+    assert metadata["event_grouping"] == {
+        "event_id": "287395",
+        "event_slug": "fed-decision-in-july-181",
+        "event_title": "Fed Decision in July?",
+    }
 
 
 def test_adapter_normalizes_false_like_booleans_and_token_id_string_variants():
