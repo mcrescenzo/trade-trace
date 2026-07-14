@@ -1,6 +1,6 @@
 ---
 name: paper-cycle
-description: One full cycle of the trade-trace self-improvement loop — spawn a background trading agent for one paper-trading pass, then exhaustively review its output, fix in-zone issues immediately, file beads for the rest, commit, and log the cycle. Designed to be driven hourly via `/loop 1h /paper-cycle`. Use when the user starts or resumes the paper-cycle loop, or asks for a single supervised cycle.
+description: One full cycle of the trade-trace self-improvement loop — spawn a background trading agent for one paper-trading pass, then exhaustively review its output, fix in-zone issues immediately, file beads for the rest, commit, and log the cycle. Works from Claude Code (driven hourly via `/loop 1h /paper-cycle`) or opencode (via /paper-cycle or scripts/paper-loop/opencode-loop.sh). Use when the user starts or resumes the paper-cycle loop, or asks for a single supervised cycle.
 ---
 
 # Paper-Cycle: trade → review → improve
@@ -10,6 +10,21 @@ You are the ORCHESTRATOR of the trade-trace self-improvement loop
 epic trade-trace-x7w7s). Each invocation = exactly one cycle. Read
 `scripts/paper-loop/CHARTER.md` before your first cycle in a session —
 it defines your ownership boundary and the owner-only carve-outs.
+
+This skill is HARNESS-SHARED: Claude Code and opencode both discover it
+(opencode reads `.claude/skills/`). The procedure below is identical in
+both; only the mechanics in the table differ. Everything else — `tt`,
+`bd`, `git`, file edits — is plain CLI and works the same everywhere.
+
+## Harness mechanics
+
+| Capability | Claude Code | opencode |
+|---|---|---|
+| Trading pass (Step 2) | Agent tool, `model: opus`, background | `task` tool with the `paper-trader` subagent (`.opencode/agent/paper-trader.md` — its permissions ENFORCE read+bash-only) |
+| Deep sweep (Step 6) | Workflow tool, 3 parallel Sonnet lanes | 3 `task` subagent invocations (parallel if supported, else sequential), one per lane prompt |
+| Hourly cadence | `/loop 1h /paper-cycle` (session cron) | `scripts/paper-loop/opencode-loop.sh` (external `opencode run` loop), or manual `/paper-cycle` per cycle |
+| Owner escalation | PushNotification tool | Print a clearly-marked `OWNER ATTENTION:` block in the final reply AND record it in the ledger notes |
+| Owner questions | AskUserQuestion tool | Ask in plain text; if non-interactive (`opencode run`), record the question as a ledger BLOCKER and stop the cycle cleanly |
 
 State lives in: `~/.trade-trace-paper/` (journal, logs, run reports,
 `cycle-ledger.md`). The repo checkout is `/home/hermes/code/trade-trace`.
@@ -23,9 +38,9 @@ State lives in: `~/.trade-trace-paper/` (journal, logs, run reports,
 - If the previous ledger line records an unresolved BLOCKER, address it
   before trading.
 
-## Step 2 — Trade (background agent)
+## Step 2 — Trade (subagent)
 
-Spawn ONE background agent (Agent tool, `model: opus`) with this prompt
+Dispatch ONE trading subagent (see Harness mechanics) with this prompt
 shape (adapt bracketed parts only):
 
 > You are the trading agent for ONE pass of the Trade Trace paper-loop.
@@ -45,7 +60,8 @@ shape (adapt bracketed parts only):
 > self-assessment.
 
 While it runs, do Step 3 prep (read open bead details for the
-improve-phase candidates).
+improve-phase candidates). Do NOT land repo commits while the pass is
+running (mid-pass drift); bd/bead notes are safe.
 
 ## Step 3 — Review (every cycle, no skipping)
 
@@ -84,15 +100,18 @@ For each issue (from Step 3 or the improve-phase bead candidates):
 ## Step 6 — Deep sweep (every 6th cycle) and push
 
 If CYCLE_N % 6 == 0:
-- Run the deep status sweep instead of stopping at Step 3: a Workflow
-  with three read-only Sonnet lanes (run summaries since last sweep;
-  journal reports via tt — calibration/exposure/reconciliation/
-  audit_readiness/phase_gate_readiness; bd + journal-memory inventory),
-  then triage its findings through Step 4. VALIDATE each lane's payload
-  before trusting it — a lane that returns placeholder/degenerate
-  content ("test", generic facts, no ids) did not do the work: re-run
-  that lane directly and note it in the ledger (sweep-1 precedent: the
-  runs lane returned junk that schema validation could not catch).
+- Run the deep status sweep instead of stopping at Step 3: three
+  read-only analysis subagents (see Harness mechanics) — lane 1: run
+  summaries since the last sweep (discipline drift, regression watch,
+  ledger contradictions); lane 2: journal reports via tt (calibration/
+  exposure/reconciliation/audit_readiness/phase_gate_readiness,
+  cross-report consistency); lane 3: bd census vs ledger claims +
+  journal-memory staleness + unpushed-commit hygiene. Then triage
+  findings through Step 4. VALIDATE each lane's payload before trusting
+  it — a lane that returns placeholder/degenerate content ("test",
+  generic facts, no ids) did not do the work: re-run that lane directly
+  and note it in the ledger (sweep-1 precedent: a lane returned junk
+  that schema validation could not catch).
 - Batch push: `git pull --rebase && git push` (this is the ~daily PyPI
   publication moment; skip if the owner said hold).
 
@@ -102,14 +121,18 @@ If CYCLE_N % 6 == 0:
   cause → fix and note; otherwise bead + ledger BLOCKER. One retry of the
   trading pass is allowed per cycle if the cause was fixed.
 - Anything requiring an owner decision, or a second consecutive failed
-  cycle: PushNotification to the owner and record BLOCKER in the ledger.
+  cycle: escalate to the owner (see Harness mechanics) and record
+  BLOCKER in the ledger.
 - Never fabricate journal evidence. Zero-trade cycles are normal and
-  expected (efficient markets + owner-held 0.05 edge gate).
+  expected (efficient markets + owner-held 0.05 edge gate; the 1/day
+  labeled exercise trade is the deliberate exception).
 
 ## Loop mechanics
 
-This skill does ONE cycle. Hourly cadence comes from invoking it as
-`/loop 1h /paper-cycle` — the loop machinery handles the wake-ups. After
-Step 5/6, end the cycle; do not self-schedule here. Restart after any
-session death: `/loop 1h /paper-cycle` in a fresh session (see
-CHARTER.md).
+This skill does ONE cycle; do not self-schedule inside it. Cadence:
+- Claude Code: `/loop 1h /paper-cycle` — the loop machinery handles
+  wake-ups. Restart after session death: same line in a fresh session.
+- opencode: `bash scripts/paper-loop/opencode-loop.sh` (hourly
+  `opencode run` wrapper, flock-guarded), or invoke `/paper-cycle` in
+  the TUI per cycle.
+See CHARTER.md for pause protocol and current loop status.

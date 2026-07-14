@@ -1,0 +1,1 @@
+../../../.claude/skills/paper-cycle/SKILL.md

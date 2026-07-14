@@ -36,7 +36,13 @@ docs, and the loop's own assets (this charter, the skill, run.sh).
 
 PAUSED by owner 2026-07-14 after cycle 12 (backlog burned to zero the
 same day — all paper-loop beads closed, suite 2802 green, pushed).
-Restart: `/loop 1h /paper-cycle` in a Claude Code session in this repo.
+Restart (either harness — the skill is harness-shared per
+trade-trace-dhvmi): Claude Code: `/loop 1h /paper-cycle` in a session in
+this repo. opencode: `bash scripts/paper-loop/opencode-loop.sh` (hourly
+wrapper) or `/paper-cycle` in the TUI per cycle. One driver at a time —
+all drivers share `$TRADE_TRACE_HOME/.run.lock` or the cycle ledger as
+the coordination point; check the ledger tail before starting a second
+driver.
 The held exercise position (20 YES @ 0.65, Fed no-change July) and 46
 pending forecasts remain in the journal; the first resumed cycle should
 settle-sweep them per conventions (several resolutions may be overdue

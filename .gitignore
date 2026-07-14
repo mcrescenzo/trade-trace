@@ -17,10 +17,16 @@ audits/
 docs/audits/
 docs/reviews/
 
-# Local agent state. `.claude/*` (not `.claude/`) so tracked exceptions
-# below can re-include children: settings.json (session hooks) and
-# skills/ (repo-local loop skills, per trade-trace-x7w7s).
-.opencode/
+# Local agent state. `.claude/*` / `.opencode/*` (not `dir/`) so tracked
+# exceptions below can re-include children: settings.json (session
+# hooks), skills/ (repo-local loop skills, per trade-trace-x7w7s), and
+# the opencode command/agent adapters (per trade-trace-dhvmi). The
+# .opencode plugin workspace (node_modules, package.json, goals/,
+# workflows/) stays local via the `*` pattern.
+.opencode/*
+!.opencode/command/
+!.opencode/agent/
+!.opencode/skills/
 .claude/*
 !.claude/settings.json
 !.claude/skills/
