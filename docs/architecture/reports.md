@@ -634,7 +634,11 @@ Output:
 {
   "summary": {
     "sample_size": 1,              // actual_enter + paper_enter decisions
-    "blocking_count": 2,
+    "conviction_sample_size": 1,   // sample split (trade-trace-u9u1c): non-exercise vs
+    "exercise_sample_size": 0,     // exercise_trade-labeled decisions
+    "blocking_count": 2,           // post-v3-cutoff rows only (owner-authorized legacy split)
+    "legacy_missing_rule_count": 0,      // pre-cutoff rows lacking forecast-level rule text
+    "undated_forecast_count": 0,   // forecasts with resolution_at null (trade-trace-fzez6)
     "warning_count": 3,
     "info_count": 1,
     "ready": false,               // true only when sample_size > 0 and no blocking issues
