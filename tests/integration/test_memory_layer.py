@@ -1029,6 +1029,89 @@ def test_chained_supersession_discounts_old_and_mid_not_newest(home):
     assert ids.index(new) < ids.index(mid)
 
 
+# -- 6a. formal supersession (trade-trace-xphae) -----------------
+
+
+def test_memory_retain_supersedes_node_id_end_to_end(home):
+    """retain A, supersede with B via memory.retain(supersedes_node_id=A):
+    B records parent_node_id=A, memory.recall (default) returns B and
+    excludes A entirely; include_invalidated=true surfaces A again, marked
+    `invalidated: true` (and still discounted the way any supersedes-edge
+    target is)."""
+
+    body = "Thin-book anchor rule: bid/ask come from bestBid/bestAsk"
+    node_a = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": body, "importance": 8,
+        "idempotency_key": "00000000-0000-4000-8000-xphae0000001",
+    }).data["id"]
+    retain_b = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": body, "importance": 8,
+        "supersedes_node_id": node_a,
+        "idempotency_key": "00000000-0000-4000-8000-xphae0000002",
+    })
+    assert retain_b.ok, retain_b
+    node_b = retain_b.data["id"]
+
+    db = open_database(db_path(home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            "SELECT parent_node_id FROM memory_nodes WHERE id = ?", (node_b,),
+        ).fetchone()
+    finally:
+        db.close()
+    assert row[0] == node_a
+
+    default_recall = _mcp(home, "memory.recall", {"query": body, "k": 10})
+    assert default_recall.ok, default_recall
+    default_ids = [it["id"] for it in default_recall.data["items"]]
+    assert node_b in default_ids
+    assert node_a not in default_ids
+
+    included_recall = _mcp(home, "memory.recall", {
+        "query": body, "k": 10, "include_invalidated": True,
+    })
+    assert included_recall.ok, included_recall
+    included_items = {it["id"]: it for it in included_recall.data["items"]}
+    assert node_a in included_items
+    assert node_b in included_items
+    assert included_items[node_a]["invalidated"] is True
+    assert included_items[node_b]["invalidated"] is False
+    # A is still ranked below B (discounted like any supersedes-edge target).
+    included_ids = [it["id"] for it in included_recall.data["items"]]
+    assert included_ids.index(node_b) < included_ids.index(node_a)
+
+
+def test_memory_retain_supersedes_node_id_rejects_unknown_target(home):
+    env = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": "corrected",
+        "supersedes_node_id": "mem_does_not_exist",
+        "idempotency_key": "00000000-0000-4000-8000-xphae0000003",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "NOT_FOUND"
+    assert env.error.details["field"] == "supersedes_node_id"
+
+
+def test_memory_retain_supersedes_node_id_conflicts_with_explicit_parent(home):
+    node_a = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": "original",
+        "idempotency_key": "00000000-0000-4000-8000-xphae0000004",
+    }).data["id"]
+    other_parent = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": "unrelated parent",
+        "idempotency_key": "00000000-0000-4000-8000-xphae0000005",
+    }).data["id"]
+    env = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": "corrected",
+        "supersedes_node_id": node_a,
+        "parent_node_id": other_parent,
+        "idempotency_key": "00000000-0000-4000-8000-xphae0000006",
+    })
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    assert env.error.details["field"] == "parent_node_id"
+
+
 # -- 6b. bm25 multi-word OR fallback (trade-trace-95ry) ----------
 
 

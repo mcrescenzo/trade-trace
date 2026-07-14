@@ -376,6 +376,26 @@ _MEMORY_RETAIN_SCHEMA: dict[str, Any] = {
         "valid_from": {"type": "string", "description": "Optional bi-temporal validity start; defaults to created_at."},
         "valid_to": {"type": "string", "description": "Optional bi-temporal validity end."},
         "parent_node_id": {"type": "string"},
+        "supersedes_node_id": {
+            "type": "string",
+            "description": (
+                "Optional formal-supersession link (bead trade-trace-xphae): "
+                "the id of an existing memory_node this new node corrects/"
+                "replaces. When supplied, the new node records parent_node_id "
+                "= supersedes_node_id (unless parent_node_id was explicitly "
+                "set to a conflicting value, which is a VALIDATION_ERROR), "
+                "writes a `supersedes` edge new -> old, and emits "
+                "`memory_node.invalidated` for the old node. memory_nodes "
+                "rows are fully append-only (no UPDATE is ever possible, "
+                "including invalidated_at), so the old node's invalidation "
+                "is derived at read time from this event, mirroring how "
+                "forecast.supersede derives scoring_state from `supersedes` "
+                "edges rather than mutating a status column. "
+                "memory.recall excludes formally-invalidated nodes by "
+                "default; pass include_invalidated=true to see them "
+                "(still discounted like any other supersedes-edge target)."
+            ),
+        },
         "meta_json": {"type": "object", "description": "Optional structured metadata (reflections may carry policy_candidate lifecycle metadata)."},
         "idempotency_key": {"type": "string"},
         "agent_id": {"type": "string"},
@@ -509,6 +529,44 @@ def _memory_retain_in_uow(
     idempotency_key = args.get("idempotency_key")
     seg = common_metadata(args)
 
+    # Formal supersession (bead trade-trace-xphae): optional
+    # supersedes_node_id validated up front so both the replay and fresh
+    # branches below see the same checked value. See _apply_supersession
+    # for why this cannot be a plain UPDATE of the old node.
+    supersedes_node_id = args.get("supersedes_node_id")
+    if supersedes_node_id is not None:
+        if not isinstance(supersedes_node_id, str) or not supersedes_node_id.strip():
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "supersedes_node_id must be a non-empty string",
+                details={"field": "supersedes_node_id", "value": supersedes_node_id},
+            )
+        if args.get("id") == supersedes_node_id:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "supersedes_node_id must not reference the node being written",
+                details={"field": "supersedes_node_id", "value": supersedes_node_id},
+            )
+        if uow.conn.execute(
+            "SELECT 1 FROM memory_nodes WHERE id = ?", (supersedes_node_id,),
+        ).fetchone() is None:
+            raise ToolError(
+                ErrorCode.NOT_FOUND,
+                f"supersedes_node_id {supersedes_node_id!r} not found",
+                details={"field": "supersedes_node_id", "target_id": supersedes_node_id},
+            )
+        if parent_node_id is not None and parent_node_id != supersedes_node_id:
+            raise ToolError(
+                ErrorCode.VALIDATION_ERROR,
+                "parent_node_id conflicts with supersedes_node_id",
+                details={
+                    "field": "parent_node_id",
+                    "parent_node_id": parent_node_id,
+                    "supersedes_node_id": supersedes_node_id,
+                },
+            )
+        parent_node_id = supersedes_node_id
+
     replay = check_idempotency_replay(
         uow, event_type="memory_node.retained",
         actor_id=ctx.actor_id, idempotency_key=idempotency_key,
@@ -527,6 +585,8 @@ def _memory_retain_in_uow(
                        node_type, importance, confidence_base,
                        decay_rate_per_day, replay_valid_from, valid_to,
                        meta_json, parent_node_id, idempotency_key)
+        _apply_supersession(uow, ctx, new_node_id=node_id,
+                            supersedes_node_id=supersedes_node_id)
         row = uow.conn.execute(
             "SELECT created_at FROM memory_nodes WHERE id = ?",
             (node_id,),
@@ -556,8 +616,107 @@ def _memory_retain_in_uow(
                    importance, confidence_base, decay_rate_per_day,
                    effective_valid_from, valid_to, meta_json,
                    parent_node_id, idempotency_key)
+    _apply_supersession(uow, ctx, new_node_id=node_id,
+                        supersedes_node_id=supersedes_node_id)
     return _retain_result(node_id, node_type, body, importance,
                           confidence_base, created_at)
+
+
+def _apply_supersession(
+    uow: UnitOfWork, ctx: ToolContext, *,
+    new_node_id: str, supersedes_node_id: str | None,
+) -> None:
+    """Formal-supersession side effects for `memory.retain`'s optional
+    `supersedes_node_id` (bead trade-trace-xphae).
+
+    `memory_nodes` rows are fully append-only: `trg_memory_nodes_no_update`
+    (migration 006) forbids ANY UPDATE on the table, so `invalidated_at`/
+    `invalidated_by` can never be written after a row's initial INSERT (they
+    are always NULL there). A physical UPDATE to mark the superseded node
+    invalidated is therefore not a lawful path.
+
+    Instead this mirrors the established repo pattern for deriving mutable
+    state from an append-only table without ever mutating a row —
+    `forecast.supersede` derives a forecast's `scoring_state` by querying
+    `supersedes` edges rather than updating a status column
+    (`_FORECAST_SUPERSEDED_IDS_SQL` in `tools/ledger/forecast.py`). Here:
+
+    - a `supersedes` edge new_node_id -> supersedes_node_id is written, so
+      the existing soft `SUPERSESSION_DISCOUNT` ranking penalty
+      (`_superseded_node_ids`) applies to the old node exactly as it already
+      does for any other `supersedes` edge (e.g. from `memory.reflect`'s
+      edge-sugar or a bare `memory.link` call);
+    - `memory_node.invalidated` is emitted with the old node as `subject_id`
+      (the event type has been reserved in `SEMANTIC_KEYS`/
+      `CLOSED_ENUMS['events.event_type']` since bead e86 for exactly this
+      purpose). `memory.recall`'s `_hard_invalidated_node_ids` reads this
+      event log to hard-exclude the old node by default (distinct from the
+      softer discount every `supersedes` edge target gets).
+
+    Idempotent: on a retried `memory.retain` call with the same
+    `idempotency_key`, the edge (and therefore the invalidation) is reused
+    rather than duplicated — mirrors `memory.reflect`'s about-edge
+    co-idempotency check.
+    """
+
+    if supersedes_node_id is None:
+        return
+    existing_edge = uow.conn.execute(
+        "SELECT id FROM edges WHERE source_kind = 'memory_node' "
+        "AND source_id = ? AND target_kind = 'memory_node' "
+        "AND target_id = ? AND edge_type = 'supersedes' LIMIT 1",
+        (new_node_id, supersedes_node_id),
+    ).fetchone()
+    if existing_edge is not None:
+        return
+    edge_id = new_id("edg")
+    edge_created_at = now_iso()
+    uow.execute(
+        "INSERT INTO edges(id, source_kind, source_id, target_kind, "
+        "target_id, edge_type, metadata_json, created_at, actor_id) "
+        "VALUES (?, 'memory_node', ?, 'memory_node', ?, 'supersedes', "
+        "'{}', ?, ?)",
+        (edge_id, new_node_id, supersedes_node_id, edge_created_at, ctx.actor_id),
+    )
+    emit_event(
+        uow, event_type="edge.created",
+        subject_kind="edge", subject_id=edge_id,
+        payload={
+            "id": edge_id,
+            "source_kind": "memory_node", "source_id": new_node_id,
+            "target_kind": "memory_node", "target_id": supersedes_node_id,
+            "edge_type": "supersedes",
+        },
+        actor_id=ctx.actor_id, idempotency_key=None, ctx=ctx,
+    )
+    emit_event(
+        uow, event_type="memory_node.invalidated",
+        subject_kind="memory_node", subject_id=supersedes_node_id,
+        payload={
+            "memory_node_id": supersedes_node_id,
+            "invalidated_by": new_node_id,
+            "invalidated_at": edge_created_at,
+        },
+        actor_id=ctx.actor_id, idempotency_key=None, ctx=ctx,
+    )
+
+
+def _hard_invalidated_node_ids(conn: sqlite3.Connection) -> set[str]:
+    """Return memory_node ids formally invalidated via `memory.retain`'s
+    `supersedes_node_id` (bead trade-trace-xphae).
+
+    See `_apply_supersession` for why this is derived from the
+    `memory_node.invalidated` event log rather than a column on
+    `memory_nodes` (fully append-only; no UPDATE is ever possible).
+    `memory.recall` hard-excludes this set by default (`_load_in_scope_nodes`
+    `invalidated_ids`); `include_invalidated=true` keeps them in scope
+    (still soft-discounted like any other `supersedes` edge target)."""
+
+    cur = conn.execute(
+        "SELECT DISTINCT subject_id FROM events "
+        "WHERE event_type = 'memory_node.invalidated'"
+    )
+    return {row[0] for row in cur.fetchall()}
 
 
 def _emit_retained(uow, ctx, node_id, args, body, title, node_type,
@@ -1096,6 +1255,7 @@ class RecallOptions:
     as_of: str | None
     requested_strategies: list[str]
     context: dict[str, Any]
+    include_invalidated: bool = False
 
 
 def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -1114,8 +1274,17 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             options = RecallOptions(
                 **{**options.__dict__, "requested_strategies": [*options.requested_strategies, "semantic"]}
             )
+        # Formal-supersession hard-exclusion (bead trade-trace-xphae):
+        # invalidated_ids is always computed (cheap; see
+        # _hard_invalidated_node_ids) so _shape_recall_items can mark
+        # `invalidated` on every item regardless of include_invalidated. It
+        # is only passed into _load_in_scope_nodes (to actually exclude the
+        # nodes from ranking/results) when the caller has NOT opted into
+        # include_invalidated.
+        invalidated_ids = _hard_invalidated_node_ids(db.connection)
         in_scope_rows = _load_in_scope_nodes(
             db.connection, as_of=options.as_of, node_types=options.node_types,
+            invalidated_ids=None if options.include_invalidated else invalidated_ids,
         )
         rankings = _build_recall_rankings(db.connection, options, in_scope_rows, provider)
         scored = _score_ranked_nodes(
@@ -1124,6 +1293,7 @@ def _memory_recall(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         )
         items, _chars_used = _shape_recall_items(
             db.connection, scored[:options.limit_k], in_scope_rows, options,
+            invalidated_ids=invalidated_ids,
         )
         recall_id, created_at = _write_recall_event_and_stats(
             db.connection, items=items, rankings=rankings, options=options,
@@ -1176,7 +1346,10 @@ def _parse_recall_options(args: dict[str, Any]) -> RecallOptions:
     if invalid:
         raise ToolError(ErrorCode.VALIDATION_ERROR, f"strategies must be drawn from {sorted(valid_strategies)}", details={"field": "strategies", "invalid": invalid, "allowed": sorted(valid_strategies)})
     context = args.get("context") or {}
-    return RecallOptions(query, limit_k, max_chars, compact, include_body, include_provenance, min_confidence, node_types, mode, as_of, requested_strategies, context)
+    include_invalidated = args.get("include_invalidated", False)
+    if not isinstance(include_invalidated, bool):
+        raise ToolError(ErrorCode.VALIDATION_ERROR, "include_invalidated must be a boolean", details={"field": "include_invalidated", "value": include_invalidated})
+    return RecallOptions(query, limit_k, max_chars, compact, include_body, include_provenance, min_confidence, node_types, mode, as_of, requested_strategies, context, include_invalidated)
 
 
 def _recall_candidate_limit(*, k: int, corpus_size: int) -> int:
@@ -1269,7 +1442,8 @@ def _effective_confidence(row: dict[str, Any], *, as_of_iso: str) -> float:
     return max(0.0, min(1.0, effective))
 
 
-def _shape_recall_items(conn: sqlite3.Connection, scored_top: list[tuple[str, float, dict[str, list[int]]]], in_scope_rows: dict[str, dict[str, Any]], options: RecallOptions) -> tuple[list[dict[str, Any]], int]:
+def _shape_recall_items(conn: sqlite3.Connection, scored_top: list[tuple[str, float, dict[str, list[int]]]], in_scope_rows: dict[str, dict[str, Any]], options: RecallOptions, *, invalidated_ids: set[str] | None = None) -> tuple[list[dict[str, Any]], int]:
+    invalidated_ids = invalidated_ids or set()
     filtered: list[tuple[str, float, dict[str, list[int]]]] = []
     as_of_iso = options.as_of or now_iso()
     for node_id, score, provenance in scored_top:
@@ -1292,7 +1466,7 @@ def _shape_recall_items(conn: sqlite3.Connection, scored_top: list[tuple[str, fl
         # placeholder to preserve the original item key order; it is filled
         # from a single batched edges query below (trade-trace-jd0x) rather
         # than one `_source_refs_for` round-trip per item.
-        item: dict[str, Any] = {"id": node_id, "node_type": row["node_type"], "title": row["title"], "importance": row["importance"], "score": round(score, 6), "source_refs": []}
+        item: dict[str, Any] = {"id": node_id, "node_type": row["node_type"], "title": row["title"], "importance": row["importance"], "score": round(score, 6), "source_refs": [], "invalidated": node_id in invalidated_ids}
         if options.include_body:
             item["body"] = body
         if options.include_provenance:
@@ -1348,6 +1522,7 @@ def _load_in_scope_nodes(
     *,
     as_of: str | None,
     node_types: list[str] | None = None,
+    invalidated_ids: set[str] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Return `{id: row_dict}` for every node passing the bi-temporal
     `as_of` filter. When `as_of` is None, treat it as the current
@@ -1361,6 +1536,14 @@ def _load_in_scope_nodes(
     engine never builds row dicts for out-of-type nodes, which also keeps
     `total_in_scope` (len of this dict) at the same node-type-filtered
     value the post-filter produced.
+
+    `invalidated_ids`, when supplied, excludes matching node ids from the
+    returned scope — the formal-supersession hard-exclusion `memory.recall`
+    applies by default (bead trade-trace-xphae; see
+    `_hard_invalidated_node_ids`/`_apply_supersession`). Pass `None` (the
+    `include_invalidated=true` recall path) to skip this filter and keep
+    every bi-temporally-valid node in scope, including formally-invalidated
+    ones.
     """
 
     effective = as_of or now_iso()
@@ -1384,6 +1567,8 @@ def _load_in_scope_nodes(
     )
     out: dict[str, dict[str, Any]] = {}
     for row in cur.fetchall():
+        if invalidated_ids is not None and row[0] in invalidated_ids:
+            continue
         out[row[0]] = {
             "id": row[0], "node_type": row[1], "version": row[2],
             "title": row[3], "body": row[4], "importance": row[5],
@@ -1984,7 +2169,10 @@ def register_memory_tools(registry: ToolRegistry) -> None:
             "strategies behind a bi-temporal as_of filter. Logs a "
             "memory_recall_events row and updates the memory_node_stats "
             "projection (recall_count, last_recalled_at). Returns top-k "
-            "with id, body, score, strategy_provenance, source_refs."
+            "with id, body, score, strategy_provenance, source_refs, "
+            "invalidated. Formally-superseded nodes (memory.retain "
+            "supersedes_node_id) are excluded by default; pass "
+            "include_invalidated=true to include them (still discounted)."
         ),
         example_minimal={
             "query": "risk management",
@@ -1999,6 +2187,7 @@ def register_memory_tools(registry: ToolRegistry) -> None:
             "node_types": ["reflection"],
             "mode": "fused",
             "as_of": "2025-01-01T00:00:00Z",
+            "include_invalidated": False,
         },
         optional_keys=(
             "context",
@@ -2012,5 +2201,6 @@ def register_memory_tools(registry: ToolRegistry) -> None:
             "node_types",
             "mode",
             "as_of",
+            "include_invalidated",
         ),
     )

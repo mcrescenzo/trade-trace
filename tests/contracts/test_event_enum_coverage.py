@@ -16,9 +16,11 @@ Coverage applies to the 13 non-playbook event types from the closed enum
 
 playbook_rule.followed / playbook_rule.overridden / playbook.proposed_version
 are validated within the playbook bead (fbq) per the 0r1 adaptation.
-memory_node.invalidated requires a memory.invalidate write tool that has
-not landed in MVP. signal.emitted / import.row_committed are not surfaced
-through user-callable write paths in MVP.
+memory_node.invalidated is emitted by memory.retain's optional
+supersedes_node_id (bead trade-trace-xphae; see
+test_memory_node_invalidated_event_emitted below) rather than a standalone
+memory.invalidate tool. signal.emitted / import.row_committed are not
+surfaced through user-callable write paths in MVP.
 """
 
 from __future__ import annotations
@@ -206,6 +208,25 @@ def test_memory_node_retained_event_emitted(home):
         "idempotency_key": "00000000-0000-4000-8000-event-memr01",
     })
     assert _count_events(home, "memory_node.retained") == 1
+
+
+def test_memory_node_invalidated_event_emitted(home):
+    """memory.retain(supersedes_node_id=...) emits memory_node.invalidated
+    for the superseded node (trade-trace-xphae), alongside memory_node.
+    retained for the new node and edge.created for the supersedes edge."""
+
+    old = _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": "stale obs",
+        "idempotency_key": "00000000-0000-4000-8000-event-inval1",
+    }).data["id"]
+    _mcp(home, "memory.retain", {
+        "node_type": "observation", "body": "corrected obs",
+        "supersedes_node_id": old,
+        "idempotency_key": "00000000-0000-4000-8000-event-inval2",
+    })
+    assert _count_events(home, "memory_node.invalidated") == 1
+    assert _count_events(home, "memory_node.retained") == 2
+    assert _count_events(home, "edge.created") == 1
 
 
 def test_edge_created_event_emitted_by_memory_link(home):
