@@ -4,7 +4,21 @@ Versioned decisions the playbook applies every run. Changing anything here
 is a methodology change: bump the run-summary `conventions_version` and note
 it in the next run summary.
 
-`conventions_version: 11`
+`conventions_version: 12`
+(v12, 2026-07-14, run -01 review — first PASS-path fill ratified: the
+risk-first chain uses TWO evaluations when the verdict passes.
+(1) PRELIMINARY `risk.evaluate` on an inline intent WITHOUT decision_id —
+all substantive rules (notional/exposure/loss/spread/slippage/runway/
+paper_only) must pass; required_links may show decision_id missing, which
+is expected at this stage and is NOT a fail of the preliminary gate.
+(2) Then `decision.add(paper_enter)` → AUTHORITATIVE `risk.evaluate` +
+`risk.check_record` with full links on the persisted material — must
+fully pass. If the authoritative verdict diverges from the preliminary
+one, EXIT the position immediately (settlement-exit mechanics at current
+touch), journal the divergence, and flag the orchestrator. Snapshot age:
+if the chain build exceeds max_snapshot_age_seconds (900), re-fetch with
+a per-attempt key and re-anchor the fill; the verdict must still hold on
+the fresh book.)
 (v11, 2026-07-13, run -11 review: exercise-trade selection made
 deterministic and ex-ante — see the Exercise trades section. Selecting a
 risk-compliant market+side BEFORE any verdict is compliance with the

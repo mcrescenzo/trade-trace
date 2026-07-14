@@ -86,10 +86,11 @@ explain it in the run summary.
 `market.search` with 2–3 single-topic queries (rotate domains across
 runs: politics, central banks, sports, crypto, entertainment, science —
 check `memory.recall` for what recent runs covered AND which domains are
-marked saturated; skip re-scanning those). Pre-screen the universe rule
-against the SEARCH RESULT's own volume/liquidity/close-date fields
-BEFORE binding — `market.bind` only candidates that plausibly pass
-(run -13 left 5 orphan gate-failing binds from bind-first ordering).
+marked saturated; skip re-scanning those). Pre-screen candidates on the
+SEARCH RESULT's close-date and binary structure BEFORE binding (search
+results carry NO volume fields — corrected run 2026-07-14-01 — so the
+volume gate can only be checked post-bind via the snapshot; the
+close-date screen alone kills most orphan binds).
 Select up to 4 new binary markets meeting the universe rule
 (conventions.md): >6h and ≤90d to resolution, reported volume ≥ $4,000,
 unambiguous resolution rules. For
