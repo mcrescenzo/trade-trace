@@ -256,6 +256,22 @@ def _optional_float(value: Any, field: str) -> float | None:
         ) from exc
 
 
+def _optional_search_float(value: Any) -> float | None:
+    """Best-effort numeric coercion for market.search's supplementary
+    liquidity-signal fields (trade-trace-ffuo7). Unlike `_optional_float`
+    (used for bind/snapshot fields, where a malformed value must fail the
+    whole call), a malformed volume/liquidity field on one discovery
+    candidate must not blow up the entire market.search response -- it
+    degrades to None (absent) instead of raising."""
+
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _cached_at_from_metadata(metadata_json: str | None, created_at: str | None) -> datetime | None:
     """Parse the ``adapter_cached_at`` timestamp a market row was cached at,
     falling back to the row's ``created_at``. Shared by `_market_cache_hit`
@@ -794,6 +810,13 @@ def _market_search_candidate(raw: dict[str, Any]) -> dict[str, Any] | None:
     non-YES/NO, or scalar), so callers only ever see markets they could hand
     straight to ``market.bind`` / ``market.refresh`` without an out-of-band
     Gamma lookup. This is read-only: no normalization side effects, no writes.
+
+    Carries best-effort liquidity signals (``volume``/``volume_24h``/
+    ``liquidity``) when Gamma's market row supplies them (trade-trace-ffuo7):
+    live-verified against real ``/markets`` and ``/public-search`` payloads,
+    where ``volume``/``volumeNum`` are reliably present but ``volume24hr`` and
+    ``liquidity``/``liquidityNum`` are present on some markets and absent on
+    others. Absent-not-fabricated throughout.
     """
 
     if not isinstance(raw, dict):
@@ -835,6 +858,20 @@ def _market_search_candidate(raw: dict[str, Any]) -> dict[str, Any] | None:
         "event_slug": _first_present(raw, "eventSlug", "event_slug"),
         "active": _normalize_bool_like(_first_present(raw, "active", "enableOrderBook")),
         "closed": _normalize_bool_like(raw.get("closed")),
+        # trade-trace-ffuo7: live Gamma /markets and /public-search market rows
+        # DO carry liquidity signals (verified against the real payload, not
+        # merely documented as absent) — `volume`/`volumeNum` (cumulative) are
+        # reliably present; `volume24hr` and `liquidity`/`liquidityNum` are
+        # present on some markets and absent on others. Surfacing them here
+        # lets the universe volume gate run at discovery time instead of only
+        # post-bind, which previously left 2-5 orphan gate-failing binds per
+        # discovery run. `volume_24h` mirrors the naming convention
+        # snapshot.fetch already uses for the same Gamma field
+        # (trade-trace-ismzy). Absent-not-fabricated: None when Gamma omits
+        # the field, never derived/guessed.
+        "volume": _optional_search_float(_first_present(raw, "volume", "volumeNum")),
+        "volume_24h": _optional_search_float(_first_present(raw, "volume24hr")),
+        "liquidity": _optional_search_float(_first_present(raw, "liquidity", "liquidityNum")),
     }
 
 
@@ -1080,12 +1117,17 @@ def register_adapter_polymarket_tools(registry: ToolRegistry) -> None:
         description=(
             "Discover candidate binary (YES/NO) Polymarket markets to bind/forecast on. "
             "Read-only live Gamma list query: returns external_id/gamma_market_id, slug, "
-            "question, outcomes, and close time. No DB writes, no advice, no trade execution. "
+            "question, outcomes, close time, and (when Gamma provides them) volume/"
+            "volume_24h/liquidity. No DB writes, no advice, no trade execution. "
             "Adapter-only: fails closed with ADAPTER_DISABLED when the adapter is off. "
             "A query is matched against Gamma's free-text search conjunctively (ALL "
             "terms must appear in one market), so prefer short single-topic queries; "
             "a multi-word query that returns zero is usually over-specified and "
             "carries a search_hint suggesting how to relax it. "
+            "volume (cumulative) is reliably present; volume_24h and liquidity are "
+            "present on some markets and null on others (absent-not-fabricated) -- "
+            "a universe volume gate can run on these at discovery time, but treat "
+            "null volume_24h/liquidity as unknown, not zero. "
             "Hand a returned external_id straight to market.bind / market.refresh."
         ),
         usage_summary="Find bindable binary markets live without a pre-known external_id.",

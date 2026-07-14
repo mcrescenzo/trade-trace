@@ -237,6 +237,87 @@ def test_market_search_candidate_exposes_resolution_description(
     assert candidate["description"] == rule_text
 
 
+def test_market_search_candidate_surfaces_liquidity_signals_when_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """trade-trace-ffuo7: live Gamma /public-search and /markets market rows
+    DO carry liquidity signals (verified against the real payload, not
+    merely documented as absent) -- surface them so the universe volume gate
+    can run at discovery time instead of only post-bind, which previously
+    left 2-5 orphan gate-failing binds per discovery run."""
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+
+    market = _binary_market("888", question="Will it?", slug="will-it", close_at="2027-01-01T00:00:00Z")
+    market["volume"] = "123456.78"
+    market["volumeNum"] = 123456.78
+    market["volume24hr"] = 4321.5
+    market["liquidity"] = "999.1"
+    market["liquidityNum"] = 999.1
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"events": [{"id": "e", "markets": [market]}]},
+    )
+
+    env = mcp_call("market.search", {"home": home, "query": "will", "limit": 20})
+    assert env.ok, env
+    candidate = env.data["candidates"][0]
+    assert candidate["volume"] == pytest.approx(123456.78)
+    assert candidate["volume_24h"] == pytest.approx(4321.5)
+    assert candidate["liquidity"] == pytest.approx(999.1)
+
+
+def test_market_search_candidate_liquidity_fields_absent_not_fabricated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """When Gamma genuinely omits a liquidity field (common for volume_24h/
+    liquidity even though cumulative volume is reliably present), the
+    candidate carries None rather than a fabricated/derived value."""
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+
+    market = _binary_market("889", question="Will it too?", slug="will-it-too", close_at="2027-01-01T00:00:00Z")
+    # No volume/volumeNum/volume24hr/liquidity/liquidityNum keys at all.
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"events": [{"id": "e", "markets": [market]}]},
+    )
+
+    env = mcp_call("market.search", {"home": home, "query": "will", "limit": 20})
+    assert env.ok, env
+    candidate = env.data["candidates"][0]
+    assert candidate["volume"] is None
+    assert candidate["volume_24h"] is None
+    assert candidate["liquidity"] is None
+
+
+def test_market_search_candidate_tolerates_malformed_volume_field(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A malformed volume field on one discovery candidate must not fail the
+    whole market.search call -- it degrades to None instead of raising
+    (unlike bind/snapshot numeric fields, which are strict and fail closed)."""
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    _enable_adapter(home)
+
+    market = _binary_market("890", question="Bad volume?", slug="bad-volume", close_at="2027-01-01T00:00:00Z")
+    market["volume"] = "not-a-number"
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {"events": [{"id": "e", "markets": [market]}]},
+    )
+
+    env = mcp_call("market.search", {"home": home, "query": "bad", "limit": 20})
+    assert env.ok, env
+    assert env.data["candidates"][0]["volume"] is None
+
+
 def test_market_search_rejects_out_of_range_limit(tmp_path: Path):
     home = str(tmp_path / "home")
     assert mcp_call("journal.init", {"home": home}).ok
