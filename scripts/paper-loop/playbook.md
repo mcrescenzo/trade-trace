@@ -31,9 +31,10 @@ procedure, and the trading rule. Follow it exactly.
    when session-loop runs omitted it) (identical contract; dots
    become spaces: `paper_fill.record` → `tt paper_fill record`). Introspect
    `tool.schema` (per tool: `tool.schema {"tool": "<name>"}`) whenever
-   unsure of args — do not guess. Adapter tools (`market.search`,
-   `market.refresh`, `snapshot.fetch`, `snapshot.fetch_series`,
-   `outcome.fetch`) require an explicit `idempotency_key`; so do
+   unsure of args — do not guess. Adapter WRITE tools (`market.refresh`,
+   `snapshot.fetch`, `snapshot.fetch_series`, `outcome.fetch`) require an
+   explicit `idempotency_key` (`market.search` is read-only and takes
+   none — corrected run -13); so do
    `pretrade_intent.record`, `paper_fill.record`,
    `account_snapshot.import`, `external_receipt.import`. Array/object CLI
    args use the `_json` flag suffix (`--outcomes-json '[...]'`); for
@@ -84,9 +85,14 @@ explain it in the run summary.
 ### 4. Discover & forecast
 `market.search` with 2–3 single-topic queries (rotate domains across
 runs: politics, central banks, sports, crypto, entertainment, science —
-check `memory.recall` for what recent runs covered). Select up to 4 new
-binary markets meeting the universe rule (conventions.md): >6h and ≤90d
-to resolution, reported (cumulative) volume ≥ $4,000 — see conventions.md v2, unambiguous resolution rules. For
+check `memory.recall` for what recent runs covered AND which domains are
+marked saturated; skip re-scanning those). Pre-screen the universe rule
+against the SEARCH RESULT's own volume/liquidity/close-date fields
+BEFORE binding — `market.bind` only candidates that plausibly pass
+(run -13 left 5 orphan gate-failing binds from bind-first ordering).
+Select up to 4 new binary markets meeting the universe rule
+(conventions.md): >6h and ≤90d to resolution, reported volume ≥ $4,000,
+unambiguous resolution rules. For
 each: `market.bind` (source=polymarket), `snapshot.fetch`,
 `memory.recall` for priors, then `forecast.add` (kind=binary, both
 outcomes, probabilities summing to 1, `rationale_body` with your actual
