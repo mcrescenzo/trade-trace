@@ -24,10 +24,18 @@ REQUIRED_FIXTURES = {
     "snapshot_thin_book.json",
     "snapshot_amm_curve.json",
     "polygon_resolution_tx.json",
+    # negRisk parent-event enrichment corpus (trade-trace-lf82j):
+    "market_negrisk_bracket_leg.json",
+    "market_negrisk_bracket_leg_no_parent.json",
+    # models Gamma's /markets?id= LIST response shape (top-level array):
+    "market_negrisk_parent_event_markets_response.json",
 }
 
+# Fixtures whose authentic Gamma payload shape is a top-level JSON array.
+LIST_SHAPED_FIXTURES = {"market_negrisk_parent_event_markets_response.json"}
 
-def _fixture(name: str) -> dict:
+
+def _fixture(name: str) -> dict | list:
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
@@ -62,7 +70,8 @@ def test_polymarket_fixture_corpus_is_complete_and_parseable():
     names = {p.name for p in FIXTURES.glob("*.json")}
     assert names == REQUIRED_FIXTURES
     for name in REQUIRED_FIXTURES:
-        assert isinstance(_fixture(name), dict), name
+        expected = list if name in LIST_SHAPED_FIXTURES else dict
+        assert isinstance(_fixture(name), expected), name
 
 
 def test_market_bind_enabled_fetches_fixture_backed_market(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
