@@ -32,6 +32,16 @@ docs, and the loop's own assets (this charter, the skill, run.sh).
 3. **Phase-gate thresholds** (`docs/architecture/phase-gates.md`) — by
    standing owner decision (trade-trace-cjgz2.5) these remain unset.
 
+## Loop status
+
+PAUSED by owner 2026-07-14 after cycle 12 (backlog burned to zero the
+same day — all paper-loop beads closed, suite 2802 green, pushed).
+Restart: `/loop 1h /paper-cycle` in a Claude Code session in this repo.
+The held exercise position (20 YES @ 0.65, Fed no-change July) and 46
+pending forecasts remain in the journal; the first resumed cycle should
+settle-sweep them per conventions (several resolutions may be overdue
+depending on pause length).
+
 ## Cadences
 
 - **Cycle**: hourly (`/loop 1h /paper-cycle`); one trading pass + full
