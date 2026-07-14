@@ -173,9 +173,20 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         }
 
     def _response(conn, decision_id: str, created_at_value: str, review_by_value: str | None) -> dict[str, Any]:
+        # `side` is persisted to the `decisions.side` column for every
+        # decision type the matrix allows it on (R or O — e.g. `skip`, where
+        # it records the abstention direction as useful provenance per
+        # x-decision-matrix), same as the write at the INSERT below. It was
+        # previously omitted from the echoed response, which made a caller
+        # who passed --side on a `skip` decision see it vanish even though it
+        # was correctly persisted and carried on the decision.created event
+        # payload (trade-trace-vpynf). Echoing it here closes that gap; X-type
+        # decisions still show no side because validate_decision_fields
+        # already rejects a non-empty value for those.
         data = {"id": decision_id, "type": decision_type,
                 "instrument_id": args.get("instrument_id"),
-                "snapshot_id": args.get("snapshot_id"), "tags": tags,
+                "snapshot_id": args.get("snapshot_id"), "side": args.get("side"),
+                "tags": tags,
                 "created_at": created_at_value, "review_by": review_by_value}
         if decision_type == "paper_enter":
             linked = _linked_position_ids(conn, decision_id)

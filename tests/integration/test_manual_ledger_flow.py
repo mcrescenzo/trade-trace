@@ -367,6 +367,34 @@ def test_decision_add_skip_forbids_quantity(home):
     assert env["error"]["details"]["decision_type"] == "skip"
 
 
+def test_decision_add_skip_persists_and_echoes_side(home):
+    # Regression for trade-trace-vpynf: x-decision-matrix declares `side` "O"
+    # (optional) for `skip` — it records the abstention direction as useful
+    # provenance, not a forbidden field like quantity/price/fees/slippage.
+    # decision.add previously accepted --side but the response silently
+    # dropped it (came back as absent/null) even though it was written to
+    # the decisions.side column and the decision.created event payload. The
+    # response must now echo the persisted value back to the caller.
+    inst_id, _ = _setup_thesis(home)
+    env = _envelope(home, "decision.add", {
+        "instrument_id": inst_id,
+        "type": "skip",
+        "reason": "insufficient edge",
+        "side": "yes",
+    })
+    assert env["ok"] is True
+    assert env["data"]["side"] == "yes"
+
+    conn = sqlite3.connect(db_path(home))
+    try:
+        row = conn.execute(
+            "SELECT side FROM decisions WHERE id = ?", (env["data"]["id"],)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row == ("yes",)
+
+
 def test_decision_add_paper_enter_full(home):
     inst_id, thesis_id = _setup_thesis(home)
     env = _envelope(home, "decision.add", {
