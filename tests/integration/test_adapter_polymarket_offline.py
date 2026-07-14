@@ -23,6 +23,7 @@ from trade_trace.tools._market_rows import adapter_cache_hit_row_dict
 from trade_trace.tools.adapter_polymarket import (
     _apply_caller_resolution_rule,
     _augment_missing_event,
+    _cached_row_age_seconds,
     _market_cache_hit,
     _market_payload,
     _normalize_gamma_market,
@@ -269,6 +270,25 @@ def test_market_cache_policy_enforces_state_ttls():
     ) is False
 
 
+def test_cached_row_age_seconds_computes_from_adapter_cached_at_or_created_at():
+    """trade-trace-pdrj0: cached_row_age_seconds must read the same cached-at
+    value _market_cache_hit's TTL comparison uses (adapter_cached_at, falling
+    back to created_at), so the surfaced age agrees with the cache-hit
+    decision it explains."""
+
+    assert _cached_row_age_seconds(
+        '{"adapter_cached_at":"2026-05-25T12:00:00.000Z"}',
+        None,
+        now="2026-05-25T12:30:00.000Z",
+    ) == 1800
+    assert _cached_row_age_seconds(
+        None, "2026-05-25T12:00:00.000Z", now="2026-05-25T12:00:45.000Z"
+    ) == 45
+    # Absent-not-fabricated: no cached-at timestamp available at all -> None,
+    # not a guessed 0.
+    assert _cached_row_age_seconds(None, None, now="2026-05-25T12:00:45.000Z") is None
+
+
 def test_market_cache_hit_row_surface_stays_narrow_and_ordered():
     """Pins the adapter market.refresh cache-hit row shape. It carries the
     lifecycle timestamps (trade-trace-kgicl: close_at was previously dropped
@@ -383,6 +403,62 @@ def test_market_refresh_cache_hit_preserves_close_at_from_bind(
     # just the re-fetch path (already correct).
     assert refreshed.data["cache_hit"] is True
     assert refreshed.data["close_at"] == "2026-12-31T00:00:00Z"
+    # trade-trace-pdrj0: cache-hit responses must carry a sane cached row age
+    # (bind -> immediate refresh happens well under a second in this test, so
+    # a generous upper bound rules out a bogus huge/negative value without
+    # requiring exact-timing precision).
+    assert isinstance(refreshed.data["cached_row_age_seconds"], int)
+    assert 0 <= refreshed.data["cached_row_age_seconds"] < 60
+
+
+def test_market_refresh_live_fetch_path_carries_cache_hit_false(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """trade-trace-pdrj0: market.refresh responses must distinguish cache-hit
+    vs live fetch, not just carry cache_hit=True with no live-fetch
+    counterpart. "ambiguous" carries a 0s cache TTL
+    (MARKET_CACHE_TTL_SECONDS), so an immediate refresh always takes the
+    live-fetch branch in _upsert_market -- this pins cache_hit=False (and no
+    cached_row_age_seconds, since a live fetch has no cached-row age to
+    report) on that branch."""
+
+    home = str(tmp_path / "home")
+    assert mcp_call("journal.init", {"home": home}).ok
+    assert mcp_call(
+        "journal.config_set",
+        with_legacy_idempotency_key(
+            "journal.config_set",
+            {"home": home, "key": "network.polymarket.enabled", "value": "true", "confirm": True},
+        ),
+    ).ok
+
+    monkeypatch.setattr(
+        PolymarketClient,
+        "gamma_get",
+        lambda self, path: {
+            "id": "pm-pdrj0-1",
+            "question": "Will pdrj0 be fixed?",
+            "outcomes": '["Yes","No"]',
+            "endDate": "2026-12-31T00:00:00Z",
+            "closed": False,
+            "ambiguous": True,
+        },
+    )
+
+    bound = mcp_call("market.bind", {"home": home, "source": "polymarket", "external_id": "pm-pdrj0-1"})
+    assert bound.ok, bound
+    assert isinstance(bound, SuccessEnvelope)
+    market_id = bound.data["id"]
+    assert bound.data["state"] == "ambiguous"
+
+    refreshed = mcp_call(
+        "market.refresh",
+        with_legacy_idempotency_key("market.refresh", {"home": home, "market_id": market_id}),
+    )
+    assert refreshed.ok, refreshed
+    assert isinstance(refreshed, SuccessEnvelope)
+    assert refreshed.data["cache_hit"] is False
+    assert "cached_row_age_seconds" not in refreshed.data
 
 
 class _StubGammaClient:

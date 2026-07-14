@@ -256,21 +256,47 @@ def _optional_float(value: Any, field: str) -> float | None:
         ) from exc
 
 
+def _cached_at_from_metadata(metadata_json: str | None, created_at: str | None) -> datetime | None:
+    """Parse the ``adapter_cached_at`` timestamp a market row was cached at,
+    falling back to the row's ``created_at``. Shared by `_market_cache_hit`
+    (TTL comparison) and `_cached_row_age_seconds` (provenance surfacing,
+    trade-trace-pdrj0) so both read the same cached-at value."""
+
+    try:
+        metadata = json.loads(metadata_json or "{}")
+    except json.JSONDecodeError:
+        metadata = {}
+    return _parse_ts(metadata.get("adapter_cached_at") or created_at)
+
+
 def _market_cache_hit(state: str | None, metadata_json: str | None, created_at: str | None, *, now: str) -> bool:
     ttl = MARKET_CACHE_TTL_SECONDS.get(state or "")
     if ttl is None:
         return True
     if not ttl:
         return False
-    try:
-        metadata = json.loads(metadata_json or "{}")
-    except json.JSONDecodeError:
-        metadata = {}
-    cached_at = _parse_ts(metadata.get("adapter_cached_at") or created_at)
+    cached_at = _cached_at_from_metadata(metadata_json, created_at)
     now_dt = _parse_ts(now)
     if cached_at is None or now_dt is None:
         return False
     return (now_dt - cached_at).total_seconds() < ttl
+
+
+def _cached_row_age_seconds(metadata_json: str | None, created_at: str | None, *, now: str) -> int | None:
+    """Age (seconds) of a cache-hit market.refresh response's underlying row.
+
+    trade-trace-pdrj0: a 57-minute-old cached row was previously served with
+    no indication it was stale, so an agent needed a second per-attempt call
+    to force freshness. Additive response field only -- no cache-policy/TTL
+    change. Returns None (absent, not fabricated) when the cached-at
+    timestamp can't be determined; callers should omit the field rather than
+    guess."""
+
+    cached_at = _cached_at_from_metadata(metadata_json, created_at)
+    now_dt = _parse_ts(now)
+    if cached_at is None or now_dt is None:
+        return None
+    return max(0, int((now_dt - cached_at).total_seconds()))
 
 
 def _resolution_source(raw: dict[str, Any], out: dict[str, Any], state: str) -> str:
@@ -470,10 +496,16 @@ def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id:
                         f"SELECT {ADAPTER_CACHE_HIT_ROW_SELECT} FROM markets WHERE id=?",
                         (refresh_market_id,),
                     ).fetchone()
-                    return adapter_cache_hit_row_dict(cached) | {
-                        "cache_hit": True,
-                        "state_changed": False,
-                    }
+                    cached_dict = adapter_cache_hit_row_dict(cached)
+                    # trade-trace-pdrj0: surface cache provenance so an agent
+                    # can tell a cache-hit response from a live fetch without a
+                    # second per-attempt call to force freshness. Additive
+                    # fields only; no cache-policy/TTL change.
+                    result = cached_dict | {"cache_hit": True, "state_changed": False}
+                    age = _cached_row_age_seconds(cached_dict.get("metadata_json"), cached_dict.get("created_at"), now=current_now)
+                    if age is not None:
+                        result["cached_row_age_seconds"] = age
+                    return result
             else:
                 external_id = require(args, "external_id")
                 # First bind: the row does not exist yet, so prefer the
@@ -514,6 +546,13 @@ def _upsert_market(args: dict[str, Any], ctx: ToolContext, *, refresh_market_id:
             # bind -> forecast.add (no snapshot yet) failed NOT_FOUND (AX-023).
             _ensure_market_instrument(uow, market_id, actor_id=ctx.actor_id)
             out = {"id": market_id, **payload, "state_changed": changed}
+            if refresh_market_id:
+                # trade-trace-pdrj0: mirror the cache-hit branch's cache_hit
+                # field on the live-fetch branch too, so market.refresh
+                # responses always distinguish cache-hit vs live fetch.
+                # cached_row_age_seconds is cache-hit-only (a live fetch has
+                # no cached-row age to report).
+                out["cache_hit"] = False
             emit_event(uow, event_type="market.refreshed" if refresh_market_id else "market.bound", subject_kind="market", subject_id=market_id, payload=out, actor_id=ctx.actor_id, idempotency_key=args.get("idempotency_key"), ctx=ctx)
             return out
 
