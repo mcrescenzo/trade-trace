@@ -4,7 +4,18 @@ Versioned decisions the playbook applies every run. Changing anything here
 is a methodology change: bump the run-summary `conventions_version` and note
 it in the next run summary.
 
-`conventions_version: 12`
+`conventions_version: 13`
+(v13, 2026-07-14, deep-sweep-2: (1) standing-table markets ALWAYS join
+the fresh sweep tier — they are by definition gate-clearing edges, and
+tier exclusion created a self-acknowledged re-entry blind spot between
+full sweeps (mem_aQKnxDXjYOhHiucD); (2) every standing-table STATE CHANGE
+(entry, exit, re-entry) is journaled as one skip decision naming the
+transition — run -10 journaled BTC-65k's first exit but run 14-01 did not
+journal its second, an audit-trail inconsistency; verbatim carries remain
+decision-free; (3) when a retained memory is found factually stale,
+retain a corrective node whose body names the stale node id and states
+it is false — the store's formal supersession fields are unused
+(tracked as a bead) so prose correction must be explicit and targeted.)
 (v12, 2026-07-14, run -01 review — first PASS-path fill ratified: the
 risk-first chain uses TWO evaluations when the verdict passes.
 (1) PRELIMINARY `risk.evaluate` on an inline intent WITHOUT decision_id —
