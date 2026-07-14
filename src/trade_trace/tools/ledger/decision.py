@@ -27,6 +27,7 @@ from trade_trace.tools._helpers import (
     reject_if_contains_secrets,
     require,
     store_metadata_json,
+    validate_fk_refs,
 )
 from trade_trace.tools.decision_matrix import (
     allowed_decision_types,
@@ -38,6 +39,38 @@ from trade_trace.tools.decision_matrix import (
 )
 from trade_trace.tools.errors import ToolError
 from trade_trace.tools.ledger._shared import _store_tags, examples_for
+
+# FK-like reference validated at write time, mirroring pretrade_intent.py's
+# _REF_TABLES pattern (bead trade-trace-yyegu). DECISION_MATRIX declares
+# `risk_check_receipt_id` O(ptional) only on paper_enter/actual_enter and
+# X(forbidden) elsewhere, so this check only ever runs when the matrix has
+# already allowed the field for the given decision type.
+_REF_TABLES = {"risk_check_receipt_id": "risk_check_receipts"}
+
+_RISK_FIRST_ADVISORY = {
+    "code": "missing_risk_check_receipt",
+    "severity": "advisory",
+    "message": (
+        "position opened without a linked risk verdict (risk-first chain "
+        "recommended: risk.evaluate -> risk.check_record -> "
+        "decision.add(risk_check_receipt_id=<receipt>) -> "
+        "pretrade_intent.record -> fill). Pass risk_check_receipt_id from "
+        "risk.check_record on the next enter decision to close the gap; "
+        "this entry still succeeded."
+    ),
+}
+
+
+def _risk_receipt_advisory(risk_check_receipt_id: Any) -> dict[str, Any] | None:
+    """Non-blocking advisory for `paper_enter`/`actual_enter` decisions with
+    no linked `risk_check_receipt_id` (bead trade-trace-yyegu design
+    proposal, owner-affirmed 2026-07-14: decision-time position opening
+    stays as-is; this nudges the risk-first order without breaking any
+    existing flow)."""
+
+    if risk_check_receipt_id:
+        return None
+    return dict(_RISK_FIRST_ADVISORY)
 
 
 def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
@@ -187,7 +220,16 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 "instrument_id": args.get("instrument_id"),
                 "snapshot_id": args.get("snapshot_id"), "side": args.get("side"),
                 "tags": tags,
+                "risk_check_receipt_id": args.get("risk_check_receipt_id"),
                 "created_at": created_at_value, "review_by": review_by_value}
+        # Risk-first advisory (trade-trace-yyegu): non-blocking caveat on
+        # both decision-time position-openers when no risk_check_receipt_id
+        # is linked. Independent of the paper_enter-only already_exposed
+        # advisory below.
+        if decision_type in ("paper_enter", "actual_enter"):
+            risk_advisory = _risk_receipt_advisory(args.get("risk_check_receipt_id"))
+            if risk_advisory is not None:
+                data.setdefault("advisories", []).append(risk_advisory)
         if decision_type == "paper_enter":
             linked = _linked_position_ids(conn, decision_id)
             data.update(linked)
@@ -220,10 +262,23 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "expected_edge_after_costs": expected_edge_after_costs,
             "cost_basis_estimate": cost_basis_estimate,
             "risk_reward_estimate": risk_reward_estimate,
+            "risk_check_receipt_id": args.get("risk_check_receipt_id"),
         }
 
     with db_for_args(args) as db:
         with UnitOfWork(db.connection) as uow:
+            # risk_check_receipt_id FK check (bead trade-trace-yyegu, mirrors
+            # pretrade_intent.py's _validate_refs). DECISION_MATRIX already
+            # forbids the field outside paper_enter/actual_enter, so this
+            # only ever fires for the two enter types.
+            if args.get("risk_check_receipt_id"):
+                missing = validate_fk_refs(uow.conn, args, _REF_TABLES)
+                if missing:
+                    raise ToolError(
+                        ErrorCode.VALIDATION_ERROR,
+                        "decision references a missing risk_check_receipt_id row",
+                        details={"missing_refs": missing},
+                    )
             replay = check_idempotency_replay(
                 uow, event_type="decision.created",
                 actor_id=ctx.actor_id, idempotency_key=idempotency_key,
@@ -250,10 +305,10 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                 "playbook_version_id, review_by, strategy_id, "
                 "declared_risk_amount, declared_risk_unit, expected_edge, "
                 "expected_edge_after_costs, cost_basis_estimate, "
-                "risk_reward_estimate, agent_id, model_id, "
+                "risk_reward_estimate, risk_check_receipt_id, agent_id, model_id, "
                 "environment, run_id, metadata_json, created_at, actor_id) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-                "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     decision_id, args.get("instrument_id"), args.get("thesis_id"),
                     args.get("forecast_id"), args.get("snapshot_id"), decision_type,
@@ -262,7 +317,7 @@ def _decision_add(args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
                     args.get("playbook_version_id"), review_by, args.get("strategy_id"),
                     declared_risk_amount, declared_risk_unit, expected_edge,
                     expected_edge_after_costs, cost_basis_estimate,
-                    risk_reward_estimate,
+                    risk_reward_estimate, args.get("risk_check_receipt_id"),
                     seg["agent_id"], seg["model_id"], seg["environment"], seg["run_id"],
                     metadata_json, created_at, ctx.actor_id,
                 ),
@@ -360,6 +415,21 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
                 "declared_risk_amount on entry/add decisions."
             ),
         },
+        "risk_check_receipt_id": {
+            "type": "string",
+            "description": (
+                "Optional link to an immutable risk_check_receipts row (from "
+                "risk.check_record) — the risk-first chain's recommended "
+                "contract for `paper_enter`/`actual_enter`: risk.evaluate -> "
+                "risk.check_record -> decision.add(risk_check_receipt_id) -> "
+                "pretrade_intent.record -> fill. Validated as a foreign key "
+                "when supplied; forbidden on every other decision type. When "
+                "omitted on paper_enter/actual_enter, the response carries a "
+                "non-blocking `advisories` entry (code "
+                "missing_risk_check_receipt) — the entry still succeeds. See "
+                "docs/AGENT_GUIDE.md's Risk-first chain section."
+            ),
+        },
         "reason": {"type": "string"},
         "review_by": {"type": "string"},
         "tags": {"type": "array", "items": {"type": "string"}},
@@ -392,7 +462,10 @@ _DECISION_ADD_SCHEMA: dict[str, Any] = {
         "materiality_reason=already_exposed) instead of fragmenting same-side "
         "exposure; the entry still succeeds. report.exposure_anomalies "
         "FRAGMENTED_SAME_SIDE_EXPOSURE is the post-hoc detector for the same "
-        "hazard."
+        "hazard. `paper_enter`/`actual_enter` also accept optional "
+        "risk_check_receipt_id (see that field's description for the "
+        "recommended risk-first chain); when absent the response carries a "
+        "non-blocking `missing_risk_check_receipt` advisory."
     ),
     "x-decision-matrix": _DECISION_MATRIX_CONTRACT,
     "x-price-convention": price_convention(),

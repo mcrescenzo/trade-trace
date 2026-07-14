@@ -28,72 +28,82 @@ DECISION_MATRIX: dict[str, dict[str, FieldKind]] = {
         "instrument_id": "R", "thesis_id": "O", "forecast_id": "O",
         "snapshot_id": "O", "side": "O",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
-        "reason": "O", "review_by": "O",
+        "reason": "O", "review_by": "O", "risk_check_receipt_id": "X",
     },
     "skip": {
         "instrument_id": "R", "thesis_id": "O", "forecast_id": "O",
         "snapshot_id": "O", "side": "O",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
-        "reason": "R", "review_by": "X",
+        "reason": "R", "review_by": "X", "risk_check_receipt_id": "X",
     },
+    # risk_check_receipt_id is O(ptional) on the two decision-time
+    # position-openers (paper_enter/actual_enter) per trade-trace-yyegu's
+    # owner-affirmed design proposal: decision-time position opening is
+    # AFFIRMED (not moved to fill-time) and the risk-first chain
+    # (risk.evaluate -> risk.check_record -> decision.add(risk_check_receipt_id)
+    # -> pretrade_intent.record -> fill) is nudged at the substrate level by
+    # linking the decision to its risk_check_receipts row when the caller has
+    # one; when absent, decision.add's response carries a non-blocking
+    # advisory caveat rather than blocking the write. See
+    # docs/AGENT_GUIDE.md's "Risk-first chain" section.
     "paper_enter": {
         "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
         "declared_risk_amount": "O", "declared_risk_unit": "O",
-        "reason": "O", "review_by": "X",
+        "reason": "O", "review_by": "X", "risk_check_receipt_id": "O",
     },
     "paper_exit": {
         "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
-        "reason": "O", "review_by": "X",
+        "reason": "O", "review_by": "X", "risk_check_receipt_id": "X",
     },
     "actual_enter": {
         "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
         "declared_risk_amount": "O", "declared_risk_unit": "O",
-        "reason": "O", "review_by": "X",
+        "reason": "O", "review_by": "X", "risk_check_receipt_id": "O",
     },
     "actual_exit": {
         "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
-        "reason": "O", "review_by": "X",
+        "reason": "O", "review_by": "X", "risk_check_receipt_id": "X",
     },
     "add": {
         "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
         "declared_risk_amount": "O", "declared_risk_unit": "O",
-        "reason": "O", "review_by": "X",
+        "reason": "O", "review_by": "X", "risk_check_receipt_id": "X",
     },
     "reduce": {
         "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "R",
         "quantity": "R", "price": "R", "fees": "O", "slippage": "O",
-        "reason": "O", "review_by": "X",
+        "reason": "O", "review_by": "X", "risk_check_receipt_id": "X",
     },
     "hold": {
         "instrument_id": "R", "thesis_id": "O", "forecast_id": "O",
         "snapshot_id": "O", "side": "O",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
-        "reason": "O", "review_by": "O",
+        "reason": "O", "review_by": "O", "risk_check_receipt_id": "X",
     },
     "invalidate_thesis": {
         "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "X",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
-        "reason": "R", "review_by": "X",
+        "reason": "R", "review_by": "X", "risk_check_receipt_id": "X",
     },
     "update_thesis": {
         "instrument_id": "R", "thesis_id": "R", "snapshot_id": "O", "side": "X",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
-        "reason": "O", "review_by": "X",
+        "reason": "O", "review_by": "X", "risk_check_receipt_id": "X",
     },
     "resolved": {
         "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "X",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
-        "reason": "O", "review_by": "X",
+        "reason": "O", "review_by": "X", "risk_check_receipt_id": "X",
     },
     "review": {
         "instrument_id": "R", "thesis_id": "O", "snapshot_id": "O", "side": "X",
         "quantity": "X", "price": "X", "fees": "X", "slippage": "X",
-        "reason": "O", "review_by": "R",
+        "reason": "O", "review_by": "R", "risk_check_receipt_id": "X",
     },
 }
 

@@ -110,6 +110,9 @@ from trade_trace.storage.migrations.m034_edges_target_type_index import (
 from trade_trace.storage.migrations.m035_memory_recall_events_filter_indexes import (
     _migration_035_memory_recall_events_filter_indexes,
 )
+from trade_trace.storage.migrations.m036_decisions_risk_check_receipt_id import (
+    _migration_036_decisions_risk_check_receipt_id,
+)
 
 MIGRATIONS: list[Migration] = [
     _migration_001_meta_table,
@@ -147,6 +150,7 @@ MIGRATIONS: list[Migration] = [
     _migration_033_decisions_type_created_at_index,
     _migration_034_edges_target_type_index,
     _migration_035_memory_recall_events_filter_indexes,
+    _migration_036_decisions_risk_check_receipt_id,
 ]
 
 
@@ -201,6 +205,7 @@ _MIGRATION_TABLES_CREATED: list[tuple[int, list[str]]] = [
     (33, []),
     (34, []),
     (35, []),
+    (36, []),
 ]
 
 
@@ -272,6 +277,7 @@ _MIGRATION_COLUMNS_ADDED: list[tuple[int, dict[str, list[str]]]] = [
     (33, {}),
     (34, {}),
     (35, {}),
+    (36, {"decisions": ["risk_check_receipt_id"]}),
 ]
 
 
@@ -319,6 +325,7 @@ _MIGRATION_INDEXES_CREATED: list[tuple[int, list[str]]] = [
         "idx_memory_recall_events_run",
         "idx_memory_recall_events_agent",
     ]),
+    (36, ["idx_decisions_risk_check_receipt"]),
 ]
 
 
@@ -366,6 +373,7 @@ __all__ = [
     "_migration_033_decisions_type_created_at_index",
     "_migration_034_edges_target_type_index",
     "_migration_035_memory_recall_events_filter_indexes",
+    "_migration_036_decisions_risk_check_receipt_id",
     "_require_fts5",
     "apply_pending_migrations",
     "current_version",

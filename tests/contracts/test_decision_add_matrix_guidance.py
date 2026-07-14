@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from trade_trace.mcp_server import mcp_call
+from trade_trace.storage import open_database
+from trade_trace.storage.paths import db_path
 from trade_trace.tools.decision_matrix import (
     allowed_decision_types,
     decision_matrix_contract,
@@ -273,7 +275,10 @@ def test_paper_enter_returns_already_exposed_advisory_on_fragmenting_same_side(i
     })
     assert first.ok is True, first
     # Fresh market: no prior open position, so no already_exposed advisory.
-    assert not first.data.get("advisories"), first.data
+    # The risk-first advisory (trade-trace-yyegu) still fires because no
+    # risk_check_receipt_id was supplied.
+    first_advisory_codes = {a["code"] for a in first.data.get("advisories", [])}
+    assert first_advisory_codes == {"missing_risk_check_receipt"}, first.data
     first_position_id = first.data["position_id"]
 
     # A different size + price + (default) run — would NOT trip the exact-replay
@@ -290,6 +295,11 @@ def test_paper_enter_returns_already_exposed_advisory_on_fragmenting_same_side(i
     assert second.ok is True, second
     advisories = second.data.get("advisories")
     assert advisories, second.data
+    # Also carries the risk-first advisory (trade-trace-yyegu, no
+    # risk_check_receipt_id supplied) alongside already_exposed.
+    assert {a["code"] for a in advisories} == {
+        "already_exposed", "missing_risk_check_receipt",
+    }, advisories
     advisory = next(a for a in advisories if a["code"] == "already_exposed")
     assert advisory["severity"] == "advisory"
     assert advisory["instrument_id"] == instrument.data["id"]
@@ -342,7 +352,8 @@ def test_paper_enter_opposite_side_does_not_trigger_already_exposed(initialized_
         "idempotency_key": "00000000-0000-4000-8000-000000000312",
     })
     assert no_entry.ok is True, no_entry
-    assert not no_entry.data.get("advisories"), no_entry.data
+    no_entry_advisory_codes = {a["code"] for a in no_entry.data.get("advisories", [])}
+    assert "already_exposed" not in no_entry_advisory_codes, no_entry.data
 
 
 def test_paper_enter_declared_risk_flows_to_position_initial_risk(initialized_home):
@@ -387,3 +398,156 @@ def test_paper_enter_declared_risk_flows_to_position_initial_risk(initialized_ho
     assert row["initial_risk_amount"] == 40.0
     caveat_codes = {c["code"] for c in row.get("caveats", [])}
     assert "missing_risk_budget" not in caveat_codes
+
+
+# -- risk_check_receipt_id / risk-first advisory (trade-trace-yyegu) -----
+
+
+def _record_pass_receipt(initialized_home, instrument_id: str) -> str:
+    """Run the public risk.evaluate -> risk.check_record loop and return the
+    immutable receipt id a decision can link via risk_check_receipt_id.
+    `instrument_id` anchors the receipt to an already-existing row so the
+    write clears the FK-enforced audit-anchor check."""
+
+    policy = _mcp(initialized_home, "risk.policy_version_add", {
+        "policy_key": "pm-default", "version": "1",
+        "rules_json": [], "source": "operator",
+        "effective_from": "2026-05-28T00:00:00.000Z",
+        "idempotency_key": "00000000-0000-4000-8000-000000000401",
+    })
+    assert policy.ok is True, policy
+    receipt = _mcp(initialized_home, "risk.check_record", {
+        "policy_version_id": policy.data["id"],
+        "status": "pass", "outcome": "pass", "rule_results": [],
+        "as_of": "2026-05-28T00:00:00.000Z",
+        "instrument_id": instrument_id,
+        "idempotency_key": "00000000-0000-4000-8000-000000000402",
+    })
+    assert receipt.ok is True, receipt
+    return receipt.data["id"]
+
+
+def test_decision_matrix_declares_risk_check_receipt_id_o_for_enter_types_x_elsewhere(initialized_home):
+    """x-decision-matrix must stay truthful: O(ptional) on paper_enter/
+    actual_enter, X(forbidden) on every other decision type."""
+
+    env = _mcp(initialized_home, "tool.schema", {"tool": "decision.add"})
+    assert env.ok, env
+    matrix = env.data["json_schema"]["x-decision-matrix"]
+    for entry_type in ("paper_enter", "actual_enter"):
+        assert "risk_check_receipt_id" in matrix[entry_type]["optional"], entry_type
+    for other_type in allowed_decision_types():
+        if other_type in ("paper_enter", "actual_enter"):
+            continue
+        assert "risk_check_receipt_id" in matrix[other_type]["forbidden"], other_type
+
+
+def test_paper_enter_risk_check_receipt_id_persists_and_fk_validates(initialized_home):
+    """A linked risk_check_receipt_id persists on the decision row (echoed on
+    the response) and clears the risk-first advisory; an unknown receipt id
+    is rejected as a missing FK reference rather than silently accepted."""
+
+    venue = _mcp(initialized_home, "venue.add", {
+        "name": "Risk Receipt PM", "kind": "prediction_market",
+    })
+    assert venue.ok is True
+    instrument = _mcp(initialized_home, "instrument.add", {
+        "venue_id": venue.data["id"], "asset_class": "prediction_market",
+        "title": "Risk-receipt market",
+    })
+    assert instrument.ok is True
+    thesis = _mcp(initialized_home, "thesis.add", {
+        "instrument_id": instrument.data["id"], "side": "yes", "body": "...",
+    })
+    assert thesis.ok is True
+    receipt_id = _record_pass_receipt(initialized_home, instrument.data["id"])
+
+    linked = _mcp(initialized_home, "decision.add", {
+        "type": "paper_enter",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "side": "yes", "quantity": 10, "price": 0.5,
+        "risk_check_receipt_id": receipt_id,
+        "idempotency_key": "00000000-0000-4000-8000-000000000403",
+    })
+    assert linked.ok is True, linked
+    assert linked.data["risk_check_receipt_id"] == receipt_id
+    linked_codes = {a["code"] for a in linked.data.get("advisories", [])}
+    assert "missing_risk_check_receipt" not in linked_codes
+
+    db = open_database(db_path(initialized_home), create_parent=False)
+    try:
+        row = db.connection.execute(
+            "SELECT risk_check_receipt_id FROM decisions WHERE id = ?",
+            (linked.data["id"],),
+        ).fetchone()
+    finally:
+        db.close()
+    assert row[0] == receipt_id
+
+    bogus = _mcp(initialized_home, "decision.add", {
+        "type": "paper_enter",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "side": "yes", "quantity": 10, "price": 0.5,
+        "risk_check_receipt_id": "risk_check_receipts_does_not_exist",
+        "idempotency_key": "00000000-0000-4000-8000-000000000404",
+    })
+    assert bogus.ok is False, bogus
+    assert bogus.error.code.value == "VALIDATION_ERROR"
+    missing = bogus.error.details["missing_refs"]
+    assert any(m["field"] == "risk_check_receipt_id" for m in missing), missing
+
+
+def test_actual_enter_absent_risk_check_receipt_id_carries_advisory(initialized_home):
+    """decision.add(actual_enter) with no risk_check_receipt_id carries the
+    non-blocking risk-first advisory; the entry still succeeds."""
+
+    venue = _mcp(initialized_home, "venue.add", {
+        "name": "Actual Enter Advisory PM", "kind": "prediction_market",
+    })
+    assert venue.ok is True
+    instrument = _mcp(initialized_home, "instrument.add", {
+        "venue_id": venue.data["id"], "asset_class": "prediction_market",
+        "title": "Actual-enter advisory market",
+    })
+    assert instrument.ok is True
+    thesis = _mcp(initialized_home, "thesis.add", {
+        "instrument_id": instrument.data["id"], "side": "yes", "body": "...",
+    })
+    assert thesis.ok is True
+
+    env = _mcp(initialized_home, "decision.add", {
+        "type": "actual_enter",
+        "instrument_id": instrument.data["id"],
+        "thesis_id": thesis.data["id"],
+        "side": "yes", "quantity": 10, "price": 0.5,
+        "idempotency_key": "00000000-0000-4000-8000-000000000405",
+    })
+    assert env.ok is True, env
+    advisories = env.data.get("advisories")
+    assert advisories, env.data
+    advisory = next(a for a in advisories if a["code"] == "missing_risk_check_receipt")
+    assert advisory["severity"] == "advisory"
+    assert "risk-first" in advisory["message"]
+
+
+def test_risk_check_receipt_id_forbidden_on_skip(initialized_home):
+    """risk_check_receipt_id is X(forbidden) outside paper_enter/actual_enter;
+    supplying it on `skip` raises the standard forbidden-field VALIDATION_ERROR."""
+
+    env = _mcp(initialized_home, "decision.add", {
+        "type": "skip",
+        "instrument_id": "ins_example",
+        "reason": "No edge after costs.",
+        "risk_check_receipt_id": "rcr_whatever",
+        "idempotency_key": "00000000-0000-4000-8000-000000000406",
+        "_dry_run": True,
+    })
+
+    assert env.ok is False
+    assert env.error.code.value == "VALIDATION_ERROR"
+    details = env.error.details
+    assert details["field"] == "risk_check_receipt_id"
+    assert details["violation"] == "forbidden_present"
+    assert details["decision_type"] == "skip"

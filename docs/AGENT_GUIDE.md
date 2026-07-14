@@ -131,6 +131,22 @@ When a run is partially complete, use `report.work_queue`, `agent.next_actions`,
 {"tool":"playbook.upsert","args":{"name":"Spread discipline","rule":"Require an explicit recorded spread-adjusted forecast gap before acting; this is a process rule, not Trade Trace advice.","idempotency_key":"agent-run-42:playbook:event-x"}}
 ```
 
+### 2.1a Risk-first chain for enter decisions
+
+`decision.add` opens the local paper/actual position AT DECISION TIME for `paper_enter`/`actual_enter` (this is an intentional, owner-affirmed substrate design — see trade-trace-yyegu — not a bug to route around): the decision row is the position-opener for both paper and actual flows, and reconciliation compares against decision-opened local positions, so moving position-opening to fill time would fork paper/actual semantics and break reconciliation's `POSITION_MISMATCH` derivation. Because the position opens before any fill, the **recommended agent contract** is to run the risk check first and link its receipt to the decision:
+
+1. `risk.evaluate` — deterministic, non-writing preliminary verdict against a policy version; inspect the result before deciding.
+2. `risk.check_record` — persist the authoritative, immutable `risk_check_receipts` row (`status`/`outcome`/`rule_results`), producing a `risk_check_receipt_id`.
+3. `decision.add` (`type: "paper_enter"` or `"actual_enter"`) — pass the `risk_check_receipt_id` from step 2. It is validated as a foreign key (an unknown id is rejected with `VALIDATION_ERROR`/`missing_refs`); it is `X` (forbidden) on every other decision type.
+4. `pretrade_intent.record` — record the non-executing pre-trade intent audit packet, referencing `decision_id` and the same `risk_check_receipt_id`.
+5. `paper_fill.record` (or the external-receipt import path for actual fills) — record the fill evidence.
+
+```json
+{"tool":"decision.add","args":{"type":"paper_enter","instrument_id":"ins_...","thesis_id":"th_...","side":"yes","quantity":100,"price":0.62,"risk_check_receipt_id":"rcr_...","idempotency_key":"agent-run-42:decision:event-x"}}
+```
+
+`risk_check_receipt_id` is optional, not required — the existing MVP loop keeps working unchanged. When it is omitted on a `paper_enter`/`actual_enter` decision, the response carries a non-blocking `advisories` entry (`code: "missing_risk_check_receipt"`); the entry still succeeds. Treat that advisory as a nudge to close the gap on the next decision, not as an error to retry.
+
 ## 3. Patterns
 
 - Idempotency keys: provide `idempotency_key` on every write. A retry with the same semantic payload replays safely; a retry with the same key but different payload returns `IDEMPOTENCY_CONFLICT`. Use stable keys such as `<run-id>:<tool>:<external-market-id>:<version>`.

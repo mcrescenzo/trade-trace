@@ -26,7 +26,12 @@ and again on 2026-06-14 when migrations 034 and 035 added the
 `idx_memory_recall_events_run` / `idx_memory_recall_events_agent`
 composite indexes (bead trade-trace-yt45).
 All of these are index/trigger-only changes, so `EXPECTED_INFO_HASH` was
-unaffected by any of them. Any intentional schema change (a new
+unaffected by any of them. Both literals were re-pinned on 2026-07-13
+when migration 036 added `decisions.risk_check_receipt_id` (nullable,
+`REFERENCES risk_check_receipts(id)`) plus its covering index
+`idx_decisions_risk_check_receipt`, per bead trade-trace-yyegu's
+owner-affirmed risk-first-chain design proposal.
+Any intentional schema change (a new
 migration or a column tweak) must update both literals.
 An *accidental* drift — e.g., during a refactor that splits the module
 into per-migration files — must keep them unchanged.
@@ -44,10 +49,10 @@ from trade_trace.storage import apply_pending_migrations, open_database
 from trade_trace.storage.paths import db_path
 
 EXPECTED_DDL_HASH = (
-    "fabf15331462480fafa5beaf03250c16782c0d1fac28efbdc425c322645916b6"
+    "fe29fe8d1d9cf4b83bc670966c02281f8bcfb7b4e3cc47e0ab317c59e82fc9f6"
 )
 EXPECTED_INFO_HASH = (
-    "bffafa475ea6c4a57b599eebaf945aa8be97faa445d282cf3325b2687d630bf7"
+    "454232d93c99a396d010aacdca4c55d23cb867e402c519d9b0b45a3fe9ae2635"
 )
 
 
